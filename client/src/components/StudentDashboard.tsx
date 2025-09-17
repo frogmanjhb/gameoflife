@@ -19,10 +19,13 @@ const StudentDashboard: React.FC = () => {
 
   const fetchData = async () => {
     try {
+      console.log('🔍 Fetching student data...');
       const [transactionsRes, loansRes] = await Promise.all([
         api.get('/transactions/history'),
         api.get('/loans')
       ]);
+      console.log('📊 Transactions:', transactionsRes.data);
+      console.log('💰 Loans:', loansRes.data);
       setTransactions(transactionsRes.data);
       setLoans(loansRes.data);
     } catch (error) {

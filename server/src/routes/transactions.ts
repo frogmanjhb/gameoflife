@@ -16,8 +16,12 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
     let transactions: TransactionWithDetails[] = [];
 
     if (req.user.role === 'student') {
+      console.log('🔍 Getting transactions for student:', req.user.username);
+      
       // Get student's account
       const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
+      console.log('💳 Student account:', account);
+      
       if (!account) {
         return res.status(404).json({ error: 'Account not found' });
       }
@@ -36,6 +40,8 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
         WHERE t.from_account_id = $1 OR t.to_account_id = $2
         ORDER BY t.created_at DESC
       `, [account.id, account.id]);
+      
+      console.log('📊 Found transactions for student:', transactions.length);
     } else {
       // Teacher can see all transactions
       transactions = await database.query(`
