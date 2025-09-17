@@ -24,7 +24,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
           COALESCE(SUM(lp.amount), 0) as total_paid,
           CASE 
             WHEN l.status = 'active' THEN 
-              CEIL((l.outstanding_balance - COALESCE(SUM(lp.amount), 0)) / l.monthly_payment)
+              CEIL((l.outstanding_balance - COALESCE(SUM(lp.amount), 0)) / l.weekly_payment)
             ELSE 0 
           END as payments_remaining
         FROM loans l
@@ -42,7 +42,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
           COALESCE(SUM(lp.amount), 0) as total_paid,
           CASE 
             WHEN l.status = 'active' THEN 
-              CEIL((l.outstanding_balance - COALESCE(SUM(lp.amount), 0)) / l.monthly_payment)
+              CEIL((l.outstanding_balance - COALESCE(SUM(lp.amount), 0)) / l.weekly_payment)
             ELSE 0 
           END as payments_remaining
         FROM loans l
@@ -99,16 +99,17 @@ router.post('/apply', [
       return res.status(400).json({ error: 'You already have an active loan' });
     }
 
-    // Calculate monthly payment (simple interest)
-    const interestRate = 0.05; // 5% annual interest
-    const monthlyInterestRate = interestRate / 12;
-    const monthlyPayment = (amount * monthlyInterestRate * Math.pow(1 + monthlyInterestRate, term_months)) / 
-                          (Math.pow(1 + monthlyInterestRate, term_months) - 1);
+        // Calculate weekly payment (simple interest)
+        const interestRate = 0.05; // 5% annual interest
+        const weeklyInterestRate = interestRate / 52; // 52 weeks in a year
+        const term_weeks = term_months * 4.33; // Approximate weeks in months
+        const weeklyPayment = (amount * weeklyInterestRate * Math.pow(1 + weeklyInterestRate, term_weeks)) /
+                             (Math.pow(1 + weeklyInterestRate, term_weeks) - 1);
 
     // Create loan application
     const result = await database.run(
-      'INSERT INTO loans (borrower_id, amount, term_months, interest_rate, status, outstanding_balance, monthly_payment) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [req.user.id, amount, term_months, interestRate, 'pending', amount, monthlyPayment]
+      'INSERT INTO loans (borrower_id, amount, term_months, interest_rate, status, outstanding_balance, weekly_payment) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [req.user.id, amount, term_months, interestRate, 'pending', amount, weeklyPayment]
     );
 
     res.status(201).json({ 

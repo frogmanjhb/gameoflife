@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS loans (
     interest_rate DECIMAL(5,2) DEFAULT 0.00,
     status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'approved', 'denied', 'active', 'paid_off')),
     outstanding_balance DECIMAL(10,2) NOT NULL,
-    monthly_payment DECIMAL(10,2) NOT NULL,
+    weekly_payment DECIMAL(10,2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     approved_at TIMESTAMP,
     due_date DATE

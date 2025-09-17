@@ -142,8 +142,8 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
                     <p className="font-semibold text-gray-900">{formatCurrency(loan.amount)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Monthly Payment</p>
-                    <p className="font-semibold text-gray-900">{formatCurrency(loan.monthly_payment)}</p>
+                    <p className="text-sm text-gray-500">Weekly Payment</p>
+                    <p className="font-semibold text-gray-900">{formatCurrency(loan.weekly_payment)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Term</p>
@@ -207,8 +207,8 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
                     <p className="font-semibold text-gray-900">{formatCurrency(loan.outstanding_balance)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Monthly Payment</p>
-                    <p className="font-semibold text-gray-900">{formatCurrency(loan.monthly_payment)}</p>
+                    <p className="text-sm text-gray-500">Weekly Payment</p>
+                    <p className="font-semibold text-gray-900">{formatCurrency(loan.weekly_payment)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Remaining Payments</p>
@@ -307,8 +307,8 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
                     <span className="font-medium">{selectedLoan.term_months} months</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Monthly Payment:</span>
-                    <span className="font-medium">{formatCurrency(selectedLoan.monthly_payment)}</span>
+                    <span className="text-gray-500">Weekly Payment:</span>
+                    <span className="font-medium">{formatCurrency(selectedLoan.weekly_payment)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Interest Rate:</span>

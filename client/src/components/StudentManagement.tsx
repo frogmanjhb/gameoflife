@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Minus, DollarSign, User, Search } from 'lucide-react';
+import { Plus, Minus, DollarSign, User, Search, Users } from 'lucide-react';
 import api from '../services/api';
 import { Student } from '../types';
 
@@ -20,10 +20,18 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedClass, setSelectedClass] = useState<string>('all');
 
-  const filteredStudents = students.filter(student =>
-    student.username.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Get unique classes from students
+  const classes = ['all', ...Array.from(new Set(students.map(s => s.class).filter(Boolean)))].sort();
+
+  const filteredStudents = students.filter(student => {
+    const matchesSearch = student.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (student.first_name && student.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (student.last_name && student.last_name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesClass = selectedClass === 'all' || student.class === selectedClass;
+    return matchesSearch && matchesClass;
+  });
 
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,16 +94,42 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
 
   return (
     <div className="space-y-6">
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search students..."
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+      {/* Search and Class Filter */}
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search students by name or username..."
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        {/* Class Filter Tabs */}
+        <div className="flex flex-wrap gap-2">
+          {classes.map((classItem) => (
+            <button
+              key={classItem}
+              onClick={() => setSelectedClass(classItem)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                selectedClass === classItem
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Users className="h-4 w-4 inline mr-1" />
+              {classItem === 'all' ? 'All Classes' : `Class ${classItem}`}
+              <span className="ml-1 text-xs opacity-75">
+                ({classItem === 'all' 
+                  ? students.length 
+                  : students.filter(s => s.class === classItem).length
+                })
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Error/Success Messages */}
@@ -129,8 +163,19 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                   <User className="h-5 w-5 text-primary-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">{student.username}</h3>
-                  <p className="text-sm text-gray-500">Account: {student.account_number}</p>
+                  <h3 className="font-semibold text-gray-900">
+                    {student.first_name && student.last_name 
+                      ? `${student.first_name} ${student.last_name}` 
+                      : student.username
+                    }
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {student.class && `Class ${student.class} • `}
+                    Account: {student.account_number}
+                  </p>
+                  {student.email && (
+                    <p className="text-xs text-gray-400">{student.email}</p>
+                  )}
                 </div>
               </div>
               <div className="text-right">

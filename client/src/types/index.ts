@@ -39,7 +39,7 @@ export interface Loan {
   interest_rate: number;
   status: 'pending' | 'approved' | 'denied' | 'active' | 'paid_off';
   outstanding_balance: number;
-  monthly_payment: number;
+  weekly_payment: number;
   created_at: string;
   approved_at?: string;
   due_date?: string;

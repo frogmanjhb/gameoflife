@@ -9,6 +9,7 @@ import transactionRoutes from './routes/transactions';
 import loanRoutes from './routes/loans';
 import studentRoutes from './routes/students';
 import exportRoutes from './routes/export';
+import automaticPaymentRoutes from './routes/automatic-payments';
 import database from './database/database-prod';
 
 dotenv.config();
@@ -36,6 +37,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/loans', loanRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/automatic-payments', automaticPaymentRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -75,19 +77,33 @@ async function initializeDatabase() {
     await database.query('SELECT 1');
     console.log('✅ Database connection successful');
     
-    // Add new columns if they don't exist (migration)
-    try {
-      await database.query(`
-        ALTER TABLE users 
-        ADD COLUMN IF NOT EXISTS first_name VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS last_name VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS class VARCHAR(10),
-        ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE
-      `);
-      console.log('✅ Database migration completed');
-    } catch (migrationError) {
-      console.log('⚠️ Migration may have already been applied:', migrationError);
-    }
+        // Add new columns if they don't exist (migration)
+        try {
+          await database.query(`
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS first_name VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS last_name VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS class VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE
+          `);
+          
+          // Add weekly_payment column and migrate existing loans
+          await database.query(`
+            ALTER TABLE loans
+            ADD COLUMN IF NOT EXISTS weekly_payment DECIMAL(10,2)
+          `);
+          
+          // Update existing loans to have weekly payment (monthly / 4.33)
+          await database.query(`
+            UPDATE loans 
+            SET weekly_payment = monthly_payment / 4.33 
+            WHERE weekly_payment IS NULL AND monthly_payment IS NOT NULL
+          `);
+          
+          console.log('✅ Database migration completed');
+        } catch (migrationError) {
+          console.log('⚠️ Migration may have already been applied:', migrationError);
+        }
     
     const schema = readFileSync(schemaPath, 'utf8');
     await database.query(schema);
