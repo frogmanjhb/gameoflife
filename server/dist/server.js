@@ -54,18 +54,22 @@ app.use('*', (req, res) => {
 async function initializeDatabase() {
     try {
         console.log('🔄 Initializing database...');
-        const schema = (0, fs_1.readFileSync)((0, path_1.join)(__dirname, 'database', 'schema-postgres.sql'), 'utf8');
+        const schemaPath = (0, path_1.join)(__dirname, 'database', 'schema-postgres.sql');
+        console.log('📁 Schema path:', schemaPath);
+        const schema = (0, fs_1.readFileSync)(schemaPath, 'utf8');
         await database_prod_1.default.query(schema);
         console.log('✅ Database initialized successfully');
     }
     catch (error) {
         console.error('❌ Database initialization failed:', error);
+        console.error('Error details:', error instanceof Error ? error.message : String(error));
         // Don't exit, just log the error - the database might already be initialized
     }
 }
 // Start server
 async function startServer() {
-    await initializeDatabase();
+    // Initialize database in background, don't block server startup
+    initializeDatabase().catch(console.error);
     app.listen(PORT, () => {
         console.log(`🚀 Server running on port ${PORT}`);
         console.log(`📊 Game of Life Classroom Simulation API`);
