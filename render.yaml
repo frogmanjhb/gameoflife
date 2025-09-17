@@ -17,17 +17,13 @@ services:
       - key: CLIENT_URL
         value: https://gameoflife-frontend.onrender.com
 
-  - type: web
+  - type: static
     name: gameoflife-frontend
-    env: node
-    plan: free
     buildCommand: cd client && npm install && npm run build
-    startCommand: cd client && node server.cjs
+    staticPublishPath: ./client/dist
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 3000
 
 databases:
   - name: gameoflife-db
