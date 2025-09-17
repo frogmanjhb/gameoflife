@@ -75,6 +75,20 @@ async function initializeDatabase() {
     await database.query('SELECT 1');
     console.log('✅ Database connection successful');
     
+    // Add new columns if they don't exist (migration)
+    try {
+      await database.query(`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS first_name VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS last_name VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS class VARCHAR(10),
+        ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE
+      `);
+      console.log('✅ Database migration completed');
+    } catch (migrationError) {
+      console.log('⚠️ Migration may have already been applied:', migrationError);
+    }
+    
     const schema = readFileSync(schemaPath, 'utf8');
     await database.query(schema);
     console.log('✅ Database schema initialized successfully');
