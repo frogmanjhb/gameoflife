@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Users, DollarSign, TrendingUp, CheckCircle, XCircle, Plus, Minus, Download } from 'lucide-react';
+import { Users, DollarSign, TrendingUp, CheckCircle, Download } from 'lucide-react';
 import api from '../services/api';
 import { Student, Loan, Transaction } from '../types';
 import StudentManagement from './StudentManagement';

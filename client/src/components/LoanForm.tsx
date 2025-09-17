@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Calendar, TrendingUp, AlertCircle } from 'lucide-react';
+import { DollarSign, Calendar, AlertCircle } from 'lucide-react';
 import api from '../services/api';
 import { Loan } from '../types';
 

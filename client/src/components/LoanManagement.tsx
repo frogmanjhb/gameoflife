@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle, XCircle, DollarSign, Calendar, User, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, DollarSign, AlertCircle } from 'lucide-react';
 import api from '../services/api';
 import { Loan } from '../types';
 

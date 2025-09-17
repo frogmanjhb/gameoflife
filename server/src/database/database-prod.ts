@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { readFileSync } from 'path';
+import { readFileSync } from 'fs';
 import { join } from 'path';
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -34,7 +34,7 @@ class Database {
       const db = new sqlite3.Database(DB_PATH);
       
       return new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => {
+        db.all(sql, params, (err: any, rows: any) => {
           if (err) {
             reject(err);
           } else {
@@ -61,7 +61,7 @@ class Database {
       const db = new sqlite3.Database(DB_PATH);
       
       return new Promise((resolve, reject) => {
-        db.run(sql, params, function(err) {
+        db.run(sql, params, function(this: any, err: any) {
           if (err) {
             reject(err);
           } else {
@@ -88,7 +88,7 @@ class Database {
       const db = new sqlite3.Database(DB_PATH);
       
       return new Promise((resolve, reject) => {
-        db.get(sql, params, (err, row) => {
+        db.get(sql, params, (err: any, row: any) => {
           if (err) {
             reject(err);
           } else {

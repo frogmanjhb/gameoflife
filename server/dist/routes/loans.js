@@ -1,0 +1,213 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const express_validator_1 = require("express-validator");
+const database_1 = __importDefault(require("../database/database"));
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+// Get all loans (for teachers) or user's loans (for students)
+router.get('/', auth_1.authenticateToken, async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        let loans = [];
+        if (req.user.role === 'teacher') {
+            // Teachers can see all loans
+            loans = await database_1.default.query(`
+        SELECT 
+          l.*,
+          u.username as borrower_username,
+          COALESCE(SUM(lp.amount), 0) as total_paid,
+          CASE 
+            WHEN l.status = 'active' THEN 
+              CEIL((l.outstanding_balance - COALESCE(SUM(lp.amount), 0)) / l.monthly_payment)
+            ELSE 0 
+          END as payments_remaining
+        FROM loans l
+        JOIN users u ON l.borrower_id = u.id
+        LEFT JOIN loan_payments lp ON l.id = lp.loan_id
+        GROUP BY l.id
+        ORDER BY l.created_at DESC
+      `);
+        }
+        else {
+            // Students can only see their own loans
+            loans = await database_1.default.query(`
+        SELECT 
+          l.*,
+          u.username as borrower_username,
+          COALESCE(SUM(lp.amount), 0) as total_paid,
+          CASE 
+            WHEN l.status = 'active' THEN 
+              CEIL((l.outstanding_balance - COALESCE(SUM(lp.amount), 0)) / l.monthly_payment)
+            ELSE 0 
+          END as payments_remaining
+        FROM loans l
+        JOIN users u ON l.borrower_id = u.id
+        LEFT JOIN loan_payments lp ON l.id = lp.loan_id
+        WHERE l.borrower_id = ?
+        GROUP BY l.id
+        ORDER BY l.created_at DESC
+      `, [req.user.id]);
+        }
+        res.json(loans);
+    }
+    catch (error) {
+        console.error('Get loans error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Apply for a loan (students only)
+router.post('/apply', [
+    (0, express_validator_1.body)('amount').isFloat({ min: 1 }).withMessage('Amount must be at least 1'),
+    (0, express_validator_1.body)('term_months').isInt({ min: 1, max: 60 }).withMessage('Term must be between 1 and 60 months')
+], auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { amount, term_months } = req.body;
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        // Check if user has any pending loans
+        const pendingLoan = await database_1.default.get('SELECT id FROM loans WHERE borrower_id = ? AND status = ?', [req.user.id, 'pending']);
+        if (pendingLoan) {
+            return res.status(400).json({ error: 'You already have a pending loan application' });
+        }
+        // Check if user has any active loans
+        const activeLoan = await database_1.default.get('SELECT id FROM loans WHERE borrower_id = ? AND status = ?', [req.user.id, 'active']);
+        if (activeLoan) {
+            return res.status(400).json({ error: 'You already have an active loan' });
+        }
+        // Calculate monthly payment (simple interest)
+        const interestRate = 0.05; // 5% annual interest
+        const monthlyInterestRate = interestRate / 12;
+        const monthlyPayment = (amount * monthlyInterestRate * Math.pow(1 + monthlyInterestRate, term_months)) /
+            (Math.pow(1 + monthlyInterestRate, term_months) - 1);
+        // Create loan application
+        const result = await database_1.default.run('INSERT INTO loans (borrower_id, amount, term_months, interest_rate, status, outstanding_balance, monthly_payment) VALUES (?, ?, ?, ?, ?, ?, ?)', [req.user.id, amount, term_months, interestRate, 'pending', amount, monthlyPayment]);
+        res.status(201).json({
+            message: 'Loan application submitted successfully',
+            loan_id: result.lastID
+        });
+    }
+    catch (error) {
+        console.error('Loan application error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Approve or deny loan (teachers only)
+router.post('/approve', [
+    (0, express_validator_1.body)('loan_id').isInt().withMessage('Loan ID is required'),
+    (0, express_validator_1.body)('approved').isBoolean().withMessage('Approval status is required')
+], auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { loan_id, approved } = req.body;
+        // Get loan details
+        const loan = await database_1.default.get('SELECT * FROM loans WHERE id = ?', [loan_id]);
+        if (!loan) {
+            return res.status(404).json({ error: 'Loan not found' });
+        }
+        if (loan.status !== 'pending') {
+            return res.status(400).json({ error: 'Loan is not pending approval' });
+        }
+        const newStatus = approved ? 'approved' : 'denied';
+        const dueDate = approved ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null;
+        // Update loan status
+        await database_1.default.run('UPDATE loans SET status = ?, approved_at = ?, due_date = ? WHERE id = ?', [newStatus, approved ? new Date().toISOString() : null, dueDate, loan_id]);
+        if (approved) {
+            // Disburse loan to student's account
+            const account = await database_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [loan.borrower_id]);
+            if (account) {
+                // Update account balance
+                await database_1.default.run('UPDATE accounts SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [loan.amount, account.id]);
+                // Record transaction
+                await database_1.default.run('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)', [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]);
+            }
+        }
+        res.json({
+            message: `Loan ${approved ? 'approved' : 'denied'} successfully`,
+            status: newStatus
+        });
+    }
+    catch (error) {
+        console.error('Loan approval error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Make loan payment (students only)
+router.post('/pay', [
+    (0, express_validator_1.body)('loan_id').isInt().withMessage('Loan ID is required'),
+    (0, express_validator_1.body)('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0')
+], auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { loan_id, amount } = req.body;
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        // Get loan details
+        const loan = await database_1.default.get('SELECT * FROM loans WHERE id = ? AND borrower_id = ?', [loan_id, req.user.id]);
+        if (!loan) {
+            return res.status(404).json({ error: 'Loan not found' });
+        }
+        if (loan.status !== 'active') {
+            return res.status(400).json({ error: 'Loan is not active' });
+        }
+        // Get student's account
+        const account = await database_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [req.user.id]);
+        if (!account) {
+            return res.status(404).json({ error: 'Account not found' });
+        }
+        // Check sufficient balance
+        if (account.balance < amount) {
+            return res.status(400).json({ error: 'Insufficient funds' });
+        }
+        // Check if payment exceeds outstanding balance
+        const totalPaid = await database_1.default.get('SELECT COALESCE(SUM(amount), 0) as total FROM loan_payments WHERE loan_id = ?', [loan_id]);
+        const remainingBalance = loan.outstanding_balance - totalPaid.total;
+        if (amount > remainingBalance) {
+            return res.status(400).json({ error: 'Payment amount exceeds outstanding balance' });
+        }
+        // Start transaction
+        await database_1.default.run('BEGIN TRANSACTION');
+        try {
+            // Update account balance
+            await database_1.default.run('UPDATE accounts SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [amount, account.id]);
+            // Record loan payment
+            await database_1.default.run('INSERT INTO loan_payments (loan_id, amount) VALUES (?, ?)', [loan_id, amount]);
+            // Check if loan is fully paid
+            const newTotalPaid = totalPaid.total + amount;
+            if (newTotalPaid >= loan.outstanding_balance) {
+                await database_1.default.run('UPDATE loans SET status = ? WHERE id = ?', ['paid_off', loan_id]);
+            }
+            // Record transaction
+            await database_1.default.run('INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)', [account.id, amount, 'loan_repayment', `Loan payment - ${amount}`]);
+            await database_1.default.run('COMMIT');
+            res.json({ message: 'Payment successful' });
+        }
+        catch (error) {
+            await database_1.default.run('ROLLBACK');
+            throw error;
+        }
+    }
+    catch (error) {
+        console.error('Loan payment error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+exports.default = router;
+//# sourceMappingURL=loans.js.map
