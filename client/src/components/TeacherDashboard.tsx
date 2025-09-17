@@ -20,11 +20,15 @@ const TeacherDashboard: React.FC = () => {
 
   const fetchData = async () => {
     try {
+      console.log('🔍 Fetching teacher data...');
       const [studentsRes, loansRes, transactionsRes] = await Promise.all([
         api.get('/students'),
         api.get('/loans'),
         api.get('/transactions/history')
       ]);
+      console.log('📊 Students:', studentsRes.data);
+      console.log('💰 Loans:', loansRes.data);
+      console.log('📈 Transactions:', transactionsRes.data);
       setStudents(studentsRes.data);
       setLoans(loansRes.data);
       setTransactions(transactionsRes.data);

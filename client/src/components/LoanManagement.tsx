@@ -15,6 +15,8 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  console.log('🔍 LoanManagement received loans:', loans);
+
   const handleApproveLoan = async (loanId: number, approved: boolean) => {
     setError('');
     setSuccess('');

@@ -227,8 +227,15 @@ const StudentDashboard: React.FC = () => {
           {activeTab === 'history' && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-gray-900">Transaction History</h3>
-              <div className="space-y-2">
-                {transactions.map((transaction) => (
+              {transactions.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <History className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>No transactions yet</p>
+                  <p className="text-sm">Your transaction history will appear here</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {transactions.map((transaction) => (
                   <div key={transaction.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-center space-x-3">
                       {getTransactionIcon(transaction.transaction_type)}
@@ -248,8 +255,9 @@ const StudentDashboard: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
