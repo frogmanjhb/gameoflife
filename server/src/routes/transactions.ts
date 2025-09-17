@@ -17,7 +17,7 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
 
     if (req.user.role === 'student') {
       // Get student's account
-      const account = await database.get('SELECT * FROM accounts WHERE user_id = ?', [req.user.id]);
+      const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
       if (!account) {
         return res.status(404).json({ error: 'Account not found' });
       }
@@ -33,7 +33,7 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
         LEFT JOIN users fu ON fa.user_id = fu.id
         LEFT JOIN accounts ta ON t.to_account_id = ta.id
         LEFT JOIN users tu ON ta.user_id = tu.id
-        WHERE t.from_account_id = ? OR t.to_account_id = ?
+        WHERE t.from_account_id = $1 OR t.to_account_id = $2
         ORDER BY t.created_at DESC
       `, [account.id, account.id]);
     } else {
@@ -78,7 +78,7 @@ router.post('/transfer', [
     }
 
     // Get sender's account
-    const fromAccount = await database.get('SELECT * FROM accounts WHERE user_id = ?', [req.user.id]);
+    const fromAccount = await database.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
     if (!fromAccount) {
       return res.status(404).json({ error: 'Account not found' });
     }
@@ -89,12 +89,12 @@ router.post('/transfer', [
     }
 
     // Get recipient's account
-    const toUser = await database.get('SELECT * FROM users WHERE username = ? AND role = ?', [to_username, 'student']);
+    const toUser = await database.get('SELECT * FROM users WHERE username = $1 AND role = $2', [to_username, 'student']);
     if (!toUser) {
       return res.status(404).json({ error: 'Recipient not found' });
     }
 
-    const toAccount = await database.get('SELECT * FROM accounts WHERE user_id = ?', [toUser.id]);
+    const toAccount = await database.get('SELECT * FROM accounts WHERE user_id = $1', [toUser.id]);
     if (!toAccount) {
       return res.status(404).json({ error: 'Recipient account not found' });
     }
@@ -110,19 +110,19 @@ router.post('/transfer', [
     try {
       // Update sender's balance
       await database.run(
-        'UPDATE accounts SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
         [amount, fromAccount.id]
       );
 
       // Update recipient's balance
       await database.run(
-        'UPDATE accounts SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
         [amount, toAccount.id]
       );
 
       // Record transaction
       await database.run(
-        'INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description) VALUES ($1, $1, $1, $1, $1)',
         [fromAccount.id, toAccount.id, amount, 'transfer', description || `Transfer to ${to_username}`]
       );
 
@@ -154,25 +154,25 @@ router.post('/deposit', [
     const { username, amount, description }: DepositRequest = req.body;
 
     // Get student's account
-    const student = await database.get('SELECT * FROM users WHERE username = ? AND role = ?', [username, 'student']);
+    const student = await database.get('SELECT * FROM users WHERE username = $1 AND role = $1', [username, 'student']);
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    const account = await database.get('SELECT * FROM accounts WHERE user_id = ?', [student.id]);
+    const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [student.id]);
     if (!account) {
       return res.status(404).json({ error: 'Student account not found' });
     }
 
     // Update balance
     await database.run(
-      'UPDATE accounts SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
       [amount, account.id]
     );
 
     // Record transaction
     await database.run(
-      'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)',
+      'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $1, $1, $1)',
       [account.id, amount, 'deposit', description || `Deposit by teacher`]
     );
 
@@ -198,12 +198,12 @@ router.post('/withdraw', [
     const { username, amount, description }: WithdrawRequest = req.body;
 
     // Get student's account
-    const student = await database.get('SELECT * FROM users WHERE username = ? AND role = ?', [username, 'student']);
+    const student = await database.get('SELECT * FROM users WHERE username = $1 AND role = $1', [username, 'student']);
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    const account = await database.get('SELECT * FROM accounts WHERE user_id = ?', [student.id]);
+    const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [student.id]);
     if (!account) {
       return res.status(404).json({ error: 'Student account not found' });
     }
@@ -215,13 +215,13 @@ router.post('/withdraw', [
 
     // Update balance
     await database.run(
-      'UPDATE accounts SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
       [amount, account.id]
     );
 
     // Record transaction
     await database.run(
-      'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)',
+      'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $1, $1, $1)',
       [account.id, amount, 'withdrawal', description || `Withdrawal by teacher`]
     );
 

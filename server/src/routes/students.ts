@@ -44,7 +44,7 @@ router.get('/:username', authenticateToken, requireRole(['teacher']), async (req
         a.updated_at as last_activity
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
-      WHERE u.username = ? AND u.role = 'student'
+      WHERE u.username = $1 AND u.role = 'student'
     `, [username]);
 
     if (!student) {
@@ -58,7 +58,7 @@ router.get('/:username', authenticateToken, requireRole(['teacher']), async (req
         COALESCE(SUM(lp.amount), 0) as total_paid
       FROM loans l
       LEFT JOIN loan_payments lp ON l.id = lp.loan_id
-      WHERE l.borrower_id = ?
+      WHERE l.borrower_id = $1
       GROUP BY l.id
       ORDER BY l.created_at DESC
     `, [student.id]);
@@ -74,7 +74,7 @@ router.get('/:username', authenticateToken, requireRole(['teacher']), async (req
       LEFT JOIN users fu ON fa.user_id = fu.id
       LEFT JOIN accounts ta ON t.to_account_id = ta.id
       LEFT JOIN users tu ON ta.user_id = tu.id
-      WHERE t.from_account_id = ? OR t.to_account_id = ?
+      WHERE t.from_account_id = $1 OR t.to_account_id = $2
       ORDER BY t.created_at DESC
       LIMIT 10
     `, [student.id, student.id]);

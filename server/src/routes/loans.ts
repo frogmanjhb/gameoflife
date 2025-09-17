@@ -48,7 +48,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
         FROM loans l
         JOIN users u ON l.borrower_id = u.id
         LEFT JOIN loan_payments lp ON l.id = lp.loan_id
-        WHERE l.borrower_id = ?
+        WHERE l.borrower_id = $1
         GROUP BY l.id
         ORDER BY l.created_at DESC
       `, [req.user.id]);
@@ -80,7 +80,7 @@ router.post('/apply', [
 
     // Check if user has any pending loans
     const pendingLoan = await database.get(
-      'SELECT id FROM loans WHERE borrower_id = ? AND status = ?',
+      'SELECT id FROM loans WHERE borrower_id = $1 AND status = $2',
       [req.user.id, 'pending']
     );
 
@@ -90,7 +90,7 @@ router.post('/apply', [
 
     // Check if user has any active loans
     const activeLoan = await database.get(
-      'SELECT id FROM loans WHERE borrower_id = ? AND status = ?',
+      'SELECT id FROM loans WHERE borrower_id = $1 AND status = $2',
       [req.user.id, 'active']
     );
 
@@ -134,7 +134,7 @@ router.post('/approve', [
     const { loan_id, approved }: LoanApprovalRequest = req.body;
 
     // Get loan details
-    const loan = await database.get('SELECT * FROM loans WHERE id = ?', [loan_id]);
+    const loan = await database.get('SELECT * FROM loans WHERE id = $1', [loan_id]);
     if (!loan) {
       return res.status(404).json({ error: 'Loan not found' });
     }
@@ -148,17 +148,17 @@ router.post('/approve', [
 
     // Update loan status
     await database.run(
-      'UPDATE loans SET status = ?, approved_at = ?, due_date = ? WHERE id = ?',
+      'UPDATE loans SET status = $1, approved_at = $2, due_date = $3 WHERE id = $4',
       [newStatus, approved ? new Date().toISOString() : null, dueDate, loan_id]
     );
 
     if (approved) {
       // Disburse loan to student's account
-      const account = await database.get('SELECT * FROM accounts WHERE user_id = ?', [loan.borrower_id]);
+      const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [loan.borrower_id]);
       if (account) {
         // Update account balance
         await database.run(
-          'UPDATE accounts SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
           [loan.amount, account.id]
         );
 
@@ -198,7 +198,7 @@ router.post('/pay', [
     }
 
     // Get loan details
-    const loan = await database.get('SELECT * FROM loans WHERE id = ? AND borrower_id = ?', [loan_id, req.user.id]);
+    const loan = await database.get('SELECT * FROM loans WHERE id = $1 AND borrower_id = $2', [loan_id, req.user.id]);
     if (!loan) {
       return res.status(404).json({ error: 'Loan not found' });
     }
@@ -208,7 +208,7 @@ router.post('/pay', [
     }
 
     // Get student's account
-    const account = await database.get('SELECT * FROM accounts WHERE user_id = ?', [req.user.id]);
+    const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
@@ -220,7 +220,7 @@ router.post('/pay', [
 
     // Check if payment exceeds outstanding balance
     const totalPaid = await database.get(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM loan_payments WHERE loan_id = ?',
+      'SELECT COALESCE(SUM(amount), 0) as total FROM loan_payments WHERE loan_id = $1',
       [loan_id]
     );
     const remainingBalance = loan.outstanding_balance - totalPaid.total;
@@ -235,7 +235,7 @@ router.post('/pay', [
     try {
       // Update account balance
       await database.run(
-        'UPDATE accounts SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
         [amount, account.id]
       );
 
@@ -249,7 +249,7 @@ router.post('/pay', [
       const newTotalPaid = totalPaid.total + amount;
       if (newTotalPaid >= loan.outstanding_balance) {
         await database.run(
-          'UPDATE loans SET status = ? WHERE id = ?',
+          'UPDATE loans SET status = $1 WHERE id = $2',
           ['paid_off', loan_id]
         );
       }
