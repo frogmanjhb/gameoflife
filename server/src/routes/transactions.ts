@@ -122,7 +122,7 @@ router.post('/transfer', [
 
       // Record transaction
       await database.run(
-        'INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description) VALUES ($1, $1, $1, $1, $1)',
+        'INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4, $5)',
         [fromAccount.id, toAccount.id, amount, 'transfer', description || `Transfer to ${to_username}`]
       );
 

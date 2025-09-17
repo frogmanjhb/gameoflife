@@ -24,6 +24,7 @@ router.get('/', authenticateToken, requireRole(['teacher']), async (req: Authent
     `);
 
     console.log('📊 Found students:', students.length);
+    console.log('📊 Student data:', JSON.stringify(students, null, 2));
     res.json(students);
   } catch (error) {
     console.error('Get students error:', error);
