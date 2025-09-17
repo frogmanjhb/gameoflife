@@ -42,6 +42,17 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Debug endpoint to check database state
+app.get('/api/debug/users', async (req, res) => {
+  try {
+    const users = await database.query('SELECT id, username, role, created_at FROM users ORDER BY created_at DESC');
+    res.json({ users, count: users.length });
+  } catch (error) {
+    console.error('Debug users error:', error);
+    res.status(500).json({ error: 'Database error', details: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Error:', err);
