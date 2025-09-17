@@ -1,108 +1,49 @@
 import { Pool } from 'pg';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-
-const isProduction = process.env.NODE_ENV === 'production';
 
 class Database {
-  private pool: Pool | null = null;
+  private pool: Pool;
 
   constructor() {
-    if (isProduction) {
-      this.pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
-        ssl: {
-          rejectUnauthorized: false
-        }
-      });
-    }
+    this.pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: {
+        rejectUnauthorized: false
+      }
+    });
   }
 
   async query(sql: string, params: any[] = []): Promise<any[]> {
-    if (isProduction && this.pool) {
-      const client = await this.pool.connect();
-      try {
-        const result = await client.query(sql, params);
-        return result.rows;
-      } finally {
-        client.release();
-      }
-    } else {
-      // Fallback to SQLite for development
-      const sqlite3 = require('sqlite3');
-      const DB_PATH = process.env.DB_PATH || './gameoflife.db';
-      const db = new sqlite3.Database(DB_PATH);
-      
-      return new Promise((resolve, reject) => {
-        db.all(sql, params, (err: any, rows: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(rows || []);
-          }
-        });
-      });
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(sql, params);
+      return result.rows;
+    } finally {
+      client.release();
     }
   }
 
   async run(sql: string, params: any[] = []): Promise<{ lastID: number; changes: number }> {
-    if (isProduction && this.pool) {
-      const client = await this.pool.connect();
-      try {
-        const result = await client.query(sql, params);
-        return { lastID: result.rows[0]?.id || 0, changes: result.rowCount || 0 };
-      } finally {
-        client.release();
-      }
-    } else {
-      // Fallback to SQLite for development
-      const sqlite3 = require('sqlite3');
-      const DB_PATH = process.env.DB_PATH || './gameoflife.db';
-      const db = new sqlite3.Database(DB_PATH);
-      
-      return new Promise((resolve, reject) => {
-        db.run(sql, params, function(this: any, err: any) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve({ lastID: this.lastID, changes: this.changes });
-          }
-        });
-      });
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(sql, params);
+      return { lastID: result.rows[0]?.id || 0, changes: result.rowCount || 0 };
+    } finally {
+      client.release();
     }
   }
 
   async get(sql: string, params: any[] = []): Promise<any> {
-    if (isProduction && this.pool) {
-      const client = await this.pool.connect();
-      try {
-        const result = await client.query(sql, params);
-        return result.rows[0] || null;
-      } finally {
-        client.release();
-      }
-    } else {
-      // Fallback to SQLite for development
-      const sqlite3 = require('sqlite3');
-      const DB_PATH = process.env.DB_PATH || './gameoflife.db';
-      const db = new sqlite3.Database(DB_PATH);
-      
-      return new Promise((resolve, reject) => {
-        db.get(sql, params, (err: any, row: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(row);
-          }
-        });
-      });
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(sql, params);
+      return result.rows[0] || null;
+    } finally {
+      client.release();
     }
   }
 
   async close() {
-    if (this.pool) {
-      await this.pool.end();
-    }
+    await this.pool.end();
   }
 }
 

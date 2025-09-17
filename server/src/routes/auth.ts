@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
-import database from '../database/database';
+import database from '../database/database-prod';
 import { CreateUserRequest, LoginRequest, AuthResponse } from '../types';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 

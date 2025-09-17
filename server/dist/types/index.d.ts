@@ -1,3 +1,4 @@
+import { Request } from 'express';
 export interface User {
     id: number;
     username: string;
@@ -86,5 +87,9 @@ export interface LoanWithDetails extends Loan {
     borrower_username: string;
     total_paid: number;
     payments_remaining: number;
+}
+export interface AuthenticatedRequest extends Request {
+    user: User;
+    account?: Account;
 }
 //# sourceMappingURL=index.d.ts.map

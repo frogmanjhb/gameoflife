@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
-import database from '../database/database';
+import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { LoanRequest, LoanApprovalRequest, LoanWithDetails } from '../types';
 

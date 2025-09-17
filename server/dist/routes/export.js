@@ -4,13 +4,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const database_1 = __importDefault(require("../database/database"));
+const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 // Export transactions as CSV
 router.get('/transactions/csv', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
-        const transactions = await database_1.default.query(`
+        const transactions = await database_prod_1.default.query(`
       SELECT 
         t.id,
         t.created_at,
@@ -42,7 +42,7 @@ router.get('/transactions/csv', auth_1.authenticateToken, (0, auth_1.requireRole
 // Export students as CSV
 router.get('/students/csv', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
-        const students = await database_1.default.query(`
+        const students = await database_prod_1.default.query(`
       SELECT 
         u.id,
         u.username,
@@ -71,7 +71,7 @@ router.get('/students/csv', auth_1.authenticateToken, (0, auth_1.requireRole)(['
 // Export loans as CSV
 router.get('/loans/csv', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
-        const loans = await database_1.default.query(`
+        const loans = await database_prod_1.default.query(`
       SELECT 
         l.id,
         u.username as borrower_username,

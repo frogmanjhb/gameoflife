@@ -5,7 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
-const database_1 = __importDefault(require("../database/database"));
+const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 // Get all loans (for teachers) or user's loans (for students)
@@ -17,7 +17,7 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
         let loans = [];
         if (req.user.role === 'teacher') {
             // Teachers can see all loans
-            loans = await database_1.default.query(`
+            loans = await database_prod_1.default.query(`
         SELECT 
           l.*,
           u.username as borrower_username,
@@ -36,7 +36,7 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
         }
         else {
             // Students can only see their own loans
-            loans = await database_1.default.query(`
+            loans = await database_prod_1.default.query(`
         SELECT 
           l.*,
           u.username as borrower_username,
@@ -76,12 +76,12 @@ router.post('/apply', [
             return res.status(401).json({ error: 'User not found' });
         }
         // Check if user has any pending loans
-        const pendingLoan = await database_1.default.get('SELECT id FROM loans WHERE borrower_id = ? AND status = ?', [req.user.id, 'pending']);
+        const pendingLoan = await database_prod_1.default.get('SELECT id FROM loans WHERE borrower_id = ? AND status = ?', [req.user.id, 'pending']);
         if (pendingLoan) {
             return res.status(400).json({ error: 'You already have a pending loan application' });
         }
         // Check if user has any active loans
-        const activeLoan = await database_1.default.get('SELECT id FROM loans WHERE borrower_id = ? AND status = ?', [req.user.id, 'active']);
+        const activeLoan = await database_prod_1.default.get('SELECT id FROM loans WHERE borrower_id = ? AND status = ?', [req.user.id, 'active']);
         if (activeLoan) {
             return res.status(400).json({ error: 'You already have an active loan' });
         }
@@ -91,7 +91,7 @@ router.post('/apply', [
         const monthlyPayment = (amount * monthlyInterestRate * Math.pow(1 + monthlyInterestRate, term_months)) /
             (Math.pow(1 + monthlyInterestRate, term_months) - 1);
         // Create loan application
-        const result = await database_1.default.run('INSERT INTO loans (borrower_id, amount, term_months, interest_rate, status, outstanding_balance, monthly_payment) VALUES (?, ?, ?, ?, ?, ?, ?)', [req.user.id, amount, term_months, interestRate, 'pending', amount, monthlyPayment]);
+        const result = await database_prod_1.default.run('INSERT INTO loans (borrower_id, amount, term_months, interest_rate, status, outstanding_balance, monthly_payment) VALUES (?, ?, ?, ?, ?, ?, ?)', [req.user.id, amount, term_months, interestRate, 'pending', amount, monthlyPayment]);
         res.status(201).json({
             message: 'Loan application submitted successfully',
             loan_id: result.lastID
@@ -114,7 +114,7 @@ router.post('/approve', [
         }
         const { loan_id, approved } = req.body;
         // Get loan details
-        const loan = await database_1.default.get('SELECT * FROM loans WHERE id = ?', [loan_id]);
+        const loan = await database_prod_1.default.get('SELECT * FROM loans WHERE id = ?', [loan_id]);
         if (!loan) {
             return res.status(404).json({ error: 'Loan not found' });
         }
@@ -124,15 +124,15 @@ router.post('/approve', [
         const newStatus = approved ? 'approved' : 'denied';
         const dueDate = approved ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null;
         // Update loan status
-        await database_1.default.run('UPDATE loans SET status = ?, approved_at = ?, due_date = ? WHERE id = ?', [newStatus, approved ? new Date().toISOString() : null, dueDate, loan_id]);
+        await database_prod_1.default.run('UPDATE loans SET status = ?, approved_at = ?, due_date = ? WHERE id = ?', [newStatus, approved ? new Date().toISOString() : null, dueDate, loan_id]);
         if (approved) {
             // Disburse loan to student's account
-            const account = await database_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [loan.borrower_id]);
+            const account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [loan.borrower_id]);
             if (account) {
                 // Update account balance
-                await database_1.default.run('UPDATE accounts SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [loan.amount, account.id]);
+                await database_prod_1.default.run('UPDATE accounts SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [loan.amount, account.id]);
                 // Record transaction
-                await database_1.default.run('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)', [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]);
+                await database_prod_1.default.run('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)', [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]);
             }
         }
         res.json({
@@ -160,7 +160,7 @@ router.post('/pay', [
             return res.status(401).json({ error: 'User not found' });
         }
         // Get loan details
-        const loan = await database_1.default.get('SELECT * FROM loans WHERE id = ? AND borrower_id = ?', [loan_id, req.user.id]);
+        const loan = await database_prod_1.default.get('SELECT * FROM loans WHERE id = ? AND borrower_id = ?', [loan_id, req.user.id]);
         if (!loan) {
             return res.status(404).json({ error: 'Loan not found' });
         }
@@ -168,7 +168,7 @@ router.post('/pay', [
             return res.status(400).json({ error: 'Loan is not active' });
         }
         // Get student's account
-        const account = await database_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [req.user.id]);
+        const account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [req.user.id]);
         if (!account) {
             return res.status(404).json({ error: 'Account not found' });
         }
@@ -177,30 +177,30 @@ router.post('/pay', [
             return res.status(400).json({ error: 'Insufficient funds' });
         }
         // Check if payment exceeds outstanding balance
-        const totalPaid = await database_1.default.get('SELECT COALESCE(SUM(amount), 0) as total FROM loan_payments WHERE loan_id = ?', [loan_id]);
+        const totalPaid = await database_prod_1.default.get('SELECT COALESCE(SUM(amount), 0) as total FROM loan_payments WHERE loan_id = ?', [loan_id]);
         const remainingBalance = loan.outstanding_balance - totalPaid.total;
         if (amount > remainingBalance) {
             return res.status(400).json({ error: 'Payment amount exceeds outstanding balance' });
         }
         // Start transaction
-        await database_1.default.run('BEGIN TRANSACTION');
+        await database_prod_1.default.run('BEGIN TRANSACTION');
         try {
             // Update account balance
-            await database_1.default.run('UPDATE accounts SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [amount, account.id]);
+            await database_prod_1.default.run('UPDATE accounts SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [amount, account.id]);
             // Record loan payment
-            await database_1.default.run('INSERT INTO loan_payments (loan_id, amount) VALUES (?, ?)', [loan_id, amount]);
+            await database_prod_1.default.run('INSERT INTO loan_payments (loan_id, amount) VALUES (?, ?)', [loan_id, amount]);
             // Check if loan is fully paid
             const newTotalPaid = totalPaid.total + amount;
             if (newTotalPaid >= loan.outstanding_balance) {
-                await database_1.default.run('UPDATE loans SET status = ? WHERE id = ?', ['paid_off', loan_id]);
+                await database_prod_1.default.run('UPDATE loans SET status = ? WHERE id = ?', ['paid_off', loan_id]);
             }
             // Record transaction
-            await database_1.default.run('INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)', [account.id, amount, 'loan_repayment', `Loan payment - ${amount}`]);
-            await database_1.default.run('COMMIT');
+            await database_prod_1.default.run('INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)', [account.id, amount, 'loan_repayment', `Loan payment - ${amount}`]);
+            await database_prod_1.default.run('COMMIT');
             res.json({ message: 'Payment successful' });
         }
         catch (error) {
-            await database_1.default.run('ROLLBACK');
+            await database_prod_1.default.run('ROLLBACK');
             throw error;
         }
     }

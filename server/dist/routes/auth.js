@@ -7,7 +7,7 @@ const express_1 = require("express");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const express_validator_1 = require("express-validator");
-const database_1 = __importDefault(require("../database/database"));
+const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -24,28 +24,28 @@ router.post('/register', [
         }
         const { username, password, role } = req.body;
         // Check if user already exists
-        const existingUser = await database_1.default.get('SELECT id FROM users WHERE username = ?', [username]);
+        const existingUser = await database_prod_1.default.get('SELECT id FROM users WHERE username = ?', [username]);
         if (existingUser) {
             return res.status(400).json({ error: 'Username already exists' });
         }
         // Hash password
         const passwordHash = await bcryptjs_1.default.hash(password, 10);
         // Create user
-        const result = await database_1.default.run('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)', [username, passwordHash, role]);
+        const result = await database_prod_1.default.run('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)', [username, passwordHash, role]);
         const userId = result.lastID;
         // Create bank account for student
         if (role === 'student') {
             const accountNumber = `ACC${Date.now()}${Math.floor(Math.random() * 1000)}`;
-            await database_1.default.run('INSERT INTO accounts (user_id, account_number, balance) VALUES (?, ?, ?)', [userId, accountNumber, 0.00]);
+            await database_prod_1.default.run('INSERT INTO accounts (user_id, account_number, balance) VALUES (?, ?, ?)', [userId, accountNumber, 0.00]);
         }
         // Generate JWT token
         const token = jsonwebtoken_1.default.sign({ userId }, JWT_SECRET, { expiresIn: '24h' });
         // Get user data
-        const user = await database_1.default.get('SELECT id, username, role, created_at, updated_at FROM users WHERE id = ?', [userId]);
+        const user = await database_prod_1.default.get('SELECT id, username, role, created_at, updated_at FROM users WHERE id = ?', [userId]);
         // Get account data for students
         let account = null;
         if (role === 'student') {
-            account = await database_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [userId]);
+            account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [userId]);
         }
         const response = {
             token,
@@ -71,7 +71,7 @@ router.post('/login', [
         }
         const { username, password } = req.body;
         // Find user
-        const user = await database_1.default.get('SELECT * FROM users WHERE username = ?', [username]);
+        const user = await database_prod_1.default.get('SELECT * FROM users WHERE username = ?', [username]);
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
@@ -85,7 +85,7 @@ router.post('/login', [
         // Get account data for students
         let account = null;
         if (user.role === 'student') {
-            account = await database_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [user.id]);
+            account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [user.id]);
         }
         const response = {
             token,
@@ -114,7 +114,7 @@ router.get('/profile', auth_1.authenticateToken, async (req, res) => {
         // Get account data for students
         let account = null;
         if (req.user.role === 'student') {
-            account = await database_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [req.user.id]);
+            account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [req.user.id]);
         }
         res.json({
             user: req.user,

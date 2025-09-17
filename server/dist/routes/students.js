@@ -4,13 +4,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const database_1 = __importDefault(require("../database/database"));
+const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 // Get all students with their account balances (teachers only)
 router.get('/', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
-        const students = await database_1.default.query(`
+        const students = await database_prod_1.default.query(`
       SELECT 
         u.id,
         u.username,
@@ -35,7 +35,7 @@ router.get('/:username', auth_1.authenticateToken, (0, auth_1.requireRole)(['tea
     try {
         const { username } = req.params;
         // Get student info
-        const student = await database_1.default.get(`
+        const student = await database_prod_1.default.get(`
       SELECT 
         u.id,
         u.username,
@@ -51,7 +51,7 @@ router.get('/:username', auth_1.authenticateToken, (0, auth_1.requireRole)(['tea
             return res.status(404).json({ error: 'Student not found' });
         }
         // Get student's loans
-        const loans = await database_1.default.query(`
+        const loans = await database_prod_1.default.query(`
       SELECT 
         l.*,
         COALESCE(SUM(lp.amount), 0) as total_paid
@@ -62,7 +62,7 @@ router.get('/:username', auth_1.authenticateToken, (0, auth_1.requireRole)(['tea
       ORDER BY l.created_at DESC
     `, [student.id]);
         // Get recent transactions
-        const transactions = await database_1.default.query(`
+        const transactions = await database_prod_1.default.query(`
       SELECT 
         t.*,
         fu.username as from_username,
