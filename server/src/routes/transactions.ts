@@ -172,7 +172,7 @@ router.post('/deposit', [
 
     // Record transaction
     await database.run(
-      'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $1, $1, $1)',
+      'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
       [account.id, amount, 'deposit', description || `Deposit by teacher`]
     );
 
@@ -221,7 +221,7 @@ router.post('/withdraw', [
 
     // Record transaction
     await database.run(
-      'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $1, $1, $1)',
+      'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
       [account.id, amount, 'withdrawal', description || `Withdrawal by teacher`]
     );
 
