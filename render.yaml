@@ -22,7 +22,7 @@ services:
     env: node
     plan: free
     buildCommand: cd client && npm install && npm run build
-    startCommand: cd client && npx serve -s dist -l 3000
+    startCommand: cd client && node server.js
     envVars:
       - key: NODE_ENV
         value: production
