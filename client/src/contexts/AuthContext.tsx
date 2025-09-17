@@ -67,7 +67,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const register = async (username: string, password: string, role: 'student' | 'teacher', first_name?: string, last_name?: string, class?: string, email?: string) => {
+  const register = async (username: string, password: string, role: 'student' | 'teacher', first_name?: string, last_name?: string, studentClass?: string, email?: string) => {
     try {
       console.log('Attempting registration for:', username, role);
       const response = await api.post('/auth/register', { 
@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         role, 
         first_name, 
         last_name, 
-        class, 
+        class: studentClass, 
         email 
       });
       console.log('Registration response:', response.data);

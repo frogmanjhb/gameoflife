@@ -65,7 +65,7 @@ export interface AuthContextType {
   user: User | null;
   account: Account | null;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string, role: 'student' | 'teacher', first_name?: string, last_name?: string, class?: string, email?: string) => Promise<void>;
+  register: (username: string, password: string, role: 'student' | 'teacher', first_name?: string, last_name?: string, studentClass?: string, email?: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
 }
