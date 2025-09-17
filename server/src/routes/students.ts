@@ -7,6 +7,8 @@ const router = Router();
 // Get all students with their account balances (teachers only)
 router.get('/', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    console.log('🔍 Getting students for teacher:', req.user?.username);
+    
     const students = await database.query(`
       SELECT 
         u.id,
@@ -21,6 +23,7 @@ router.get('/', authenticateToken, requireRole(['teacher']), async (req: Authent
       ORDER BY u.username
     `);
 
+    console.log('📊 Found students:', students.length);
     res.json(students);
   } catch (error) {
     console.error('Get students error:', error);
