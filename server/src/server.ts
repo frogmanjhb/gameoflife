@@ -60,9 +60,13 @@ async function initializeDatabase() {
     const schemaPath = join(__dirname, 'database', 'schema-postgres.sql');
     console.log('📁 Schema path:', schemaPath);
     
+    // Test database connection first
+    await database.query('SELECT 1');
+    console.log('✅ Database connection successful');
+    
     const schema = readFileSync(schemaPath, 'utf8');
     await database.query(schema);
-    console.log('✅ Database initialized successfully');
+    console.log('✅ Database schema initialized successfully');
   } catch (error) {
     console.error('❌ Database initialization failed:', error);
     console.error('Error details:', error instanceof Error ? error.message : String(error));

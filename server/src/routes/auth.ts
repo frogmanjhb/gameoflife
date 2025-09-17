@@ -24,7 +24,7 @@ router.post('/register', [
     const { username, password, role }: CreateUserRequest = req.body;
 
     // Check if user already exists
-    const existingUser = await database.get('SELECT id FROM users WHERE username = ?', [username]);
+    const existingUser = await database.get('SELECT id FROM users WHERE username = $1', [username]);
     if (existingUser) {
       return res.status(400).json({ error: 'Username already exists' });
     }
@@ -34,7 +34,7 @@ router.post('/register', [
 
     // Create user
     const result = await database.run(
-      'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
+      'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id',
       [username, passwordHash, role]
     );
 
@@ -44,7 +44,7 @@ router.post('/register', [
     if (role === 'student') {
       const accountNumber = `ACC${Date.now()}${Math.floor(Math.random() * 1000)}`;
       await database.run(
-        'INSERT INTO accounts (user_id, account_number, balance) VALUES (?, ?, ?)',
+        'INSERT INTO accounts (user_id, account_number, balance) VALUES ($1, $2, $3)',
         [userId, accountNumber, 0.00]
       );
     }
@@ -53,12 +53,12 @@ router.post('/register', [
     const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '24h' });
 
     // Get user data
-    const user = await database.get('SELECT id, username, role, created_at, updated_at FROM users WHERE id = ?', [userId]);
+    const user = await database.get('SELECT id, username, role, created_at, updated_at FROM users WHERE id = $1', [userId]);
     
     // Get account data for students
     let account = null;
     if (role === 'student') {
-      account = await database.get('SELECT * FROM accounts WHERE user_id = ?', [userId]);
+      account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [userId]);
     }
 
     const response: AuthResponse = {
@@ -88,7 +88,7 @@ router.post('/login', [
     const { username, password }: LoginRequest = req.body;
 
     // Find user
-    const user = await database.get('SELECT * FROM users WHERE username = ?', [username]);
+    const user = await database.get('SELECT * FROM users WHERE username = $1', [username]);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -105,7 +105,7 @@ router.post('/login', [
     // Get account data for students
     let account = null;
     if (user.role === 'student') {
-      account = await database.get('SELECT * FROM accounts WHERE user_id = ?', [user.id]);
+      account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [user.id]);
     }
 
     const response: AuthResponse = {
