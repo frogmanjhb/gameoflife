@@ -13,6 +13,10 @@ router.get('/', authenticateToken, requireRole(['teacher']), async (req: Authent
       SELECT 
         u.id,
         u.username,
+        u.first_name,
+        u.last_name,
+        u.class,
+        u.email,
         u.created_at,
         a.account_number,
         a.balance,
@@ -20,7 +24,7 @@ router.get('/', authenticateToken, requireRole(['teacher']), async (req: Authent
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
       WHERE u.role = 'student'
-      ORDER BY u.username
+      ORDER BY u.class, u.last_name, u.first_name
     `);
 
     console.log('📊 Found students:', students.length);

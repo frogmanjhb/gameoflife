@@ -179,8 +179,18 @@ const TeacherDashboard: React.FC = () => {
                             <span className="text-sm font-semibold text-primary-600">#{index + 1}</span>
                           </div>
                           <div>
-                            <p className="font-medium text-gray-900">{student.username}</p>
-                            <p className="text-sm text-gray-500">Account: {student.account_number}</p>
+                            <p className="font-medium text-gray-900">
+                              {student.first_name && student.last_name 
+                                ? `${student.first_name} ${student.last_name}` 
+                                : student.username
+                              }
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {student.class && `Class ${student.class}`} • Account: {student.account_number}
+                            </p>
+                            {student.email && (
+                              <p className="text-xs text-gray-400">{student.email}</p>
+                            )}
                           </div>
                         </div>
                         <div className="text-right">

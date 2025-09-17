@@ -9,7 +9,11 @@ const LoginForm: React.FC = () => {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    role: 'student' as 'student' | 'teacher'
+    role: 'student' as 'student' | 'teacher',
+    first_name: '',
+    last_name: '',
+    class: '',
+    email: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,7 +27,15 @@ const LoginForm: React.FC = () => {
       if (isLogin) {
         await login(formData.username, formData.password);
       } else {
-        await register(formData.username, formData.password, formData.role);
+        await register(
+          formData.username, 
+          formData.password, 
+          formData.role,
+          formData.first_name,
+          formData.last_name,
+          formData.class,
+          formData.email
+        );
       }
     } catch (err: any) {
       setError(err.message);
@@ -110,21 +122,96 @@ const LoginForm: React.FC = () => {
             </div>
 
             {!isLogin && (
-              <div>
-                <label htmlFor="role" className="label">
-                  I am a...
-                </label>
-                <select
-                  id="role"
-                  name="role"
-                  className="input-field"
-                  value={formData.role}
-                  onChange={handleInputChange}
-                >
-                  <option value="student">🎓 Student</option>
-                  <option value="teacher">👨‍🏫 Teacher</option>
-                </select>
-              </div>
+              <>
+                <div>
+                  <label htmlFor="role" className="label">
+                    I am a...
+                  </label>
+                  <select
+                    id="role"
+                    name="role"
+                    className="input-field"
+                    value={formData.role}
+                    onChange={handleInputChange}
+                  >
+                    <option value="student">🎓 Student</option>
+                    <option value="teacher">👨‍🏫 Teacher</option>
+                  </select>
+                </div>
+
+                {formData.role === 'student' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="first_name" className="label">
+                          First Name
+                        </label>
+                        <input
+                          id="first_name"
+                          name="first_name"
+                          type="text"
+                          required
+                          className="input-field"
+                          placeholder="Enter first name"
+                          value={formData.first_name}
+                          onChange={handleInputChange}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="last_name" className="label">
+                          Last Name
+                        </label>
+                        <input
+                          id="last_name"
+                          name="last_name"
+                          type="text"
+                          required
+                          className="input-field"
+                          placeholder="Enter last name"
+                          value={formData.last_name}
+                          onChange={handleInputChange}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="class" className="label">
+                        Class
+                      </label>
+                      <select
+                        id="class"
+                        name="class"
+                        required
+                        className="input-field"
+                        value={formData.class}
+                        onChange={handleInputChange}
+                      >
+                        <option value="">Select your class</option>
+                        <option value="6A">6A</option>
+                        <option value="6B">6B</option>
+                        <option value="6C">6C</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="email" className="label">
+                        Email Address
+                      </label>
+                      <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        required
+                        className="input-field"
+                        placeholder="yourname@stpeters.co.za"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Must end with @stpeters.co.za</p>
+                    </div>
+                  </>
+                )}
+              </>
             )}
 
             <div>

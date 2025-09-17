@@ -13,7 +13,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 router.post('/register', [
   body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['student', 'teacher']).withMessage('Role must be student or teacher')
+  body('role').isIn(['student', 'teacher']).withMessage('Role must be student or teacher'),
+  body('first_name').optional().isLength({ min: 1 }).withMessage('First name is required'),
+  body('last_name').optional().isLength({ min: 1 }).withMessage('Last name is required'),
+  body('class').optional().isIn(['6A', '6B', '6C']).withMessage('Class must be 6A, 6B, or 6C'),
+  body('email').optional().isEmail().withMessage('Valid email is required'),
+  body('email').optional().custom((value) => {
+    if (value && !value.endsWith('@stpeters.co.za')) {
+      throw new Error('Email must end with @stpeters.co.za');
+    }
+    return true;
+  })
 ], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
@@ -21,7 +31,7 @@ router.post('/register', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { username, password, role }: CreateUserRequest = req.body;
+    const { username, password, role, first_name, last_name, class: studentClass, email }: CreateUserRequest = req.body;
 
     // Check if user already exists
     const existingUser = await database.get('SELECT id FROM users WHERE username = $1', [username]);
@@ -34,8 +44,8 @@ router.post('/register', [
 
     // Create user
     const result = await database.run(
-      'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id',
-      [username, passwordHash, role]
+      'INSERT INTO users (username, password_hash, role, first_name, last_name, class, email) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+      [username, passwordHash, role, first_name, last_name, studentClass, email]
     );
 
     const userId = result.lastID;

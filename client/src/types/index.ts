@@ -2,6 +2,10 @@ export interface User {
   id: number;
   username: string;
   role: 'student' | 'teacher';
+  first_name?: string;
+  last_name?: string;
+  class?: string;
+  email?: string;
   created_at: string;
   updated_at: string;
 }
@@ -47,6 +51,10 @@ export interface Loan {
 export interface Student {
   id: number;
   username: string;
+  first_name?: string;
+  last_name?: string;
+  class?: string;
+  email?: string;
   created_at: string;
   account_number: string;
   balance: number;
@@ -57,7 +65,7 @@ export interface AuthContextType {
   user: User | null;
   account: Account | null;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string, role: 'student' | 'teacher') => Promise<void>;
+  register: (username: string, password: string, role: 'student' | 'teacher', first_name?: string, last_name?: string, class?: string, email?: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
 }
