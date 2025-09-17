@@ -19,9 +19,10 @@ services:
 
   - type: web
     name: gameoflife-frontend
-    env: static
+    env: node
+    plan: free
     buildCommand: cd client && npm install && npm run build
-    staticPublishPath: ./client/dist
+    startCommand: cd client && npx serve -s dist -l 3000
     envVars:
       - key: NODE_ENV
         value: production
