@@ -15,7 +15,7 @@ services:
           name: gameoflife-db
           property: connectionString
       - key: CLIENT_URL
-        value: https://gameoflife-frontend.onrender.com
+        value: https://gameoflife-5jf4.onrender.com
 
   - type: static
     name: gameoflife-frontend
