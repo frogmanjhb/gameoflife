@@ -29,6 +29,15 @@ const TeacherDashboard: React.FC = () => {
       console.log('📊 Students:', studentsRes.data);
       console.log('💰 Loans:', loansRes.data);
       console.log('📈 Transactions:', transactionsRes.data);
+      
+      // Debug loan filtering
+      const pendingLoans = loansRes.data.filter((loan: any) => loan.status === 'pending');
+      const activeLoans = loansRes.data.filter((loan: any) => loan.status === 'active');
+      const approvedLoans = loansRes.data.filter((loan: any) => loan.status === 'approved');
+      console.log('🔍 Pending loans:', pendingLoans.length);
+      console.log('🔍 Active loans:', activeLoans.length);
+      console.log('🔍 Approved loans:', approvedLoans.length);
+      console.log('🔍 All loan statuses:', loansRes.data.map((l: any) => l.status));
       setStudents(studentsRes.data);
       setLoans(loansRes.data);
       setTransactions(transactionsRes.data);

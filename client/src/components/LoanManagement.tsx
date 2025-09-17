@@ -16,6 +16,8 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
   const [success, setSuccess] = useState('');
 
   console.log('🔍 LoanManagement received loans:', loans);
+  console.log('🔍 Loan count:', loans.length);
+  console.log('🔍 Loan statuses:', loans.map(l => l.status));
 
   const handleApproveLoan = async (loanId: number, approved: boolean) => {
     setError('');
@@ -89,7 +91,10 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
 
   const pendingLoans = loans.filter(loan => loan.status === 'pending');
   const activeLoans = loans.filter(loan => loan.status === 'active');
+  const approvedLoans = loans.filter(loan => loan.status === 'approved');
   const completedLoans = loans.filter(loan => loan.status === 'paid_off' || loan.status === 'denied');
+  
+  console.log('🔍 Filtered loans - Pending:', pendingLoans.length, 'Active:', activeLoans.length, 'Approved:', approvedLoans.length, 'Completed:', completedLoans.length);
 
   return (
     <div className="space-y-6">
@@ -167,15 +172,15 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
         </div>
       )}
 
-      {/* Active Loans */}
-      {activeLoans.length > 0 && (
+      {/* Approved/Active Loans */}
+      {(activeLoans.length > 0 || approvedLoans.length > 0) && (
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <DollarSign className="h-5 w-5 text-blue-600 mr-2" />
-            Active Loans ({activeLoans.length})
+            Active Loans ({activeLoans.length + approvedLoans.length})
           </h3>
           <div className="space-y-4">
-            {activeLoans.map((loan) => (
+            {[...activeLoans, ...approvedLoans].map((loan) => (
               <div key={loan.id} className="card border-l-4 border-blue-400">
                 <div className="flex items-start justify-between mb-4">
                   <div>
