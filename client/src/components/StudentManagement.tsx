@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus, Minus, DollarSign, User, Search, Users } from 'lucide-react';
 import api from '../services/api';
 import { Student } from '../types';
@@ -22,16 +22,40 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState<string>('all');
 
-  // Get unique classes from students
-  const classes = ['all', ...Array.from(new Set(students.map(s => s.class).filter(Boolean)))].sort();
+  // Group students by class
+  const studentsByClass = useMemo(() => {
+    const grouped = students.reduce((acc, student) => {
+      const className = student.class || 'Unassigned';
+      if (!acc[className]) {
+        acc[className] = [];
+      }
+      acc[className].push(student);
+      return acc;
+    }, {} as Record<string, Student[]>);
 
-  const filteredStudents = students.filter(student => {
-    const matchesSearch = student.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (student.first_name && student.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         (student.last_name && student.last_name.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesClass = selectedClass === 'all' || student.class === selectedClass;
-    return matchesSearch && matchesClass;
-  });
+    // Sort classes alphabetically, with 'Unassigned' at the end
+    const sortedClasses = Object.keys(grouped).sort((a, b) => {
+      if (a === 'Unassigned') return 1;
+      if (b === 'Unassigned') return -1;
+      return a.localeCompare(b);
+    });
+
+    return { grouped, sortedClasses };
+  }, [students]);
+
+  // Get students for the selected class
+  const getStudentsForClass = (className: string) => {
+    if (className === 'all') {
+      return students;
+    }
+    return studentsByClass.grouped[className] || [];
+  };
+
+  const filteredStudents = getStudentsForClass(selectedClass).filter(student =>
+    student.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (student.first_name && student.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (student.last_name && student.last_name.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,42 +118,44 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
 
   return (
     <div className="space-y-6">
-      {/* Search and Class Filter */}
-      <div className="space-y-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search students by name or username..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search students by name or username..."
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
 
-        {/* Class Filter Tabs */}
-        <div className="flex flex-wrap gap-2">
-          {classes.map((classItem) => (
-            <button
-              key={classItem}
-              onClick={() => setSelectedClass(classItem)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedClass === classItem
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <Users className="h-4 w-4 inline mr-1" />
-              {classItem === 'all' ? 'All Classes' : `Class ${classItem}`}
-              <span className="ml-1 text-xs opacity-75">
-                ({classItem === 'all' 
-                  ? students.length 
-                  : students.filter(s => s.class === classItem).length
-                })
-              </span>
-            </button>
-          ))}
-        </div>
+      {/* Class Tabs */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setSelectedClass('all')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            selectedClass === 'all'
+              ? 'bg-primary-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          <Users className="h-4 w-4 inline mr-2" />
+          All Students ({students.length})
+        </button>
+        {studentsByClass.sortedClasses.map((className) => (
+          <button
+            key={className}
+            onClick={() => setSelectedClass(className)}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              selectedClass === className
+                ? 'bg-primary-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {className === 'Unassigned' ? '❓' : '🎓'} {className} ({studentsByClass.grouped[className].length})
+          </button>
+        ))}
       </div>
 
       {/* Error/Success Messages */}
@@ -145,9 +171,55 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
         </div>
       )}
 
+      {/* Class Summary (only when "All Students" is selected) */}
+      {selectedClass === 'all' && studentsByClass.sortedClasses.length > 1 && (
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">Class Summary</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {studentsByClass.sortedClasses.map((className) => {
+              const classStudents = studentsByClass.grouped[className];
+              const classBalance = classStudents.reduce((sum, student) => sum + (Number(student.balance) || 0), 0);
+              return (
+                <div key={className} className="bg-white rounded-lg p-3 border">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-gray-900">
+                        {className === 'Unassigned' ? '❓' : '🎓'} {className}
+                      </h4>
+                      <p className="text-sm text-gray-500">{classStudents.length} students</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-success-600">
+                        {formatCurrency(classBalance)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Students List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredStudents.map((student) => (
+      {filteredStudents.length === 0 ? (
+        <div className="text-center py-12">
+          <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {searchTerm ? 'No students found' : `No students in ${selectedClass === 'all' ? 'any class' : selectedClass}`}
+          </h3>
+          <p className="text-gray-500">
+            {searchTerm 
+              ? 'Try adjusting your search terms' 
+              : selectedClass === 'all' 
+                ? 'Students will appear here once they register' 
+                : 'Students in this class will appear here'
+            }
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredStudents.map((student) => (
           <div
             key={student.id}
             className={`card cursor-pointer transition-all duration-200 ${
@@ -169,19 +241,22 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                       : student.username
                     }
                   </h3>
-                  <p className="text-sm text-gray-500">
-                    {student.class && `Class ${student.class} • `}
-                    Account: {student.account_number}
-                  </p>
-                  {student.email && (
-                    <p className="text-xs text-gray-400">{student.email}</p>
-                  )}
+                  <p className="text-sm text-gray-500">@{student.username}</p>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded-full">
+                      {student.class || 'Unassigned'}
+                    </span>
+                    {student.email && (
+                      <span className="text-xs text-gray-500">{student.email}</span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-lg font-bold text-success-600">
                   {formatCurrency(student.balance)}
                 </p>
+                <p className="text-xs text-gray-500">Account: {student.account_number}</p>
               </div>
             </div>
 
@@ -211,7 +286,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
       {/* Deposit Modal */}
       {showDepositForm && selectedStudent && (
