@@ -1,0 +1,22 @@
+{
+  "name": "game-of-life-classroom",
+  "version": "1.0.0",
+  "description": "A classroom Game of Life simulation for teaching financial literacy",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "server:dev": "cd server && npm run dev",
+    "client:dev": "cd client && npm run dev",
+    "build": "npm run server:build && npm run client:build",
+    "server:build": "cd server && npm run build",
+    "client:build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install"
+  },
+  "keywords": ["education", "financial-literacy", "game-of-life", "classroom"],
+  "author": "Classroom Game of Life",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
