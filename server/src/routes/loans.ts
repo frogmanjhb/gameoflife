@@ -106,7 +106,7 @@ router.post('/apply', [
 
     // Create loan application
     const result = await database.run(
-      'INSERT INTO loans (borrower_id, amount, term_months, interest_rate, status, outstanding_balance, monthly_payment) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO loans (borrower_id, amount, term_months, interest_rate, status, outstanding_balance, monthly_payment) VALUES ($1, $2, $3, $4, $5, $6, $7)',
       [req.user.id, amount, term_months, interestRate, 'pending', amount, monthlyPayment]
     );
 
@@ -164,7 +164,7 @@ router.post('/approve', [
 
         // Record transaction
         await database.run(
-          'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)',
+          'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
           [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]
         );
       }
@@ -241,7 +241,7 @@ router.post('/pay', [
 
       // Record loan payment
       await database.run(
-        'INSERT INTO loan_payments (loan_id, amount) VALUES (?, ?)',
+        'INSERT INTO loan_payments (loan_id, amount) VALUES ($1, $2)',
         [loan_id, amount]
       );
 
@@ -256,7 +256,7 @@ router.post('/pay', [
 
       // Record transaction
       await database.run(
-        'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)',
+        'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
         [account.id, amount, 'loan_repayment', `Loan payment - ${amount}`]
       );
 

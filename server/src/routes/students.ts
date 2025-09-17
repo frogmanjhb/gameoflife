@@ -64,20 +64,24 @@ router.get('/:username', authenticateToken, requireRole(['teacher']), async (req
     `, [student.id]);
 
     // Get recent transactions
-    const transactions = await database.query(`
-      SELECT 
-        t.*,
-        fu.username as from_username,
-        tu.username as to_username
-      FROM transactions t
-      LEFT JOIN accounts fa ON t.from_account_id = fa.id
-      LEFT JOIN users fu ON fa.user_id = fu.id
-      LEFT JOIN accounts ta ON t.to_account_id = ta.id
-      LEFT JOIN users tu ON ta.user_id = tu.id
-      WHERE t.from_account_id = $1 OR t.to_account_id = $2
-      ORDER BY t.created_at DESC
-      LIMIT 10
-    `, [student.id, student.id]);
+    const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [student.id]);
+    let transactions = [];
+    if (account) {
+      transactions = await database.query(`
+        SELECT 
+          t.*,
+          fu.username as from_username,
+          tu.username as to_username
+        FROM transactions t
+        LEFT JOIN accounts fa ON t.from_account_id = fa.id
+        LEFT JOIN users fu ON fa.user_id = fu.id
+        LEFT JOIN accounts ta ON t.to_account_id = ta.id
+        LEFT JOIN users tu ON ta.user_id = tu.id
+        WHERE t.from_account_id = $1 OR t.to_account_id = $2
+        ORDER BY t.created_at DESC
+        LIMIT 10
+      `, [account.id, account.id]);
+    }
 
     res.json({
       student,
