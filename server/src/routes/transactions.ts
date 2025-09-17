@@ -154,7 +154,7 @@ router.post('/deposit', [
     const { username, amount, description }: DepositRequest = req.body;
 
     // Get student's account
-    const student = await database.get('SELECT * FROM users WHERE username = $1 AND role = $1', [username, 'student']);
+    const student = await database.get('SELECT * FROM users WHERE username = $1 AND role = $2', [username, 'student']);
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -166,7 +166,7 @@ router.post('/deposit', [
 
     // Update balance
     await database.run(
-      'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
       [amount, account.id]
     );
 
@@ -198,7 +198,7 @@ router.post('/withdraw', [
     const { username, amount, description }: WithdrawRequest = req.body;
 
     // Get student's account
-    const student = await database.get('SELECT * FROM users WHERE username = $1 AND role = $1', [username, 'student']);
+    const student = await database.get('SELECT * FROM users WHERE username = $1 AND role = $2', [username, 'student']);
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -215,7 +215,7 @@ router.post('/withdraw', [
 
     // Update balance
     await database.run(
-      'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
       [amount, account.id]
     );
 
