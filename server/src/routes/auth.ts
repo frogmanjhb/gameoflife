@@ -53,17 +53,19 @@ router.post('/register', [
     // Create bank account for student
     if (role === 'student') {
       const accountNumber = `ACC${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      console.log('🏦 Creating account for student:', userId, accountNumber);
       await database.run(
         'INSERT INTO accounts (user_id, account_number, balance) VALUES ($1, $2, $3)',
         [userId, accountNumber, 0.00]
       );
+      console.log('✅ Account created successfully');
     }
 
     // Generate JWT token
     const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '24h' });
 
     // Get user data
-    const user = await database.get('SELECT id, username, role, created_at, updated_at FROM users WHERE id = $1', [userId]);
+    const user = await database.get('SELECT id, username, role, first_name, last_name, class, email, created_at, updated_at FROM users WHERE id = $1', [userId]);
     
     // Get account data for students
     let account = null;
