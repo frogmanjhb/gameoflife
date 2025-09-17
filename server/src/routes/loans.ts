@@ -49,7 +49,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
         JOIN users u ON l.borrower_id = u.id
         LEFT JOIN loan_payments lp ON l.id = lp.loan_id
         WHERE l.borrower_id = $1
-        GROUP BY l.id
+        GROUP BY l.id, u.username
         ORDER BY l.created_at DESC
       `, [req.user.id]);
     }
