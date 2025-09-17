@@ -137,7 +137,7 @@ router.get('/profile', authenticateToken, async (req: AuthenticatedRequest, res:
     // Get account data for students
     let account = null;
     if (req.user.role === 'student') {
-      account = await database.get('SELECT * FROM accounts WHERE user_id = ?', [req.user.id]);
+      account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
     }
 
     res.json({

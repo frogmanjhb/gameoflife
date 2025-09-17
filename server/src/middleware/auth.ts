@@ -19,7 +19,7 @@ export const authenticateToken = async (req: AuthenticatedRequest, res: Response
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
-    const user = await database.get('SELECT * FROM users WHERE id = ?', [decoded.userId]);
+    const user = await database.get('SELECT * FROM users WHERE id = $1', [decoded.userId]);
     
     if (!user) {
       return res.status(401).json({ error: 'Invalid token' });
