@@ -52,7 +52,7 @@ const TeacherDashboard: React.FC = () => {
     });
   };
 
-  const totalClassBalance = students.reduce((sum, student) => sum + (parseFloat(student.balance) || 0), 0);
+  const totalClassBalance = students.reduce((sum, student) => sum + (Number(student.balance) || 0), 0);
   const pendingLoans = loans.filter(loan => loan.status === 'pending');
   const activeLoans = loans.filter(loan => loan.status === 'active');
   const recentTransactions = transactions.slice(0, 10);
@@ -194,7 +194,7 @@ const TeacherDashboard: React.FC = () => {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold text-success-600">{formatCurrency(parseFloat(student.balance) || 0)}</p>
+                          <p className="font-semibold text-success-600">{formatCurrency(Number(student.balance) || 0)}</p>
                         </div>
                       </div>
                     ))}
