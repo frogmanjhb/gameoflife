@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: process.env.NODE_ENV === 'production' 
-    ? 'https://gameoflife-backend.onrender.com/api' 
+    ? 'https://gameoflife-mu3t.onrender.com/api' 
     : 'http://localhost:5000/api',
   headers: {
     'Content-Type': 'application/json',
