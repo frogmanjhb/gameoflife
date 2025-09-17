@@ -2,11 +2,14 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import authRoutes from './routes/auth';
 import transactionRoutes from './routes/transactions';
 import loanRoutes from './routes/loans';
 import studentRoutes from './routes/students';
 import exportRoutes from './routes/export';
+import database from './database/database-prod';
 
 dotenv.config();
 
@@ -47,8 +50,28 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Game of Life Classroom Simulation API`);
-  console.log(`🌐 Health check: http://localhost:${PORT}/api/health`);
-});
+// Initialize database
+async function initializeDatabase() {
+  try {
+    console.log('🔄 Initializing database...');
+    const schema = readFileSync(join(__dirname, 'database', 'schema-postgres.sql'), 'utf8');
+    await database.query(schema);
+    console.log('✅ Database initialized successfully');
+  } catch (error) {
+    console.error('❌ Database initialization failed:', error);
+    // Don't exit, just log the error - the database might already be initialized
+  }
+}
+
+// Start server
+async function startServer() {
+  await initializeDatabase();
+  
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📊 Game of Life Classroom Simulation API`);
+    console.log(`🌐 Health check: http://localhost:${PORT}/api/health`);
+  });
+}
+
+startServer().catch(console.error);
