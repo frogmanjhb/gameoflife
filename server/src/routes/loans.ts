@@ -54,6 +54,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
       `, [req.user.id]);
     }
 
+    console.log('📊 Loan statuses:', loans.map(l => ({ id: l.id, status: l.status, borrower: l.borrower_username })));
     res.json(loans);
   } catch (error) {
     console.error('Get loans error:', error);
@@ -143,7 +144,7 @@ router.post('/approve', [
       return res.status(400).json({ error: 'Loan is not pending approval' });
     }
 
-    const newStatus = approved ? 'approved' : 'denied';
+    const newStatus = approved ? 'active' : 'denied';
     const dueDate = approved ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null;
 
     // Update loan status
@@ -171,7 +172,7 @@ router.post('/approve', [
     }
 
     res.json({ 
-      message: `Loan ${approved ? 'approved' : 'denied'} successfully`,
+      message: `Loan ${approved ? 'approved and activated' : 'denied'} successfully`,
       status: newStatus
     });
   } catch (error) {
