@@ -32,11 +32,11 @@ const TeacherDashboard: React.FC = () => {
       
       // Debug loan filtering
       const pendingLoans = loansRes.data.filter((loan: any) => loan.status === 'pending');
-      const activeLoans = loansRes.data.filter((loan: any) => loan.status === 'active');
+      const activeLoans = loansRes.data.filter((loan: any) => loan.status === 'active' || loan.status === 'approved');
       const approvedLoans = loansRes.data.filter((loan: any) => loan.status === 'approved');
       console.log('🔍 Pending loans:', pendingLoans.length);
-      console.log('🔍 Active loans:', activeLoans.length);
-      console.log('🔍 Approved loans:', approvedLoans.length);
+      console.log('🔍 Active loans (including approved):', activeLoans.length);
+      console.log('🔍 Approved loans only:', approvedLoans.length);
       console.log('🔍 All loan statuses:', loansRes.data.map((l: any) => l.status));
       setStudents(studentsRes.data);
       setLoans(loansRes.data);
@@ -67,7 +67,7 @@ const TeacherDashboard: React.FC = () => {
 
   const totalClassBalance = students.reduce((sum, student) => sum + (Number(student.balance) || 0), 0);
   const pendingLoans = loans.filter(loan => loan.status === 'pending');
-  const activeLoans = loans.filter(loan => loan.status === 'active');
+  const activeLoans = loans.filter(loan => loan.status === 'active' || loan.status === 'approved');
   const recentTransactions = transactions.slice(0, 10);
 
   const handleExport = async (type: 'transactions' | 'students' | 'loans') => {
