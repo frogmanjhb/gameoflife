@@ -55,8 +55,8 @@ const LoginForm: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 bg-primary-600 rounded-full flex items-center justify-center">
-            <img src="/logo.png" alt="Game of Life Bank" className="h-10 w-10" />
+          <div className="mx-auto h-24 w-24 bg-primary-600 rounded-full flex items-center justify-center">
+            <img src="/logo.png" alt="Game of Life Bank" className="h-15 w-15" />
           </div>
           <h2 className="mt-6 text-3xl font-bold text-gray-900">
             {isLogin ? 'Game of Life Bank' : 'Join the Game!'}

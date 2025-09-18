@@ -3,9 +3,8 @@ services:
     name: gameoflife-backend
     env: node
     plan: free
-    buildCommand: cd server && npm ci --only=production --no-audit --no-fund && npm run build:prod
+    buildCommand: cd server && npm install && npm run build
     startCommand: cd server && npm start
-    dockerfilePath: ./server/Dockerfile
     envVars:
       - key: NODE_ENV
         value: production

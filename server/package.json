@@ -5,10 +5,8 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc --incremental && npx copyfiles src/database/*.sql dist/database/ --flat",
-    "build:prod": "tsc --incremental --sourceMap false --declaration false && npx copyfiles src/database/*.sql dist/database/ --flat",
-    "start": "node dist/server.js",
-    "postinstall": "npm run build:prod"
+    "build": "tsc && npx copyfiles src/database/*.sql dist/database/ --flat",
+    "start": "node dist/server.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
