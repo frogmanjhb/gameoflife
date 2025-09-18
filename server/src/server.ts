@@ -68,33 +68,50 @@ app.use('*', (req, res) => {
 async function initializeDatabase() {
   try {
     console.log('🔄 Initializing database...');
-    const schemaPath = join(__dirname, 'database', 'schema-postgres.sql');
-    console.log('📁 Schema path:', schemaPath);
     
-    // Test database connection first
-    await database.query('SELECT 1');
+    // Test database connection first with timeout
+    await Promise.race([
+      database.query('SELECT 1'),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Database connection timeout')), 5000)
+      )
+    ]);
     console.log('✅ Database connection successful');
     
-    // Add new columns if they don't exist (migration)
-    try {
-      await database.query(`
-        ALTER TABLE users 
-        ADD COLUMN IF NOT EXISTS first_name VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS last_name VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS class VARCHAR(10),
-        ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE
-      `);
-      console.log('✅ Database migration completed');
-    } catch (migrationError) {
-      console.log('⚠️ Migration may have already been applied:', migrationError);
-    }
+    // Check if tables already exist to avoid unnecessary schema execution
+    const tablesExist = await database.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+      );
+    `);
     
-    const schema = readFileSync(schemaPath, 'utf8');
-    await database.query(schema);
-    console.log('✅ Database schema initialized successfully');
+    if (tablesExist[0]?.exists) {
+      console.log('✅ Database tables already exist, skipping schema initialization');
+      
+      // Only run migrations if needed
+      try {
+        await database.query(`
+          ALTER TABLE users 
+          ADD COLUMN IF NOT EXISTS first_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS last_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS class VARCHAR(10),
+          ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE
+        `);
+        console.log('✅ Database migration completed');
+      } catch (migrationError) {
+        console.log('⚠️ Migration may have already been applied');
+      }
+    } else {
+      // Only run full schema if tables don't exist
+      const schemaPath = join(__dirname, 'database', 'schema-postgres.sql');
+      const schema = readFileSync(schemaPath, 'utf8');
+      await database.query(schema);
+      console.log('✅ Database schema initialized successfully');
+    }
   } catch (error) {
     console.error('❌ Database initialization failed:', error);
-    console.error('Error details:', error instanceof Error ? error.message : String(error));
     // Don't exit, just log the error - the database might already be initialized
   }
 }
