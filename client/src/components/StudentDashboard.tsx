@@ -94,7 +94,7 @@ const StudentDashboard: React.FC = () => {
     <div className="space-y-6">
       {/* Welcome Header */}
       <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">Welcome back, {user?.username}! 🎓</h1>
+        <h1 className="text-2xl font-bold mb-2">Game of Life Bank - Welcome, {user?.username}! 🎓</h1>
         <p className="text-primary-100">Manage your virtual finances and learn about money!</p>
       </div>
 

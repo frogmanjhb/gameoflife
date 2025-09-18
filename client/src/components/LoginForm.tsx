@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Eye, EyeOff, User, Lock, GraduationCap } from 'lucide-react';
+import { Eye, EyeOff, User, Lock } from 'lucide-react';
 
 const LoginForm: React.FC = () => {
   const { login, register } = useAuth();
@@ -56,10 +56,10 @@ const LoginForm: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="mx-auto h-16 w-16 bg-primary-600 rounded-full flex items-center justify-center">
-            <GraduationCap className="h-8 w-8 text-white" />
+            <img src="/logo.png" alt="Game of Life Bank" className="h-10 w-10" />
           </div>
           <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            {isLogin ? 'Welcome Back!' : 'Join the Game!'}
+            {isLogin ? 'Game of Life Bank' : 'Join the Game!'}
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             {isLogin ? 'Sign in to your account' : 'Create your classroom account'}

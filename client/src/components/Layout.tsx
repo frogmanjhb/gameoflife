@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, User, GraduationCap } from 'lucide-react';
+import { LogOut, User } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -21,10 +21,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
               <div className="bg-primary-600 p-2 rounded-lg">
-                <GraduationCap className="h-6 w-6 text-white" />
+                <img src="/logo.png" alt="Game of Life Bank" className="h-6 w-6" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Game of Life</h1>
+                <h1 className="text-xl font-bold text-gray-900">Game of Life Bank</h1>
                 <p className="text-sm text-gray-500">Classroom Simulation</p>
               </div>
             </div>
