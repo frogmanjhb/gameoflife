@@ -56,7 +56,7 @@ const LoginForm: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="mx-auto bg-primary-600 rounded-full flex items-center justify-center" style={{ width: '216px', height: '216px' }}>
-            <img src="/logo.png" alt="Game of Life Bank" className="h-15 w-15" />
+            <img src="/logo.png" alt="Game of Life Bank" className="h-11 w-11" />
           </div>
           <h2 className="mt-6 text-3xl font-bold text-gray-900">
             {isLogin ? 'Game of Life Bank' : 'Join the Game!'}
