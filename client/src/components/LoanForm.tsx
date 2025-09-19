@@ -102,7 +102,9 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
   };
 
   const hasPendingLoan = loans.some(loan => loan.status === 'pending');
+  const hasApprovedLoan = loans.some(loan => loan.status === 'approved');
   const hasActiveLoan = loans.some(loan => loan.status === 'active');
+  const hasAnyLoanInProgress = hasPendingLoan || hasApprovedLoan || hasActiveLoan;
 
   return (
     <div className="space-y-6">
@@ -129,7 +131,7 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
       )}
 
       {/* Apply for Loan Button */}
-      {!hasPendingLoan && !hasActiveLoan && (
+      {!hasAnyLoanInProgress && (
         <div className="text-center">
           <button
             onClick={() => setShowApplyForm(true)}
@@ -137,6 +139,21 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
           >
             Apply for a Loan
           </button>
+        </div>
+      )}
+
+      {/* Loan Status Messages */}
+      {hasApprovedLoan && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertCircle className="h-5 w-5 text-green-600 mr-3" />
+            <div>
+              <h3 className="font-semibold text-green-900">Loan Approved!</h3>
+              <p className="text-sm text-green-800">
+                Your loan has been approved and the money is being processed. You'll be able to make payments once it becomes active.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -272,6 +289,17 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
                       <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" />
                       <p className="text-sm text-yellow-800">
                         Your loan application is pending teacher approval.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {loan.status === 'approved' && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-center">
+                      <AlertCircle className="h-4 w-4 text-green-600 mr-2" />
+                      <p className="text-sm text-green-800">
+                        Your loan has been approved! The money will be disbursed to your account shortly.
                       </p>
                     </div>
                   </div>

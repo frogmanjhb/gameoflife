@@ -76,15 +76,17 @@ router.post('/apply', [
         if (!req.user) {
             return res.status(401).json({ error: 'User not found' });
         }
-        // Check if user has any pending loans
-        const pendingLoan = await database_prod_1.default.get('SELECT id FROM loans WHERE borrower_id = $1 AND status = $2', [req.user.id, 'pending']);
-        if (pendingLoan) {
-            return res.status(400).json({ error: 'You already have a pending loan application' });
-        }
-        // Check if user has any active loans
-        const activeLoan = await database_prod_1.default.get('SELECT id FROM loans WHERE borrower_id = $1 AND status = $2', [req.user.id, 'active']);
-        if (activeLoan) {
-            return res.status(400).json({ error: 'You already have an active loan' });
+        // Check if user has any pending, approved, or active loans
+        const existingLoan = await database_prod_1.default.get('SELECT id, status FROM loans WHERE borrower_id = $1 AND status IN ($2, $3, $4)', [req.user.id, 'pending', 'approved', 'active']);
+        if (existingLoan) {
+            const statusMessages = {
+                'pending': 'You already have a pending loan application',
+                'approved': 'You already have an approved loan that is being processed',
+                'active': 'You already have an active loan'
+            };
+            return res.status(400).json({
+                error: statusMessages[existingLoan.status] || 'You already have a loan in progress'
+            });
         }
         // Calculate interest rate based on term
         let interestRate;
@@ -134,9 +136,9 @@ router.post('/approve', [
         if (loan.status !== 'pending') {
             return res.status(400).json({ error: 'Loan is not pending approval' });
         }
-        const newStatus = approved ? 'active' : 'denied';
+        const newStatus = approved ? 'approved' : 'denied';
         const dueDate = approved ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null;
-        // Update loan status
+        // Update loan status to approved first
         await database_prod_1.default.run('UPDATE loans SET status = $1, approved_at = $2, due_date = $3 WHERE id = $4', [newStatus, approved ? new Date().toISOString() : null, dueDate, loan_id]);
         if (approved) {
             // Disburse loan to student's account
@@ -146,6 +148,8 @@ router.post('/approve', [
                 await database_prod_1.default.run('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [loan.amount, account.id]);
                 // Record transaction
                 await database_prod_1.default.run('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]);
+                // Now update status to active after disbursement
+                await database_prod_1.default.run('UPDATE loans SET status = $1 WHERE id = $2', ['active', loan_id]);
             }
         }
         res.json({
