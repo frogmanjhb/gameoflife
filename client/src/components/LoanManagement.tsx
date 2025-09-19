@@ -41,6 +41,22 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
     }
   };
 
+  const handleActivateLoan = async (loanId: number) => {
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      await api.post(`/loans/activate/${loanId}`);
+      setSuccess('Loan activated successfully!');
+      onUpdate();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to activate loan');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -221,6 +237,18 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
                     <p className="text-sm text-green-800">
                       <strong>Total Paid:</strong> {formatCurrency(loan.total_paid)}
                     </p>
+                  </div>
+                )}
+
+                {loan.status === 'approved' && (
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      onClick={() => handleActivateLoan(loan.id)}
+                      disabled={loading}
+                      className="btn-primary disabled:opacity-50"
+                    >
+                      {loading ? 'Activating...' : 'Activate Loan'}
+                    </button>
                   </div>
                 )}
               </div>

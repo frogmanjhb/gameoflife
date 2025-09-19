@@ -147,8 +147,8 @@ router.post('/approve', [
       return res.status(404).json({ error: 'Loan not found' });
     }
 
-    if (loan.status !== 'pending') {
-      return res.status(400).json({ error: 'Loan is not pending approval' });
+    if (loan.status !== 'pending' && loan.status !== 'approved') {
+      return res.status(400).json({ error: 'Loan cannot be processed - invalid status' });
     }
 
     const newStatus = approved ? 'approved' : 'denied';
@@ -328,6 +328,65 @@ router.post('/pay', [
     }
   } catch (error) {
     console.error('Loan payment error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Activate approved loans (teachers only) - for fixing stuck loans
+router.post('/activate/:loan_id', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { loan_id } = req.params;
+
+    // Get loan details
+    const loan = await database.get('SELECT * FROM loans WHERE id = $1', [loan_id]);
+    if (!loan) {
+      return res.status(404).json({ error: 'Loan not found' });
+    }
+
+    if (loan.status !== 'approved') {
+      return res.status(400).json({ error: 'Loan is not in approved status' });
+    }
+
+    // Start transaction for loan activation
+    await database.run('BEGIN');
+    
+    try {
+      // Disburse loan to student's account
+      const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [loan.borrower_id]);
+      if (!account) {
+        throw new Error('Student account not found');
+      }
+
+      // Update account balance
+      await database.run(
+        'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [loan.amount, account.id]
+      );
+
+      // Record transaction
+      await database.run(
+        'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
+        [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]
+      );
+
+      // Update status to active
+      await database.run(
+        'UPDATE loans SET status = $1 WHERE id = $2',
+        ['active', loan_id]
+      );
+
+      await database.run('COMMIT');
+
+      res.json({ 
+        message: 'Loan activated successfully',
+        status: 'active'
+      });
+    } catch (error) {
+      await database.run('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Loan activation error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
