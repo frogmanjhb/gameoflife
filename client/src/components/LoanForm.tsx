@@ -102,7 +102,9 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
   };
 
   const hasPendingLoan = loans.some(loan => loan.status === 'pending');
+  const hasApprovedLoan = loans.some(loan => loan.status === 'approved');
   const hasActiveLoan = loans.some(loan => loan.status === 'active');
+  const hasAnyLoanInProgress = hasPendingLoan || hasApprovedLoan || hasActiveLoan;
 
   return (
     <div className="space-y-6">
@@ -129,7 +131,7 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
       )}
 
       {/* Apply for Loan Button */}
-      {!hasPendingLoan && !hasActiveLoan && (
+      {!hasAnyLoanInProgress && (
         <div className="text-center">
           <button
             onClick={() => setShowApplyForm(true)}
@@ -137,6 +139,21 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
           >
             Apply for a Loan
           </button>
+        </div>
+      )}
+
+      {/* Loan Status Messages */}
+      {hasApprovedLoan && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertCircle className="h-5 w-5 text-green-600 mr-3" />
+            <div>
+              <h3 className="font-semibold text-green-900">Loan Approved!</h3>
+              <p className="text-sm text-green-800">
+                Your loan has been approved and the money is being processed. You'll be able to make payments once it becomes active.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -176,10 +193,10 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
                 value={formData.term_months}
                 onChange={(e) => setFormData({ ...formData, term_months: e.target.value })}
               >
-                <option value="6">6 months</option>
-                <option value="12">12 months</option>
-                <option value="24">24 months</option>
-                <option value="36">36 months</option>
+                <option value="6">6 months (5% interest)</option>
+                <option value="12">12 months (10% interest)</option>
+                <option value="24">24 months (12% interest)</option>
+                <option value="48">48 months (15% interest)</option>
               </select>
             </div>
 
@@ -276,6 +293,17 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
                     </div>
                   </div>
                 )}
+
+                {loan.status === 'approved' && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-center">
+                      <AlertCircle className="h-4 w-4 text-green-600 mr-2" />
+                      <p className="text-sm text-green-800">
+                        Your loan has been approved! The money will be disbursed to your account shortly.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -286,7 +314,7 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
       <div className="bg-blue-50 rounded-lg p-4">
         <h3 className="font-semibold text-blue-900 mb-2">💡 Loan Information:</h3>
         <ul className="text-sm text-blue-800 space-y-1">
-          <li>• Interest rate: 5% per year</li>
+          <li>• Interest rates: 5% (6 months), 10% (12 months), 12% (24 months), 15% (48 months)</li>
           <li>• You can only have one active loan at a time</li>
           <li>• Teachers must approve all loan applications</li>
           <li>• Make payments on time to avoid penalties</li>

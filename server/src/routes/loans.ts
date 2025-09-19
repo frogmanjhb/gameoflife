@@ -79,36 +79,43 @@ router.post('/apply', [
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // Check if user has any pending loans
-    const pendingLoan = await database.get(
-      'SELECT id FROM loans WHERE borrower_id = $1 AND status = $2',
-      [req.user.id, 'pending']
+    // Check if user has any pending, approved, or active loans
+    const existingLoan = await database.get(
+      'SELECT id, status FROM loans WHERE borrower_id = $1 AND status IN ($2, $3, $4)',
+      [req.user.id, 'pending', 'approved', 'active']
     );
 
-    if (pendingLoan) {
-      return res.status(400).json({ error: 'You already have a pending loan application' });
+    if (existingLoan) {
+      const statusMessages = {
+        'pending': 'You already have a pending loan application',
+        'approved': 'You already have an approved loan that is being processed',
+        'active': 'You already have an active loan'
+      };
+      return res.status(400).json({ 
+        error: statusMessages[existingLoan.status as keyof typeof statusMessages] || 'You already have a loan in progress'
+      });
     }
 
-    // Check if user has any active loans
-    const activeLoan = await database.get(
-      'SELECT id FROM loans WHERE borrower_id = $1 AND status = $2',
-      [req.user.id, 'active']
-    );
-
-    if (activeLoan) {
-      return res.status(400).json({ error: 'You already have an active loan' });
+    // Calculate interest rate based on term
+    let interestRate: number;
+    if (term_months <= 6) {
+      interestRate = 0.05; // 5% for 6 months or less
+    } else if (term_months <= 12) {
+      interestRate = 0.10; // 10% for 12 months
+    } else if (term_months <= 24) {
+      interestRate = 0.12; // 12% for 24 months
+    } else {
+      interestRate = 0.15; // 15% for 48 months
     }
 
-    // Calculate monthly payment (simple interest)
-    const interestRate = 0.05; // 5% annual interest
-    const monthlyInterestRate = interestRate / 12;
-    const monthlyPayment = (amount * monthlyInterestRate * Math.pow(1 + monthlyInterestRate, term_months)) / 
-                          (Math.pow(1 + monthlyInterestRate, term_months) - 1);
+    // Calculate total amount with interest
+    const totalAmount = amount * (1 + interestRate);
+    const monthlyPayment = totalAmount / term_months;
 
     // Create loan application
     const result = await database.run(
       'INSERT INTO loans (borrower_id, amount, term_months, interest_rate, status, outstanding_balance, monthly_payment) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [req.user.id, amount, term_months, interestRate, 'pending', amount, monthlyPayment]
+      [req.user.id, amount, term_months, interestRate, 'pending', totalAmount, monthlyPayment]
     );
 
     res.status(201).json({ 
@@ -144,10 +151,10 @@ router.post('/approve', [
       return res.status(400).json({ error: 'Loan is not pending approval' });
     }
 
-    const newStatus = approved ? 'active' : 'denied';
+    const newStatus = approved ? 'approved' : 'denied';
     const dueDate = approved ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null;
 
-    // Update loan status
+    // Update loan status to approved first
     await database.run(
       'UPDATE loans SET status = $1, approved_at = $2, due_date = $3 WHERE id = $4',
       [newStatus, approved ? new Date().toISOString() : null, dueDate, loan_id]
@@ -167,6 +174,12 @@ router.post('/approve', [
         await database.run(
           'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
           [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]
+        );
+
+        // Now update status to active after disbursement
+        await database.run(
+          'UPDATE loans SET status = $1 WHERE id = $2',
+          ['active', loan_id]
         );
       }
     }
@@ -214,17 +227,35 @@ router.post('/pay', [
       return res.status(404).json({ error: 'Account not found' });
     }
 
-    // Check sufficient balance
-    if (account.balance < amount) {
+    console.log('Loan payment debug:', {
+      userId: req.user.id,
+      accountBalance: account.balance,
+      paymentAmount: amount,
+      accountId: account.id
+    });
+
+    // Check sufficient balance (ensure balance is a number)
+    const accountBalance = parseFloat(account.balance);
+    if (accountBalance < amount) {
+      console.log('Insufficient funds:', { balance: accountBalance, amount, originalBalance: account.balance });
       return res.status(400).json({ error: 'Insufficient funds' });
     }
 
     // Check if payment exceeds outstanding balance
-    const totalPaid = await database.get(
+    const totalPaidResult = await database.get(
       'SELECT COALESCE(SUM(amount), 0) as total FROM loan_payments WHERE loan_id = $1',
       [loan_id]
     );
-    const remainingBalance = loan.outstanding_balance - totalPaid.total;
+    const totalPaid = parseFloat(totalPaidResult?.total || 0);
+    const outstandingBalance = parseFloat(loan.outstanding_balance);
+    const remainingBalance = outstandingBalance - totalPaid;
+
+    console.log('Loan balance debug:', {
+      outstandingBalance,
+      totalPaid,
+      remainingBalance,
+      paymentAmount: amount
+    });
 
     if (amount > remainingBalance) {
       return res.status(400).json({ error: 'Payment amount exceeds outstanding balance' });
@@ -246,9 +277,15 @@ router.post('/pay', [
         [loan_id, amount]
       );
 
+      // Update outstanding balance
+      const newOutstandingBalance = outstandingBalance - amount;
+      await database.run(
+        'UPDATE loans SET outstanding_balance = $1 WHERE id = $2',
+        [newOutstandingBalance, loan_id]
+      );
+
       // Check if loan is fully paid
-      const newTotalPaid = totalPaid.total + amount;
-      if (newTotalPaid >= loan.outstanding_balance) {
+      if (newOutstandingBalance <= 0) {
         await database.run(
           'UPDATE loans SET status = $1 WHERE id = $2',
           ['paid_off', loan_id]

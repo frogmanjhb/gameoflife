@@ -41,6 +41,17 @@ app.use('/api/export', export_1.default);
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
+// Debug endpoint to check database state
+app.get('/api/debug/users', async (req, res) => {
+    try {
+        const users = await database_prod_1.default.query('SELECT id, username, role, created_at FROM users ORDER BY created_at DESC');
+        res.json({ users, count: users.length });
+    }
+    catch (error) {
+        console.error('Debug users error:', error);
+        res.status(500).json({ error: 'Database error', details: error instanceof Error ? error.message : String(error) });
+    }
+});
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Error:', err);
@@ -56,9 +67,26 @@ async function initializeDatabase() {
         console.log('🔄 Initializing database...');
         const schemaPath = (0, path_1.join)(__dirname, 'database', 'schema-postgres.sql');
         console.log('📁 Schema path:', schemaPath);
+        // Test database connection first
+        await database_prod_1.default.query('SELECT 1');
+        console.log('✅ Database connection successful');
+        // Add new columns if they don't exist (migration)
+        try {
+            await database_prod_1.default.query(`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS first_name VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS last_name VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS class VARCHAR(10),
+        ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE
+      `);
+            console.log('✅ Database migration completed');
+        }
+        catch (migrationError) {
+            console.log('⚠️ Migration may have already been applied:', migrationError);
+        }
         const schema = (0, fs_1.readFileSync)(schemaPath, 'utf8');
         await database_prod_1.default.query(schema);
-        console.log('✅ Database initialized successfully');
+        console.log('✅ Database schema initialized successfully');
     }
     catch (error) {
         console.error('❌ Database initialization failed:', error);
