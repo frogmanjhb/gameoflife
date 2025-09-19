@@ -214,17 +214,35 @@ router.post('/pay', [
       return res.status(404).json({ error: 'Account not found' });
     }
 
-    // Check sufficient balance
-    if (account.balance < amount) {
+    console.log('Loan payment debug:', {
+      userId: req.user.id,
+      accountBalance: account.balance,
+      paymentAmount: amount,
+      accountId: account.id
+    });
+
+    // Check sufficient balance (ensure balance is a number)
+    const accountBalance = parseFloat(account.balance);
+    if (accountBalance < amount) {
+      console.log('Insufficient funds:', { balance: accountBalance, amount, originalBalance: account.balance });
       return res.status(400).json({ error: 'Insufficient funds' });
     }
 
     // Check if payment exceeds outstanding balance
-    const totalPaid = await database.get(
+    const totalPaidResult = await database.get(
       'SELECT COALESCE(SUM(amount), 0) as total FROM loan_payments WHERE loan_id = $1',
       [loan_id]
     );
-    const remainingBalance = loan.outstanding_balance - totalPaid.total;
+    const totalPaid = parseFloat(totalPaidResult?.total || 0);
+    const outstandingBalance = parseFloat(loan.outstanding_balance);
+    const remainingBalance = outstandingBalance - totalPaid;
+
+    console.log('Loan balance debug:', {
+      outstandingBalance,
+      totalPaid,
+      remainingBalance,
+      paymentAmount: amount
+    });
 
     if (amount > remainingBalance) {
       return res.status(400).json({ error: 'Payment amount exceeds outstanding balance' });
@@ -247,8 +265,8 @@ router.post('/pay', [
       );
 
       // Check if loan is fully paid
-      const newTotalPaid = totalPaid.total + amount;
-      if (newTotalPaid >= loan.outstanding_balance) {
+      const newTotalPaid = totalPaid + amount;
+      if (newTotalPaid >= outstandingBalance) {
         await database.run(
           'UPDATE loans SET status = $1 WHERE id = $2',
           ['paid_off', loan_id]
