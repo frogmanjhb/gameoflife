@@ -1,5 +1,6 @@
+import { Pool } from 'pg';
 declare class Database {
-    private pool;
+    private _pool;
     constructor();
     query(sql: string, params?: any[]): Promise<any[]>;
     run(sql: string, params?: any[]): Promise<{
@@ -8,6 +9,7 @@ declare class Database {
     }>;
     get(sql: string, params?: any[]): Promise<any>;
     close(): Promise<void>;
+    get pool(): Pool;
 }
 declare const _default: Database;
 export default _default;

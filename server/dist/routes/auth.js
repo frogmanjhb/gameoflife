@@ -15,37 +15,49 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 router.post('/register', [
     (0, express_validator_1.body)('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
     (0, express_validator_1.body)('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-    (0, express_validator_1.body)('role').isIn(['student', 'teacher']).withMessage('Role must be student or teacher')
+    (0, express_validator_1.body)('role').isIn(['student', 'teacher']).withMessage('Role must be student or teacher'),
+    (0, express_validator_1.body)('first_name').optional().isLength({ min: 1 }).withMessage('First name is required'),
+    (0, express_validator_1.body)('last_name').optional().isLength({ min: 1 }).withMessage('Last name is required'),
+    (0, express_validator_1.body)('class').optional().isIn(['6A', '6B', '6C']).withMessage('Class must be 6A, 6B, or 6C'),
+    (0, express_validator_1.body)('email').optional().isEmail().withMessage('Valid email is required'),
+    (0, express_validator_1.body)('email').optional().custom((value) => {
+        if (value && !value.endsWith('@stpeters.co.za')) {
+            throw new Error('Email must end with @stpeters.co.za');
+        }
+        return true;
+    })
 ], async (req, res) => {
     try {
         const errors = (0, express_validator_1.validationResult)(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
         }
-        const { username, password, role } = req.body;
+        const { username, password, role, first_name, last_name, class: studentClass, email } = req.body;
         // Check if user already exists
-        const existingUser = await database_prod_1.default.get('SELECT id FROM users WHERE username = ?', [username]);
+        const existingUser = await database_prod_1.default.get('SELECT id FROM users WHERE username = $1', [username]);
         if (existingUser) {
             return res.status(400).json({ error: 'Username already exists' });
         }
         // Hash password
         const passwordHash = await bcryptjs_1.default.hash(password, 10);
         // Create user
-        const result = await database_prod_1.default.run('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)', [username, passwordHash, role]);
+        const result = await database_prod_1.default.run('INSERT INTO users (username, password_hash, role, first_name, last_name, class, email) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id', [username, passwordHash, role, first_name, last_name, studentClass, email]);
         const userId = result.lastID;
         // Create bank account for student
         if (role === 'student') {
             const accountNumber = `ACC${Date.now()}${Math.floor(Math.random() * 1000)}`;
-            await database_prod_1.default.run('INSERT INTO accounts (user_id, account_number, balance) VALUES (?, ?, ?)', [userId, accountNumber, 0.00]);
+            console.log('🏦 Creating account for student:', userId, accountNumber);
+            await database_prod_1.default.run('INSERT INTO accounts (user_id, account_number, balance) VALUES ($1, $2, $3)', [userId, accountNumber, 0.00]);
+            console.log('✅ Account created successfully');
         }
         // Generate JWT token
         const token = jsonwebtoken_1.default.sign({ userId }, JWT_SECRET, { expiresIn: '24h' });
         // Get user data
-        const user = await database_prod_1.default.get('SELECT id, username, role, created_at, updated_at FROM users WHERE id = ?', [userId]);
+        const user = await database_prod_1.default.get('SELECT id, username, role, first_name, last_name, class, email, created_at, updated_at FROM users WHERE id = $1', [userId]);
         // Get account data for students
         let account = null;
         if (role === 'student') {
-            account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [userId]);
+            account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = $1', [userId]);
         }
         const response = {
             token,
@@ -71,7 +83,7 @@ router.post('/login', [
         }
         const { username, password } = req.body;
         // Find user
-        const user = await database_prod_1.default.get('SELECT * FROM users WHERE username = ?', [username]);
+        const user = await database_prod_1.default.get('SELECT * FROM users WHERE username = $1', [username]);
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
@@ -85,7 +97,7 @@ router.post('/login', [
         // Get account data for students
         let account = null;
         if (user.role === 'student') {
-            account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [user.id]);
+            account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = $1', [user.id]);
         }
         const response = {
             token,
@@ -114,7 +126,7 @@ router.get('/profile', auth_1.authenticateToken, async (req, res) => {
         // Get account data for students
         let account = null;
         if (req.user.role === 'student') {
-            account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = ?', [req.user.id]);
+            account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
         }
         res.json({
             user: req.user,

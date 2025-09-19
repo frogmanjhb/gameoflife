@@ -176,10 +176,10 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
                 value={formData.term_months}
                 onChange={(e) => setFormData({ ...formData, term_months: e.target.value })}
               >
-                <option value="6">6 months</option>
-                <option value="12">12 months</option>
-                <option value="24">24 months</option>
-                <option value="36">36 months</option>
+                <option value="6">6 months (5% interest)</option>
+                <option value="12">12 months (10% interest)</option>
+                <option value="24">24 months (12% interest)</option>
+                <option value="48">48 months (15% interest)</option>
               </select>
             </div>
 
@@ -286,7 +286,7 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
       <div className="bg-blue-50 rounded-lg p-4">
         <h3 className="font-semibold text-blue-900 mb-2">💡 Loan Information:</h3>
         <ul className="text-sm text-blue-800 space-y-1">
-          <li>• Interest rate: 5% per year</li>
+          <li>• Interest rates: 5% (6 months), 10% (12 months), 12% (24 months), 15% (48 months)</li>
           <li>• You can only have one active loan at a time</li>
           <li>• Teachers must approve all loan applications</li>
           <li>• Make payments on time to avoid penalties</li>

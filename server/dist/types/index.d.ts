@@ -3,6 +3,10 @@ export interface User {
     id: number;
     username: string;
     role: 'student' | 'teacher';
+    first_name?: string;
+    last_name?: string;
+    class?: string;
+    email?: string;
     created_at: string;
     updated_at: string;
 }
@@ -46,6 +50,10 @@ export interface CreateUserRequest {
     username: string;
     password: string;
     role: 'student' | 'teacher';
+    first_name?: string;
+    last_name?: string;
+    class?: string;
+    email?: string;
 }
 export interface LoginRequest {
     username: string;

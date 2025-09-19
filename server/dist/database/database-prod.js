@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const pg_1 = require("pg");
 class Database {
     constructor() {
-        this.pool = new pg_1.Pool({
+        this._pool = new pg_1.Pool({
             connectionString: process.env.DATABASE_URL,
             ssl: {
                 rejectUnauthorized: false
@@ -11,7 +11,7 @@ class Database {
         });
     }
     async query(sql, params = []) {
-        const client = await this.pool.connect();
+        const client = await this._pool.connect();
         try {
             const result = await client.query(sql, params);
             return result.rows;
@@ -21,7 +21,7 @@ class Database {
         }
     }
     async run(sql, params = []) {
-        const client = await this.pool.connect();
+        const client = await this._pool.connect();
         try {
             const result = await client.query(sql, params);
             return { lastID: result.rows[0]?.id || 0, changes: result.rowCount || 0 };
@@ -31,7 +31,7 @@ class Database {
         }
     }
     async get(sql, params = []) {
-        const client = await this.pool.connect();
+        const client = await this._pool.connect();
         try {
             const result = await client.query(sql, params);
             return result.rows[0] || null;
@@ -41,7 +41,11 @@ class Database {
         }
     }
     async close() {
-        await this.pool.end();
+        await this._pool.end();
+    }
+    // Get pool for transactions
+    get pool() {
+        return this._pool;
     }
 }
 exports.default = new Database();

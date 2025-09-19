@@ -99,16 +99,26 @@ router.post('/apply', [
       return res.status(400).json({ error: 'You already have an active loan' });
     }
 
-    // Calculate monthly payment (simple interest)
-    const interestRate = 0.05; // 5% annual interest
-    const monthlyInterestRate = interestRate / 12;
-    const monthlyPayment = (amount * monthlyInterestRate * Math.pow(1 + monthlyInterestRate, term_months)) / 
-                          (Math.pow(1 + monthlyInterestRate, term_months) - 1);
+    // Calculate interest rate based on term
+    let interestRate: number;
+    if (term_months <= 6) {
+      interestRate = 0.05; // 5% for 6 months or less
+    } else if (term_months <= 12) {
+      interestRate = 0.10; // 10% for 12 months
+    } else if (term_months <= 24) {
+      interestRate = 0.12; // 12% for 24 months
+    } else {
+      interestRate = 0.15; // 15% for 48 months
+    }
+
+    // Calculate total amount with interest
+    const totalAmount = amount * (1 + interestRate);
+    const monthlyPayment = totalAmount / term_months;
 
     // Create loan application
     const result = await database.run(
       'INSERT INTO loans (borrower_id, amount, term_months, interest_rate, status, outstanding_balance, monthly_payment) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [req.user.id, amount, term_months, interestRate, 'pending', amount, monthlyPayment]
+      [req.user.id, amount, term_months, interestRate, 'pending', totalAmount, monthlyPayment]
     );
 
     res.status(201).json({ 
@@ -264,9 +274,15 @@ router.post('/pay', [
         [loan_id, amount]
       );
 
+      // Update outstanding balance
+      const newOutstandingBalance = outstandingBalance - amount;
+      await database.run(
+        'UPDATE loans SET outstanding_balance = $1 WHERE id = $2',
+        [newOutstandingBalance, loan_id]
+      );
+
       // Check if loan is fully paid
-      const newTotalPaid = totalPaid + amount;
-      if (newTotalPaid >= outstandingBalance) {
+      if (newOutstandingBalance <= 0) {
         await database.run(
           'UPDATE loans SET status = $1 WHERE id = $2',
           ['paid_off', loan_id]
