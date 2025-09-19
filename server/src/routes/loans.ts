@@ -181,16 +181,17 @@ router.post('/approve', [
           throw new Error('Student account not found');
         }
 
-        // Update account balance
+        // Update account balance (ensure amount is a number)
+        const loanAmount = parseFloat(loan.amount);
         await client.query(
           'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-          [loan.amount, account.id]
+          [loanAmount, account.id]
         );
 
         // Record transaction
         await client.query(
           'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
-          [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]
+          [account.id, loanAmount, 'loan_disbursement', `Loan disbursement - ${loanAmount}`]
         );
 
         // Update status to active after successful disbursement
@@ -260,6 +261,12 @@ router.post('/pay', [
       return res.status(401).json({ error: 'User not found' });
     }
 
+    // Convert amount to number to ensure proper handling
+    const paymentAmount = parseFloat(amount);
+    if (isNaN(paymentAmount)) {
+      return res.status(400).json({ error: 'Invalid payment amount' });
+    }
+
     // Get loan details
     const loan = await database.get('SELECT * FROM loans WHERE id = $1 AND borrower_id = $2', [loan_id, req.user.id]);
     if (!loan) {
@@ -279,14 +286,14 @@ router.post('/pay', [
     console.log('Loan payment debug:', {
       userId: req.user.id,
       accountBalance: account.balance,
-      paymentAmount: amount,
+      paymentAmount: paymentAmount,
       accountId: account.id
     });
 
     // Check sufficient balance (ensure balance is a number)
     const accountBalance = parseFloat(account.balance);
-    if (accountBalance < amount) {
-      console.log('Insufficient funds:', { balance: accountBalance, amount, originalBalance: account.balance });
+    if (accountBalance < paymentAmount) {
+      console.log('Insufficient funds:', { balance: accountBalance, amount: paymentAmount, originalBalance: account.balance });
       return res.status(400).json({ error: 'Insufficient funds' });
     }
 
@@ -303,13 +310,13 @@ router.post('/pay', [
       outstandingBalance,
       totalPaid,
       remainingBalance,
-      paymentAmount: amount
+      paymentAmount: paymentAmount
     });
 
     // Allow payment if it's close to the remaining balance (within 1 cent tolerance)
-    if (amount > remainingBalance + 0.01) {
+    if (paymentAmount > remainingBalance + 0.01) {
       return res.status(400).json({ 
-        error: `Payment amount ($${amount.toFixed(2)}) exceeds outstanding balance ($${remainingBalance.toFixed(2)})` 
+        error: `Payment amount ($${paymentAmount.toFixed(2)}) exceeds outstanding balance ($${remainingBalance.toFixed(2)})` 
       });
     }
 
@@ -322,17 +329,17 @@ router.post('/pay', [
       // Update account balance
       await client.query(
         'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [amount, account.id]
+        [paymentAmount, account.id]
       );
 
       // Record loan payment
       await client.query(
         'INSERT INTO loan_payments (loan_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
-        [loan_id, amount]
+        [loan_id, paymentAmount]
       );
 
       // Update outstanding balance
-      const newOutstandingBalance = outstandingBalance - amount;
+      const newOutstandingBalance = outstandingBalance - paymentAmount;
       await client.query(
         'UPDATE loans SET outstanding_balance = $1 WHERE id = $2',
         [newOutstandingBalance, loan_id]
@@ -349,7 +356,7 @@ router.post('/pay', [
       // Record transaction
       await client.query(
         'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
-        [account.id, amount, 'loan_repayment', `Loan payment - ${amount}`]
+        [account.id, paymentAmount, 'loan_repayment', `Loan payment - ${paymentAmount}`]
       );
 
       await client.query('COMMIT');
@@ -403,16 +410,17 @@ router.post('/activate/:loan_id', authenticateToken, requireRole(['teacher']), a
         throw new Error('Student account not found');
       }
 
-      // Update account balance
+      // Update account balance (ensure amount is a number)
+      const loanAmount = parseFloat(loan.amount);
       await client.query(
         'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [loan.amount, account.id]
+        [loanAmount, account.id]
       );
 
       // Record transaction
       await client.query(
         'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
-        [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]
+        [account.id, loanAmount, 'loan_disbursement', `Loan disbursement - ${loanAmount}`]
       );
 
       // Update status to active
@@ -555,16 +563,17 @@ router.post('/admin/fix-approved', authenticateToken, requireRole(['teacher']), 
             throw new Error(`Student account not found for user ${loan.borrower_id}`);
           }
 
-          // Update account balance
+          // Update account balance (ensure amount is a number)
+          const loanAmount = parseFloat(loan.amount);
           await client.query(
             'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-            [loan.amount, account.id]
+            [loanAmount, account.id]
           );
 
           // Record transaction
           await client.query(
             'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
-            [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]
+            [account.id, loanAmount, 'loan_disbursement', `Loan disbursement - ${loanAmount}`]
           );
 
           // Update status to active
