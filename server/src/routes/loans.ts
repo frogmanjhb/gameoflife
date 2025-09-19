@@ -134,8 +134,16 @@ router.post('/approve', [
   body('approved').isBoolean().withMessage('Approval status is required')
 ], authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    console.log('🔍 Loan approval request received:', {
+      loan_id: req.body.loan_id,
+      approved: req.body.approved,
+      user_id: req.user?.id,
+      timestamp: new Date().toISOString()
+    });
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
@@ -232,14 +240,23 @@ router.post('/pay', [
   body('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0')
 ], authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    console.log('🔍 Loan payment request received:', {
+      loan_id: req.body.loan_id,
+      amount: req.body.amount,
+      user_id: req.user?.id,
+      timestamp: new Date().toISOString()
+    });
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
     const { loan_id, amount } = req.body;
 
     if (!req.user) {
+      console.log('❌ No user found in request');
       return res.status(401).json({ error: 'User not found' });
     }
 
@@ -418,6 +435,170 @@ router.post('/activate/:loan_id', authenticateToken, requireRole(['teacher']), a
     }
   } catch (error) {
     console.error('Loan activation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Admin route to view all loans (teachers only)
+router.get('/admin/all', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const loans = await database.query(`
+      SELECT 
+        l.*,
+        u.username as borrower_username,
+        u.role as borrower_role
+      FROM loans l
+      JOIN users u ON l.borrower_id = u.id
+      ORDER BY l.created_at DESC
+    `);
+    
+    res.json({ loans });
+  } catch (error) {
+    console.error('Admin loans view error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Admin route to view all users (teachers only)
+router.get('/admin/users', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const users = await database.query(`
+      SELECT 
+        u.*,
+        a.balance,
+        a.account_number
+      FROM users u
+      LEFT JOIN accounts a ON u.id = a.user_id
+      ORDER BY u.created_at DESC
+    `);
+    
+    res.json({ users });
+  } catch (error) {
+    console.error('Admin users view error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Admin route to view all transactions (teachers only)
+router.get('/admin/transactions', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const transactions = await database.query(`
+      SELECT 
+        t.*,
+        from_acc.account_number as from_account,
+        to_acc.account_number as to_account,
+        from_user.username as from_username,
+        to_user.username as to_username
+      FROM transactions t
+      LEFT JOIN accounts from_acc ON t.from_account_id = from_acc.id
+      LEFT JOIN accounts to_acc ON t.to_account_id = to_acc.id
+      LEFT JOIN users from_user ON from_acc.user_id = from_user.id
+      LEFT JOIN users to_user ON to_acc.user_id = to_user.id
+      ORDER BY t.created_at DESC
+      LIMIT 100
+    `);
+    
+    res.json({ transactions });
+  } catch (error) {
+    console.error('Admin transactions view error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Admin route to view loan payments (teachers only)
+router.get('/admin/loan-payments', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const payments = await database.query(`
+      SELECT 
+        lp.*,
+        l.amount as loan_amount,
+        l.status as loan_status,
+        u.username as borrower_username
+      FROM loan_payments lp
+      JOIN loans l ON lp.loan_id = l.id
+      JOIN users u ON l.borrower_id = u.id
+      ORDER BY lp.payment_date DESC
+    `);
+    
+    res.json({ payments });
+  } catch (error) {
+    console.error('Admin loan payments view error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Fix all approved loans (teachers only) - for fixing stuck loans
+router.post('/admin/fix-approved', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log('🔧 Fixing all approved loans...');
+    
+    // Get all approved loans
+    const approvedLoans = await database.query('SELECT * FROM loans WHERE status = $1', ['approved']);
+    
+    console.log(`Found ${approvedLoans.length} approved loans to fix`);
+    
+    const results = [];
+    
+    for (const loan of approvedLoans) {
+      try {
+        console.log(`Processing loan ${loan.id} for user ${loan.borrower_id}`);
+        
+        // Start transaction for loan activation
+        const client = await database.pool.connect();
+        
+        try {
+          await client.query('BEGIN');
+          
+          // Disburse loan to student's account
+          const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [loan.borrower_id]);
+          if (!account) {
+            throw new Error(`Student account not found for user ${loan.borrower_id}`);
+          }
+
+          // Update account balance
+          await client.query(
+            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            [loan.amount, account.id]
+          );
+
+          // Record transaction
+          await client.query(
+            'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
+            [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]
+          );
+
+          // Update status to active
+          await client.query(
+            'UPDATE loans SET status = $1 WHERE id = $2',
+            ['active', loan.id]
+          );
+
+          await client.query('COMMIT');
+          
+          results.push({ loan_id: loan.id, status: 'success', message: 'Loan activated successfully' });
+          console.log(`✅ Loan ${loan.id} activated successfully`);
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally {
+          client.release();
+        }
+      } catch (error) {
+        console.error(`❌ Failed to activate loan ${loan.id}:`, error);
+        results.push({ 
+          loan_id: loan.id, 
+          status: 'error', 
+          message: error instanceof Error ? error.message : String(error) 
+        });
+      }
+    }
+
+    res.json({ 
+      message: `Processed ${approvedLoans.length} approved loans`,
+      results 
+    });
+  } catch (error) {
+    console.error('Fix approved loans error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
