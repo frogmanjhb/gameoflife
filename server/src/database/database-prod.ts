@@ -4,11 +4,15 @@ class Database {
   private _pool: Pool;
 
   constructor() {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL environment variable is required for PostgreSQL connection');
+    }
+    
     this._pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: {
+      ssl: process.env.NODE_ENV === 'production' ? {
         rejectUnauthorized: false
-      }
+      } : false
     });
   }
 
