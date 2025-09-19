@@ -310,14 +310,25 @@ router.post('/pay', [
       outstandingBalance,
       totalPaid,
       remainingBalance,
-      paymentAmount: paymentAmount
+      paymentAmount: paymentAmount,
+      monthlyPayment: loan.monthly_payment,
+      isFinalPayment: remainingBalance <= loan.monthly_payment
     });
 
+    // For final payments, automatically adjust payment to remaining balance
+    const isFinalPayment = remainingBalance <= loan.monthly_payment;
+    const actualPaymentAmount = isFinalPayment ? remainingBalance : paymentAmount;
+    
     // Allow payment if it's close to the remaining balance (within 1 cent tolerance)
-    if (paymentAmount > remainingBalance + 0.01) {
+    if (actualPaymentAmount > remainingBalance + 0.01) {
       return res.status(400).json({ 
         error: `Payment amount ($${paymentAmount.toFixed(2)}) exceeds outstanding balance ($${remainingBalance.toFixed(2)})` 
       });
+    }
+    
+    // Log if payment was adjusted for final payment
+    if (isFinalPayment && actualPaymentAmount !== paymentAmount) {
+      console.log(`🔄 Final payment: Adjusted payment from $${paymentAmount.toFixed(2)} to $${actualPaymentAmount.toFixed(2)}`);
     }
 
     // Start transaction using PostgreSQL client
@@ -329,17 +340,17 @@ router.post('/pay', [
       // Update account balance
       await client.query(
         'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [paymentAmount, account.id]
+        [actualPaymentAmount, account.id]
       );
 
       // Record loan payment
       await client.query(
         'INSERT INTO loan_payments (loan_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
-        [loan_id, paymentAmount]
+        [loan_id, actualPaymentAmount]
       );
 
       // Update outstanding balance
-      const newOutstandingBalance = outstandingBalance - paymentAmount;
+      const newOutstandingBalance = outstandingBalance - actualPaymentAmount;
       await client.query(
         'UPDATE loans SET outstanding_balance = $1 WHERE id = $2',
         [newOutstandingBalance, loan_id]
@@ -356,11 +367,20 @@ router.post('/pay', [
       // Record transaction
       await client.query(
         'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
-        [account.id, paymentAmount, 'loan_repayment', `Loan payment - ${paymentAmount}`]
+        [account.id, actualPaymentAmount, 'loan_repayment', `Loan payment - ${actualPaymentAmount}`]
       );
 
       await client.query('COMMIT');
-      res.json({ message: 'Payment successful' });
+      
+      const responseMessage = isFinalPayment && actualPaymentAmount !== paymentAmount 
+        ? `Payment successful! Final payment adjusted from $${paymentAmount.toFixed(2)} to $${actualPaymentAmount.toFixed(2)}. Loan paid off.`
+        : 'Payment successful';
+        
+      res.json({ 
+        message: responseMessage,
+        paymentAmount: actualPaymentAmount,
+        isFinalPayment: newOutstandingBalance <= 0.01
+      });
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
