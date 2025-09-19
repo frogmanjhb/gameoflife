@@ -133,33 +133,61 @@ router.post('/approve', [
         if (!loan) {
             return res.status(404).json({ error: 'Loan not found' });
         }
-        if (loan.status !== 'pending') {
-            return res.status(400).json({ error: 'Loan is not pending approval' });
+        if (loan.status !== 'pending' && loan.status !== 'approved') {
+            return res.status(400).json({ error: 'Loan cannot be processed - invalid status' });
         }
         const newStatus = approved ? 'approved' : 'denied';
         const dueDate = approved ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null;
-        // Update loan status to approved first
-        await database_prod_1.default.run('UPDATE loans SET status = $1, approved_at = $2, due_date = $3 WHERE id = $4', [newStatus, approved ? new Date().toISOString() : null, dueDate, loan_id]);
         if (approved) {
-            // Disburse loan to student's account
-            const account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = $1', [loan.borrower_id]);
-            if (account) {
+            // Start transaction for loan approval and disbursement
+            const client = await database_prod_1.default.pool.connect();
+            try {
+                await client.query('BEGIN');
+                // Update loan status to approved and set dates
+                await client.query('UPDATE loans SET status = $1, approved_at = $2, due_date = $3 WHERE id = $4', [newStatus, new Date().toISOString(), dueDate, loan_id]);
+                // Disburse loan to student's account
+                const account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = $1', [loan.borrower_id]);
+                if (!account) {
+                    throw new Error('Student account not found');
+                }
                 // Update account balance
-                await database_prod_1.default.run('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [loan.amount, account.id]);
+                await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [loan.amount, account.id]);
                 // Record transaction
-                await database_prod_1.default.run('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]);
-                // Now update status to active after disbursement
-                await database_prod_1.default.run('UPDATE loans SET status = $1 WHERE id = $2', ['active', loan_id]);
+                await client.query('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]);
+                // Update status to active after successful disbursement
+                await client.query('UPDATE loans SET status = $1 WHERE id = $2', ['active', loan_id]);
+                await client.query('COMMIT');
             }
+            catch (error) {
+                await client.query('ROLLBACK');
+                throw error;
+            }
+            finally {
+                client.release();
+            }
+        }
+        else {
+            // Just update status to denied
+            await database_prod_1.default.run('UPDATE loans SET status = $1, approved_at = $2 WHERE id = $3', [newStatus, new Date().toISOString(), loan_id]);
         }
         res.json({
             message: `Loan ${approved ? 'approved and activated' : 'denied'} successfully`,
-            status: newStatus
+            status: approved ? 'active' : 'denied'
         });
     }
     catch (error) {
         console.error('Loan approval error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Error details:', {
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            loan_id: req.body.loan_id,
+            approved: req.body.approved,
+            user_id: req.user?.id
+        });
+        res.status(500).json({
+            error: 'Internal server error',
+            details: error instanceof Error ? error.message : String(error)
+        });
     }
 });
 // Make loan payment (students only)
@@ -212,35 +240,98 @@ router.post('/pay', [
             remainingBalance,
             paymentAmount: amount
         });
-        if (amount > remainingBalance) {
-            return res.status(400).json({ error: 'Payment amount exceeds outstanding balance' });
+        // Allow payment if it's close to the remaining balance (within 1 cent tolerance)
+        if (amount > remainingBalance + 0.01) {
+            return res.status(400).json({
+                error: `Payment amount ($${amount.toFixed(2)}) exceeds outstanding balance ($${remainingBalance.toFixed(2)})`
+            });
         }
-        // Start transaction
-        await database_prod_1.default.run('BEGIN TRANSACTION');
+        // Start transaction using PostgreSQL client
+        const client = await database_prod_1.default.pool.connect();
         try {
+            await client.query('BEGIN');
             // Update account balance
-            await database_prod_1.default.run('UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [amount, account.id]);
+            await client.query('UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [amount, account.id]);
             // Record loan payment
-            await database_prod_1.default.run('INSERT INTO loan_payments (loan_id, amount) VALUES ($1, $2)', [loan_id, amount]);
+            await client.query('INSERT INTO loan_payments (loan_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)', [loan_id, amount]);
             // Update outstanding balance
             const newOutstandingBalance = outstandingBalance - amount;
-            await database_prod_1.default.run('UPDATE loans SET outstanding_balance = $1 WHERE id = $2', [newOutstandingBalance, loan_id]);
-            // Check if loan is fully paid
-            if (newOutstandingBalance <= 0) {
-                await database_prod_1.default.run('UPDATE loans SET status = $1 WHERE id = $2', ['paid_off', loan_id]);
+            await client.query('UPDATE loans SET outstanding_balance = $1 WHERE id = $2', [newOutstandingBalance, loan_id]);
+            // Check if loan is fully paid (allow for small rounding differences)
+            if (newOutstandingBalance <= 0.01) {
+                await client.query('UPDATE loans SET status = $1, outstanding_balance = 0 WHERE id = $2', ['paid_off', loan_id]);
             }
             // Record transaction
-            await database_prod_1.default.run('INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [account.id, amount, 'loan_repayment', `Loan payment - ${amount}`]);
-            await database_prod_1.default.run('COMMIT');
+            await client.query('INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [account.id, amount, 'loan_repayment', `Loan payment - ${amount}`]);
+            await client.query('COMMIT');
             res.json({ message: 'Payment successful' });
         }
         catch (error) {
-            await database_prod_1.default.run('ROLLBACK');
+            await client.query('ROLLBACK');
             throw error;
+        }
+        finally {
+            client.release();
         }
     }
     catch (error) {
         console.error('Loan payment error:', error);
+        console.error('Error details:', {
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            loan_id: req.body.loan_id,
+            amount: req.body.amount,
+            user_id: req.user?.id
+        });
+        res.status(500).json({
+            error: 'Internal server error',
+            details: error instanceof Error ? error.message : String(error)
+        });
+    }
+});
+// Activate approved loans (teachers only) - for fixing stuck loans
+router.post('/activate/:loan_id', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const { loan_id } = req.params;
+        // Get loan details
+        const loan = await database_prod_1.default.get('SELECT * FROM loans WHERE id = $1', [loan_id]);
+        if (!loan) {
+            return res.status(404).json({ error: 'Loan not found' });
+        }
+        if (loan.status !== 'approved') {
+            return res.status(400).json({ error: 'Loan is not in approved status' });
+        }
+        // Start transaction for loan activation
+        const client = await database_prod_1.default.pool.connect();
+        try {
+            await client.query('BEGIN');
+            // Disburse loan to student's account
+            const account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = $1', [loan.borrower_id]);
+            if (!account) {
+                throw new Error('Student account not found');
+            }
+            // Update account balance
+            await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [loan.amount, account.id]);
+            // Record transaction
+            await client.query('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]);
+            // Update status to active
+            await client.query('UPDATE loans SET status = $1 WHERE id = $2', ['active', loan_id]);
+            await client.query('COMMIT');
+            res.json({
+                message: 'Loan activated successfully',
+                status: 'active'
+            });
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        }
+        finally {
+            client.release();
+        }
+    }
+    catch (error) {
+        console.error('Loan activation error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

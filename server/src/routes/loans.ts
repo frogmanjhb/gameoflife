@@ -215,8 +215,8 @@ router.post('/approve', [
     console.error('Error details:', {
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      loan_id,
-      approved,
+      loan_id: req.body.loan_id,
+      approved: req.body.approved,
       user_id: req.user?.id
     });
     res.status(500).json({ 
@@ -348,8 +348,8 @@ router.post('/pay', [
     console.error('Error details:', {
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      loan_id,
-      amount,
+      loan_id: req.body.loan_id,
+      amount: req.body.amount,
       user_id: req.user?.id
     });
     res.status(500).json({ 
