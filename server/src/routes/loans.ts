@@ -154,16 +154,23 @@ router.post('/approve', [
     const newStatus = approved ? 'approved' : 'denied';
     const dueDate = approved ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null;
 
-    // Update loan status to approved first
-    await database.run(
-      'UPDATE loans SET status = $1, approved_at = $2, due_date = $3 WHERE id = $4',
-      [newStatus, approved ? new Date().toISOString() : null, dueDate, loan_id]
-    );
-
     if (approved) {
-      // Disburse loan to student's account
-      const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [loan.borrower_id]);
-      if (account) {
+      // Start transaction for loan approval and disbursement
+      await database.run('BEGIN');
+      
+      try {
+        // Update loan status to approved and set dates
+        await database.run(
+          'UPDATE loans SET status = $1, approved_at = $2, due_date = $3 WHERE id = $4',
+          [newStatus, new Date().toISOString(), dueDate, loan_id]
+        );
+
+        // Disburse loan to student's account
+        const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [loan.borrower_id]);
+        if (!account) {
+          throw new Error('Student account not found');
+        }
+
         // Update account balance
         await database.run(
           'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
@@ -176,17 +183,28 @@ router.post('/approve', [
           [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]
         );
 
-        // Now update status to active after disbursement
+        // Update status to active after successful disbursement
         await database.run(
           'UPDATE loans SET status = $1 WHERE id = $2',
           ['active', loan_id]
         );
+
+        await database.run('COMMIT');
+      } catch (error) {
+        await database.run('ROLLBACK');
+        throw error;
       }
+    } else {
+      // Just update status to denied
+      await database.run(
+        'UPDATE loans SET status = $1, approved_at = $2 WHERE id = $3',
+        [newStatus, new Date().toISOString(), loan_id]
+      );
     }
 
     res.json({ 
       message: `Loan ${approved ? 'approved and activated' : 'denied'} successfully`,
-      status: newStatus
+      status: approved ? 'active' : 'denied'
     });
   } catch (error) {
     console.error('Loan approval error:', error);
@@ -257,12 +275,15 @@ router.post('/pay', [
       paymentAmount: amount
     });
 
-    if (amount > remainingBalance) {
-      return res.status(400).json({ error: 'Payment amount exceeds outstanding balance' });
+    // Allow payment if it's close to the remaining balance (within 1 cent tolerance)
+    if (amount > remainingBalance + 0.01) {
+      return res.status(400).json({ 
+        error: `Payment amount ($${amount.toFixed(2)}) exceeds outstanding balance ($${remainingBalance.toFixed(2)})` 
+      });
     }
 
     // Start transaction
-    await database.run('BEGIN TRANSACTION');
+    await database.run('BEGIN');
 
     try {
       // Update account balance
@@ -273,7 +294,7 @@ router.post('/pay', [
 
       // Record loan payment
       await database.run(
-        'INSERT INTO loan_payments (loan_id, amount) VALUES ($1, $2)',
+        'INSERT INTO loan_payments (loan_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
         [loan_id, amount]
       );
 
@@ -284,10 +305,10 @@ router.post('/pay', [
         [newOutstandingBalance, loan_id]
       );
 
-      // Check if loan is fully paid
-      if (newOutstandingBalance <= 0) {
+      // Check if loan is fully paid (allow for small rounding differences)
+      if (newOutstandingBalance <= 0.01) {
         await database.run(
-          'UPDATE loans SET status = $1 WHERE id = $2',
+          'UPDATE loans SET status = $1, outstanding_balance = 0 WHERE id = $2',
           ['paid_off', loan_id]
         );
       }
