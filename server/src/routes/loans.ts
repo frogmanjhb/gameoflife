@@ -305,6 +305,25 @@ router.post('/pay', [
     const totalPaid = parseFloat(totalPaidResult?.total || 0);
     const outstandingBalance = parseFloat(loan.outstanding_balance);
     const remainingBalance = outstandingBalance - totalPaid;
+    
+    // Check if loan is already paid off
+    if (remainingBalance <= 0.01) {
+      return res.status(400).json({ 
+        error: 'Loan is already paid off or has a very small remaining balance.' 
+      });
+    }
+    
+    // Check for recent payments to prevent duplicate submissions
+    const recentPayment = await database.get(
+      'SELECT id FROM loan_payments WHERE loan_id = $1 AND payment_date > NOW() - INTERVAL \'5 seconds\'',
+      [loan_id]
+    );
+    
+    if (recentPayment) {
+      return res.status(400).json({ 
+        error: 'A payment was recently processed for this loan. Please wait a moment before trying again.' 
+      });
+    }
 
     console.log('Loan balance debug:', {
       outstandingBalance,
@@ -317,7 +336,20 @@ router.post('/pay', [
 
     // For final payments, automatically adjust payment to remaining balance
     const isFinalPayment = remainingBalance <= loan.monthly_payment;
-    const actualPaymentAmount = isFinalPayment ? remainingBalance : paymentAmount;
+    let actualPaymentAmount = isFinalPayment ? remainingBalance : paymentAmount;
+    
+    // Handle very small remaining balances (less than 1 cent)
+    if (actualPaymentAmount < 0.01 && actualPaymentAmount > 0) {
+      actualPaymentAmount = 0.01; // Minimum payment of 1 cent
+      console.log(`🔄 Very small balance: Adjusted payment to minimum $0.01`);
+    }
+    
+    // Skip payment if amount is zero or negative
+    if (actualPaymentAmount <= 0) {
+      return res.status(400).json({ 
+        error: 'Payment amount is zero or negative. Loan may already be paid off.' 
+      });
+    }
     
     // Allow payment if it's close to the remaining balance (within 1 cent tolerance)
     if (actualPaymentAmount > remainingBalance + 0.01) {
@@ -628,6 +660,29 @@ router.post('/admin/fix-approved', authenticateToken, requireRole(['teacher']), 
     });
   } catch (error) {
     console.error('Fix approved loans error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Clean up zero-amount transactions (teachers only) - for fixing data issues
+router.post('/admin/cleanup-zero-transactions', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log('🧹 Cleaning up zero-amount loan repayment transactions...');
+    
+    // Find and delete zero-amount loan repayment transactions
+    const result = await database.query(
+      'DELETE FROM transactions WHERE transaction_type = $1 AND amount = $2',
+      ['loan_repayment', '0.00']
+    );
+    
+    console.log(`✅ Cleaned up ${result.length || 0} zero-amount transactions`);
+    
+    res.json({ 
+      message: `Cleaned up ${result.length || 0} zero-amount loan repayment transactions`,
+      deletedCount: result.length || 0
+    });
+  } catch (error) {
+    console.error('Cleanup zero transactions error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
