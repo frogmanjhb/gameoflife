@@ -156,11 +156,13 @@ router.post('/approve', [
 
     if (approved) {
       // Start transaction for loan approval and disbursement
-      await database.run('BEGIN');
+      const client = await database.pool.connect();
       
       try {
+        await client.query('BEGIN');
+        
         // Update loan status to approved and set dates
-        await database.run(
+        await client.query(
           'UPDATE loans SET status = $1, approved_at = $2, due_date = $3 WHERE id = $4',
           [newStatus, new Date().toISOString(), dueDate, loan_id]
         );
@@ -172,27 +174,29 @@ router.post('/approve', [
         }
 
         // Update account balance
-        await database.run(
+        await client.query(
           'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
           [loan.amount, account.id]
         );
 
         // Record transaction
-        await database.run(
+        await client.query(
           'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
           [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]
         );
 
         // Update status to active after successful disbursement
-        await database.run(
+        await client.query(
           'UPDATE loans SET status = $1 WHERE id = $2',
           ['active', loan_id]
         );
 
-        await database.run('COMMIT');
+        await client.query('COMMIT');
       } catch (error) {
-        await database.run('ROLLBACK');
+        await client.query('ROLLBACK');
         throw error;
+      } finally {
+        client.release();
       }
     } else {
       // Just update status to denied
@@ -208,7 +212,17 @@ router.post('/approve', [
     });
   } catch (error) {
     console.error('Loan approval error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      loan_id,
+      approved,
+      user_id: req.user?.id
+    });
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
@@ -282,53 +296,66 @@ router.post('/pay', [
       });
     }
 
-    // Start transaction
-    await database.run('BEGIN');
-
+    // Start transaction using PostgreSQL client
+    const client = await database.pool.connect();
+    
     try {
+      await client.query('BEGIN');
+
       // Update account balance
-      await database.run(
+      await client.query(
         'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
         [amount, account.id]
       );
 
       // Record loan payment
-      await database.run(
+      await client.query(
         'INSERT INTO loan_payments (loan_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
         [loan_id, amount]
       );
 
       // Update outstanding balance
       const newOutstandingBalance = outstandingBalance - amount;
-      await database.run(
+      await client.query(
         'UPDATE loans SET outstanding_balance = $1 WHERE id = $2',
         [newOutstandingBalance, loan_id]
       );
 
       // Check if loan is fully paid (allow for small rounding differences)
       if (newOutstandingBalance <= 0.01) {
-        await database.run(
+        await client.query(
           'UPDATE loans SET status = $1, outstanding_balance = 0 WHERE id = $2',
           ['paid_off', loan_id]
         );
       }
 
       // Record transaction
-      await database.run(
+      await client.query(
         'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
         [account.id, amount, 'loan_repayment', `Loan payment - ${amount}`]
       );
 
-      await database.run('COMMIT');
-
+      await client.query('COMMIT');
       res.json({ message: 'Payment successful' });
     } catch (error) {
-      await database.run('ROLLBACK');
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
   } catch (error) {
     console.error('Loan payment error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      loan_id,
+      amount,
+      user_id: req.user?.id
+    });
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
@@ -348,9 +375,11 @@ router.post('/activate/:loan_id', authenticateToken, requireRole(['teacher']), a
     }
 
     // Start transaction for loan activation
-    await database.run('BEGIN');
+    const client = await database.pool.connect();
     
     try {
+      await client.query('BEGIN');
+      
       // Disburse loan to student's account
       const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [loan.borrower_id]);
       if (!account) {
@@ -358,32 +387,34 @@ router.post('/activate/:loan_id', authenticateToken, requireRole(['teacher']), a
       }
 
       // Update account balance
-      await database.run(
+      await client.query(
         'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
         [loan.amount, account.id]
       );
 
       // Record transaction
-      await database.run(
+      await client.query(
         'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
         [account.id, loan.amount, 'loan_disbursement', `Loan disbursement - ${loan.amount}`]
       );
 
       // Update status to active
-      await database.run(
+      await client.query(
         'UPDATE loans SET status = $1 WHERE id = $2',
         ['active', loan_id]
       );
 
-      await database.run('COMMIT');
+      await client.query('COMMIT');
 
       res.json({ 
         message: 'Loan activated successfully',
         status: 'active'
       });
     } catch (error) {
-      await database.run('ROLLBACK');
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
   } catch (error) {
     console.error('Loan activation error:', error);
