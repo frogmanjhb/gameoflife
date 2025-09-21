@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Users, DollarSign, TrendingUp, CheckCircle, Download } from 'lucide-react';
+import { Users, DollarSign, TrendingUp, CheckCircle, Download, AlertTriangle, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import { Student, Loan, Transaction } from '../types';
 import StudentManagement from './StudentManagement';
@@ -13,6 +13,8 @@ const TeacherDashboard: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'loans' | 'transactions'>('overview');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -86,6 +88,25 @@ const TeacherDashboard: React.FC = () => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Export failed:', error);
+    }
+  };
+
+  const handleResetAllLoans = async () => {
+    try {
+      setResetting(true);
+      const response = await api.post('/loans/admin/reset-all-loans');
+      
+      console.log('Reset response:', response.data);
+      alert(`Success! Reset completed:\n- ${response.data.deleted.loans} loans deleted\n- ${response.data.deleted.payments} payments deleted\n- ${response.data.deleted.transactions} transactions deleted`);
+      
+      // Refresh all data
+      await fetchData();
+      setShowResetConfirm(false);
+    } catch (error: any) {
+      console.error('Reset failed:', error);
+      alert('Failed to reset loan data: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -244,6 +265,31 @@ const TeacherDashboard: React.FC = () => {
                   ))}
                 </div>
               </div>
+
+              {/* Admin Tools */}
+              <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Admin Tools</h3>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-start space-x-3">
+                    <AlertTriangle className="h-6 w-6 text-red-600 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-red-800 mb-1">Reset All Loan Data</h4>
+                      <p className="text-sm text-red-700 mb-3">
+                        This will permanently delete ALL loan data including loans, payments, and related transactions. 
+                        This action cannot be undone. Use this to reset the system for a new semester or class.
+                      </p>
+                      <button
+                        onClick={() => setShowResetConfirm(true)}
+                        disabled={resetting}
+                        className="bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span>{resetting ? 'Resetting...' : 'Reset All Loan Data'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -324,6 +370,57 @@ const TeacherDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <AlertTriangle className="h-8 w-8 text-red-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Confirm Reset</h3>
+            </div>
+            <div className="mb-6">
+              <p className="text-sm text-gray-700 mb-3">
+                Are you absolutely sure you want to reset ALL loan data? This will permanently delete:
+              </p>
+              <ul className="text-sm text-gray-600 space-y-1 ml-4">
+                <li>• All loans ({loans.length} loans)</li>
+                <li>• All loan payments</li>
+                <li>• All loan-related transactions</li>
+              </ul>
+              <p className="text-sm text-red-600 font-semibold mt-3">
+                ⚠️ This action cannot be undone!
+              </p>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                disabled={resetting}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetAllLoans}
+                disabled={resetting}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-400 flex items-center justify-center space-x-2"
+              >
+                {resetting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Resetting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    <span>Reset All Data</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

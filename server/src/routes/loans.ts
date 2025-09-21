@@ -24,7 +24,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
           COALESCE(SUM(lp.amount), 0) as total_paid,
           CASE 
             WHEN l.status = 'active' THEN 
-              CEIL((l.outstanding_balance - COALESCE(SUM(lp.amount), 0)) / l.monthly_payment)
+              GREATEST(0, CEIL((l.amount * (1 + l.interest_rate) - COALESCE(SUM(lp.amount), 0)) / l.monthly_payment))
             ELSE 0 
           END as payments_remaining
         FROM loans l
@@ -42,7 +42,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
           COALESCE(SUM(lp.amount), 0) as total_paid,
           CASE 
             WHEN l.status = 'active' THEN 
-              CEIL((l.outstanding_balance - COALESCE(SUM(lp.amount), 0)) / l.monthly_payment)
+              GREATEST(0, CEIL((l.amount * (1 + l.interest_rate) - COALESCE(SUM(lp.amount), 0)) / l.monthly_payment))
             ELSE 0 
           END as payments_remaining
         FROM loans l
@@ -381,8 +381,11 @@ router.post('/pay', [
         [loan_id, actualPaymentAmount]
       );
 
-      // Update outstanding balance
-      const newOutstandingBalance = outstandingBalance - actualPaymentAmount;
+      // Calculate the new outstanding balance based on total loan amount minus total paid
+      const totalLoanAmount = parseFloat(loan.amount) * (1 + parseFloat(loan.interest_rate));
+      const newTotalPaid = totalPaid + actualPaymentAmount;
+      const newOutstandingBalance = totalLoanAmount - newTotalPaid;
+      
       await client.query(
         'UPDATE loans SET outstanding_balance = $1 WHERE id = $2',
         [newOutstandingBalance, loan_id]
@@ -404,6 +407,18 @@ router.post('/pay', [
 
       await client.query('COMMIT');
       
+      // Calculate remaining payments for response
+      const remainingPayments = Math.max(0, Math.ceil(newOutstandingBalance / parseFloat(loan.monthly_payment)));
+      
+      console.log('✅ Payment processed successfully:', {
+        loan_id,
+        paymentAmount: actualPaymentAmount,
+        newOutstandingBalance,
+        remainingPayments,
+        totalLoanAmount,
+        newTotalPaid
+      });
+      
       const responseMessage = isFinalPayment && actualPaymentAmount !== paymentAmount 
         ? `Payment successful! Final payment adjusted from $${paymentAmount.toFixed(2)} to $${actualPaymentAmount.toFixed(2)}. Loan paid off.`
         : 'Payment successful';
@@ -411,7 +426,9 @@ router.post('/pay', [
       res.json({ 
         message: responseMessage,
         paymentAmount: actualPaymentAmount,
-        isFinalPayment: newOutstandingBalance <= 0.01
+        isFinalPayment: newOutstandingBalance <= 0.01,
+        remainingPayments,
+        newOutstandingBalance
       });
     } catch (error) {
       await client.query('ROLLBACK');
@@ -683,6 +700,116 @@ router.post('/admin/cleanup-zero-transactions', authenticateToken, requireRole([
     });
   } catch (error) {
     console.error('Cleanup zero transactions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Fix outstanding balance for all loans (teachers only) - for correcting data inconsistencies
+router.post('/admin/fix-outstanding-balances', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log('🔧 Fixing outstanding balances for all loans...');
+    
+    // Get all active loans
+    const loans = await database.query('SELECT * FROM loans WHERE status = $1', ['active']);
+    
+    console.log(`Found ${loans.length} active loans to fix`);
+    
+    const results = [];
+    
+    for (const loan of loans) {
+      try {
+        // Calculate correct outstanding balance
+        const totalLoanAmount = parseFloat(loan.amount) * (1 + parseFloat(loan.interest_rate));
+        const totalPaidResult = await database.get(
+          'SELECT COALESCE(SUM(amount), 0) as total FROM loan_payments WHERE loan_id = $1',
+          [loan.id]
+        );
+        const totalPaid = parseFloat(totalPaidResult?.total || 0);
+        const correctOutstandingBalance = totalLoanAmount - totalPaid;
+        
+        // Update the loan with correct outstanding balance
+        await database.run(
+          'UPDATE loans SET outstanding_balance = $1 WHERE id = $2',
+          [correctOutstandingBalance, loan.id]
+        );
+        
+        results.push({ 
+          loan_id: loan.id, 
+          status: 'success', 
+          message: `Fixed outstanding balance from $${loan.outstanding_balance} to $${correctOutstandingBalance.toFixed(2)}` 
+        });
+        
+        console.log(`✅ Loan ${loan.id}: Fixed outstanding balance from $${loan.outstanding_balance} to $${correctOutstandingBalance.toFixed(2)}`);
+      } catch (error) {
+        console.error(`❌ Failed to fix loan ${loan.id}:`, error);
+        results.push({ 
+          loan_id: loan.id, 
+          status: 'error', 
+          message: error instanceof Error ? error.message : String(error) 
+        });
+      }
+    }
+
+    res.json({ 
+      message: `Processed ${loans.length} active loans`,
+      results 
+    });
+  } catch (error) {
+    console.error('Fix outstanding balances error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Reset all loan data (teachers only) - DANGEROUS: This will delete all loans, payments, and related transactions
+router.post('/admin/reset-all-loans', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log('⚠️ RESETTING ALL LOAN DATA - This action cannot be undone!');
+    
+    // Get database connection for transaction
+    const client = await database.getClient();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Get count of data to be deleted for logging
+      const loansCountResult = await client.query('SELECT COUNT(*) as count FROM loans');
+      const paymentsCountResult = await client.query('SELECT COUNT(*) as count FROM loan_payments');
+      const transactionsCountResult = await client.query('SELECT COUNT(*) as count FROM transactions WHERE transaction_type IN ($1, $2)', ['loan_disbursement', 'loan_repayment']);
+      
+      const loansCount = parseInt(loansCountResult.rows[0]?.count || '0');
+      const paymentsCount = parseInt(paymentsCountResult.rows[0]?.count || '0');
+      const transactionsCount = parseInt(transactionsCountResult.rows[0]?.count || '0');
+      
+      console.log(`🗑️ Deleting: ${loansCount} loans, ${paymentsCount} payments, ${transactionsCount} transactions`);
+      
+      // Delete in correct order due to foreign key constraints
+      await client.query('DELETE FROM loan_payments');
+      await client.query('DELETE FROM transactions WHERE transaction_type IN ($1, $2)', ['loan_disbursement', 'loan_repayment']);
+      await client.query('DELETE FROM loans');
+      
+      // Reset any account balances that were affected by loans (optional - you might want to keep student balances)
+      // await client.query('UPDATE accounts SET balance = 0 WHERE id IN (SELECT id FROM accounts WHERE balance != 0)');
+      
+      await client.query('COMMIT');
+      
+      console.log('✅ All loan data has been reset successfully');
+      
+      res.json({ 
+        message: 'All loan data has been successfully reset',
+        deleted: {
+          loans: loansCount,
+          payments: paymentsCount,
+          transactions: transactionsCount
+        }
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Reset loan data error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

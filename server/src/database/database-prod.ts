@@ -46,6 +46,10 @@ class Database {
     }
   }
 
+  async getClient() {
+    return await this._pool.connect();
+  }
+
   async close() {
     await this._pool.end();
   }
