@@ -12,9 +12,9 @@ const getApiUrl = () => {
     return `${import.meta.env.VITE_BACKEND_URL}/api`;
   }
   
-  // Production fallback (Render)
+  // Production: Use relative URL (same domain as frontend)
   if (import.meta.env.PROD) {
-    return 'https://gameoflife-mu3t.onrender.com/api';
+    return '/api';
   }
   
   // Development default

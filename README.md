@@ -4,7 +4,8 @@ A comprehensive web application designed to teach financial literacy to Grade 6 
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
 
-> 🚂 **Now optimized for Railway deployment!** Deploy in minutes with our [Quick Start Guide](./RAILWAY_QUICKSTART.md) | [Full Guide](./RAILWAY_DEPLOYMENT.md) | [Migration Guide](./MIGRATION_TO_RAILWAY.md)
+> 🚂 **Now optimized for Railway deployment!** Deploy in minutes with our [Quick Start Guide](./RAILWAY_QUICKSTART.md) | [Full Guide](./RAILWAY_DEPLOYMENT.md) | [Migration Guide](./MIGRATION_TO_RAILWAY.md)  
+> 🪟 **Windows Users**: See [Windows Guide](./WINDOWS_RAILWAY_GUIDE.md) for PowerShell-specific instructions!
 
 ## ✨ Features
 

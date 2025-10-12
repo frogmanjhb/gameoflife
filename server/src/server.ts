@@ -66,6 +66,20 @@ app.use('/api/loans', loanRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/export', exportRoutes);
 
+// Serve static files from client/dist in production
+if (process.env.NODE_ENV === 'production') {
+  const clientDistPath = join(__dirname, '..', '..', 'client', 'dist');
+  console.log('📁 Serving static files from:', clientDistPath);
+  app.use(express.static(clientDistPath));
+  
+  // Handle SPA routing - send index.html for all non-API routes
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(join(clientDistPath, 'index.html'));
+    }
+  });
+}
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

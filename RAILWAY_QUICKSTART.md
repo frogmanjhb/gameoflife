@@ -7,6 +7,8 @@ Deploy your Game of Life app to Railway in under 10 minutes!
 - ✅ Railway account (sign up at [railway.app](https://railway.app))
 - ✅ Code pushed to GitHub
 
+> 🪟 **Windows Users**: Using PowerShell? Check [WINDOWS_RAILWAY_GUIDE.md](./WINDOWS_RAILWAY_GUIDE.md) for Windows-specific commands!
+
 ## 🎯 Step-by-Step Deployment
 
 ### 1️⃣ Create New Project (2 minutes)
@@ -27,18 +29,26 @@ Deploy your Game of Life app to Railway in under 10 minutes!
 
 ### 3️⃣ Initialize Database Schema (2 minutes)
 
-**Option A: Using Railway's Data Tab**
+> 🪟 **Windows Users**: The command line method doesn't work in PowerShell. See [WINDOWS_RAILWAY_GUIDE.md](./WINDOWS_RAILWAY_GUIDE.md) for Windows-specific instructions!
+
+**Option A: Using Railway's Data Tab (Recommended - Works on all platforms!)**
 1. Click on your PostgreSQL service
 2. Go to **"Data"** tab
 3. Click **"Query"**
 4. Copy the entire content from `server/src/database/schema-postgres.sql`
 5. Paste and click **"Run Query"**
 
-**Option B: Using Command Line**
+**Option B: Using Command Line (Unix/Linux/Mac/Git Bash only)**
 ```bash
 # Get DATABASE_URL from Railway dashboard
 railway link
 railway run psql < server/src/database/schema-postgres.sql
+```
+
+**Option C: For Windows PowerShell**
+```powershell
+# Copy file to clipboard, then paste in Railway dashboard
+Get-Content server/src/database/schema-postgres.sql | Set-Clipboard
 ```
 
 ### 4️⃣ Configure Backend Service (3 minutes)
