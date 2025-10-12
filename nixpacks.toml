@@ -2,10 +2,14 @@
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["npm ci --include=dev || npm install"]
+cmds = ["npm ci --include=dev || npm install --include=dev"]
 
 [phases.build]
-cmds = ["cd server && npm ci --include=dev || npm install", "cd ../client && npm ci --include=dev || npm install", "cd .. && npm run build"]
+cmds = [
+  "cd server && (npm ci --include=dev || npm install --include=dev)",
+  "cd ../client && (npm ci --include=dev || npm install --include=dev)",
+  "cd .. && npm run build"
+]
 
 [start]
 cmd = "npm start"

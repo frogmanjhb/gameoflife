@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "npm exec tsc && npm exec copyfiles src/database/*.sql dist/database/ --flat",
+    "build": "npx --yes tsc && npx --yes copyfiles src/database/*.sql dist/database/ --flat",
     "start": "node dist/server.js"
   },
   "dependencies": {
