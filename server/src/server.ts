@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import authRoutes from './routes/auth';
 import transactionRoutes from './routes/transactions';
@@ -91,13 +91,32 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Serve static files from client/dist in production
 if (process.env.NODE_ENV === 'production') {
   const clientDistPath = join(__dirname, '..', '..', 'client', 'dist');
-  console.log('📁 Serving static files from:', clientDistPath);
-  app.use(express.static(clientDistPath));
+  console.log('📁 Attempting to serve static files from:', clientDistPath);
+  console.log('📁 __dirname is:', __dirname);
   
-  // Handle SPA routing - send index.html for all non-API routes (MUST BE LAST)
-  app.get('*', (req, res) => {
-    res.sendFile(join(clientDistPath, 'index.html'));
-  });
+  // Check if dist exists
+  if (existsSync(clientDistPath)) {
+    console.log('✅ Client dist folder exists!');
+    const files = readdirSync(clientDistPath);
+    console.log('📄 Files in dist:', files);
+    app.use(express.static(clientDistPath));
+    
+    // Handle SPA routing - send index.html for all non-API routes (MUST BE LAST)
+    app.get('*', (req, res) => {
+      const indexPath = join(clientDistPath, 'index.html');
+      console.log('📄 Serving index.html from:', indexPath);
+      res.sendFile(indexPath);
+    });
+  } else {
+    console.error('❌ Client dist folder NOT found at:', clientDistPath);
+    app.get('*', (req, res) => {
+      res.status(500).json({ 
+        error: 'Frontend not built', 
+        path: clientDistPath,
+        cwd: process.cwd()
+      });
+    });
+  }
 } else {
   // 404 handler for development
   app.use('*', (req, res) => {
