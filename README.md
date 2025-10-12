@@ -2,6 +2,10 @@
 
 A comprehensive web application designed to teach financial literacy to Grade 6 students through interactive gameplay. Students learn about banking, loans, money management, and peer-to-peer transactions in a safe, virtual environment.
 
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
+
+> 🚂 **Now optimized for Railway deployment!** Deploy in minutes with our [Quick Start Guide](./RAILWAY_QUICKSTART.md) | [Full Guide](./RAILWAY_DEPLOYMENT.md) | [Migration Guide](./MIGRATION_TO_RAILWAY.md)
+
 ## ✨ Features
 
 ### 🎓 Student Features
@@ -144,9 +148,14 @@ The application automatically creates the SQLite database and tables on first ru
 
 ### Railway (Recommended)
 
-1. Connect your GitHub repository to Railway
-2. Set environment variables in Railway dashboard
-3. Deploy both frontend and backend
+This application is optimized for Railway deployment. See [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) for complete instructions.
+
+**Quick Start:**
+1. Push your code to GitHub
+2. Connect repository to Railway
+3. Provision PostgreSQL database
+4. Deploy backend and frontend services
+5. Configure environment variables
 
 ### Manual Deployment
 
@@ -159,6 +168,10 @@ The application automatically creates the SQLite database and tables on first ru
    ```bash
    npm start
    ```
+
+For detailed deployment instructions, see:
+- **Railway**: [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md)
+- **Render**: [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 ## 🎨 Customization
 

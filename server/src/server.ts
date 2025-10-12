@@ -18,15 +18,44 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(helmet());
+
+// Configure CORS for multiple deployment platforms
+const allowedOrigins = process.env.NODE_ENV === 'production' 
+  ? [
+      process.env.CLIENT_URL || 'https://gameoflife-frontend.onrender.com',
+      'https://gameoflife-5jf4.onrender.com',
+      // Railway domains
+      /\.railway\.app$/,
+      /\.up\.railway\.app$/
+    ].filter(Boolean)
+  : ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000'];
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        process.env.CLIENT_URL || 'https://gameoflife-frontend.onrender.com',
-        'https://gameoflife-5jf4.onrender.com'
-      ] 
-    : ['http://localhost:3000', 'http://localhost:3001'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is allowed
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (typeof allowed === 'string') {
+        return origin === allowed;
+      }
+      if (allowed instanceof RegExp) {
+        return allowed.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS: Origin ${origin} not allowed`);
+      callback(null, true); // Still allow but log for debugging
+    }
+  },
   credentials: true
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

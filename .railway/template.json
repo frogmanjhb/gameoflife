@@ -1,0 +1,68 @@
+{
+  "name": "Game of Life Classroom Simulation",
+  "description": "Financial literacy teaching tool for Grade 6 students with banking, loans, and transactions",
+  "repository": "github.com/yourusername/gameoflife",
+  "services": [
+    {
+      "name": "gameoflife-backend",
+      "plan": "hobby",
+      "source": {
+        "repo": "github.com/yourusername/gameoflife"
+      },
+      "env": {
+        "NODE_ENV": "production",
+        "JWT_SECRET": {
+          "description": "Secret key for JWT token generation (min 32 characters)",
+          "generate": true
+        },
+        "CLIENT_URL": {
+          "description": "Frontend URL for CORS",
+          "required": true
+        },
+        "DATABASE_URL": {
+          "description": "PostgreSQL connection string",
+          "reference": "DATABASE_URL"
+        }
+      },
+      "build": {
+        "command": "npm run install:all && npm run build"
+      },
+      "start": {
+        "command": "npm start"
+      },
+      "healthcheck": {
+        "path": "/api/health",
+        "timeout": 100
+      }
+    },
+    {
+      "name": "gameoflife-frontend",
+      "plan": "hobby",
+      "source": {
+        "repo": "github.com/yourusername/gameoflife",
+        "directory": "client"
+      },
+      "env": {
+        "NODE_ENV": "production",
+        "VITE_API_URL": {
+          "description": "Backend API URL",
+          "required": true
+        }
+      },
+      "build": {
+        "command": "npm install && npm run build"
+      },
+      "start": {
+        "command": "npx serve -s dist -l $PORT"
+      }
+    }
+  ],
+  "databases": [
+    {
+      "name": "gameoflife-db",
+      "type": "postgresql",
+      "plan": "hobby"
+    }
+  ]
+}
+

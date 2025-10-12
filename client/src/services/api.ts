@@ -1,9 +1,28 @@
 import axios from 'axios';
 
+// Support for multiple deployment platforms
+const getApiUrl = () => {
+  // Check for Vite environment variable first (Railway, Vercel, etc.)
+  if (import.meta.env.VITE_API_URL) {
+    return `${import.meta.env.VITE_API_URL}/api`;
+  }
+  
+  // Check for legacy environment variables
+  if (import.meta.env.VITE_BACKEND_URL) {
+    return `${import.meta.env.VITE_BACKEND_URL}/api`;
+  }
+  
+  // Production fallback (Render)
+  if (import.meta.env.PROD) {
+    return 'https://gameoflife-mu3t.onrender.com/api';
+  }
+  
+  // Development default
+  return 'http://localhost:5000/api';
+};
+
 const api = axios.create({
-  baseURL: process.env.NODE_ENV === 'production' 
-    ? 'https://gameoflife-mu3t.onrender.com/api' 
-    : 'http://localhost:5000/api',
+  baseURL: getApiUrl(),
   headers: {
     'Content-Type': 'application/json',
   },

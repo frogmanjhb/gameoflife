@@ -11,11 +11,21 @@
     "server:build": "cd server && npm run build",
     "client:build": "cd client && npm run build",
     "start": "cd server && npm start",
-    "install:all": "npm install && cd server && npm install && cd ../client && npm install"
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "railway:init": "railway init",
+    "railway:link": "railway link",
+    "railway:deploy": "railway up",
+    "railway:logs": "railway logs",
+    "railway:open": "railway open",
+    "db:migrate": "railway run --service backend psql < server/src/database/schema-postgres.sql"
   },
-  "keywords": ["education", "financial-literacy", "game-of-life", "classroom"],
+  "keywords": ["education", "financial-literacy", "game-of-life", "classroom", "railway"],
   "author": "Classroom Game of Life",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2"
   }
