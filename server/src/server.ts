@@ -88,11 +88,13 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Serve static files from client/dist in production
+// Serve static files from client/dist in production  
+console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
 if (process.env.NODE_ENV === 'production') {
   const clientDistPath = join(__dirname, '..', '..', 'client', 'dist');
   console.log('📁 Attempting to serve static files from:', clientDistPath);
   console.log('📁 __dirname is:', __dirname);
+  console.log('📁 process.cwd():', process.cwd());
   
   // Check if dist exists
   if (existsSync(clientDistPath)) {
