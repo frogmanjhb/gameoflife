@@ -18,8 +18,7 @@ class Database {
     this._pool = new Pool({
       connectionString: databaseUrl,
       ssl: process.env.NODE_ENV === 'production' ? {
-        rejectUnauthorized: false,
-        sslmode: 'require'
+        rejectUnauthorized: false
       } : false
     });
   }
