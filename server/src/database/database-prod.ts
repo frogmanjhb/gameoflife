@@ -4,12 +4,19 @@ class Database {
   private _pool: Pool;
 
   constructor() {
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL environment variable is required for PostgreSQL connection');
+    // Railway uses DATABASE_PUBLIC_URL, fallback to DATABASE_URL
+    const databaseUrl = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
+    
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL or DATABASE_PUBLIC_URL environment variable is required for PostgreSQL connection');
     }
     
+    console.log('🔗 Database URL found:', databaseUrl ? 'Yes' : 'No');
+    console.log('🔗 Using DATABASE_PUBLIC_URL:', !!process.env.DATABASE_PUBLIC_URL);
+    console.log('🔗 Using DATABASE_URL:', !!process.env.DATABASE_URL);
+    
     this._pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: databaseUrl,
       ssl: process.env.NODE_ENV === 'production' ? {
         rejectUnauthorized: false
       } : false
