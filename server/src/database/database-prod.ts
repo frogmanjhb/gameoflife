@@ -26,7 +26,10 @@ class Database {
     
     this._pool = new Pool({
       connectionString: databaseUrl,
-      ssl: sslConfig
+      ssl: sslConfig,
+      connectionTimeoutMillis: 10000,
+      idleTimeoutMillis: 30000,
+      max: 10
     });
   }
 
