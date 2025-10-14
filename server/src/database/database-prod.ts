@@ -18,10 +18,8 @@ class Database {
     
     // Configure SSL based on the URL type
     const isInternalUrl = databaseUrl.includes('railway.internal');
-    const sslConfig = process.env.NODE_ENV === 'production' ? {
-      rejectUnauthorized: false,
-      ...(isInternalUrl ? {} : { sslmode: 'require' })
-    } : false;
+    const sslConfig = process.env.NODE_ENV === 'production' ? 
+      (isInternalUrl ? false : { rejectUnauthorized: false }) : false;
     
     console.log('🔗 Using internal URL:', isInternalUrl);
     console.log('🔗 SSL config:', sslConfig);
