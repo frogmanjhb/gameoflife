@@ -4,7 +4,7 @@ class Database {
   private _pool: Pool;
 
   constructor() {
-    // Railway uses DATABASE_PUBLIC_URL, fallback to DATABASE_URL
+    // Railway uses DATABASE_PUBLIC_URL for external access, DATABASE_URL for internal
     const databaseUrl = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
     
     if (!databaseUrl) {
@@ -14,12 +14,21 @@ class Database {
     console.log('🔗 Database URL found:', databaseUrl ? 'Yes' : 'No');
     console.log('🔗 Using DATABASE_PUBLIC_URL:', !!process.env.DATABASE_PUBLIC_URL);
     console.log('🔗 Using DATABASE_URL:', !!process.env.DATABASE_URL);
+    console.log('🔗 Database URL preview:', databaseUrl.substring(0, 20) + '...');
+    
+    // Configure SSL based on the URL type
+    const isInternalUrl = databaseUrl.includes('railway.internal');
+    const sslConfig = process.env.NODE_ENV === 'production' ? {
+      rejectUnauthorized: false,
+      ...(isInternalUrl ? {} : { sslmode: 'require' })
+    } : false;
+    
+    console.log('🔗 Using internal URL:', isInternalUrl);
+    console.log('🔗 SSL config:', sslConfig);
     
     this._pool = new Pool({
       connectionString: databaseUrl,
-      ssl: process.env.NODE_ENV === 'production' ? {
-        rejectUnauthorized: false
-      } : false
+      ssl: sslConfig
     });
   }
 
