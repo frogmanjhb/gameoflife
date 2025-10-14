@@ -20,7 +20,13 @@
     "railway:open": "railway open",
     "db:migrate": "railway run --service backend psql < server/src/database/schema-postgres.sql"
   },
-  "keywords": ["education", "financial-literacy", "game-of-life", "classroom", "railway"],
+  "keywords": [
+    "education",
+    "financial-literacy",
+    "game-of-life",
+    "classroom",
+    "railway"
+  ],
   "author": "Classroom Game of Life",
   "license": "MIT",
   "engines": {
@@ -29,5 +35,8 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
   }
 }
