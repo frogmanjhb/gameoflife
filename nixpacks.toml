@@ -7,7 +7,6 @@ cmds = ["npm install"]
 [phases.build]
 cmds = [
   "cd server && rm -rf node_modules && npm install",
-  "cd ../client && rm -rf node_modules && npm install",
   "cd .. && npm run build"
 ]
 
