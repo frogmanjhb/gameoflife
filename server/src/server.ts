@@ -81,7 +81,14 @@ app.get('/health', (req, res) => {
 // Detailed health check (must come before other routes)
 app.get('/api/health', async (req, res) => {
   const startTime = Date.now();
-  const healthStatus = {
+  const healthStatus: {
+    status: string;
+    timestamp: string;
+    uptime: number;
+    database: string;
+    responseTime: number;
+    error?: string;
+  } = {
     status: 'OK',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
