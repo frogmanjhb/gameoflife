@@ -37,9 +37,8 @@ class Database {
     const isInternalUrl = databaseUrl.includes('railway.internal');
     const isExternalUrl = databaseUrl.includes('switchback.proxy.rlwy.net');
     
-    // Configure SSL based on the URL type
-    const sslConfig = process.env.NODE_ENV === 'production' ? 
-      (isInternalUrl ? false : { rejectUnauthorized: false }) : false;
+    // Disable SSL completely for Railway connections
+    const sslConfig = false;
     
     console.log('🔗 Using internal URL:', isInternalUrl);
     console.log('🔗 Using external URL:', isExternalUrl);
