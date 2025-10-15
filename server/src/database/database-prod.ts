@@ -50,13 +50,7 @@ class Database {
       ssl: sslConfig,
       connectionTimeoutMillis: 30000,
       idleTimeoutMillis: 30000,
-      max: 1,
-      min: 0,
-      acquireTimeoutMillis: 60000,
-      createTimeoutMillis: 30000,
-      destroyTimeoutMillis: 5000,
-      reapIntervalMillis: 1000,
-      createRetryIntervalMillis: 200
+      max: 1
     });
   }
 
