@@ -283,7 +283,7 @@ router.post('/bulk-payment', [
           // Record transaction
           await database.run(
             'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
-            [student.account_id, amount, 'bulk_payment', description || `Bulk payment to ${class_name}`]
+            [student.account_id, amount, 'deposit', description || `Bulk payment to ${class_name}`]
           );
 
           updatedCount++;
@@ -348,7 +348,7 @@ router.post('/bulk-removal', [
           // Record transaction
           await database.run(
             'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
-            [student.account_id, amount, 'bulk_removal', description || `Bulk removal from ${class_name}`]
+            [student.account_id, amount, 'withdrawal', description || `Bulk removal from ${class_name}`]
           );
 
           updatedCount++;
