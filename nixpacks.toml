@@ -3,13 +3,17 @@ nixPkgs = ["nodejs_20"]
 
 [phases.install]
 cmds = [
-  "rm -rf node_modules package-lock.json",
+  "rm -rf node_modules package-lock.json .npm",
+  "npm cache clean --force",
   "npm install",
-  "cd server && rm -rf node_modules package-lock.json && npm install"
+  "cd server && rm -rf node_modules package-lock.json .npm && npm cache clean --force && npm install"
 ]
 
 [phases.build]
-cmds = ["npm run build"]
+cmds = [
+  "rm -rf server/dist",
+  "npm run build"
+]
 
 [start]
 cmd = "npm start"
