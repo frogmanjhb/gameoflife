@@ -61,9 +61,9 @@ class Database {
         console.log(`🔍 DB Query: ${sql.substring(0, 50)}...`);
         const client = await this._pool.connect();
         try {
-          const result = await client.query(sql, params);
-          console.log(`✅ DB Query successful, returned ${result.rows.length} rows`);
-          return result.rows;
+        const result = await client.query(sql, params);
+        console.log(`✅ DB Query successful, returned ${result.rows?.length || 0} rows`);
+        return result.rows || [];
         } finally {
           client.release();
         }
@@ -85,9 +85,9 @@ class Database {
         console.log(`🔍 DB Run: ${sql.substring(0, 50)}...`);
         const client = await this._pool.connect();
         try {
-          const result = await client.query(sql, params);
-          console.log(`✅ DB Run successful, ${result.rowCount || 0} rows affected`);
-          return { lastID: result.rows[0]?.id || 0, changes: result.rowCount || 0 };
+        const result = await client.query(sql, params);
+        console.log(`✅ DB Run successful, ${result.rowCount || 0} rows affected`);
+        return { lastID: result.rows?.[0]?.id || 0, changes: result.rowCount || 0 };
         } finally {
           client.release();
         }
@@ -109,9 +109,9 @@ class Database {
         console.log(`🔍 DB Get: ${sql.substring(0, 50)}...`);
         const client = await this._pool.connect();
         try {
-          const result = await client.query(sql, params);
-          console.log(`✅ DB Get successful, ${result.rows.length} rows returned`);
-          return result.rows[0] || null;
+        const result = await client.query(sql, params);
+        console.log(`✅ DB Get successful, ${result.rows?.length || 0} rows returned`);
+        return result.rows?.[0] || null;
         } finally {
           client.release();
         }
