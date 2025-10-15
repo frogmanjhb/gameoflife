@@ -9,6 +9,7 @@ import transactionRoutes from './routes/transactions';
 import loanRoutes from './routes/loans';
 import studentRoutes from './routes/students';
 import exportRoutes from './routes/export';
+import mathGameRoutes from './routes/math-game';
 import database from './database/database-prod';
 
 dotenv.config();
@@ -81,6 +82,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/loans', loanRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/math-game', mathGameRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -69,3 +69,44 @@ export interface AuthContextType {
   logout: () => void;
   loading: boolean;
 }
+
+export interface MathGameSession {
+  id: number;
+  user_id: number;
+  difficulty: 'easy' | 'medium' | 'hard';
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  earnings: number;
+  played_at: string;
+}
+
+export interface MathGameStatus {
+  remaining_plays: number;
+  high_scores: {
+    easy: number;
+    medium: number;
+    hard: number;
+  };
+  recent_sessions: MathGameSession[];
+}
+
+export interface MathProblem {
+  num1: number;
+  num2: number;
+  operation: '+' | '-' | '×' | '÷';
+  answer: number;
+  display: string;
+}
+
+export interface MathGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export interface MathGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}

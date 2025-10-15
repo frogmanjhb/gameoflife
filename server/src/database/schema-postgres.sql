@@ -58,6 +58,28 @@ CREATE TABLE IF NOT EXISTS loan_payments (
     payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Math game sessions table
+CREATE TABLE IF NOT EXISTS math_game_sessions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    difficulty VARCHAR(10) NOT NULL CHECK (difficulty IN ('easy', 'medium', 'hard')),
+    score INTEGER NOT NULL DEFAULT 0,
+    correct_answers INTEGER NOT NULL DEFAULT 0,
+    total_problems INTEGER NOT NULL DEFAULT 0,
+    earnings DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Math game high scores table
+CREATE TABLE IF NOT EXISTS math_game_high_scores (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    difficulty VARCHAR(10) NOT NULL CHECK (difficulty IN ('easy', 'medium', 'hard')),
+    high_score INTEGER NOT NULL DEFAULT 0,
+    achieved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, difficulty)
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_from_account ON transactions(from_account_id);
@@ -65,3 +87,6 @@ CREATE INDEX IF NOT EXISTS idx_transactions_to_account ON transactions(to_accoun
 CREATE INDEX IF NOT EXISTS idx_loans_borrower_id ON loans(borrower_id);
 CREATE INDEX IF NOT EXISTS idx_loans_status ON loans(status);
 CREATE INDEX IF NOT EXISTS idx_loan_payments_loan_id ON loan_payments(loan_id);
+CREATE INDEX IF NOT EXISTS idx_math_game_sessions_user_id ON math_game_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_math_game_sessions_played_at ON math_game_sessions(played_at);
+CREATE INDEX IF NOT EXISTS idx_math_game_high_scores_user_id ON math_game_high_scores(user_id);

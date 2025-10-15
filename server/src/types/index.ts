@@ -26,7 +26,7 @@ export interface Transaction {
   from_account_id?: number;
   to_account_id?: number;
   amount: number;
-  transaction_type: 'deposit' | 'withdrawal' | 'transfer' | 'loan_disbursement' | 'loan_repayment' | 'salary' | 'fine';
+  transaction_type: 'deposit' | 'withdrawal' | 'transfer' | 'loan_disbursement' | 'loan_repayment' | 'salary' | 'fine' | 'math_game';
   description?: string;
   created_at: string;
 }
@@ -115,4 +115,45 @@ export interface LoanWithDetails extends Loan {
 export interface AuthenticatedRequest extends Request {
   user: User;
   account?: Account;
+}
+
+export interface MathGameSession {
+  id: number;
+  user_id: number;
+  difficulty: 'easy' | 'medium' | 'hard';
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  earnings: number;
+  played_at: string;
+}
+
+export interface MathGameHighScore {
+  id: number;
+  user_id: number;
+  difficulty: 'easy' | 'medium' | 'hard';
+  high_score: number;
+  achieved_at: string;
+}
+
+export interface MathGameStatus {
+  remaining_plays: number;
+  high_scores: {
+    easy: number;
+    medium: number;
+    hard: number;
+  };
+  recent_sessions: MathGameSession[];
+}
+
+export interface MathGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export interface MathGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[]; // true for correct, false for incorrect
 }

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { MathGameStatus, MathGameStartRequest, MathGameSubmitRequest } from '../types';
 
 // Support for multiple deployment platforms
 const getApiUrl = () => {
@@ -53,5 +54,23 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Math Game API methods
+export const mathGameApi = {
+  // Get math game status (remaining plays, high scores, recent sessions)
+  getStatus: (): Promise<{ data: MathGameStatus }> => {
+    return api.get('/math-game/status');
+  },
+
+  // Start a new math game session
+  startGame: (data: MathGameStartRequest): Promise<{ data: { session: any } }> => {
+    return api.post('/math-game/start', data);
+  },
+
+  // Submit math game results
+  submitGame: (data: MathGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; isNewHighScore: boolean } }> => {
+    return api.post('/math-game/submit', data);
+  }
+};
 
 export default api;
