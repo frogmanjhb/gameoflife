@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Users, DollarSign, TrendingUp, CheckCircle, Download, AlertTriangle, Trash2 } from 'lucide-react';
+import { Users, DollarSign, TrendingUp, CheckCircle, Download, AlertTriangle, Trash2, Building2 } from 'lucide-react';
 import api from '../services/api';
 import { Student, Loan, Transaction } from '../types';
 import StudentManagement from './StudentManagement';
 import LoanManagement from './LoanManagement';
+import ClassManagement from './ClassManagement';
 
 const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -12,7 +13,7 @@ const TeacherDashboard: React.FC = () => {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'loans' | 'transactions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'class' | 'loans' | 'transactions'>('overview');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
 
@@ -176,6 +177,7 @@ const TeacherDashboard: React.FC = () => {
             {[
               { id: 'overview', label: 'Overview', icon: TrendingUp },
               { id: 'students', label: 'Students', icon: Users },
+              { id: 'class', label: 'Class', icon: Building2 },
               { id: 'loans', label: 'Loans', icon: DollarSign },
               { id: 'transactions', label: 'Transactions', icon: CheckCircle }
             ].map(({ id, label, icon: Icon }) => (
@@ -307,6 +309,17 @@ const TeacherDashboard: React.FC = () => {
                 </button>
               </div>
               <StudentManagement students={students} onUpdate={fetchData} />
+            </div>
+          )}
+
+          {/* Class Tab */}
+          {activeTab === 'class' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold text-gray-900">Class Management</h3>
+                <p className="text-sm text-gray-500">Pay or remove money from all students in a class</p>
+              </div>
+              <ClassManagement students={students} onUpdate={fetchData} />
             </div>
           )}
 

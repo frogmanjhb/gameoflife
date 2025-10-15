@@ -238,4 +238,134 @@ router.post('/withdraw', [
   }
 });
 
+// Teacher: Bulk payment to all students in a class
+router.post('/bulk-payment', [
+  body('class_name').notEmpty().withMessage('Class name is required'),
+  body('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0'),
+  body('description').optional().isString()
+], authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { class_name, amount, description }: { class_name: string; amount: number; description?: string } = req.body;
+
+    console.log('🔍 Bulk payment to class:', class_name, 'amount:', amount);
+
+    // Get all students in the class
+    const students = await database.query(
+      'SELECT u.id, u.username, a.id as account_id, a.balance FROM users u LEFT JOIN accounts a ON u.id = a.user_id WHERE u.role = $1 AND u.class = $2',
+      ['student', class_name]
+    );
+
+    if (students.length === 0) {
+      return res.status(404).json({ error: `No students found in class ${class_name}` });
+    }
+
+    console.log('📊 Found students in class:', students.length);
+
+    let updatedCount = 0;
+
+    // Start transaction
+    await database.run('BEGIN TRANSACTION');
+
+    try {
+      for (const student of students) {
+        if (student.account_id) {
+          // Update balance
+          await database.run(
+            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            [amount, student.account_id]
+          );
+
+          // Record transaction
+          await database.run(
+            'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
+            [student.account_id, amount, 'bulk_payment', description || `Bulk payment to ${class_name}`]
+          );
+
+          updatedCount++;
+        }
+      }
+
+      await database.run('COMMIT');
+      console.log('✅ Bulk payment completed for', updatedCount, 'students');
+      res.json({ message: 'Bulk payment successful', updated_count: updatedCount });
+    } catch (error) {
+      await database.run('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Bulk payment error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Teacher: Bulk removal from all students in a class
+router.post('/bulk-removal', [
+  body('class_name').notEmpty().withMessage('Class name is required'),
+  body('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0'),
+  body('description').optional().isString()
+], authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { class_name, amount, description }: { class_name: string; amount: number; description?: string } = req.body;
+
+    console.log('🔍 Bulk removal from class:', class_name, 'amount:', amount);
+
+    // Get all students in the class with sufficient balance
+    const students = await database.query(
+      'SELECT u.id, u.username, a.id as account_id, a.balance FROM users u LEFT JOIN accounts a ON u.id = a.user_id WHERE u.role = $1 AND u.class = $2 AND a.balance >= $3',
+      ['student', class_name, amount]
+    );
+
+    if (students.length === 0) {
+      return res.status(404).json({ error: `No students found in class ${class_name} with sufficient balance` });
+    }
+
+    console.log('📊 Found students with sufficient balance:', students.length);
+
+    let updatedCount = 0;
+
+    // Start transaction
+    await database.run('BEGIN TRANSACTION');
+
+    try {
+      for (const student of students) {
+        if (student.account_id) {
+          // Update balance
+          await database.run(
+            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            [amount, student.account_id]
+          );
+
+          // Record transaction
+          await database.run(
+            'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
+            [student.account_id, amount, 'bulk_removal', description || `Bulk removal from ${class_name}`]
+          );
+
+          updatedCount++;
+        }
+      }
+
+      await database.run('COMMIT');
+      console.log('✅ Bulk removal completed for', updatedCount, 'students');
+      res.json({ message: 'Bulk removal successful', updated_count: updatedCount });
+    } catch (error) {
+      await database.run('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Bulk removal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
