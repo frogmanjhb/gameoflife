@@ -27,7 +27,11 @@ class Database {
     console.log('🔗 Using DATABASE_PUBLIC_URL:', !!process.env.DATABASE_PUBLIC_URL);
     console.log('🔗 Using DATABASE_URL:', !!process.env.DATABASE_URL);
     console.log('🔗 Using individual params:', !!process.env.PGHOST);
-    console.log('🔗 Database URL preview:', databaseUrl.substring(0, 30) + '...');
+    console.log('🔗 PGHOST:', process.env.PGHOST);
+    console.log('🔗 PGPORT:', process.env.PGPORT);
+    console.log('🔗 PGUSER:', process.env.PGUSER);
+    console.log('🔗 PGDATABASE:', process.env.PGDATABASE);
+    console.log('🔗 Database URL preview:', databaseUrl.substring(0, 50) + '...');
     
     // Configure SSL based on the URL type
     const isInternalUrl = databaseUrl.includes('railway.internal');
