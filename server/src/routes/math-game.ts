@@ -43,7 +43,10 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
     };
 
     highScores.forEach((row: any) => {
-      highScoreMap[row.difficulty as keyof typeof highScoreMap] = row.high_score;
+      const difficulty = row.difficulty as keyof typeof highScoreMap;
+      if (difficulty in highScoreMap) {
+        highScoreMap[difficulty] = row.high_score;
+      }
     });
 
     // Get recent sessions (last 5)
@@ -162,9 +165,9 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     };
 
     // Calculate earnings
-    const difficultyMultipliers = { easy: 1.0, medium: 1.2, hard: 1.5 };
+    const difficultyMultipliers: Record<string, number> = { easy: 1.0, medium: 1.2, hard: 1.5 };
     const basePoints = correct_answers * 1; // 1 point per correct answer
-    const difficultyMultiplier = difficultyMultipliers[session.difficulty];
+    const difficultyMultiplier = difficultyMultipliers[session.difficulty] || 1.0;
     const streakBonus = calculateStreakBonus(answer_sequence);
     const totalEarnings = basePoints * difficultyMultiplier * streakBonus;
 
