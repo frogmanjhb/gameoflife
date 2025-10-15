@@ -11,8 +11,7 @@ cmds = [
 
 [phases.build]
 cmds = [
-  "rm -rf server/dist",
-  "npm run build"
+  "echo 'Skipping build - running TypeScript directly'"
 ]
 
 [start]
