@@ -48,20 +48,37 @@ class Database {
     this._pool = new Pool({
       connectionString: databaseUrl,
       ssl: sslConfig,
-      connectionTimeoutMillis: 10000,
+      connectionTimeoutMillis: 30000,
       idleTimeoutMillis: 30000,
-      max: 10
+      max: 1,
+      min: 0,
+      acquireTimeoutMillis: 60000,
+      createTimeoutMillis: 30000,
+      destroyTimeoutMillis: 5000,
+      reapIntervalMillis: 1000,
+      createRetryIntervalMillis: 200
     });
   }
 
   async query(sql: string, params: any[] = []): Promise<any[]> {
-    const client = await this._pool.connect();
-    try {
-      const result = await client.query(sql, params);
-      return result.rows;
-    } finally {
-      client.release();
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        const client = await this._pool.connect();
+        try {
+          const result = await client.query(sql, params);
+          return result.rows;
+        } finally {
+          client.release();
+        }
+      } catch (error) {
+        retries--;
+        if (retries === 0) throw error;
+        console.log(`🔄 Database query failed, retrying... (${retries} attempts left)`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
+    throw new Error('All retry attempts failed');
   }
 
   async run(sql: string, params: any[] = []): Promise<{ lastID: number; changes: number }> {
