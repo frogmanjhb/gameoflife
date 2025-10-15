@@ -16,6 +16,7 @@ const TeacherDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'class' | 'loans' | 'transactions'>('overview');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [selectedClass, setSelectedClass] = useState<'all' | '6A' | '6B' | '6C'>('all');
 
   useEffect(() => {
     fetchData();
@@ -68,10 +69,33 @@ const TeacherDashboard: React.FC = () => {
     });
   };
 
-  const totalClassBalance = students.reduce((sum, student) => sum + (Number(student.balance) || 0), 0);
-  const pendingLoans = loans.filter(loan => loan.status === 'pending');
-  const activeLoans = loans.filter(loan => loan.status === 'active' || loan.status === 'approved');
-  const recentTransactions = transactions.slice(0, 10);
+  // Filter students by selected class
+  const filteredStudents = selectedClass === 'all' 
+    ? students 
+    : students.filter(student => student.class === selectedClass);
+
+  // Filter loans by students in selected class
+  const filteredLoans = selectedClass === 'all'
+    ? loans
+    : loans.filter(loan => {
+        const student = students.find(s => s.id === loan.borrower_id);
+        return student && student.class === selectedClass;
+      });
+
+  // Filter transactions by students in selected class
+  const filteredTransactions = selectedClass === 'all'
+    ? transactions
+    : transactions.filter(transaction => {
+        const fromStudent = students.find(s => s.account_number === transaction.from_account_number);
+        const toStudent = students.find(s => s.account_number === transaction.to_account_number);
+        return (fromStudent && fromStudent.class === selectedClass) || 
+               (toStudent && toStudent.class === selectedClass);
+      });
+
+  const totalClassBalance = filteredStudents.reduce((sum, student) => sum + (Number(student.balance) || 0), 0);
+  const pendingLoans = filteredLoans.filter(loan => loan.status === 'pending');
+  const activeLoans = filteredLoans.filter(loan => loan.status === 'active' || loan.status === 'approved');
+  const recentTransactions = filteredTransactions.slice(0, 10);
 
   const handleExport = async (type: 'transactions' | 'students' | 'loans') => {
     try {
@@ -127,6 +151,31 @@ const TeacherDashboard: React.FC = () => {
         <p className="text-primary-100">Manage your classroom's financial simulation</p>
       </div>
 
+      {/* Class Filter */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Class Filter</h3>
+          <div className="flex space-x-2">
+            {['all', '6A', '6B', '6C'].map((className) => (
+              <button
+                key={className}
+                onClick={() => setSelectedClass(className as any)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  selectedClass === className
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {className === 'all' ? 'All Classes' : `Class ${className}`}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="text-sm text-gray-500 mt-2">
+          Currently viewing: <span className="font-medium">{selectedClass === 'all' ? 'All Classes' : `Class ${selectedClass}`}</span>
+        </p>
+      </div>
+
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="card">
@@ -134,7 +183,7 @@ const TeacherDashboard: React.FC = () => {
             <Users className="h-8 w-8 text-primary-600" />
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Students</p>
-              <p className="text-2xl font-bold text-gray-900">{students.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{filteredStudents.length}</p>
             </div>
           </div>
         </div>
@@ -205,7 +254,7 @@ const TeacherDashboard: React.FC = () => {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Students by Balance</h3>
                 <div className="space-y-3">
-                  {students
+                  {filteredStudents
                     .sort((a, b) => b.balance - a.balance)
                     .slice(0, 5)
                     .map((student, index) => (
@@ -336,7 +385,7 @@ const TeacherDashboard: React.FC = () => {
                   <span>Export CSV</span>
                 </button>
               </div>
-              <LoanManagement loans={loans} onUpdate={fetchData} />
+              <LoanManagement loans={filteredLoans} onUpdate={fetchData} />
             </div>
           )}
 
@@ -354,7 +403,7 @@ const TeacherDashboard: React.FC = () => {
                 </button>
               </div>
               <div className="space-y-2">
-                {transactions.map((transaction) => (
+                {filteredTransactions.map((transaction) => (
                   <div key={transaction.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
