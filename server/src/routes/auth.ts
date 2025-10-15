@@ -14,10 +14,30 @@ router.post('/register', [
   body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').isIn(['student', 'teacher']).withMessage('Role must be student or teacher'),
-  body('first_name').optional().isLength({ min: 1 }).withMessage('First name is required'),
-  body('last_name').optional().isLength({ min: 1 }).withMessage('Last name is required'),
-  body('class').optional().isIn(['6A', '6B', '6C']).withMessage('Class must be 6A, 6B, or 6C'),
-  body('email').optional().isEmail().withMessage('Valid email is required'),
+  body('first_name').optional().custom((value) => {
+    if (value && value.length < 1) {
+      throw new Error('First name must be at least 1 character');
+    }
+    return true;
+  }),
+  body('last_name').optional().custom((value) => {
+    if (value && value.length < 1) {
+      throw new Error('Last name must be at least 1 character');
+    }
+    return true;
+  }),
+  body('class').optional().custom((value) => {
+    if (value && !['6A', '6B', '6C'].includes(value)) {
+      throw new Error('Class must be 6A, 6B, or 6C');
+    }
+    return true;
+  }),
+  body('email').optional().custom((value) => {
+    if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      throw new Error('Valid email is required');
+    }
+    return true;
+  }),
   body('email').optional().custom((value) => {
     if (value && !value.endsWith('@stpeters.co.za')) {
       throw new Error('Email must end with @stpeters.co.za');
@@ -35,6 +55,12 @@ router.post('/register', [
 
     const { username, password, role, first_name, last_name, class: studentClass, email }: CreateUserRequest = req.body;
 
+    // Handle empty strings as null for optional fields
+    const firstName = first_name && first_name.trim() ? first_name.trim() : null;
+    const lastName = last_name && last_name.trim() ? last_name.trim() : null;
+    const studentClassName = studentClass && studentClass.trim() ? studentClass.trim() : null;
+    const emailAddress = email && email.trim() ? email.trim() : null;
+
     // Check if user already exists
     const existingUser = await database.get('SELECT id FROM users WHERE username = $1', [username]);
     if (existingUser) {
@@ -47,7 +73,7 @@ router.post('/register', [
     // Create user
     const result = await database.run(
       'INSERT INTO users (username, password_hash, role, first_name, last_name, class, email) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-      [username, passwordHash, role, first_name, last_name, studentClass, email]
+      [username, passwordHash, role, firstName, lastName, studentClassName, emailAddress]
     );
 
     const userId = result.lastID;
