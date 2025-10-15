@@ -1,9 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Send, User, DollarSign, MessageSquare } from 'lucide-react';
 import api from '../services/api';
 
 interface TransferFormProps {
   onSuccess: () => void;
+}
+
+interface Classmate {
+  id: number;
+  username: string;
+  first_name: string | null;
+  last_name: string | null;
+  class: string | null;
 }
 
 const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
@@ -15,6 +23,25 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [classmates, setClassmates] = useState<Classmate[]>([]);
+  const [loadingClassmates, setLoadingClassmates] = useState(true);
+
+  // Load classmates when component mounts
+  useEffect(() => {
+    const fetchClassmates = async () => {
+      try {
+        const response = await api.get('/students/classmates');
+        setClassmates(response.data);
+      } catch (err: any) {
+        console.error('Failed to load classmates:', err);
+        setError('Failed to load classmates. Please refresh the page.');
+      } finally {
+        setLoadingClassmates(false);
+      }
+    };
+
+    fetchClassmates();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +66,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
@@ -72,18 +99,37 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
         <div>
           <label htmlFor="to_username" className="label">
             <User className="h-4 w-4 inline mr-1" />
-            Send to (Username)
+            Send to (Classmate)
           </label>
-          <input
-            id="to_username"
-            name="to_username"
-            type="text"
-            required
-            className="input-field"
-            placeholder="Enter recipient's username"
-            value={formData.to_username}
-            onChange={handleInputChange}
-          />
+          {loadingClassmates ? (
+            <div className="input-field text-gray-500">
+              Loading classmates...
+            </div>
+          ) : (
+            <select
+              id="to_username"
+              name="to_username"
+              required
+              className="input-field"
+              value={formData.to_username}
+              onChange={handleInputChange}
+            >
+              <option value="">Select a classmate</option>
+              {classmates.map((classmate) => (
+                <option key={classmate.id} value={classmate.username}>
+                  {classmate.first_name && classmate.last_name 
+                    ? `${classmate.first_name} ${classmate.last_name} (${classmate.username})`
+                    : classmate.username
+                  }
+                </option>
+              ))}
+            </select>
+          )}
+          {!loadingClassmates && classmates.length === 0 && (
+            <p className="text-sm text-gray-500 mt-1">
+              No classmates found in your class.
+            </p>
+          )}
         </div>
 
         <div>
@@ -134,7 +180,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
         <h3 className="font-semibold text-blue-900 mb-2">💡 Transfer Tips:</h3>
         <ul className="text-sm text-blue-800 space-y-1">
           <li>• Make sure you have enough money in your account</li>
-          <li>• Double-check the recipient's username</li>
+          <li>• Select a classmate from your class to send money to</li>
           <li>• Add a description to remember what the money is for</li>
         </ul>
       </div>

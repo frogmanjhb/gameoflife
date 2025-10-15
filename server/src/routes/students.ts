@@ -4,6 +4,37 @@ import { authenticateToken, AuthenticatedRequest, requireRole } from '../middlew
 
 const router = Router();
 
+// Get students in the same class as the current student
+router.get('/classmates', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'student') {
+      return res.status(403).json({ error: 'Only students can access classmates' });
+    }
+
+    console.log('🔍 Getting classmates for student:', req.user.username, 'in class:', req.user.class);
+    
+    const classmates = await database.query(`
+      SELECT 
+        u.id,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class
+      FROM users u
+      WHERE u.role = 'student' 
+        AND u.class = $1 
+        AND u.id != $2
+      ORDER BY u.first_name, u.last_name
+    `, [req.user.class, req.user.id]);
+
+    console.log('📊 Found classmates:', classmates.length);
+    res.json(classmates);
+  } catch (error) {
+    console.error('Get classmates error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get all students with their account balances (teachers only)
 router.get('/', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
