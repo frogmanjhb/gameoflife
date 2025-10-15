@@ -5,7 +5,7 @@ class Database {
 
   constructor() {
     // Try different connection methods in order of preference
-    let databaseUrl = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
+    let databaseUrl = process.env.DATABASE_URL || process.env.DATABASE_PUBLIC_URL;
     
     // If no URL available, construct from individual parameters
     if (!databaseUrl && process.env.PGHOST) {
@@ -37,9 +37,9 @@ class Database {
     const isInternalUrl = databaseUrl.includes('railway.internal');
     const isExternalUrl = databaseUrl.includes('switchback.proxy.rlwy.net');
     
-    // For Railway external URLs, disable SSL
+    // Configure SSL based on the URL type
     const sslConfig = process.env.NODE_ENV === 'production' ? 
-      (isExternalUrl ? false : { rejectUnauthorized: false }) : false;
+      (isInternalUrl ? false : { rejectUnauthorized: false }) : false;
     
     console.log('🔗 Using internal URL:', isInternalUrl);
     console.log('🔗 Using external URL:', isExternalUrl);
