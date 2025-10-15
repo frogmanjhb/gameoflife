@@ -60,24 +60,57 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check (must come before other routes)
+// Simple health check (no database dependency) - Railway healthcheck endpoint
+app.get('/health', (req, res) => {
+  // Allow Railway healthcheck hostname
+  const allowedHosts = ['healthcheck.railway.app', 'localhost', '127.0.0.1'];
+  const host = req.get('host')?.split(':')[0];
+  
+  if (host && !allowedHosts.includes(host)) {
+    console.log(`Health check request from unexpected host: ${host}`);
+  }
+  
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    port: process.env.PORT || 5000
+  });
+});
+
+// Detailed health check (must come before other routes)
 app.get('/api/health', async (req, res) => {
+  const startTime = Date.now();
+  const healthStatus = {
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    database: 'unknown',
+    responseTime: 0
+  };
+
   try {
-    // Simple database connectivity test
-    await database.query('SELECT 1 as test');
-    res.json({ 
-      status: 'OK', 
-      timestamp: new Date().toISOString(),
-      database: 'connected'
-    });
+    // Test database connectivity with timeout
+    const dbTestPromise = database.query('SELECT 1 as test');
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database query timeout')), 5000)
+    );
+    
+    await Promise.race([dbTestPromise, timeoutPromise]);
+    healthStatus.database = 'connected';
+    
+    res.json(healthStatus);
   } catch (error) {
     console.error('Health check failed:', error);
-    res.status(500).json({ 
-      status: 'ERROR', 
-      timestamp: new Date().toISOString(),
-      database: 'disconnected',
-      error: error instanceof Error ? error.message : String(error)
-    });
+    healthStatus.status = 'ERROR';
+    healthStatus.database = 'disconnected';
+    healthStatus.error = error instanceof Error ? error.message : String(error);
+    
+    // Still return 200 for basic health, 500 for critical failures
+    const statusCode = error instanceof Error && error.message.includes('timeout') ? 200 : 500;
+    res.status(statusCode).json(healthStatus);
+  } finally {
+    healthStatus.responseTime = Date.now() - startTime;
   }
 });
 
@@ -187,7 +220,8 @@ async function startServer() {
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📊 Game of Life Classroom Simulation API`);
-    console.log(`🌐 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`🌐 Health check: http://localhost:${PORT}/health`);
+    console.log(`🔍 Detailed health: http://localhost:${PORT}/api/health`);
   });
 }
 
