@@ -14,6 +14,18 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
 
     const userId = req.user.id;
 
+    // Check if math game tables exist, if not return default status
+    try {
+      await database.query('SELECT 1 FROM math_game_sessions LIMIT 1');
+    } catch (tableError) {
+      console.log('Math game tables not found, returning default status');
+      return res.json({
+        remaining_plays: 3,
+        high_scores: { easy: 0, medium: 0, hard: 0 },
+        recent_sessions: []
+      });
+    }
+
     // Check remaining plays today (resets at 6 AM)
     const todayPlays = await database.query(`
       SELECT COUNT(*) as count FROM math_game_sessions 
@@ -85,6 +97,13 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
 
     const userId = req.user.id;
 
+    // Check if math game tables exist
+    try {
+      await database.query('SELECT 1 FROM math_game_sessions LIMIT 1');
+    } catch (tableError) {
+      return res.status(503).json({ error: 'Math game feature not available yet. Please try again later.' });
+    }
+
     // Check remaining plays today
     const todayPlays = await database.query(`
       SELECT COUNT(*) as count FROM math_game_sessions 
@@ -132,6 +151,13 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     }
 
     const userId = req.user.id;
+
+    // Check if math game tables exist
+    try {
+      await database.query('SELECT 1 FROM math_game_sessions LIMIT 1');
+    } catch (tableError) {
+      return res.status(503).json({ error: 'Math game feature not available yet. Please try again later.' });
+    }
 
     // Verify session belongs to user
     const session = await database.get(`

@@ -61,8 +61,24 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Health check (must come before other routes)
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+app.get('/api/health', async (req, res) => {
+  try {
+    // Simple database connectivity test
+    await database.query('SELECT 1 as test');
+    res.json({ 
+      status: 'OK', 
+      timestamp: new Date().toISOString(),
+      database: 'connected'
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(500).json({ 
+      status: 'ERROR', 
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
 });
 
 // Debug endpoint to check database state
