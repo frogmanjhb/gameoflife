@@ -4,175 +4,164 @@ A comprehensive web application designed to teach financial literacy to Grade 6 
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
 
-> 🚂 **Now optimized for Railway deployment!** Deploy in minutes with our [Quick Start Guide](./RAILWAY_QUICKSTART.md) | [Full Guide](./RAILWAY_DEPLOYMENT.md) | [Migration Guide](./MIGRATION_TO_RAILWAY.md)  
-> 🪟 **Windows Users**: See [Windows Guide](./WINDOWS_RAILWAY_GUIDE.md) for PowerShell-specific instructions!
+> 🚂 **Now optimized for Railway deployment!** Deploy in minutes with our comprehensive guide below.
 
 ## ✨ Features
 
-### 🎓 Student Features
-- **Virtual Bank Account**: Each student gets a unique account with balance tracking
-- **Peer-to-Peer Transfers**: Send money to classmates with descriptions
-- **Loan System**: Apply for loans with teacher approval required
-- **Transaction History**: View all financial activities
-- **Real-time Balance Updates**: See account changes instantly
+### 🎓 For Students
+- **Virtual Bank Account**: Each student gets a personal account with real-time balance tracking
+- **Peer-to-Peer Transfers**: Send money to classmates with dropdown selection
+- **Loan Applications**: Apply for loans with customizable amounts and purposes
+- **Transaction History**: View all account activity with detailed records
+- **Financial Dashboard**: Track spending, savings, and loan status
 
-### 👨‍🏫 Teacher Features
-- **Student Management**: View all students and their account balances
-- **Money Management**: Deposit salaries, bonuses, or deduct fines
-- **Loan Approval**: Review and approve/deny student loan applications
-- **Transaction Monitoring**: Track all classroom financial activity
-- **Class Analytics**: See top savers and spending patterns
+### 👨‍🏫 For Teachers
+- **Student Management**: View all students with balances and activity
+- **Loan Approval System**: Review and approve/deny student loan applications
+- **Class Operations**: Bulk pay or remove money from entire classes
+- **Class Filtering**: View statistics for individual classes (6A, 6B, 6C) or all combined
+- **Data Export**: Export student, loan, and transaction data as CSV
+- **Real-time Monitoring**: Track classroom financial activity
 
-### 🏦 Banking System
-- **Secure Authentication**: JWT-based login system
-- **Role-based Access**: Separate interfaces for students and teachers
-- **Transaction Logging**: Complete audit trail of all financial activities
-- **Loan Tracking**: Monitor loan status, payments, and outstanding balances
+### 🏦 Financial Features
+- **Interest-free Loans**: Students can borrow up to $500
+- **Automatic Repayments**: Scheduled loan payments with flexible terms
+- **Transaction Types**: Deposits, withdrawals, transfers, loan disbursements, and repayments
+- **Balance Validation**: Prevents overdrafts and invalid transactions
+- **Audit Trail**: Complete transaction history for accountability
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Development)
 
 ### Prerequisites
-- Node.js 18+ 
-- npm or yarn
+- Node.js 18+ and npm 9+
+- Git
 
 ### Installation
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/gameoflife.git
+cd gameoflife
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd gameoflife
-   ```
+# Install all dependencies (root, server, and client)
+npm run install:all
 
-2. **Install dependencies**
-   ```bash
-   npm run install:all
-   ```
-
-3. **Set up environment variables**
-   ```bash
-   cd server
-   cp env.example .env
-   # Edit .env with your preferred settings
-   ```
-
-4. **Start the development servers**
-   ```bash
-   npm run dev
-   ```
-
-5. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:5000
-
-## 🏗️ Project Structure
-
-```
-gameoflife/
-├── client/                 # React frontend
-│   ├── src/
-│   │   ├── components/    # React components
-│   │   ├── contexts/      # React contexts (Auth)
-│   │   ├── services/      # API services
-│   │   └── types/         # TypeScript types
-│   └── package.json
-├── server/                # Node.js backend
-│   ├── src/
-│   │   ├── database/      # Database schema and connection
-│   │   ├── middleware/    # Express middleware
-│   │   ├── routes/        # API routes
-│   │   └── types/         # TypeScript types
-│   └── package.json
-└── package.json           # Root package.json
+# Start development servers
+npm run dev
 ```
 
-## 🛠️ Technology Stack
+The application will be available at:
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:5000
 
-### Frontend
-- **React 18** with TypeScript
-- **Tailwind CSS** for styling
-- **React Router** for navigation
-- **Axios** for API calls
-- **Lucide React** for icons
-- **Vite** for build tooling
+### First-Time Setup
+1. **Register as a Teacher** first to access admin features
+2. **Create student accounts** or let students register themselves
+3. **Configure classes** (6A, 6B, 6C) for students
+4. **Start the simulation** with initial deposits or loan approvals
 
-### Backend
-- **Node.js** with Express
-- **TypeScript** for type safety
-- **SQLite** database (easily switchable to PostgreSQL)
-- **JWT** for authentication
-- **bcryptjs** for password hashing
-- **Express Validator** for input validation
+## 🚂 Railway Deployment (Production)
 
-## 📊 Database Schema
+### Prerequisites
+- GitHub account
+- Railway account (free at [railway.app](https://railway.app))
+- Code pushed to GitHub
 
-The application uses a SQLite database with the following tables:
+> 🪟 **Windows Users**: See Windows-specific instructions in the deployment section below!
 
-- **users**: Student and teacher accounts
-- **accounts**: Bank account information
-- **transactions**: All financial transactions
-- **loans**: Loan applications and details
-- **loan_payments**: Loan payment history
+### Quick Deployment (10 minutes)
 
-## 🎯 Educational Goals
+#### 1️⃣ Create Project & Database
+1. Go to [Railway Dashboard](https://railway.app/dashboard)
+2. Click **"New Project"** → **"Deploy from GitHub repo"**
+3. Select your `gameoflife` repository
+4. Click **"New"** → **"Database"** → **"Add PostgreSQL"**
 
-This application helps students learn:
+#### 2️⃣ Initialize Database Schema
+**Method 1 - Railway Dashboard (Recommended):**
+1. Click on the **PostgreSQL** service
+2. Go to **"Data"** tab → **"Query"**
+3. Copy the entire contents of `server/src/database/schema-postgres.sql`
+4. Paste and execute the query
 
-1. **Financial Responsibility**: Managing virtual money
-2. **Banking Concepts**: Accounts, balances, transactions
-3. **Loan Understanding**: Interest, payments, debt management
-4. **Peer Interaction**: Transferring money between classmates
-5. **Decision Making**: When to save, spend, or borrow
+**Method 2 - Command Line:**
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
 
-## 🔧 Configuration
+# Link project
+railway link
+
+# Import schema
+railway run --service backend psql < server/src/database/schema-postgres.sql
+```
+
+#### 3️⃣ Deploy Backend
+1. In Railway, click **"New"** → **"GitHub Repo"**
+2. Select your repository
+3. Railway auto-detects Node.js and deploys
+4. Add environment variables:
+   - `NODE_ENV` = `production`
+   - `JWT_SECRET` = `your-super-secret-jwt-key-change-this`
+   - `DATABASE_URL` = (auto-populated from PostgreSQL service)
+
+#### 4️⃣ Configure Environment
+1. **Get your Railway URL** from the deployed service
+2. **Update CORS settings** in Railway dashboard if needed
+3. **Test the API** at `https://your-app.railway.app/api/health`
+
+### 🪟 Windows-Specific Instructions
+
+**PowerShell Commands:**
+```powershell
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Link project
+railway link
+
+# Import schema (Windows method)
+Get-Content server/src/database/schema-postgres.sql | railway run --service backend psql
+
+# Or use the dashboard method (recommended)
+```
+
+**Database Schema Import (Windows):**
+1. Open Railway Dashboard → Your Project → Postgres → Data → Query
+2. Copy contents of `server/src/database/schema-postgres.sql`
+3. Paste and execute in Railway's query interface
 
 ### Environment Variables
 
-Create a `.env` file in the `server` directory:
-
+#### Backend (Railway)
 ```env
-PORT=5000
-NODE_ENV=development
-DB_PATH=./gameoflife.db
-JWT_SECRET=your-super-secret-jwt-key
-CLIENT_URL=http://localhost:3000
+NODE_ENV=production
+JWT_SECRET=your-super-secret-jwt-key-change-this
+DATABASE_URL=postgresql://... (auto-populated)
+CLIENT_URL=https://your-frontend-url.railway.app
 ```
 
-### Database
+#### Frontend (if deploying separately)
+```env
+VITE_API_URL=https://your-backend-url.railway.app
+NODE_ENV=production
+```
 
-The application automatically creates the SQLite database and tables on first run. For production, consider switching to PostgreSQL:
+### Troubleshooting
 
-1. Install PostgreSQL
-2. Update the database connection in `server/src/database/database.ts`
-3. Run the schema SQL against your PostgreSQL instance
+#### Common Issues:
+1. **Database Connection**: Verify `DATABASE_URL` is correct
+2. **CORS Errors**: Check `CLIENT_URL` matches your frontend domain
+3. **Build Failures**: Ensure all dependencies are in `package.json`
+4. **Schema Import**: Use Railway dashboard method for Windows users
 
-## 🚀 Deployment
+#### Logs:
+```bash
+# View Railway logs
+railway logs
 
-### Railway (Recommended)
-
-This application is optimized for Railway deployment. See [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) for complete instructions.
-
-**Quick Start:**
-1. Push your code to GitHub
-2. Connect repository to Railway
-3. Provision PostgreSQL database
-4. Deploy backend and frontend services
-5. Configure environment variables
-
-### Manual Deployment
-
-1. **Build the application**
-   ```bash
-   npm run build
-   ```
-
-2. **Start the production server**
-   ```bash
-   npm start
-   ```
-
-For detailed deployment instructions, see:
-- **Railway**: [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md)
-- **Render**: [DEPLOYMENT.md](./DEPLOYMENT.md)
+# View specific service logs
+railway logs --service backend
+```
 
 ## 🎨 Customization
 
@@ -182,9 +171,62 @@ For detailed deployment instructions, see:
 - Customize component styles in individual files
 
 ### Features
-- Add new transaction types in the database schema
-- Implement additional loan features
+- Add new transaction types in `server/src/database/schema-postgres.sql`
+- Implement additional loan features in `server/src/routes/loans.ts`
 - Create custom dashboards for specific needs
+
+### Classes
+The system supports three classes by default (6A, 6B, 6C). To modify:
+1. Update the validation in `server/src/routes/auth.ts`
+2. Update the class filter in `client/src/components/TeacherDashboard.tsx`
+3. Update the class management in `client/src/components/ClassManagement.tsx`
+
+## 📊 Usage Guide
+
+### For Teachers
+1. **Register** as a teacher (first user)
+2. **Create student accounts** or let students self-register
+3. **Assign classes** (6A, 6B, 6C) to students
+4. **Make initial deposits** to student accounts
+5. **Monitor loan applications** and approve/deny as needed
+6. **Use class operations** for bulk payments or fines
+7. **Export data** for grading and analysis
+
+### For Students
+1. **Register** with teacher-assigned class
+2. **View account balance** and transaction history
+3. **Apply for loans** with specific purposes
+4. **Transfer money** to classmates using the dropdown
+5. **Make loan repayments** when approved
+6. **Track financial progress** through the dashboard
+
+## 🔧 Technical Details
+
+### Architecture
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
+- **Backend**: Node.js + Express + TypeScript
+- **Database**: PostgreSQL (production) / SQLite (development)
+- **Authentication**: JWT tokens
+- **Deployment**: Railway (recommended) or Render
+
+### API Endpoints
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/login` - User login
+- `GET /api/students` - Get all students (teachers only)
+- `GET /api/students/classmates` - Get classmates (students only)
+- `POST /api/transactions/transfer` - Transfer money
+- `POST /api/transactions/bulk-payment` - Bulk class payment
+- `POST /api/transactions/bulk-removal` - Bulk class removal
+- `POST /api/loans/apply` - Apply for loan
+- `POST /api/loans/approve` - Approve/deny loan
+- `GET /api/export/*` - Export data as CSV
+
+### Database Schema
+- **users**: Student and teacher accounts
+- **accounts**: Bank account balances
+- **transactions**: All financial transactions
+- **loans**: Loan applications and details
+- **loan_payments**: Scheduled and completed payments
 
 ## 🤝 Contributing
 
@@ -201,16 +243,12 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🆘 Support
 
 For questions or issues:
-1. Check the GitHub Issues page
-2. Create a new issue with detailed information
-3. Contact the development team
-
-## 🎉 Acknowledgments
-
-- Designed for Grade 6 financial literacy education
-- Inspired by real-world banking and loan systems
-- Built with modern web technologies for educational use
+- Check the [troubleshooting section](#troubleshooting) above
+- Review Railway logs: `railway logs`
+- Open an issue on GitHub
 
 ---
 
-**Happy Learning! 🎓💰**
+**Your Game of Life Classroom Simulation is ready to teach financial literacy! 🎉**
+
+Start with teacher registration, create student accounts, and watch your classroom learn about money management through interactive gameplay.
