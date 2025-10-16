@@ -36,8 +36,29 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
 
   // Problem generation
   const generateProblem = useCallback((diff: Difficulty): MathProblem => {
-    const ranges = { easy: 20, medium: 50, hard: 100 };
-    const range = ranges[diff];
+    // Define appropriate ranges for each difficulty and operation
+    const config = {
+      easy: {
+        addition: { max: 20, min: 1 },
+        subtraction: { max: 20, min: 1 },
+        multiplication: { max: 12, min: 1 },
+        division: { max: 12, min: 2 }
+      },
+      medium: {
+        addition: { max: 50, min: 1 },
+        subtraction: { max: 50, min: 1 },
+        multiplication: { max: 15, min: 1 },
+        division: { max: 15, min: 2 }
+      },
+      hard: {
+        addition: { max: 100, min: 1 },
+        subtraction: { max: 100, min: 1 },
+        multiplication: { max: 20, min: 1 },
+        division: { max: 20, min: 2 }
+      }
+    };
+
+    const ranges = config[diff];
     const operations = ['+', '-', '×', '÷'] as const;
     const operation = operations[Math.floor(Math.random() * operations.length)];
 
@@ -45,26 +66,26 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
 
     switch (operation) {
       case '+':
-        num1 = Math.floor(Math.random() * range) + 1;
-        num2 = Math.floor(Math.random() * range) + 1;
+        num1 = Math.floor(Math.random() * (ranges.addition.max - ranges.addition.min + 1)) + ranges.addition.min;
+        num2 = Math.floor(Math.random() * (ranges.addition.max - ranges.addition.min + 1)) + ranges.addition.min;
         answer = num1 + num2;
         break;
       case '-':
-        num1 = Math.floor(Math.random() * range) + 1;
-        num2 = Math.floor(Math.random() * range) + 1;
+        num1 = Math.floor(Math.random() * (ranges.subtraction.max - ranges.subtraction.min + 1)) + ranges.subtraction.min;
+        num2 = Math.floor(Math.random() * (ranges.subtraction.max - ranges.subtraction.min + 1)) + ranges.subtraction.min;
         // Ensure positive result
         if (num1 < num2) [num1, num2] = [num2, num1];
         answer = num1 - num2;
         break;
       case '×':
-        num1 = Math.floor(Math.random() * Math.min(range, 20)) + 1;
-        num2 = Math.floor(Math.random() * Math.min(range, 20)) + 1;
+        num1 = Math.floor(Math.random() * (ranges.multiplication.max - ranges.multiplication.min + 1)) + ranges.multiplication.min;
+        num2 = Math.floor(Math.random() * (ranges.multiplication.max - ranges.multiplication.min + 1)) + ranges.multiplication.min;
         answer = num1 * num2;
         break;
       case '÷':
-        // Ensure no remainders
-        num2 = Math.floor(Math.random() * Math.min(range, 20)) + 1;
-        answer = Math.floor(Math.random() * Math.min(range, 20)) + 1;
+        // Ensure no remainders - generate answer first, then divisor
+        answer = Math.floor(Math.random() * (ranges.division.max - ranges.division.min + 1)) + ranges.division.min;
+        num2 = Math.floor(Math.random() * (ranges.division.max - ranges.division.min + 1)) + ranges.division.min;
         num1 = num2 * answer;
         break;
     }
@@ -246,21 +267,21 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
                     level: 'easy' as Difficulty, 
                     label: 'Easy', 
                     multiplier: '1.0x', 
-                    range: '1-20',
+                    range: '1-20, ×÷ up to 12',
                     color: 'bg-green-600'
                   },
                   { 
                     level: 'medium' as Difficulty, 
                     label: 'Medium', 
                     multiplier: '1.2x', 
-                    range: '1-50',
+                    range: '1-50, ×÷ up to 15',
                     color: 'bg-yellow-600'
                   },
                   { 
                     level: 'hard' as Difficulty, 
                     label: 'Hard', 
                     multiplier: '1.5x', 
-                    range: '1-100',
+                    range: '1-100, ×÷ up to 20',
                     color: 'bg-red-600'
                   }
                 ].map(({ level, label, multiplier, range, color }) => (
@@ -344,19 +365,19 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
               </div>
 
               {/* Number Pad */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-4">
                 {[
                   ['1', '2', '3'],
                   ['4', '5', '6'],
                   ['7', '8', '9'],
                   ['clear', '0', 'backspace']
                 ].map((row, rowIndex) => (
-                  <div key={rowIndex} className="flex space-x-3">
+                  <div key={rowIndex} className="contents">
                     {row.map((value) => (
                       <button
                         key={value}
                         onClick={() => handleNumberInput(value)}
-                        className={`flex-1 py-3 px-4 rounded-lg font-semibold text-white transition-colors ${
+                        className={`py-4 px-6 rounded-lg font-semibold text-white transition-colors text-lg ${
                           value === 'clear' || value === 'backspace'
                             ? 'bg-gray-600 hover:bg-gray-500'
                             : 'bg-gray-700 hover:bg-gray-600'
