@@ -316,7 +316,7 @@ const StudentDashboard: React.FC = () => {
                         </div>
                         <div className="text-right">
                           <p className="font-semibold text-green-600">
-                            +${session.earnings.toFixed(2)}
+                            +${Number(session.earnings || 0).toFixed(2)}
                           </p>
                           <p className="text-sm text-gray-500">
                             {session.correct_answers}/{session.total_problems} correct

@@ -394,7 +394,7 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
                   <div className="text-sm text-gray-400">Score</div>
                 </div>
                 <div className="bg-gray-800 rounded-lg p-4">
-                  <div className="text-3xl font-bold text-green-500">${gameResults.earnings.toFixed(2)}</div>
+                  <div className="text-3xl font-bold text-green-500">${Number(gameResults.earnings || 0).toFixed(2)}</div>
                   <div className="text-sm text-gray-400">Earned</div>
                 </div>
                 <div className="bg-gray-800 rounded-lg p-4">
