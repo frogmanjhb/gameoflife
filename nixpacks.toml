@@ -6,12 +6,13 @@ cmds = [
   "rm -rf node_modules package-lock.json .npm",
   "npm cache clean --force",
   "npm install",
-  "cd server && rm -rf node_modules package-lock.json .npm && npm cache clean --force && npm install"
+  "cd server && rm -rf node_modules package-lock.json .npm && npm cache clean --force && npm install",
+  "cd ../client && rm -rf node_modules package-lock.json .npm && npm cache clean --force && npm install"
 ]
 
 [phases.build]
 cmds = [
-  "echo 'Skipping build - running TypeScript directly'"
+  "npm run build"
 ]
 
 [start]
