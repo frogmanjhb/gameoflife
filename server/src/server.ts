@@ -224,11 +224,28 @@ async function startServer() {
   // Initialize database in background, don't block server startup
   initializeDatabase().catch(console.error);
   
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📊 Game of Life Classroom Simulation API`);
     console.log(`🌐 Health check: http://localhost:${PORT}/health`);
     console.log(`🔍 Detailed health: http://localhost:${PORT}/api/health`);
+  });
+
+  // Handle graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('🛑 SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+      console.log('✅ Server closed');
+      process.exit(0);
+    });
+  });
+
+  process.on('SIGINT', () => {
+    console.log('🛑 SIGINT received, shutting down gracefully...');
+    server.close(() => {
+      console.log('✅ Server closed');
+      process.exit(0);
+    });
   });
 }
 
