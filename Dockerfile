@@ -20,6 +20,10 @@ COPY . .
 # Build the application
 RUN npm run build
 
+# Ensure database files are copied (fallback)
+RUN mkdir -p /app/server/dist/database
+RUN cp /app/server/src/database/*.sql /app/server/dist/database/ 2>/dev/null || echo "No SQL files to copy"
+
 # Expose port
 EXPOSE 5000
 
