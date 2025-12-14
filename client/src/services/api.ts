@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { MathGameStatus, MathGameStartRequest, MathGameSubmitRequest } from '../types';
+import { MathGameStatus, MathGameStartRequest, MathGameSubmitRequest, Job, JobApplication } from '../types';
 
 // Support for multiple deployment platforms
 const getApiUrl = () => {
@@ -73,6 +73,44 @@ export const mathGameApi = {
   // Submit math game results
   submitGame: (data: MathGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; isNewHighScore: boolean } }> => {
     return api.post('/math-game/submit', data);
+  }
+};
+
+// Jobs API methods
+export const jobsApi = {
+  // Get all jobs
+  getJobs: (): Promise<{ data: Job[] }> => {
+    return api.get('/jobs');
+  },
+
+  // Get job by ID
+  getJob: (id: number): Promise<{ data: Job }> => {
+    return api.get(`/jobs/${id}`);
+  },
+
+  // Apply to a job
+  applyToJob: (jobId: number, answers: Record<string, string | string[]>): Promise<{ data: JobApplication }> => {
+    return api.post(`/jobs/${jobId}/apply`, { answers });
+  },
+
+  // Get applications (teachers only)
+  getApplications: (filters?: { status?: string; job_id?: number; user_id?: number }): Promise<{ data: JobApplication[] }> => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.job_id) params.append('job_id', filters.job_id.toString());
+    if (filters?.user_id) params.append('user_id', filters.user_id.toString());
+    const queryString = params.toString();
+    return api.get(`/jobs/applications${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get specific application (teachers only)
+  getApplication: (id: number): Promise<{ data: JobApplication }> => {
+    return api.get(`/jobs/applications/${id}`);
+  },
+
+  // Update application status (teachers only)
+  updateApplicationStatus: (id: number, status: 'approved' | 'denied'): Promise<{ data: JobApplication }> => {
+    return api.put(`/jobs/applications/${id}`, { status });
   }
 };
 

@@ -57,11 +57,11 @@ const LoginForm: React.FC = () => {
         <div className="text-center">
           <div className="mb-6">
             <div className="mx-auto flex items-center justify-center">
-              <img src="/logo.png" alt="Game of Life Bank" style={{ width: '180px', height: '180px' }} />
+              <img src="/logo.png" alt="Game of Life Town Hub" style={{ width: '180px', height: '180px' }} />
             </div>
           </div>
           <h2 className="text-3xl font-bold text-gray-900">
-            {isLogin ? 'Game of Life Bank' : 'Join the Game!'}
+            {isLogin ? 'Game of Life Town Hub' : 'Join the Game!'}
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             {isLogin ? 'Sign in to your account' : 'Create your classroom account'}
@@ -239,7 +239,7 @@ const LoginForm: React.FC = () => {
         </div>
 
         <div className="text-center text-sm text-gray-500">
-          <p>🎮 Learn financial literacy through interactive gameplay!</p>
+          <p>🏘️ Welcome to your Town Hub - Manage your virtual life!</p>
         </div>
       </div>
     </div>

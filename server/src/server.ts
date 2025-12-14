@@ -13,6 +13,7 @@ import mathGameRoutes from './routes/math-game';
 import pluginRoutes from './routes/plugins';
 import announcementRoutes from './routes/announcements';
 import townRoutes from './routes/town';
+import jobRoutes from './routes/jobs';
 import database from './database/database-prod';
 
 dotenv.config();
@@ -145,6 +146,7 @@ app.use('/api/math-game', mathGameRoutes);
 app.use('/api/plugins', pluginRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/town', townRoutes);
+app.use('/api/jobs', jobRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -226,6 +228,18 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Town Hub migration may have already been applied:', migrationError);
+    }
+    
+    // Run Job Applications migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '003_job_applications.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Job Applications migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Job Applications migration may have already been applied:', migrationError);
     }
     
     const schema = readFileSync(schemaPath, 'utf8');

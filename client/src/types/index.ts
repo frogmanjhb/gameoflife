@@ -151,5 +151,42 @@ export interface Job {
   name: string;
   description?: string;
   salary: number;
+  requirements?: string;
+  company_name?: string;
+  location?: string;
   created_at: string;
+}
+
+export interface JobApplication {
+  id: number;
+  user_id: number;
+  job_id: number;
+  answers: Record<string, string | string[]>;
+  status: 'pending' | 'approved' | 'denied';
+  reviewed_by?: number;
+  reviewed_at?: string;
+  created_at: string;
+  applicant_username?: string;
+  applicant_first_name?: string;
+  applicant_last_name?: string;
+  job_name?: string;
+  job_salary?: number;
+  job_description?: string;
+  job_requirements?: string;
+  reviewer_username?: string;
+}
+
+export type QuestionType = 'short_answer' | 'long_answer' | 'multiple_choice' | 'yes_no';
+
+export interface ApplicationQuestion {
+  id: string;
+  type: QuestionType;
+  label: string;
+  required: boolean;
+  options?: string[]; // For multiple choice
+}
+
+export interface ApplicationAnswer {
+  question_id: string;
+  answer: string | string[];
 }
