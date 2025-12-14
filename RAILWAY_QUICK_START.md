@@ -9,10 +9,21 @@
 
 ### 2. Run Migration (Choose ONE method)
 
-**Method A: Railway Dashboard (Easiest)**
-1. Railway Dashboard → PostgreSQL service → Data tab → Query
-2. Copy/paste contents of `server/migrations/002_town_hub_tables.sql`
-3. Click Run
+**Method A: Railway CLI (Recommended)**
+
+**Linux/Mac:**
+```bash
+railway link
+railway run --service "bank front_backends" psql $DATABASE_URL < server/migrations/002_town_hub_tables.sql
+```
+
+**Windows PowerShell:**
+```powershell
+railway link
+Get-Content server/migrations/002_town_hub_tables.sql | railway run --service "bank front_backends" psql $env:DATABASE_URL
+```
+
+**Note:** Replace `"bank front_backends"` with your actual service name if different. Find it with: `railway status`
 
 **Method B: Railway CLI**
 ```bash

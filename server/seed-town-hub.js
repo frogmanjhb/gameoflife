@@ -3,9 +3,21 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
 async function seedDatabase() {
+  // Prefer DATABASE_PUBLIC_URL for external connections, fallback to DATABASE_URL
+  const connectionString = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
+  
+  if (!connectionString) {
+    console.error('❌ No DATABASE_URL or DATABASE_PUBLIC_URL found');
+    console.error('💡 Get connection string: railway connect postgres');
+    console.error('💡 Then set: $env:DATABASE_PUBLIC_URL = "your-connection-string"');
+    process.exit(1);
+  }
+  
+  console.log('🔗 Using connection string:', connectionString.substring(0, 30) + '...');
+  
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || process.env.DATABASE_PUBLIC_URL,
-    ssl: false
+    connectionString: connectionString,
+    ssl: connectionString.includes('railway') ? { rejectUnauthorized: false } : false
   });
 
   try {

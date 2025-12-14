@@ -33,45 +33,95 @@ railway link
 railway up
 ```
 
-## Step 2: Add PostgreSQL Database
+## Step 2: PostgreSQL Database
+
+### If You Have an Existing Database (Banking App)
+
+**Use your existing PostgreSQL database!** The migration is safe to run on existing databases.
+
+1. **Backup first** (recommended): Railway Dashboard → PostgreSQL → Settings → Backup
+2. The migration will add new tables without affecting existing data
+3. All existing users, accounts, transactions, and loans will be preserved
+4. See `MIGRATE_FROM_BANKING_APP.md` for detailed migration guide
+
+### If Starting Fresh
 
 1. In Railway dashboard, click **"New"** → **"Database"** → **"Add PostgreSQL"**
-2. Railway will automatically create a PostgreSQL service
+2. Railway will automatically create a PostgreSQL service (e.g., "PostgreSQL - Townhub")
 3. The `DATABASE_URL` environment variable will be automatically set
+4. **Note**: If your PostgreSQL service has a custom name, you may need to reference it in CLI commands
 
 ## Step 3: Run Database Migration
 
 You need to run the migration to create the new Town Hub tables. Choose one method:
 
-### Method 1: Railway Dashboard (Easiest)
+### Method 1: Railway CLI (Recommended)
 
-1. In Railway dashboard, click on your **PostgreSQL** service
-2. Go to **"Data"** tab → **"Query"**
-3. Copy the entire contents of `server/migrations/002_town_hub_tables.sql`
-4. Paste into the query editor
-5. Click **"Run"** to execute
+Railway doesn't have a built-in SQL query interface in the dashboard. Use the CLI instead:
 
-### Method 2: Railway CLI
-
+**Linux/Mac (Bash):**
 ```bash
 # Make sure you're linked to the project
 railway link
 
-# Run the migration
-railway run --service backend psql $DATABASE_URL < server/migrations/002_town_hub_tables.sql
+# Run the migration through your backend service (replace "bank front_backends" with your service name)
+railway run --service "bank front_backends" psql $DATABASE_URL < server/migrations/002_town_hub_tables.sql
 ```
 
-**Windows PowerShell:**
+**Windows PowerShell (Correct Syntax):**
 ```powershell
-Get-Content server/migrations/002_town_hub_tables.sql | railway run --service backend psql $env:DATABASE_URL
+# Make sure you're linked to the project
+railway link
+
+# PowerShell doesn't support < redirection, use Get-Content and pipe instead
+Get-Content server/migrations/002_town_hub_tables.sql | railway run --service "bank front_backends" psql $env:DATABASE_URL
 ```
 
-### Method 3: Local Connection (If you have direct DB access)
+**Alternative: Direct PostgreSQL service connection**
+```bash
+# Get connection string from Railway
+railway connect postgres
+
+# Or run SQL file directly (Bash)
+railway run --service "Postgres" psql < server/migrations/002_town_hub_tables.sql
+
+# PowerShell
+Get-Content server/migrations/002_town_hub_tables.sql | railway run --service "Postgres" psql
+```
+
+### Method 2: External Database Client
+
+If you have a PostgreSQL client installed (like pgAdmin, DBeaver, or psql):
+
+1. **Get connection details from Railway:**
+   - Railway Dashboard → **Postgres** service → **Variables** tab
+   - Copy the `DATABASE_URL` or individual connection parameters
+   - Or use: `railway connect postgres` to get connection string
+
+2. **Connect with psql:**
+   ```bash
+   # Get connection string
+   railway connect postgres
+   
+   # Copy the connection string, then:
+   psql "postgresql://user:password@host:port/database" -f server/migrations/002_town_hub_tables.sql
+   ```
+
+3. **Or use a GUI client:**
+   - Use the connection details from Railway
+   - Connect to the database
+   - Open and run the migration SQL file
+
+### Method 3: Via Backend Service (Automatic on Deploy)
+
+The server automatically runs migrations on startup. However, for a one-time migration, use Method 1 (CLI) above.
+
+### Method 4: Local Connection (If you have direct DB access)
 
 If Railway provides a direct connection string, you can use `psql` locally:
 
 ```bash
-# Get your DATABASE_URL from Railway dashboard
+# Get your DATABASE_URL from Railway dashboard (PostgreSQL - Townhub → Variables)
 # Then run:
 psql $DATABASE_URL -f server/migrations/002_town_hub_tables.sql
 ```
@@ -171,9 +221,10 @@ If tables aren't created:
 
 ### Cannot Connect to Database
 
-1. Verify `DATABASE_URL` is set in Railway variables
-2. Check that PostgreSQL service is running (green status)
-3. Try connecting via Railway dashboard → PostgreSQL → Connect
+1. Verify `DATABASE_URL` is set in Railway variables (check backend service → Variables)
+2. Check that PostgreSQL service ("PostgreSQL - Townhub") is running (green status)
+3. Try connecting via Railway dashboard → PostgreSQL - Townhub → Connect
+4. Verify the service name matches: `railway status` to list all services
 
 ## Quick Reference Commands
 
@@ -181,11 +232,17 @@ If tables aren't created:
 # Link to Railway project
 railway link
 
+# View all services (to find your PostgreSQL service name)
+railway status
+
 # View logs
 railway logs --service backend
 
-# Run migration
+# Run migration (using backend service - recommended)
 railway run --service backend psql $DATABASE_URL < server/migrations/002_town_hub_tables.sql
+
+# Or run directly on PostgreSQL service
+railway run --service "PostgreSQL - Townhub" psql < server/migrations/002_town_hub_tables.sql
 
 # Run seed
 railway run --service backend node server/seed-town-hub.js

@@ -40,23 +40,29 @@ const AppContent: React.FC = () => {
   console.log('AppContent - Current user:', user);
 
   return (
-    <PluginProvider>
-      <TownProvider>
-        <Routes>
-          <Route path="/login" element={<LoginForm />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
+    <Routes>
+      <Route path="/login" element={<LoginForm />} />
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <PluginProvider>
+              <TownProvider>
                 {user?.role === 'teacher' ? <TeacherDashboard /> : <StudentDashboard />}
-              </ProtectedRoute>
-            }
-          />
+              </TownProvider>
+            </PluginProvider>
+          </ProtectedRoute>
+        }
+      />
           <Route
             path="/bank"
             element={
               <ProtectedRoute>
-                <BankPlugin />
+                <PluginProvider>
+                  <TownProvider>
+                    <BankPlugin />
+                  </TownProvider>
+                </PluginProvider>
               </ProtectedRoute>
             }
           />
@@ -64,7 +70,11 @@ const AppContent: React.FC = () => {
             path="/land"
             element={
               <ProtectedRoute>
-                <LandPlugin />
+                <PluginProvider>
+                  <TownProvider>
+                    <LandPlugin />
+                  </TownProvider>
+                </PluginProvider>
               </ProtectedRoute>
             }
           />
@@ -72,7 +82,11 @@ const AppContent: React.FC = () => {
             path="/jobs"
             element={
               <ProtectedRoute>
-                <JobsPlugin />
+                <PluginProvider>
+                  <TownProvider>
+                    <JobsPlugin />
+                  </TownProvider>
+                </PluginProvider>
               </ProtectedRoute>
             }
           />
@@ -80,7 +94,11 @@ const AppContent: React.FC = () => {
             path="/news"
             element={
               <ProtectedRoute>
-                <NewsPlugin />
+                <PluginProvider>
+                  <TownProvider>
+                    <NewsPlugin />
+                  </TownProvider>
+                </PluginProvider>
               </ProtectedRoute>
             }
           />
@@ -88,14 +106,16 @@ const AppContent: React.FC = () => {
             path="/government"
             element={
               <ProtectedRoute>
-                <GovernmentPlugin />
+                <PluginProvider>
+                  <TownProvider>
+                    <GovernmentPlugin />
+                  </TownProvider>
+                </PluginProvider>
               </ProtectedRoute>
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </TownProvider>
-    </PluginProvider>
   );
 };
 

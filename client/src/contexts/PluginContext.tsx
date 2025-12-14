@@ -39,7 +39,13 @@ export const PluginProvider: React.FC<PluginProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
-    fetchPlugins();
+    // Only fetch plugins if we have a token (user might be logged in)
+    const token = localStorage.getItem('token');
+    if (token) {
+      fetchPlugins();
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   const enabledPlugins = plugins.filter(p => p.enabled);

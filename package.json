@@ -18,8 +18,9 @@
     "railway:deploy": "railway up",
     "railway:logs": "railway logs",
     "railway:open": "railway open",
-    "db:migrate": "railway run --service backend psql $DATABASE_URL < server/migrations/002_town_hub_tables.sql",
-    "db:seed": "cd server && railway run --service backend node seed-town-hub.js",
+    "db:migrate": "railway run --service \"bank front_backends\" psql $DATABASE_URL < server/migrations/002_town_hub_tables.sql",
+    "db:migrate:ps": "Get-Content server/migrations/002_town_hub_tables.sql | railway run --service \"bank front_backends\" psql $env:DATABASE_URL",
+    "db:seed": "cd server && railway run --service \"bank front_backends\" node seed-town-hub.js",
     "db:init": "npm run db:migrate && npm run db:seed"
   },
   "keywords": [

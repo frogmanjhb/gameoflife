@@ -38,23 +38,25 @@ export const TownProvider: React.FC<TownProviderProps> = ({ children }) => {
 
   // Auto-select town based on user's class
   useEffect(() => {
-    if (user?.class && ['6A', '6B', '6C'].includes(user.class)) {
+    if (!user) return; // Don't run if user not loaded
+    
+    if (user.class && ['6A', '6B', '6C'].includes(user.class)) {
       setCurrentTownClassState(user.class as '6A' | '6B' | '6C');
-    } else if (user?.role === 'teacher' && allTowns.length > 0 && !currentTownClass) {
+    } else if (user.role === 'teacher' && allTowns.length > 0 && !currentTownClass) {
       // Default to first town for teachers if no class assigned
       setCurrentTownClassState(allTowns[0].class);
     }
   }, [user, allTowns, currentTownClass]);
 
-  // Fetch town settings when town class changes
+  // Fetch town settings when town class changes (only if user is logged in)
   useEffect(() => {
-    if (currentTownClass) {
+    if (currentTownClass && user) {
       fetchTownSettings();
       fetchAnnouncements();
     }
-  }, [currentTownClass]);
+  }, [currentTownClass, user]);
 
-  // Fetch all towns for teachers
+  // Fetch all towns for teachers (only if user is logged in)
   useEffect(() => {
     if (user?.role === 'teacher') {
       fetchAllTowns();
@@ -62,7 +64,7 @@ export const TownProvider: React.FC<TownProviderProps> = ({ children }) => {
   }, [user]);
 
   const fetchTownSettings = async () => {
-    if (!currentTownClass) return;
+    if (!currentTownClass || !user) return;
     
     try {
       const response = await api.get(`/town/settings?class=${currentTownClass}`);
@@ -75,6 +77,8 @@ export const TownProvider: React.FC<TownProviderProps> = ({ children }) => {
   };
 
   const fetchAllTowns = async () => {
+    if (!user) return;
+    
     try {
       const response = await api.get('/town/settings?all=true');
       setAllTowns(response.data);
@@ -84,7 +88,7 @@ export const TownProvider: React.FC<TownProviderProps> = ({ children }) => {
   };
 
   const fetchAnnouncements = async () => {
-    if (!currentTownClass) return;
+    if (!currentTownClass || !user) return;
     
     try {
       const response = await api.get(`/announcements?town_class=${currentTownClass}`);
