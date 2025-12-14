@@ -8,13 +8,14 @@ import TownInfo from './TownInfo';
 import PluginManagement from './admin/PluginManagement';
 import AnnouncementManagement from './admin/AnnouncementManagement';
 import TownSettings from './admin/TownSettings';
-import { Grid, Settings, ChevronDown } from 'lucide-react';
+import JobManagement from './admin/JobManagement';
+import { Grid, Settings, ChevronDown, Briefcase } from 'lucide-react';
 
 const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
   const { enabledPlugins, plugins, loading: pluginsLoading, refreshPlugins } = usePlugins();
   const { currentTown, currentTownClass, allTowns, announcements, loading: townLoading, setCurrentTownClass, refreshAnnouncements } = useTown();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'plugins' | 'announcements' | 'town'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'plugins' | 'announcements' | 'town' | 'jobs'>('dashboard');
   const [showTownSelector, setShowTownSelector] = useState(false);
 
   const displayName = user?.first_name && user?.last_name
@@ -78,6 +79,7 @@ const TeacherDashboard: React.FC = () => {
           <nav className="flex space-x-8 px-6">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: Grid },
+              { id: 'jobs', label: 'Jobs', icon: Briefcase },
               { id: 'plugins', label: 'Plugins', icon: Settings },
               { id: 'announcements', label: 'Announcements', icon: Settings },
               { id: 'town', label: 'Town Settings', icon: Settings }
@@ -139,6 +141,11 @@ const TeacherDashboard: React.FC = () => {
           {/* Announcements Tab */}
           {activeTab === 'announcements' && (
             <AnnouncementManagement announcements={announcements} onUpdate={refreshAnnouncements} />
+          )}
+
+          {/* Jobs Tab */}
+          {activeTab === 'jobs' && (
+            <JobManagement />
           )}
 
           {/* Town Settings Tab */}

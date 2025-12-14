@@ -48,12 +48,16 @@ router.get('/', authenticateToken, requireRole(['teacher']), async (req: Authent
         u.last_name,
         u.class,
         u.email,
+        u.job_id,
         u.created_at,
         a.account_number,
         a.balance,
-        a.updated_at as last_activity
+        a.updated_at as last_activity,
+        j.name as job_name,
+        j.salary as job_salary
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
+      LEFT JOIN jobs j ON u.job_id = j.id
       WHERE u.role = 'student'
       ORDER BY u.class, u.last_name, u.first_name
     `);

@@ -111,6 +111,22 @@ export const jobsApi = {
   // Update application status (teachers only)
   updateApplicationStatus: (id: number, status: 'approved' | 'denied'): Promise<{ data: JobApplication }> => {
     return api.put(`/jobs/applications/${id}`, { status });
+  },
+
+  // Get job assignments overview (teachers only)
+  getJobAssignmentsOverview: (className?: string): Promise<{ data: { jobs: any[]; students: any[] } }> => {
+    const params = className ? `?class=${className}` : '';
+    return api.get(`/jobs/assignments/overview${params}`);
+  },
+
+  // Assign job to student (teachers only)
+  assignJobToStudent: (userId: number, jobId: number): Promise<{ data: any }> => {
+    return api.post('/jobs/assign', { user_id: userId, job_id: jobId });
+  },
+
+  // Remove job from student (teachers only)
+  removeJobFromStudent: (userId: number): Promise<{ data: { message: string } }> => {
+    return api.delete(`/jobs/assign/${userId}`);
   }
 };
 
