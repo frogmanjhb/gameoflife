@@ -233,14 +233,15 @@ async function seedDatabase() {
 
     for (const job of jobs) {
       await pool.query(
-        `INSERT INTO jobs (name, description, salary, company_name, location)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO jobs (name, description, salary, company_name, location, requirements)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (name) DO UPDATE SET
            description = EXCLUDED.description,
            salary = EXCLUDED.salary,
            company_name = EXCLUDED.company_name,
-           location = EXCLUDED.location`,
-        [job.name, job.description, job.salary, job.company_name || null, job.location || null]
+           location = EXCLUDED.location,
+           requirements = EXCLUDED.requirements`,
+        [job.name, job.description, job.salary, job.company_name || null, job.location || null, job.requirements || null]
       );
     }
     console.log('✅ Jobs seeded');
