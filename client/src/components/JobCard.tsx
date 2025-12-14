@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Job } from '../types';
 import { Briefcase, DollarSign } from 'lucide-react';
 
@@ -10,18 +10,65 @@ interface JobCardProps {
 
 const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [isTopRow, setIsTopRow] = useState(false);
 
-  // Generate a random color for the flyer
-  const flyerColors = [
-    'bg-pink-50 border-pink-200',
-    'bg-blue-50 border-blue-200',
-    'bg-yellow-50 border-yellow-200',
-    'bg-green-50 border-green-200',
-    'bg-purple-50 border-purple-200',
-    'bg-orange-50 border-orange-200',
-  ];
-  const colorIndex = job.id % flyerColors.length;
-  const flyerColor = flyerColors[colorIndex];
+  // Color code by company/job type
+  const getJobColor = (companyName?: string, jobName?: string) => {
+    if (!companyName) {
+      // Fallback colors for jobs without company
+      return 'bg-blue-50 border-blue-200';
+    }
+    
+    const company = companyName.toLowerCase();
+    const job = jobName?.toLowerCase() || '';
+    
+    // Town Government - Green
+    if (company.includes('government')) {
+      return 'bg-green-50 border-green-200';
+    }
+    // Town Finance - Blue
+    if (company.includes('finance')) {
+      return 'bg-blue-50 border-blue-200';
+    }
+    // Town Police - Red/Pink
+    if (company.includes('police')) {
+      return 'bg-pink-50 border-pink-200';
+    }
+    // Town Infrastructure/Design - Orange
+    if (company.includes('infrastructure') || company.includes('design')) {
+      return 'bg-orange-50 border-orange-200';
+    }
+    // Town Education - Yellow
+    if (company.includes('education')) {
+      return 'bg-yellow-50 border-yellow-200';
+    }
+    // Town Health - Light Red/Pink
+    if (company.includes('health')) {
+      return 'bg-red-50 border-red-200';
+    }
+    // Town Retail/Business - Purple
+    if (company.includes('retail') || company.includes('events') || company.includes('business')) {
+      return 'bg-purple-50 border-purple-200';
+    }
+    // Town Media/News - Light Blue
+    if (company.includes('media') || company.includes('news')) {
+      return 'bg-cyan-50 border-cyan-200';
+    }
+    
+    // Default fallback
+    return 'bg-gray-50 border-gray-200';
+  };
+
+  const flyerColor = getJobColor(job.company_name, job.name);
+
+  // Extract number of positions from requirements
+  const getPositionsAvailable = () => {
+    if (!job.requirements) return null;
+    const match = job.requirements.match(/(\d+)\s+positions?/i) || job.requirements.match(/(\d+)\s+position/i);
+    return match ? parseInt(match[1]) : null;
+  };
+
+  const positionsAvailable = getPositionsAvailable();
 
   const formatSalary = (salary: number) => {
     return new Intl.NumberFormat('en-ZA', {
@@ -32,9 +79,33 @@ const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0 }) => {
     }).format(salary);
   };
 
+  // Check if this is in the top row to position tooltip correctly
+  const cardRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const checkPosition = () => {
+      if (cardRef.current) {
+        const rect = cardRef.current.getBoundingClientRect();
+        const parent = cardRef.current.closest('.pin-board');
+        if (parent) {
+          const parentRect = parent.getBoundingClientRect();
+          // If card is in top 30% of pin board, show tooltip below
+          const relativeTop = rect.top - parentRect.top;
+          setIsTopRow(relativeTop < parentRect.height * 0.3);
+        }
+      }
+    };
+    
+    checkPosition();
+    // Recheck on window resize
+    window.addEventListener('resize', checkPosition);
+    return () => window.removeEventListener('resize', checkPosition);
+  }, []);
+
   return (
     <div
-      className={`job-flyer relative cursor-pointer transition-all duration-300 ${isHovered ? 'wiggle' : ''}`}
+      ref={cardRef}
+      className={`job-flyer relative cursor-pointer transition-all duration-300 ${isHovered ? 'wiggle-subtle' : ''}`}
       style={{ transform: `rotate(${rotation}deg)` }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -78,11 +149,26 @@ const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0 }) => {
 
         {/* Hover Preview Tooltip */}
         {isHovered && (
-          <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl z-20 whitespace-nowrap pointer-events-none">
+          <div className={`absolute left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl z-50 pointer-events-none whitespace-nowrap ${
+            isTopRow ? 'top-full mt-2' : '-top-24'
+          }`}>
             <div className="font-semibold">{job.name}</div>
             <div className="text-gray-300">{formatSalary(job.salary)}</div>
-            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full">
-              <div className="border-4 border-transparent border-t-gray-900"></div>
+            {positionsAvailable && (
+              <div className="text-gray-400 mt-1 text-center">
+                {positionsAvailable} position{positionsAvailable > 1 ? 's' : ''} available
+              </div>
+            )}
+            <div className={`absolute left-1/2 transform -translate-x-1/2 ${
+              isTopRow 
+                ? 'bottom-full mb-0' 
+                : 'top-full mt-0'
+            }`}>
+              <div className={`border-4 border-transparent ${
+                isTopRow 
+                  ? 'border-b-gray-900' 
+                  : 'border-t-gray-900'
+              }`}></div>
             </div>
           </div>
         )}
