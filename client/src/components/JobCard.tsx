@@ -24,9 +24,9 @@ const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0 }) => {
   const flyerColor = flyerColors[colorIndex];
 
   const formatSalary = (salary: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-ZA', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'ZAR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(salary);
