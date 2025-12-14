@@ -174,6 +174,15 @@ router.get('/profile', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.status(401).json({ error: 'User not found' });
     }
 
+    // Get user with job information
+    const userWithJob = await database.get(
+      `SELECT u.*, j.name as job_name, j.description as job_description, j.salary as job_salary
+       FROM users u
+       LEFT JOIN jobs j ON u.job_id = j.id
+       WHERE u.id = $1`,
+      [req.user.id]
+    );
+
     // Get account data for students
     let account = null;
     if (req.user.role === 'student') {
@@ -181,7 +190,7 @@ router.get('/profile', authenticateToken, async (req: AuthenticatedRequest, res:
     }
 
     res.json({
-      user: req.user,
+      user: userWithJob,
       account
     });
   } catch (error) {

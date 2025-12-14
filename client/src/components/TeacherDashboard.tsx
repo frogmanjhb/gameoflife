@@ -1,141 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Users, DollarSign, TrendingUp, CheckCircle, Download, AlertTriangle, Trash2, Building2 } from 'lucide-react';
-import api from '../services/api';
-import { Student, Loan, Transaction } from '../types';
-import StudentManagement from './StudentManagement';
-import LoanManagement from './LoanManagement';
-import ClassManagement from './ClassManagement';
+import { usePlugins } from '../contexts/PluginContext';
+import { useTown } from '../contexts/TownContext';
+import PluginCard from './PluginCard';
+import AnnouncementsPanel from './AnnouncementsPanel';
+import TownInfo from './TownInfo';
+import PluginManagement from './admin/PluginManagement';
+import AnnouncementManagement from './admin/AnnouncementManagement';
+import TownSettings from './admin/TownSettings';
+import { Grid, Settings, ChevronDown } from 'lucide-react';
 
 const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loans, setLoans] = useState<Loan[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'class' | 'loans' | 'transactions'>('overview');
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<'all' | '6A' | '6B' | '6C'>('all');
+  const { enabledPlugins, plugins, loading: pluginsLoading, refreshPlugins } = usePlugins();
+  const { currentTown, currentTownClass, allTowns, announcements, loading: townLoading, setCurrentTownClass, refreshAnnouncements } = useTown();
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'plugins' | 'announcements' | 'town'>('dashboard');
+  const [showTownSelector, setShowTownSelector] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const displayName = user?.first_name && user?.last_name
+    ? `${user.first_name} ${user.last_name}`
+    : user?.username || 'Teacher';
 
-  const fetchData = async () => {
-    try {
-      console.log('🔍 Fetching teacher data...');
-      const [studentsRes, loansRes, transactionsRes] = await Promise.all([
-        api.get('/students'),
-        api.get('/loans'),
-        api.get('/transactions/history')
-      ]);
-      console.log('📊 Students:', studentsRes.data);
-      console.log('💰 Loans:', loansRes.data);
-      console.log('📈 Transactions:', transactionsRes.data);
-      
-      // Debug loan filtering
-      const pendingLoans = loansRes.data.filter((loan: any) => loan.status === 'pending');
-      const activeLoans = loansRes.data.filter((loan: any) => loan.status === 'active' || loan.status === 'approved');
-      const approvedLoans = loansRes.data.filter((loan: any) => loan.status === 'approved');
-      console.log('🔍 Pending loans:', pendingLoans.length);
-      console.log('🔍 Active loans (including approved):', activeLoans.length);
-      console.log('🔍 Approved loans only:', approvedLoans.length);
-      console.log('🔍 All loan statuses:', loansRes.data.map((l: any) => l.status));
-      setStudents(studentsRes.data);
-      setLoans(loansRes.data);
-      setTransactions(transactionsRes.data);
-    } catch (error) {
-      console.error('Failed to fetch data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  // Filter students by selected class
-  const filteredStudents = selectedClass === 'all' 
-    ? students 
-    : students.filter(student => student.class === selectedClass);
-
-  // Filter loans by students in selected class
-  const filteredLoans = selectedClass === 'all'
-    ? loans
-    : loans.filter(loan => {
-        const student = students.find(s => s.id === loan.borrower_id);
-        return student && student.class === selectedClass;
-      });
-
-  // Filter transactions by students in selected class
-  const filteredTransactions = selectedClass === 'all'
-    ? transactions
-    : transactions.filter(transaction => {
-        const fromStudent = students.find(s => s.account_number === transaction.from_account_number);
-        const toStudent = students.find(s => s.account_number === transaction.to_account_number);
-        return (fromStudent && fromStudent.class === selectedClass) || 
-               (toStudent && toStudent.class === selectedClass);
-      });
-
-  const totalClassBalance = filteredStudents.reduce((sum, student) => sum + (Number(student.balance) || 0), 0);
-  const pendingLoans = filteredLoans.filter(loan => loan.status === 'pending');
-  const activeLoans = filteredLoans.filter(loan => loan.status === 'active' || loan.status === 'approved');
-  const recentTransactions = filteredTransactions.slice(0, 10);
-
-  const handleExport = async (type: 'transactions' | 'students' | 'loans') => {
-    try {
-      const response = await api.get(`/export/${type}/csv`, {
-        responseType: 'blob'
-      });
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${type}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Export failed:', error);
-    }
-  };
-
-  const handleResetAllLoans = async () => {
-    try {
-      setResetting(true);
-      const response = await api.post('/loans/admin/reset-all-loans');
-      
-      console.log('Reset response:', response.data);
-      alert(`Success! Reset completed:\n- ${response.data.deleted.loans} loans deleted\n- ${response.data.deleted.payments} payments deleted\n- ${response.data.deleted.transactions} transactions deleted`);
-      
-      // Refresh all data
-      await fetchData();
-      setShowResetConfirm(false);
-    } catch (error: any) {
-      console.error('Reset failed:', error);
-      alert('Failed to reset loan data: ' + (error.response?.data?.error || error.message));
-    } finally {
-      setResetting(false);
-    }
-  };
-
-  if (loading) {
+  if (pluginsLoading || townLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -145,77 +31,44 @@ const TeacherDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Welcome Header */}
+      {/* Welcome Banner with Town Selector */}
       <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">Game of Life Bank - Welcome, {user?.username}! 👨‍🏫</h1>
-        <p className="text-primary-100">Manage your classroom's financial simulation</p>
-      </div>
-
-      {/* Class Filter */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Class Filter</h3>
-          <div className="flex space-x-2">
-            {['all', '6A', '6B', '6C'].map((className) => (
+          <div>
+            <h1 className="text-2xl font-bold mb-2">Welcome, {displayName}! 👨‍🏫</h1>
+            <p className="text-primary-100">
+              {currentTown ? `Managing ${currentTown.town_name}` : 'Town Hub Control Center'}
+            </p>
+          </div>
+          {allTowns.length > 0 && (
+            <div className="relative">
               <button
-                key={className}
-                onClick={() => setSelectedClass(className as any)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  selectedClass === className
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                onClick={() => setShowTownSelector(!showTownSelector)}
+                className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
               >
-                {className === 'all' ? 'All Classes' : `Class ${className}`}
+                <span>Class {currentTownClass || allTowns[0]?.class}</span>
+                <ChevronDown className="h-4 w-4" />
               </button>
-            ))}
-          </div>
-        </div>
-        <p className="text-sm text-gray-500 mt-2">
-          Currently viewing: <span className="font-medium">{selectedClass === 'all' ? 'All Classes' : `Class ${selectedClass}`}</span>
-        </p>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="card">
-          <div className="flex items-center">
-            <Users className="h-8 w-8 text-primary-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Total Students</p>
-              <p className="text-2xl font-bold text-gray-900">{filteredStudents.length}</p>
+              {showTownSelector && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg z-10 border border-gray-200">
+                  {allTowns.map((town) => (
+                    <button
+                      key={town.id}
+                      onClick={() => {
+                        setCurrentTownClass(town.class);
+                        setShowTownSelector(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg transition-colors ${
+                        currentTownClass === town.class ? 'bg-primary-50 text-primary-700' : 'text-gray-700'
+                      }`}
+                    >
+                      {town.town_name} (Class {town.class})
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center">
-            <DollarSign className="h-8 w-8 text-success-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Class Total Balance</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalClassBalance)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center">
-            <TrendingUp className="h-8 w-8 text-warning-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Pending Loans</p>
-              <p className="text-2xl font-bold text-gray-900">{pendingLoans.length}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center">
-            <CheckCircle className="h-8 w-8 text-blue-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Active Loans</p>
-              <p className="text-2xl font-bold text-gray-900">{activeLoans.length}</p>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -224,11 +77,10 @@ const TeacherDashboard: React.FC = () => {
         <div className="border-b border-gray-200">
           <nav className="flex space-x-8 px-6">
             {[
-              { id: 'overview', label: 'Overview', icon: TrendingUp },
-              { id: 'students', label: 'Students', icon: Users },
-              { id: 'class', label: 'Class', icon: Building2 },
-              { id: 'loans', label: 'Loans', icon: DollarSign },
-              { id: 'transactions', label: 'Transactions', icon: CheckCircle }
+              { id: 'dashboard', label: 'Dashboard', icon: Grid },
+              { id: 'plugins', label: 'Plugins', icon: Settings },
+              { id: 'announcements', label: 'Announcements', icon: Settings },
+              { id: 'town', label: 'Town Settings', icon: Settings }
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -247,242 +99,54 @@ const TeacherDashboard: React.FC = () => {
         </div>
 
         <div className="p-6">
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
+          {/* Dashboard Tab */}
+          {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              {/* Top Students by Balance */}
+              {/* Town Info and Announcements */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <TownInfo town={currentTown} readOnly={true} />
+                <AnnouncementsPanel announcements={announcements} />
+              </div>
+
+              {/* Plugin Cards Grid */}
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Students by Balance</h3>
-                <div className="space-y-3">
-                  {filteredStudents
-                    .sort((a, b) => b.balance - a.balance)
-                    .slice(0, 5)
-                    .map((student, index) => (
-                      <div key={student.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                            <span className="text-sm font-semibold text-primary-600">#{index + 1}</span>
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              {student.first_name && student.last_name 
-                                ? `${student.first_name} ${student.last_name}` 
-                                : student.username
-                              }
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {student.class && `Class ${student.class}`} • Account: {student.account_number}
-                            </p>
-                            {student.email && (
-                              <p className="text-xs text-gray-400">{student.email}</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-success-600">{formatCurrency(Number(student.balance) || 0)}</p>
-                        </div>
-                      </div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <Grid className="h-5 w-5 text-primary-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">Available Systems</h2>
+                </div>
+                
+                {enabledPlugins.length === 0 ? (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                    <Grid className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p className="text-gray-500">No systems available at this time</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {enabledPlugins.map((plugin) => (
+                      <PluginCard key={plugin.id} plugin={plugin} />
                     ))}
-                </div>
-              </div>
-
-              {/* Recent Activity */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-                <div className="space-y-3">
-                  {recentTransactions.map((transaction) => (
-                    <div key={transaction.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                          <DollarSign className="h-4 w-4 text-primary-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {transaction.description || transaction.transaction_type}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {transaction.from_username && transaction.to_username
-                              ? `${transaction.from_username} → ${transaction.to_username}`
-                              : formatDate(transaction.created_at)
-                            }
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-gray-900">{formatCurrency(transaction.amount)}</p>
-                        <p className="text-sm text-gray-500">{formatDate(transaction.created_at)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Admin Tools */}
-              <div className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Admin Tools</h3>
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex items-start space-x-3">
-                    <AlertTriangle className="h-6 w-6 text-red-600 mt-0.5" />
-                    <div className="flex-1">
-                      <h4 className="text-sm font-semibold text-red-800 mb-1">Reset All Loan Data</h4>
-                      <p className="text-sm text-red-700 mb-3">
-                        This will permanently delete ALL loan data including loans, payments, and related transactions. 
-                        This action cannot be undone. Use this to reset the system for a new semester or class.
-                      </p>
-                      <button
-                        onClick={() => setShowResetConfirm(true)}
-                        disabled={resetting}
-                        className="bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span>{resetting ? 'Resetting...' : 'Reset All Loan Data'}</span>
-                      </button>
-                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Students Tab */}
-          {activeTab === 'students' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-gray-900">Student Management</h3>
-                <button
-                  onClick={() => handleExport('students')}
-                  className="btn-secondary flex items-center space-x-2"
-                >
-                  <Download className="h-4 w-4" />
-                  <span>Export CSV</span>
-                </button>
-              </div>
-              <StudentManagement students={students} onUpdate={fetchData} />
-            </div>
+          {/* Plugins Tab */}
+          {activeTab === 'plugins' && (
+            <PluginManagement plugins={plugins} onUpdate={refreshPlugins} />
           )}
 
-          {/* Class Tab */}
-          {activeTab === 'class' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-gray-900">Class Management</h3>
-                <p className="text-sm text-gray-500">Pay or remove money from all students in a class</p>
-              </div>
-              <ClassManagement students={students} onUpdate={fetchData} />
-            </div>
+          {/* Announcements Tab */}
+          {activeTab === 'announcements' && (
+            <AnnouncementManagement announcements={announcements} onUpdate={refreshAnnouncements} />
           )}
 
-          {/* Loans Tab */}
-          {activeTab === 'loans' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-gray-900">Loan Management</h3>
-                <button
-                  onClick={() => handleExport('loans')}
-                  className="btn-secondary flex items-center space-x-2"
-                >
-                  <Download className="h-4 w-4" />
-                  <span>Export CSV</span>
-                </button>
-              </div>
-              <LoanManagement loans={filteredLoans} onUpdate={fetchData} />
-            </div>
-          )}
-
-          {/* Transactions Tab */}
-          {activeTab === 'transactions' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-gray-900">All Transactions</h3>
-                <button
-                  onClick={() => handleExport('transactions')}
-                  className="btn-secondary flex items-center space-x-2"
-                >
-                  <Download className="h-4 w-4" />
-                  <span>Export CSV</span>
-                </button>
-              </div>
-              <div className="space-y-2">
-                {filteredTransactions.map((transaction) => (
-                  <div key={transaction.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                        <DollarSign className="h-4 w-4 text-primary-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {transaction.description || transaction.transaction_type}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {transaction.from_username && transaction.to_username
-                            ? `${transaction.from_username} → ${transaction.to_username}`
-                            : formatDate(transaction.created_at)
-                          }
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-900">{formatCurrency(transaction.amount)}</p>
-                      <p className="text-sm text-gray-500">{formatDate(transaction.created_at)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* Town Settings Tab */}
+          {activeTab === 'town' && (
+            <TownSettings />
           )}
         </div>
       </div>
-
-      {/* Reset Confirmation Modal */}
-      {showResetConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex items-center space-x-3 mb-4">
-              <AlertTriangle className="h-8 w-8 text-red-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Confirm Reset</h3>
-            </div>
-            <div className="mb-6">
-              <p className="text-sm text-gray-700 mb-3">
-                Are you absolutely sure you want to reset ALL loan data? This will permanently delete:
-              </p>
-              <ul className="text-sm text-gray-600 space-y-1 ml-4">
-                <li>• All loans ({loans.length} loans)</li>
-                <li>• All loan payments</li>
-                <li>• All loan-related transactions</li>
-              </ul>
-              <p className="text-sm text-red-600 font-semibold mt-3">
-                ⚠️ This action cannot be undone!
-              </p>
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowResetConfirm(false)}
-                disabled={resetting}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleResetAllLoans}
-                disabled={resetting}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-400 flex items-center justify-center space-x-2"
-              >
-                {resetting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Resetting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="h-4 w-4" />
-                    <span>Reset All Data</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

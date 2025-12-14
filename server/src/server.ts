@@ -10,6 +10,9 @@ import loanRoutes from './routes/loans';
 import studentRoutes from './routes/students';
 import exportRoutes from './routes/export';
 import mathGameRoutes from './routes/math-game';
+import pluginRoutes from './routes/plugins';
+import announcementRoutes from './routes/announcements';
+import townRoutes from './routes/town';
 import database from './database/database-prod';
 
 dotenv.config();
@@ -139,6 +142,9 @@ app.use('/api/loans', loanRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/math-game', mathGameRoutes);
+app.use('/api/plugins', pluginRoutes);
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/town', townRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -202,11 +208,24 @@ async function initializeDatabase() {
         ADD COLUMN IF NOT EXISTS first_name VARCHAR(255),
         ADD COLUMN IF NOT EXISTS last_name VARCHAR(255),
         ADD COLUMN IF NOT EXISTS class VARCHAR(10),
-        ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE
+        ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE,
+        ADD COLUMN IF NOT EXISTS job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL
       `);
       console.log('✅ Database migration completed');
     } catch (migrationError) {
       console.log('⚠️ Migration may have already been applied:', migrationError);
+    }
+    
+    // Run Town Hub migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '002_town_hub_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Town Hub migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Town Hub migration may have already been applied:', migrationError);
     }
     
     const schema = readFileSync(schemaPath, 'utf8');

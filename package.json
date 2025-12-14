@@ -18,7 +18,9 @@
     "railway:deploy": "railway up",
     "railway:logs": "railway logs",
     "railway:open": "railway open",
-    "db:migrate": "railway run --service backend psql < server/src/database/schema-postgres.sql"
+    "db:migrate": "railway run --service backend psql $DATABASE_URL < server/migrations/002_town_hub_tables.sql",
+    "db:seed": "cd server && railway run --service backend node seed-town-hub.js",
+    "db:init": "npm run db:migrate && npm run db:seed"
   },
   "keywords": [
     "education",

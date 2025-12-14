@@ -6,6 +6,10 @@ export interface User {
   last_name?: string;
   class?: string;
   email?: string;
+  job_id?: number;
+  job_name?: string;
+  job_description?: string;
+  job_salary?: number;
   created_at: string;
   updated_at: string;
 }
@@ -109,4 +113,43 @@ export interface MathGameSubmitRequest {
   correct_answers: number;
   total_problems: number;
   answer_sequence: boolean[];
+}
+
+export interface Plugin {
+  id: number;
+  name: string;
+  enabled: boolean;
+  route_path: string;
+  icon?: string;
+  description?: string;
+  created_at: string;
+}
+
+export interface Announcement {
+  id: number;
+  title: string;
+  content: string;
+  town_class: '6A' | '6B' | '6C';
+  created_by: number;
+  created_by_username?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TownSettings {
+  id: number;
+  class: '6A' | '6B' | '6C';
+  town_name: string;
+  mayor_name?: string;
+  tax_rate: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Job {
+  id: number;
+  name: string;
+  description?: string;
+  salary: number;
+  created_at: string;
 }
