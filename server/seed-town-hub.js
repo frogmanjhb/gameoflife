@@ -83,6 +83,14 @@ async function seedDatabase() {
     // Seed Jobs
     // Note: All salaries are in South African Rands (ZAR)
     console.log('💼 Seeding jobs...');
+    
+    // Delete old placeholder jobs if they exist
+    const oldJobs = ['Chef', 'Firefighter', 'Police Officer', 'Farmer', 'Shopkeeper', 'Engineer'];
+    for (const oldJobName of oldJobs) {
+      await pool.query('DELETE FROM jobs WHERE name = $1', [oldJobName]);
+    }
+    console.log('✅ Old placeholder jobs removed');
+    
     const jobs = [
       // 🏛️ GOVERNANCE & ADMINISTRATION
       {
