@@ -21,8 +21,12 @@ RUN cd client && rm -rf node_modules package-lock.json && npm install
 # Copy source code
 COPY . .
 
-# Reinstall client deps to ensure rollup native bindings are correct for this platform
-RUN cd client && rm -rf node_modules && npm install
+# Reinstall client deps after COPY . . (COPY overwrites lockfiles from host)
+# Fix npm optional-deps bug for rollup native bindings by regenerating lockfile in Linux
+RUN cd client \
+  && rm -rf node_modules package-lock.json \
+  && npm install --include=optional \
+  && npm install --no-save @rollup/rollup-linux-x64-gnu
 
 # Build the application
 RUN npm run build
