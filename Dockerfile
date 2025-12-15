@@ -1,5 +1,5 @@
-# Use Node.js 20
-FROM node:20-alpine
+# Use Node.js 20 (non-alpine to avoid rollup musl issues)
+FROM node:20-slim
 
 # Set working directory
 WORKDIR /app
@@ -9,10 +9,10 @@ COPY package*.json ./
 COPY server/package*.json ./server/
 COPY client/package*.json ./client/
 
-# Install dependencies
-RUN npm install
-RUN cd server && npm install
-RUN cd client && npm install
+# Install dependencies with clean install
+RUN npm ci --legacy-peer-deps || npm install
+RUN cd server && npm ci --legacy-peer-deps || npm install
+RUN cd client && npm ci --legacy-peer-deps || npm install
 
 # Copy source code
 COPY . .
