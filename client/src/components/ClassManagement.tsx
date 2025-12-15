@@ -36,9 +36,9 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ students, onUpdate })
   }, {} as Record<string, Student[]>);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-ZA', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'ZAR'
     }).format(amount);
   };
 

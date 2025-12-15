@@ -103,6 +103,14 @@ export const TownProvider: React.FC<TownProviderProps> = ({ children }) => {
     setLoading(true);
   };
 
+  const refreshTown = async () => {
+    await fetchTownSettings();
+    // Also refresh allTowns for teachers to update treasury balance in tabs
+    if (user?.role === 'teacher') {
+      await fetchAllTowns();
+    }
+  };
+
   const value: TownContextType = {
     currentTown,
     currentTownClass,
@@ -110,7 +118,7 @@ export const TownProvider: React.FC<TownProviderProps> = ({ children }) => {
     allTowns,
     loading,
     setCurrentTownClass,
-    refreshTown: fetchTownSettings,
+    refreshTown,
     refreshAnnouncements: fetchAnnouncements
   };
 

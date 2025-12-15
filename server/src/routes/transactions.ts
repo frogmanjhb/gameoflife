@@ -4,6 +4,35 @@ import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { TransferRequest, DepositRequest, WithdrawRequest, TransactionWithDetails } from '../types';
 
+// Helper function to check if student can make transactions
+async function checkStudentCanTransact(userId: number): Promise<{ canTransact: boolean; reason?: string }> {
+  // Check if student has negative balance
+  const account = await database.get('SELECT balance FROM accounts WHERE user_id = $1', [userId]);
+  if (account && parseFloat(account.balance) < 0) {
+    return { 
+      canTransact: false, 
+      reason: 'Your account has a negative balance. Please clear your debt before making any transactions.' 
+    };
+  }
+
+  // Check if student has an active loan with overdue payment
+  const activeLoan = await database.get(
+    `SELECT id, weekly_payment, next_payment_date, outstanding_balance 
+     FROM loans 
+     WHERE borrower_id = $1 AND status = 'active' AND next_payment_date < CURRENT_DATE`,
+    [userId]
+  );
+  
+  if (activeLoan) {
+    return { 
+      canTransact: false, 
+      reason: 'You have an overdue loan payment. Please make your loan payment before making any other transactions.' 
+    };
+  }
+
+  return { canTransact: true };
+}
+
 const router = Router();
 
 // Get transaction history
@@ -81,6 +110,12 @@ router.post('/transfer', [
 
     if (!req.user) {
       return res.status(401).json({ error: 'User not found' });
+    }
+
+    // Check if student can make transactions (no negative balance or overdue loans)
+    const canTransactResult = await checkStudentCanTransact(req.user.id);
+    if (!canTransactResult.canTransact) {
+      return res.status(400).json({ error: canTransactResult.reason });
     }
 
     // Get sender's account
@@ -364,6 +399,158 @@ router.post('/bulk-removal', [
     }
   } catch (error) {
     console.error('Bulk removal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Check if student can make transactions
+router.get('/can-transact', authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const result = await checkStudentCanTransact(req.user.id);
+    res.json(result);
+  } catch (error) {
+    console.error('Can transact check error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get bank settings (teachers only)
+router.get('/bank-settings', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const settings = await database.query('SELECT * FROM bank_settings');
+    const settingsMap = settings.reduce((acc: Record<string, string>, s: any) => {
+      acc[s.setting_key] = s.setting_value;
+      return acc;
+    }, {});
+    res.json(settingsMap);
+  } catch (error) {
+    console.error('Get bank settings error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update bank setting (teachers only)
+router.put('/bank-settings/:key', [
+  body('value').notEmpty().withMessage('Value is required')
+], authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { key } = req.params;
+    const { value } = req.body;
+
+    await database.run(
+      'UPDATE bank_settings SET setting_value = $1, updated_at = CURRENT_TIMESTAMP, updated_by = $2 WHERE setting_key = $3',
+      [value, req.user?.id, key]
+    );
+
+    res.json({ message: 'Setting updated successfully', key, value });
+  } catch (error) {
+    console.error('Update bank setting error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Pay basic salary to all unemployed students (teachers only)
+router.post('/pay-basic-salary', [
+  body('amount').optional().isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0')
+], authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    // Get basic salary amount from settings or use provided amount or default
+    let amount = req.body.amount;
+    if (!amount) {
+      const setting = await database.get('SELECT setting_value FROM bank_settings WHERE setting_key = $1', ['basic_salary_amount']);
+      amount = parseFloat(setting?.setting_value || '1500');
+    }
+
+    console.log('💰 Paying basic salary to unemployed students:', amount);
+
+    // Get all students without jobs
+    const students = await database.query(
+      `SELECT u.id, u.username, a.id as account_id 
+       FROM users u 
+       LEFT JOIN accounts a ON u.id = a.user_id 
+       WHERE u.role = 'student' AND (u.job_id IS NULL OR u.job_id = 0)`,
+      []
+    );
+
+    if (students.length === 0) {
+      return res.json({ message: 'No unemployed students found', updated_count: 0 });
+    }
+
+    console.log('📊 Found unemployed students:', students.length);
+
+    let updatedCount = 0;
+    const client = await database.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      for (const student of students) {
+        if (student.account_id) {
+          // Update balance
+          await client.query(
+            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            [amount, student.account_id]
+          );
+
+          // Record transaction
+          await client.query(
+            'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
+            [student.account_id, amount, 'salary', 'Basic salary (unemployed)']
+          );
+
+          updatedCount++;
+        }
+      }
+
+      // Update last run timestamp
+      await client.query(
+        'UPDATE bank_settings SET setting_value = $1, updated_at = CURRENT_TIMESTAMP WHERE setting_key = $2',
+        [new Date().toISOString(), 'last_basic_salary_run']
+      );
+
+      await client.query('COMMIT');
+      console.log('✅ Basic salary paid to', updatedCount, 'unemployed students');
+      res.json({ message: 'Basic salary paid successfully', updated_count: updatedCount, amount });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Pay basic salary error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get unemployed students count (teachers only)
+router.get('/unemployed-students', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const students = await database.query(
+      `SELECT u.id, u.username, u.first_name, u.last_name, u.class, a.balance, a.account_number
+       FROM users u 
+       LEFT JOIN accounts a ON u.id = a.user_id 
+       WHERE u.role = 'student' AND (u.job_id IS NULL OR u.job_id = 0)
+       ORDER BY u.class, u.last_name, u.first_name`,
+      []
+    );
+    res.json({ students, count: students.length });
+  } catch (error) {
+    console.error('Get unemployed students error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

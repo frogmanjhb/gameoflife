@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, User, DollarSign, MessageSquare } from 'lucide-react';
+import { Send, User, DollarSign, MessageSquare, AlertCircle, XCircle } from 'lucide-react';
 import api from '../services/api';
 
 interface TransferFormProps {
@@ -14,6 +14,11 @@ interface Classmate {
   class: string | null;
 }
 
+interface CanTransactResult {
+  canTransact: boolean;
+  reason?: string;
+}
+
 const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
   const [formData, setFormData] = useState({
     to_username: '',
@@ -25,22 +30,29 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
   const [success, setSuccess] = useState('');
   const [classmates, setClassmates] = useState<Classmate[]>([]);
   const [loadingClassmates, setLoadingClassmates] = useState(true);
+  const [canTransact, setCanTransact] = useState<CanTransactResult | null>(null);
+  const [checkingTransact, setCheckingTransact] = useState(true);
 
-  // Load classmates when component mounts
+  // Load classmates and check if student can transact
   useEffect(() => {
-    const fetchClassmates = async () => {
+    const fetchData = async () => {
       try {
-        const response = await api.get('/students/classmates');
-        setClassmates(response.data);
+        const [classmatesRes, canTransactRes] = await Promise.all([
+          api.get('/students/classmates'),
+          api.get('/transactions/can-transact')
+        ]);
+        setClassmates(classmatesRes.data);
+        setCanTransact(canTransactRes.data);
       } catch (err: any) {
-        console.error('Failed to load classmates:', err);
-        setError('Failed to load classmates. Please refresh the page.');
+        console.error('Failed to load data:', err);
+        setError('Failed to load data. Please refresh the page.');
       } finally {
         setLoadingClassmates(false);
+        setCheckingTransact(false);
       }
     };
 
-    fetchClassmates();
+    fetchData();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,6 +84,43 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
       [e.target.name]: e.target.value
     });
   };
+
+  if (checkingTransact) {
+    return (
+      <div className="flex items-center justify-center h-32">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  // Show blocking message if student cannot transact
+  if (canTransact && !canTransact.canTransact) {
+    return (
+      <div className="max-w-md mx-auto">
+        <div className="text-center mb-6">
+          <div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <XCircle className="h-8 w-8 text-red-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Transfers Blocked</h2>
+        </div>
+
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-800 font-medium mb-2">You cannot make transfers at this time</p>
+          <p className="text-red-700 text-sm">{canTransact.reason}</p>
+        </div>
+
+        <div className="mt-6 p-4 bg-yellow-50 rounded-lg">
+          <h3 className="font-semibold text-yellow-900 mb-2">⚠️ How to resolve:</h3>
+          <ul className="text-sm text-yellow-800 space-y-1">
+            <li>• If you have a negative balance, deposit money to clear it</li>
+            <li>• If you have an overdue loan payment, make a loan payment first</li>
+            <li>• Contact your teacher if you need assistance</li>
+          </ul>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto">
@@ -182,6 +231,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
           <li>• Make sure you have enough money in your account</li>
           <li>• Select a classmate from your class to send money to</li>
           <li>• Add a description to remember what the money is for</li>
+          <li>• Pay off any outstanding loans before making transfers</li>
         </ul>
       </div>
     </div>

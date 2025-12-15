@@ -1,4 +1,8 @@
 import { Pool } from 'pg';
+import dotenv from 'dotenv';
+
+// Load .env before anything else
+dotenv.config();
 
 class Database {
   private _pool: Pool;

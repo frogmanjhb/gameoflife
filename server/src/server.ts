@@ -1,7 +1,10 @@
+// Load environment variables FIRST, before any other imports
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import authRoutes from './routes/auth';
@@ -14,9 +17,8 @@ import pluginRoutes from './routes/plugins';
 import announcementRoutes from './routes/announcements';
 import townRoutes from './routes/town';
 import jobRoutes from './routes/jobs';
+import landRoutes from './routes/land';
 import database from './database/database-prod';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -147,6 +149,7 @@ app.use('/api/plugins', pluginRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/town', townRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/land', landRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -240,6 +243,30 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Job Applications migration may have already been applied:', migrationError);
+    }
+    
+    // Run Bank Settings migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '004_bank_settings.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Bank Settings migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Bank Settings migration may have already been applied:', migrationError);
+    }
+    
+    // Run Land Registry migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '005_land_registry.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Land Registry migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Land Registry migration may have already been applied:', migrationError);
     }
     
     const schema = readFileSync(schemaPath, 'utf8');

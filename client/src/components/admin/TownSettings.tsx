@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { TownSettings as TownSettingsType } from '../../types';
 import { useTown } from '../../contexts/TownContext';
-import api from '../../services/api';
-import { Save, Building2 } from 'lucide-react';
+import api, { treasuryApi } from '../../services/api';
+import { Save, Building2, ToggleLeft, ToggleRight, Wallet } from 'lucide-react';
 
 const TownSettings: React.FC = () => {
   const { allTowns, refreshTown } = useTown();
@@ -17,10 +17,30 @@ const TownSettings: React.FC = () => {
       setFormData({
         town_name: selectedTown.town_name,
         mayor_name: selectedTown.mayor_name || '',
-        tax_rate: selectedTown.tax_rate
+        tax_rate: selectedTown.tax_rate,
+        tax_enabled: selectedTown.tax_enabled
       });
     }
   }, [selectedTown]);
+
+  const handleToggleTax = async () => {
+    if (!selectedTown) return;
+    
+    setSaving(true);
+    try {
+      await treasuryApi.toggleTax(selectedTown.class, !selectedTown.tax_enabled);
+      await refreshTown();
+    } catch (error: any) {
+      console.error('Failed to toggle tax:', error);
+      alert(error.response?.data?.error || 'Failed to toggle tax');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,6 +127,48 @@ const TownSettings: React.FC = () => {
                 required
               />
             </div>
+
+            {/* Tax Toggle */}
+            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Tax Collection
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1">
+                    When enabled, progressive tax is deducted from salaries
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleTax}
+                  disabled={saving}
+                  className="focus:outline-none"
+                >
+                  {selectedTown?.tax_enabled ? (
+                    <ToggleRight className="h-10 w-10 text-green-600" />
+                  ) : (
+                    <ToggleLeft className="h-10 w-10 text-gray-400" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Treasury Info */}
+            {selectedTown && (
+              <div className="border border-emerald-200 rounded-lg p-4 bg-emerald-50">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Wallet className="h-5 w-5 text-emerald-600" />
+                  <span className="text-sm font-medium text-emerald-800">Town Treasury</span>
+                </div>
+                <p className="text-2xl font-bold text-emerald-700">
+                  {formatCurrency(selectedTown.treasury_balance || 10000000)}
+                </p>
+                <p className="text-xs text-emerald-600 mt-1">
+                  Used for paying student salaries
+                </p>
+              </div>
+            )}
 
             <button
               type="submit"

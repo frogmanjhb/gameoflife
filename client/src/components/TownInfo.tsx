@@ -1,13 +1,18 @@
 import React from 'react';
 import { TownSettings } from '../types';
-import { Building2, User, Percent } from 'lucide-react';
+import { Building2, User, Percent, Wallet, ToggleLeft, ToggleRight } from 'lucide-react';
 
 interface TownInfoProps {
   town: TownSettings | null;
   readOnly?: boolean;
+  showTreasury?: boolean; // Only teachers should see treasury
 }
 
-const TownInfo: React.FC<TownInfoProps> = ({ town, readOnly = true }) => {
+const TownInfo: React.FC<TownInfoProps> = ({ town, readOnly = true, showTreasury = false }) => {
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount);
+  };
+
   if (!town) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -50,12 +55,38 @@ const TownInfo: React.FC<TownInfoProps> = ({ town, readOnly = true }) => {
             <Percent className="h-4 w-4 text-gray-400" />
             <span className="text-sm font-medium text-gray-500">Tax Rate</span>
           </div>
-          <p className="text-base text-gray-900">{town.tax_rate}%</p>
+          <div className="flex items-center space-x-2">
+            <p className="text-base text-gray-900">{town.tax_rate}%</p>
+            {town.tax_enabled !== undefined && (
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                town.tax_enabled 
+                  ? 'bg-green-100 text-green-700' 
+                  : 'bg-gray-100 text-gray-500'
+              }`}>
+                {town.tax_enabled ? 'Active' : 'Disabled'}
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Treasury Info - Only shown to teachers */}
+        {showTreasury && town.treasury_balance !== undefined && (
+          <div className="pt-4 border-t border-gray-200">
+            <div className="flex items-center space-x-2 mb-1">
+              <Wallet className="h-4 w-4 text-emerald-500" />
+              <span className="text-sm font-medium text-gray-500">Town Treasury</span>
+            </div>
+            <p className="text-2xl font-bold text-emerald-600">
+              {formatCurrency(town.treasury_balance)}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Used for paying student salaries
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export default TownInfo;
-

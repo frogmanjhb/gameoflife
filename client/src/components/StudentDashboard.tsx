@@ -5,6 +5,8 @@ import { useTown } from '../contexts/TownContext';
 import PluginCard from './PluginCard';
 import AnnouncementsPanel from './AnnouncementsPanel';
 import TownInfo from './TownInfo';
+import MyJobCard from './MyJobCard';
+import MyPropertyCard from './MyPropertyCard';
 import { Grid } from 'lucide-react';
 
 const StudentDashboard: React.FC = () => {
@@ -37,10 +39,12 @@ const StudentDashboard: React.FC = () => {
         </p>
       </div>
 
-      {/* Town Info and Announcements Side by Side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Town Info, Announcements, My Job, and Properties */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
         <TownInfo town={currentTown} readOnly={true} />
         <AnnouncementsPanel announcements={announcements} />
+        {user && <MyJobCard user={user} />}
+        <MyPropertyCard />
       </div>
 
       {/* Plugin Cards Grid */}

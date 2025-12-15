@@ -58,9 +58,9 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-ZA', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'ZAR'
     }).format(amount);
   };
 
@@ -158,12 +158,16 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
                     <p className="font-semibold text-gray-900">{formatCurrency(loan.amount)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Monthly Payment</p>
-                    <p className="font-semibold text-gray-900">{formatCurrency(loan.monthly_payment)}</p>
+                    <p className="text-sm text-gray-500">Weekly Payment</p>
+                    <p className="font-semibold text-gray-900">
+                      {formatCurrency(loan.weekly_payment || loan.monthly_payment / 4.33)}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Term</p>
-                    <p className="font-semibold text-gray-900">{loan.term_months} months</p>
+                    <p className="font-semibold text-gray-900">
+                      {loan.term_weeks ? `${loan.term_weeks} weeks` : `${loan.term_months} months`}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Interest Rate</p>
@@ -223,14 +227,24 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
                     <p className="font-semibold text-gray-900">{formatCurrency(loan.outstanding_balance)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Monthly Payment</p>
-                    <p className="font-semibold text-gray-900">{formatCurrency(loan.monthly_payment)}</p>
+                    <p className="text-sm text-gray-500">Weekly Payment</p>
+                    <p className="font-semibold text-gray-900">
+                      {formatCurrency(loan.weekly_payment || loan.monthly_payment / 4.33)}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Remaining Payments</p>
                     <p className="font-semibold text-gray-900">{loan.payments_remaining || 0}</p>
                   </div>
                 </div>
+
+                {loan.next_payment_date && (
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>Next Payment Due:</strong> {formatDate(loan.next_payment_date)}
+                    </p>
+                  </div>
+                )}
 
                 {loan.total_paid && (
                   <div className="mt-4 p-3 bg-green-50 rounded-lg">
@@ -335,8 +349,10 @@ const LoanManagement: React.FC<LoanManagementProps> = ({ loans, onUpdate }) => {
                     <span className="font-medium">{selectedLoan.term_months} months</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Monthly Payment:</span>
-                    <span className="font-medium">{formatCurrency(selectedLoan.monthly_payment)}</span>
+                    <span className="text-gray-500">Weekly Payment:</span>
+                    <span className="font-medium">
+                      {formatCurrency(selectedLoan.weekly_payment || selectedLoan.monthly_payment / 4.33)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Interest Rate:</span>
