@@ -9,13 +9,20 @@ COPY package*.json ./
 COPY server/package*.json ./server/
 COPY client/package*.json ./client/
 
-# Install dependencies with clean install
+# Install root dependencies
 RUN npm ci --legacy-peer-deps || npm install
+
+# Install server dependencies
 RUN cd server && npm ci --legacy-peer-deps || npm install
-RUN cd client && npm ci --legacy-peer-deps || npm install
+
+# Install client dependencies - fix rollup optional deps bug
+RUN cd client && rm -rf node_modules package-lock.json && npm install
 
 # Copy source code
 COPY . .
+
+# Reinstall client deps to ensure rollup native bindings are correct for this platform
+RUN cd client && rm -rf node_modules && npm install
 
 # Build the application
 RUN npm run build
