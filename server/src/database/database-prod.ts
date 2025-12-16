@@ -37,16 +37,24 @@ class Database {
     console.log('🔗 PGDATABASE:', process.env.PGDATABASE);
     console.log('🔗 Database URL preview:', databaseUrl.substring(0, 50) + '...');
     
-    // Configure SSL based on the URL type
-    const isInternalUrl = databaseUrl.includes('railway.internal');
-    const isExternalUrl = databaseUrl.includes('switchback.proxy.rlwy.net');
+    // Configure SSL
+    // Railway/Postgres proxies often require SSL for external connections (e.g. switchback.proxy.rlwy.net).
+    // Local dev typically should not use SSL.
+    const isRailwayLike =
+      databaseUrl.includes('railway') ||
+      databaseUrl.includes('rlwy.net') ||
+      databaseUrl.includes('railway.internal') ||
+      databaseUrl.includes('switchback.proxy.rlwy.net');
+
+    const sslConfig: any =
+      process.env.PGSSLMODE === 'disable'
+        ? false
+        : isRailwayLike
+          ? { rejectUnauthorized: false }
+          : false;
     
-    // Disable SSL completely for Railway connections
-    const sslConfig = false;
-    
-    console.log('🔗 Using internal URL:', isInternalUrl);
-    console.log('🔗 Using external URL:', isExternalUrl);
-    console.log('🔗 SSL config:', sslConfig);
+    console.log('🔗 Railway-like URL:', isRailwayLike);
+    console.log('🔗 SSL config:', sslConfig ? 'enabled' : 'disabled');
     
     this._pool = new Pool({
       connectionString: databaseUrl,
@@ -55,6 +63,11 @@ class Database {
       idleTimeoutMillis: 30000,
       max: 10,
       min: 2
+    });
+
+    // Prevent process crash on unexpected idle client errors
+    this._pool.on('error', (err) => {
+      console.error('❌ Unexpected database pool error (idle client):', err);
     });
   }
 

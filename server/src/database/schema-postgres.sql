@@ -92,6 +92,36 @@ CREATE TABLE IF NOT EXISTS plugins (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Tenders table (per town/class)
+CREATE TABLE IF NOT EXISTS tenders (
+    id SERIAL PRIMARY KEY,
+    town_class VARCHAR(10) NOT NULL CHECK (town_class IN ('6A', '6B', '6C')),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'awarded', 'closed')),
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    awarded_to_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    awarded_application_id INTEGER,
+    awarded_at TIMESTAMP,
+    paid BOOLEAN NOT NULL DEFAULT false,
+    paid_at TIMESTAMP,
+    paid_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tender applications table
+CREATE TABLE IF NOT EXISTS tender_applications (
+    id SERIAL PRIMARY KEY,
+    tender_id INTEGER NOT NULL REFERENCES tenders(id) ON DELETE CASCADE,
+    applicant_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
+    reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tender_id, applicant_id)
+);
+
 -- Jobs table (available jobs in the town)
 CREATE TABLE IF NOT EXISTS jobs (
     id SERIAL PRIMARY KEY,
@@ -170,6 +200,13 @@ CREATE INDEX IF NOT EXISTS idx_math_game_sessions_user_id ON math_game_sessions(
 CREATE INDEX IF NOT EXISTS idx_math_game_sessions_played_at ON math_game_sessions(played_at);
 CREATE INDEX IF NOT EXISTS idx_math_game_high_scores_user_id ON math_game_high_scores(user_id);
 CREATE INDEX IF NOT EXISTS idx_plugins_enabled ON plugins(enabled);
+CREATE INDEX IF NOT EXISTS idx_tenders_town_class ON tenders(town_class);
+CREATE INDEX IF NOT EXISTS idx_tenders_status ON tenders(status);
+CREATE INDEX IF NOT EXISTS idx_tenders_paid ON tenders(paid);
+CREATE INDEX IF NOT EXISTS idx_tenders_created_at ON tenders(created_at);
+CREATE INDEX IF NOT EXISTS idx_tender_applications_tender_id ON tender_applications(tender_id);
+CREATE INDEX IF NOT EXISTS idx_tender_applications_applicant_id ON tender_applications(applicant_id);
+CREATE INDEX IF NOT EXISTS idx_tender_applications_status ON tender_applications(status);
 CREATE INDEX IF NOT EXISTS idx_announcements_town_class ON announcements(town_class);
 CREATE INDEX IF NOT EXISTS idx_announcements_created_at ON announcements(created_at);
 CREATE INDEX IF NOT EXISTS idx_town_settings_class ON town_settings(class);

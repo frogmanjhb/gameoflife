@@ -18,6 +18,7 @@ import announcementRoutes from './routes/announcements';
 import townRoutes from './routes/town';
 import jobRoutes from './routes/jobs';
 import landRoutes from './routes/land';
+import tenderRoutes from './routes/tenders';
 import database from './database/database-prod';
 
 const app = express();
@@ -150,6 +151,7 @@ app.use('/api/announcements', announcementRoutes);
 app.use('/api/town', townRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/land', landRoutes);
+app.use('/api/tenders', tenderRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -267,6 +269,30 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Land Registry migration may have already been applied:', migrationError);
+    }
+
+    // Run Tenders migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '007_tenders.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Tenders migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Tenders migration may have already been applied:', migrationError);
+    }
+
+    // Run Tender Payments migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '008_tender_payments.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Tender Payments migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Tender Payments migration may have already been applied:', migrationError);
     }
     
     const schema = readFileSync(schemaPath, 'utf8');

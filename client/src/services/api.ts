@@ -3,7 +3,8 @@ import {
   MathGameStatus, MathGameStartRequest, MathGameSubmitRequest, 
   Job, JobApplication, LandParcel, LandPurchaseRequest, 
   LandStats, MyPropertiesResponse, BiomeConfig, BiomeType,
-  TaxBracket, TreasuryInfo, TaxReport, SalaryPaymentResult, TownSettings
+  TaxBracket, TreasuryInfo, TaxReport, SalaryPaymentResult, TownSettings,
+  Tender, TenderApplication
 } from '../types';
 
 // Support for multiple deployment platforms
@@ -240,6 +241,40 @@ export const treasuryApi = {
   // Toggle tax for a town
   toggleTax: (townClass: string, enabled: boolean): Promise<{ data: { message: string; town: TownSettings } }> => {
     return api.post(`/town/toggle-tax/${townClass}`, { enabled });
+  }
+};
+
+// Tenders API methods
+export const tendersApi = {
+  // List tenders (teachers should pass town_class; students are auto-scoped server-side)
+  getTenders: (townClass?: '6A' | '6B' | '6C'): Promise<{ data: Tender[] }> => {
+    const params = townClass ? `?town_class=${townClass}` : '';
+    return api.get(`/tenders${params}`);
+  },
+
+  // Create tender (teachers only)
+  createTender: (data: { town_class: '6A' | '6B' | '6C'; name: string; description?: string; value: number }): Promise<{ data: Tender }> => {
+    return api.post('/tenders', data);
+  },
+
+  // Apply to tender (students only)
+  applyToTender: (tenderId: number): Promise<{ data: TenderApplication }> => {
+    return api.post(`/tenders/${tenderId}/apply`);
+  },
+
+  // Get applications for a tender (teachers only)
+  getTenderApplications: (tenderId: number): Promise<{ data: { tender: Tender; applications: TenderApplication[] } }> => {
+    return api.get(`/tenders/${tenderId}/applications`);
+  },
+
+  // Update application status (teachers only)
+  updateTenderApplicationStatus: (applicationId: number, status: 'approved' | 'denied'): Promise<{ data: TenderApplication }> => {
+    return api.put(`/tenders/applications/${applicationId}`, { status });
+  },
+
+  // Pay tender (teachers only)
+  payTender: (tenderId: number): Promise<{ data: Tender }> => {
+    return api.post(`/tenders/${tenderId}/pay`);
   }
 };
 

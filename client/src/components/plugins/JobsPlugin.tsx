@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { usePlugins } from '../../contexts/PluginContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { Briefcase, Loader2 } from 'lucide-react';
+import { Briefcase, Loader2, AlertCircle } from 'lucide-react';
 import { Job } from '../../types';
 import { jobsApi } from '../../services/api';
 import JobCard from '../JobCard';
@@ -10,12 +11,16 @@ import JobApplicationForm from '../JobApplicationForm';
 
 const JobsPlugin: React.FC = () => {
   const { plugins } = usePlugins();
+  const { user } = useAuth();
   const jobsPlugin = plugins.find(p => p.route_path === '/jobs');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isApplicationFormOpen, setIsApplicationFormOpen] = useState(false);
+  
+  // Check if current user already has a job
+  const userHasJob = user?.job_id !== null && user?.job_id !== undefined;
 
   useEffect(() => {
     if (jobsPlugin && jobsPlugin.enabled) {
@@ -71,12 +76,20 @@ const JobsPlugin: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">💼</div>
-          <div>
-            <h1 className="text-2xl font-bold">Jobs</h1>
-            <p className="text-primary-100">Employment Board</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="text-4xl">💼</div>
+            <div>
+              <h1 className="text-2xl font-bold">Jobs</h1>
+              <p className="text-primary-100">Employment Board</p>
+            </div>
           </div>
+          {userHasJob && (
+            <div className="bg-white bg-opacity-20 rounded-lg px-4 py-2 flex items-center space-x-2">
+              <AlertCircle className="h-5 w-5" />
+              <span className="text-sm font-medium">You are employed as: {user?.job_name}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -114,6 +127,8 @@ const JobsPlugin: React.FC = () => {
         onClose={handleCloseDetails}
         job={selectedJob}
         onApply={handleApplyClick}
+        userHasJob={userHasJob}
+        userJobName={user?.job_name}
       />
 
       {/* Application Form Modal */}

@@ -67,7 +67,8 @@ async function seedDatabase() {
       { name: 'Land & Property', route_path: '/land', icon: '🗺️', description: 'Land registry and property management' },
       { name: 'Jobs', route_path: '/jobs', icon: '💼', description: 'Employment board and job listings' },
       { name: 'Town News', route_path: '/news', icon: '📰', description: 'Local news and updates' },
-      { name: 'Government', route_path: '/government', icon: '🏛️', description: 'Town government services' }
+      { name: 'Government', route_path: '/government', icon: '🏛️', description: 'Town government services' },
+      { name: 'Tenders', route_path: '/tenders', icon: '📑', description: 'Building jobs that need to happen on the game board' }
     ];
 
     for (const plugin of plugins) {

@@ -1,16 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Job } from '../types';
-import { Briefcase, DollarSign } from 'lucide-react';
+import { Briefcase, DollarSign, CheckCircle } from 'lucide-react';
 
 interface JobCardProps {
   job: Job;
   onClick: () => void;
   rotation?: number;
+  isFulfilled?: boolean;
 }
 
-const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0 }) => {
+const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0, isFulfilled = false }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isTopRow, setIsTopRow] = useState(false);
+  
+  // Check if job is fulfilled from prop or from job data
+  const jobIsFulfilled = isFulfilled || job.is_fulfilled;
 
   // Color code by company/job type
   const getJobColor = (companyName?: string, jobName?: string) => {
@@ -116,7 +120,18 @@ const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0 }) => {
       <div className="absolute -top-2 -right-2 w-4 h-4 bg-blue-500 rounded-full border-2 border-blue-700 shadow-md z-10"></div>
 
       {/* Flyer Card */}
-      <div className={`${flyerColor} border-2 rounded-lg p-4 shadow-lg hover:shadow-xl transition-shadow min-h-[180px] flex flex-col`}>
+      <div className={`${flyerColor} border-2 rounded-lg p-4 shadow-lg hover:shadow-xl transition-shadow min-h-[180px] flex flex-col relative overflow-hidden`}>
+        {/* Position Fulfilled Overlay */}
+        {jobIsFulfilled && (
+          <div className="absolute inset-0 bg-gray-800 bg-opacity-60 flex flex-col items-center justify-center z-20 rounded-lg">
+            <CheckCircle className="h-10 w-10 text-green-400 mb-2" />
+            <div className="text-white font-bold text-lg text-center px-2">Position Fulfilled</div>
+            {job.assigned_to_name && (
+              <div className="text-green-200 text-sm text-center px-2 mt-1">by {job.assigned_to_name}</div>
+            )}
+          </div>
+        )}
+        
         <div className="flex items-start justify-between mb-2">
           <Briefcase className="h-6 w-6 text-gray-700 flex-shrink-0" />
           <div className="text-right">

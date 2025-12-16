@@ -12,6 +12,7 @@ import LandPlugin from './components/plugins/LandPlugin';
 import JobsPlugin from './components/plugins/JobsPlugin';
 import NewsPlugin from './components/plugins/NewsPlugin';
 import GovernmentPlugin from './components/plugins/GovernmentPlugin';
+import TendersPlugin from './components/plugins/TendersPlugin';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -109,6 +110,18 @@ const AppContent: React.FC = () => {
                 <PluginProvider>
                   <TownProvider>
                     <GovernmentPlugin />
+                  </TownProvider>
+                </PluginProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tenders"
+            element={
+              <ProtectedRoute>
+                <PluginProvider>
+                  <TownProvider>
+                    <TendersPlugin />
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>

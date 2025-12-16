@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Briefcase, DollarSign, MapPin, Building, FileText } from 'lucide-react';
+import { X, Briefcase, DollarSign, MapPin, Building, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import { Job } from '../types';
 
 interface JobDetailsModalProps {
@@ -7,10 +7,18 @@ interface JobDetailsModalProps {
   onClose: () => void;
   job: Job | null;
   onApply: () => void;
+  userHasJob?: boolean;
+  userJobName?: string;
 }
 
-const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job, onApply }) => {
+const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job, onApply, userHasJob = false, userJobName }) => {
   if (!isOpen || !job) return null;
+  
+  // Check if position is already fulfilled
+  const isPositionFulfilled = job.is_fulfilled;
+  
+  // Determine if user can apply
+  const canApply = !userHasJob && !isPositionFulfilled;
 
   const formatSalary = (salary: number) => {
     return new Intl.NumberFormat('en-ZA', {
@@ -100,14 +108,46 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
             Posted on {formatDate(job.created_at)}
           </div>
 
+          {/* Status Messages */}
+          {isPositionFulfilled && (
+            <div className="flex items-center space-x-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-green-800">Position Fulfilled</p>
+                <p className="text-sm text-green-600">
+                  This position has been filled{job.assigned_to_name ? ` by ${job.assigned_to_name}` : ''}.
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {userHasJob && !isPositionFulfilled && (
+            <div className="flex items-center space-x-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertCircle className="h-6 w-6 text-amber-600 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-amber-800">You Already Have a Job</p>
+                <p className="text-sm text-amber-600">You are currently employed as: {userJobName}</p>
+              </div>
+            </div>
+          )}
+
           {/* Apply Button */}
           <div className="flex space-x-4 pt-4">
-            <button
-              onClick={onApply}
-              className="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-md hover:shadow-lg"
-            >
-              Apply Now
-            </button>
+            {canApply ? (
+              <button
+                onClick={onApply}
+                className="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-md hover:shadow-lg"
+              >
+                Apply Now
+              </button>
+            ) : (
+              <button
+                disabled
+                className="flex-1 bg-gray-300 text-gray-500 font-semibold py-3 px-6 rounded-lg cursor-not-allowed"
+              >
+                {isPositionFulfilled ? 'Position Filled' : 'Cannot Apply'}
+              </button>
+            )}
             <button
               onClick={onClose}
               className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"

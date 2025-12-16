@@ -169,6 +169,9 @@ export interface Job {
   company_name?: string;
   location?: string;
   created_at: string;
+  is_fulfilled?: boolean;
+  assigned_count?: number;
+  assigned_to_name?: string;
 }
 
 export interface JobApplication {
@@ -383,4 +386,48 @@ export interface SalaryPaymentResult {
     tax_amount: number;
     net_salary: number;
   }>;
+}
+
+// Tenders Types
+export type TenderStatus = 'open' | 'awarded' | 'closed';
+export type TenderApplicationStatus = 'pending' | 'approved' | 'denied';
+
+export interface Tender {
+  id: number;
+  town_class: '6A' | '6B' | '6C';
+  name: string;
+  description?: string;
+  value: number;
+  status: TenderStatus;
+  created_by?: number;
+  created_by_username?: string;
+  awarded_to_user_id?: number;
+  awarded_to_username?: string;
+  awarded_application_id?: number;
+  awarded_at?: string;
+  paid?: boolean;
+  paid_at?: string;
+  paid_by?: number;
+  created_at: string;
+  // Teacher list extras
+  application_count?: number;
+  pending_count?: number;
+  // Student list extras
+  my_application_id?: number;
+  my_application_status?: TenderApplicationStatus;
+}
+
+export interface TenderApplication {
+  id: number;
+  tender_id: number;
+  applicant_id: number;
+  status: TenderApplicationStatus;
+  reviewed_by?: number;
+  reviewed_at?: string;
+  created_at: string;
+  applicant_username?: string;
+  applicant_first_name?: string;
+  applicant_last_name?: string;
+  applicant_class?: string;
+  reviewer_username?: string;
 }
