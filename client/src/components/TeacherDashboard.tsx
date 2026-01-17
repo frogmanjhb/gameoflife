@@ -10,6 +10,7 @@ import AnnouncementManagement from './admin/AnnouncementManagement';
 import TownSettings from './admin/TownSettings';
 import JobManagement from './admin/JobManagement';
 import TreasuryManagement from './admin/TreasuryManagement';
+import StudentManagement from './StudentManagement';
 import { 
   Grid, Settings, Briefcase, Building2, Users, Wallet, 
   TrendingUp, CreditCard, Megaphone, MapPin, Landmark
@@ -30,7 +31,7 @@ const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
   const { enabledPlugins, plugins, loading: pluginsLoading, refreshPlugins } = usePlugins();
   const { currentTown, currentTownClass, allTowns, announcements, loading: townLoading, setCurrentTownClass, refreshAnnouncements } = useTown();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs' | 'students'>('dashboard');
   
   // Data for town stats
   const [students, setStudents] = useState<Student[]>([]);
@@ -242,6 +243,7 @@ const TeacherDashboard: React.FC = () => {
           <nav className="flex space-x-8 px-6">
             {[
               { id: 'dashboard', label: 'Overview', icon: Grid },
+              { id: 'students', label: 'Students', icon: Users },
               { id: 'treasury', label: 'Treasury', icon: Landmark },
               { id: 'jobs', label: 'Jobs', icon: Briefcase },
               { id: 'plugins', label: 'Plugins', icon: Settings },
@@ -349,6 +351,11 @@ const TeacherDashboard: React.FC = () => {
                 )}
               </div>
             </div>
+          )}
+
+          {/* Students Tab */}
+          {activeTab === 'students' && (
+            <StudentManagement students={students} onUpdate={fetchData} />
           )}
 
           {/* Treasury Tab */}

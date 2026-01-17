@@ -71,6 +71,72 @@ router.get('/', authenticateToken, requireRole(['teacher']), async (req: Authent
   }
 });
 
+// Delete a student (teachers only)
+router.delete('/:username', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { username } = req.params;
+
+    // Get student info first
+    const student = await database.get(`
+      SELECT u.id, u.username, u.role
+      FROM users u
+      WHERE u.username = $1 AND u.role = 'student'
+    `, [username]);
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    // Get the student's account
+    const account = await database.get('SELECT id FROM accounts WHERE user_id = $1', [student.id]);
+
+    // Delete related data in order (respecting foreign key constraints)
+    // 1. Delete transactions involving this account
+    if (account) {
+      await database.run('DELETE FROM transactions WHERE from_account_id = $1 OR to_account_id = $1', [account.id]);
+    }
+
+    // 2. Delete loan payments for loans where student is borrower
+    await database.run(`
+      DELETE FROM loan_payments WHERE loan_id IN (
+        SELECT id FROM loans WHERE borrower_id = $1
+      )
+    `, [student.id]);
+
+    // 3. Delete loans where student is borrower
+    await database.run('DELETE FROM loans WHERE borrower_id = $1', [student.id]);
+
+    // 4. Delete job applications
+    await database.run('DELETE FROM job_applications WHERE user_id = $1', [student.id]);
+
+    // 5. Delete land purchase requests
+    await database.run('DELETE FROM land_purchase_requests WHERE user_id = $1', [student.id]);
+
+    // 6. Update owned land parcels (set owner to null)
+    await database.run('UPDATE land_parcels SET owner_id = NULL, owner_username = NULL WHERE owner_id = $1', [student.id]);
+
+    // 7. Delete tender applications
+    await database.run('DELETE FROM tender_applications WHERE user_id = $1', [student.id]);
+
+    // 8. Delete math game sessions
+    await database.run('DELETE FROM math_game_sessions WHERE user_id = $1', [student.id]);
+
+    // 9. Delete the account
+    if (account) {
+      await database.run('DELETE FROM accounts WHERE user_id = $1', [student.id]);
+    }
+
+    // 10. Finally, delete the user
+    await database.run('DELETE FROM users WHERE id = $1', [student.id]);
+
+    console.log(`🗑️ Teacher ${req.user?.username} deleted student ${username}`);
+    res.json({ message: `Student ${username} has been deleted successfully` });
+  } catch (error) {
+    console.error('Delete student error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get student details with loan information (teachers only)
 router.get('/:username', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {

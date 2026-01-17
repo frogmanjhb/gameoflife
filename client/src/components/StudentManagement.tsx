@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Minus, DollarSign, User, Search, Users } from 'lucide-react';
+import { Plus, Minus, DollarSign, User, Search, Users, Trash2, AlertTriangle } from 'lucide-react';
 import api from '../services/api';
 import { Student } from '../types';
 
@@ -12,6 +12,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showDepositForm, setShowDepositForm] = useState(false);
   const [showWithdrawForm, setShowWithdrawForm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
   const [formData, setFormData] = useState({
     amount: '',
     description: ''
@@ -104,6 +106,26 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
       onUpdate();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Withdrawal failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteStudent = async () => {
+    if (!studentToDelete) return;
+
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      await api.delete(`/students/${studentToDelete.username}`);
+      setSuccess(`Student ${studentToDelete.username} has been deleted successfully`);
+      setShowDeleteConfirm(false);
+      setStudentToDelete(null);
+      onUpdate();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to delete student');
     } finally {
       setLoading(false);
     }
@@ -283,6 +305,17 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                 <Minus className="h-4 w-4 inline mr-1" />
                 Remove Money
               </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setStudentToDelete(student);
+                  setShowDeleteConfirm(true);
+                }}
+                className="px-3 py-2 bg-red-100 text-red-600 hover:bg-red-200 rounded-lg transition-colors text-sm"
+                title="Delete Student"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
           </div>
         ))}
@@ -399,6 +432,60 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && studentToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="bg-red-100 p-3 rounded-full">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Delete Student
+              </h3>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-600 mb-3">
+                Are you sure you want to delete the following student? This action cannot be undone.
+              </p>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="font-semibold text-gray-900">
+                  {studentToDelete.first_name && studentToDelete.last_name 
+                    ? `${studentToDelete.first_name} ${studentToDelete.last_name}` 
+                    : studentToDelete.username}
+                </p>
+                <p className="text-sm text-gray-500">@{studentToDelete.username}</p>
+                <p className="text-sm text-gray-500">Class: {studentToDelete.class || 'Unassigned'}</p>
+                <p className="text-sm text-gray-500">Balance: {formatCurrency(studentToDelete.balance)}</p>
+              </div>
+              <p className="text-sm text-red-600 mt-3">
+                <strong>Warning:</strong> All associated data including transactions, loans, job applications, and land ownership will be removed.
+              </p>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={handleDeleteStudent}
+                disabled={loading}
+                className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Deleting...' : 'Delete Student'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setStudentToDelete(null);
+                }}
+                className="flex-1 btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
