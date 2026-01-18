@@ -29,9 +29,9 @@ async function checkStudentCanTransact(userId: number): Promise<{ canTransact: b
 
   // Check if student has an active loan with overdue payment
   const activeLoan = await database.get(
-    `SELECT id, monthly_payment, next_payment_date, outstanding_balance 
+    `SELECT id, monthly_payment, due_date, outstanding_balance 
      FROM loans 
-     WHERE borrower_id = $1 AND status = 'active' AND next_payment_date < CURRENT_DATE`,
+     WHERE borrower_id = $1 AND status = 'active' AND due_date IS NOT NULL AND due_date < CURRENT_DATE`,
     [userId]
   );
   
@@ -339,10 +339,9 @@ router.post('/approve', [
           `UPDATE loans SET 
             status = 'active', 
             approved_at = $1, 
-            next_payment_date = $2,
-            due_date = $3
-          WHERE id = $4`,
-          [new Date().toISOString(), nextMonday.toISOString().split('T')[0], nextMonday.toISOString().split('T')[0], loan_id]
+            due_date = $2
+          WHERE id = $3`,
+          [new Date().toISOString(), nextMonday.toISOString().split('T')[0], loan_id]
         );
 
         // Disburse loan to student's account
@@ -418,17 +417,17 @@ router.post('/process-weekly-payments', authenticateToken, requireRole(['teacher
       });
     }
 
-    // Get all active loans with payments due today or earlier
-    const loansToProcess = await database.query(
-      `SELECT l.*, u.username as borrower_username, a.id as account_id, a.balance as account_balance
-       FROM loans l
-       JOIN users u ON l.borrower_id = u.id
-       JOIN accounts a ON l.borrower_id = a.user_id
-       WHERE l.status = 'active' 
-       AND l.next_payment_date <= CURRENT_DATE
-       AND l.outstanding_balance > 0`,
-      []
-    );
+      // Get all active loans with payments due today or earlier
+      const loansToProcess = await database.query(
+        `SELECT l.*, u.username as borrower_username, a.id as account_id, a.balance as account_balance
+         FROM loans l
+         JOIN users u ON l.borrower_id = u.id
+         JOIN accounts a ON l.borrower_id = a.user_id
+         WHERE l.status = 'active' 
+         AND l.due_date IS NOT NULL AND l.due_date <= CURRENT_DATE
+         AND l.outstanding_balance > 0`,
+        []
+      );
 
     console.log(`📋 Found ${loansToProcess.length} loans to process`);
 
@@ -472,7 +471,7 @@ router.post('/process-weekly-payments', authenticateToken, requireRole(['teacher
         if (newOutstandingBalance <= 0.01) {
           // Loan is paid off
           await client.query(
-            'UPDATE loans SET status = $1, outstanding_balance = 0, last_payment_date = CURRENT_DATE, next_payment_date = NULL WHERE id = $2',
+            'UPDATE loans SET status = $1, outstanding_balance = 0 WHERE id = $2',
             ['paid_off', loan.id]
           );
           
@@ -484,10 +483,10 @@ router.post('/process-weekly-payments', authenticateToken, requireRole(['teacher
             message: 'Loan fully paid off'
           });
         } else {
-          // Set next payment date to next Monday
+          // Update outstanding balance (due_date remains unchanged)
           await client.query(
-            'UPDATE loans SET outstanding_balance = $1, last_payment_date = CURRENT_DATE, next_payment_date = $2 WHERE id = $3',
-            [newOutstandingBalance, nextMonday.toISOString().split('T')[0], loan.id]
+            'UPDATE loans SET outstanding_balance = $1 WHERE id = $2',
+            [newOutstandingBalance, loan.id]
           );
           
           results.push({
@@ -677,14 +676,14 @@ router.post('/pay', [
       const newOutstandingBalance = totalLoanAmount - newTotalPaid;
       
       await client.query(
-        'UPDATE loans SET outstanding_balance = $1, last_payment_date = CURRENT_DATE WHERE id = $2',
+        'UPDATE loans SET outstanding_balance = $1 WHERE id = $2',
         [newOutstandingBalance, loan_id]
       );
 
       // Check if loan is fully paid (allow for small rounding differences)
       if (newOutstandingBalance <= 0.01) {
         await client.query(
-          'UPDATE loans SET status = $1, outstanding_balance = 0, next_payment_date = NULL WHERE id = $2',
+          'UPDATE loans SET status = $1, outstanding_balance = 0 WHERE id = $2',
           ['paid_off', loan_id]
         );
       }
@@ -800,9 +799,9 @@ router.post('/activate/:loan_id', authenticateToken, requireRole(['teacher']), a
         [account.id, loanAmount, 'loan_disbursement', `Loan disbursement - R${loanAmount.toFixed(2)}`]
       );
 
-      // Update status to active with next payment date
+      // Update status to active with due date
       await client.query(
-        'UPDATE loans SET status = $1, next_payment_date = $2 WHERE id = $3',
+        'UPDATE loans SET status = $1, due_date = $2 WHERE id = $3',
         ['active', nextMonday.toISOString().split('T')[0], loan_id]
       );
 
@@ -958,7 +957,7 @@ router.post('/admin/fix-approved', authenticateToken, requireRole(['teacher']), 
 
           // Update status to active
           await client.query(
-            'UPDATE loans SET status = $1, next_payment_date = $2 WHERE id = $3',
+            'UPDATE loans SET status = $1, due_date = $2 WHERE id = $3',
             ['active', nextMonday.toISOString().split('T')[0], loan.id]
           );
 
