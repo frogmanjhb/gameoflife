@@ -121,3 +121,4 @@ const MyJobCard: React.FC<MyJobCardProps> = ({ user }) => {
 
 export default MyJobCard;
 
+
