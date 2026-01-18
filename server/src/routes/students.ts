@@ -11,6 +11,11 @@ router.get('/classmates', authenticateToken, async (req: AuthenticatedRequest, r
       return res.status(403).json({ error: 'Only students can access classmates' });
     }
 
+    if (!req.user.class) {
+      console.log('⚠️ Student has no class assigned:', req.user.username);
+      return res.json([]);
+    }
+
     console.log('🔍 Getting classmates for student:', req.user.username, 'in class:', req.user.class);
     
     const classmates = await database.query(`
@@ -113,7 +118,7 @@ router.delete('/:username', authenticateToken, requireRole(['teacher']), async (
     await database.run('DELETE FROM land_purchase_requests WHERE user_id = $1', [student.id]);
 
     // 6. Update owned land parcels (set owner to null)
-    await database.run('UPDATE land_parcels SET owner_id = NULL, owner_username = NULL WHERE owner_id = $1', [student.id]);
+    await database.run('UPDATE land_parcels SET owner_id = NULL WHERE owner_id = $1', [student.id]);
 
     // 7. Delete tender applications
     await database.run('DELETE FROM tender_applications WHERE applicant_id = $1', [student.id]);
