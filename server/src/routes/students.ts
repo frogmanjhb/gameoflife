@@ -116,7 +116,7 @@ router.delete('/:username', authenticateToken, requireRole(['teacher']), async (
     await database.run('UPDATE land_parcels SET owner_id = NULL, owner_username = NULL WHERE owner_id = $1', [student.id]);
 
     // 7. Delete tender applications
-    await database.run('DELETE FROM tender_applications WHERE user_id = $1', [student.id]);
+    await database.run('DELETE FROM tender_applications WHERE applicant_id = $1', [student.id]);
 
     // 8. Delete math game sessions
     await database.run('DELETE FROM math_game_sessions WHERE user_id = $1', [student.id]);
