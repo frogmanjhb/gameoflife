@@ -32,6 +32,11 @@ router.post(
       return res.status(400).json({ error: 'Confirmation text must be exactly RESET' });
     }
 
+    // TypeScript safety: authenticateToken should set req.user, but guard anyway
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
     const client = await database.pool.connect();
     try {
       await client.query('BEGIN');
