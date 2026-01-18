@@ -17,7 +17,7 @@ async function checkStudentCanTransact(userId: number): Promise<{ canTransact: b
 
   // Check if student has an active loan with overdue payment
   const activeLoan = await database.get(
-    `SELECT id, weekly_payment, next_payment_date, outstanding_balance 
+    `SELECT id, monthly_payment, next_payment_date, outstanding_balance 
      FROM loans 
      WHERE borrower_id = $1 AND status = 'active' AND next_payment_date < CURRENT_DATE`,
     [userId]
