@@ -19,6 +19,7 @@ import townRoutes from './routes/town';
 import jobRoutes from './routes/jobs';
 import landRoutes from './routes/land';
 import tenderRoutes from './routes/tenders';
+import adminRoutes from './routes/admin';
 import database from './database/database-prod';
 
 const app = express();
@@ -152,6 +153,7 @@ app.use('/api/town', townRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/land', landRoutes);
 app.use('/api/tenders', tenderRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
