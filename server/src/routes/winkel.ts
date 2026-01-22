@@ -247,7 +247,7 @@ router.post(
 );
 
 // GET /api/winkel/stats - Get shop statistics (teacher only)
-router.get('/stats', authenticateToken, requireRole('teacher'), async (req: AuthenticatedRequest, res: Response) => {
+router.get('/stats', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const stats = await database.query(
       `SELECT 
