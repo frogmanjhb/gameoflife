@@ -22,6 +22,16 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
       return res.status(400).json({ error: 'Invalid class' });
     }
 
+    // Check if pizza_time table exists
+    try {
+      await database.query('SELECT 1 FROM pizza_time LIMIT 1');
+    } catch (tableError: any) {
+      if (tableError.message && tableError.message.includes('does not exist')) {
+        return res.status(503).json({ error: 'Pizza Time feature is not available yet. The server needs to run migrations. Please contact your administrator or restart the server.' });
+      }
+      throw tableError;
+    }
+
     // Get or create pizza time for this class
     let pizzaTime = await database.get(
       'SELECT * FROM pizza_time WHERE class = $1',
@@ -91,7 +101,9 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
     });
   } catch (error) {
     console.error('Failed to fetch pizza time status:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Error details:', errorMessage);
+    res.status(500).json({ error: `Internal server error: ${errorMessage}` });
   }
 });
 

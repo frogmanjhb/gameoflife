@@ -54,11 +54,13 @@ const PizzaTimePlugin: React.FC = () => {
 
   const fetchStatus = async () => {
     try {
+      setError('');
       const response = await api.get('/pizza-time/status');
       setStatus(response.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch pizza time status:', error);
-      setError('Failed to load pizza time status');
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to load pizza time status';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -190,10 +192,23 @@ const PizzaTimePlugin: React.FC = () => {
     );
   }
 
-  if (!status) {
+  if (!status && !loading) {
     return (
-      <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
-        <p className="text-red-700">Failed to load pizza time status</p>
+      <div className="space-y-6">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <div>
+              <p className="text-red-700 font-semibold">Failed to load pizza time status</p>
+              {error && (
+                <p className="text-red-600 text-sm mt-1">{error}</p>
+              )}
+              <p className="text-red-600 text-sm mt-2">
+                If you see this error, the server may need to be restarted to run database migrations.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
