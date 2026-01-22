@@ -1431,8 +1431,17 @@ const StudentBankView: React.FC<StudentBankViewProps> = ({ bankPlugin }) => {
 // ============================================
 const BankPlugin: React.FC = () => {
   const { user } = useAuth();
-  const { plugins } = usePlugins();
+  const { plugins, loading: pluginsLoading } = usePlugins();
   const bankPlugin = plugins.find(p => p.route_path === '/bank');
+
+  // Wait for plugins to load before checking
+  if (pluginsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
   if (!bankPlugin || !bankPlugin.enabled) {
     return <Navigate to="/" replace />;

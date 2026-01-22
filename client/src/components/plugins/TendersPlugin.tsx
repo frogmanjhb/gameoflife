@@ -8,17 +8,14 @@ import { tendersApi } from '../../services/api';
 import { Tender, TenderApplication, TenderApplicationStatus } from '../../types';
 
 const TendersPlugin: React.FC = () => {
-  const { plugins } = usePlugins();
+  const { plugins, loading: pluginsLoading } = usePlugins();
   const { user } = useAuth();
   const { currentTownClass } = useTown();
   const tendersPlugin = plugins.find(p => p.route_path === '/tenders');
 
-  if (!tendersPlugin || !tendersPlugin.enabled) {
-    return <Navigate to="/" replace />;
-  }
-
   const isTeacher = user?.role === 'teacher';
 
+  // All hooks must be called before any early returns
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,11 +58,26 @@ const TendersPlugin: React.FC = () => {
   };
 
   useEffect(() => {
+    // Skip fetching if plugins haven't loaded yet or plugin isn't enabled
+    if (pluginsLoading || !tendersPlugin || !tendersPlugin.enabled) return;
     // Teachers: refresh when they change town tab
     if (isTeacher && !currentTownClass) return;
     fetchTenders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTeacher, currentTownClass]);
+  }, [isTeacher, currentTownClass, pluginsLoading, tendersPlugin]);
+
+  // Wait for plugins to load before checking
+  if (pluginsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
+      </div>
+    );
+  }
+
+  if (!tendersPlugin || !tendersPlugin.enabled) {
+    return <Navigate to="/" replace />;
+  }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount);

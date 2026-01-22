@@ -10,9 +10,11 @@ import JobDetailsModal from '../JobDetailsModal';
 import JobApplicationForm from '../JobApplicationForm';
 
 const JobsPlugin: React.FC = () => {
-  const { plugins } = usePlugins();
+  const { plugins, loading: pluginsLoading } = usePlugins();
   const { user } = useAuth();
   const jobsPlugin = plugins.find(p => p.route_path === '/jobs');
+  
+  // All hooks must be called before any early returns
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -67,6 +69,15 @@ const JobsPlugin: React.FC = () => {
   const getRotation = (index: number) => {
     return (index * 7.3) % 11 - 5; // Pseudo-random but consistent per job
   };
+
+  // Wait for plugins to load before checking
+  if (pluginsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
+      </div>
+    );
+  }
 
   if (!jobsPlugin || !jobsPlugin.enabled) {
     return <Navigate to="/" replace />;
