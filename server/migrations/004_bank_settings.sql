@@ -18,3 +18,4 @@ VALUES
   ('last_basic_salary_run', '', 'Timestamp of last basic salary processing')
 ON CONFLICT (setting_key) DO NOTHING;
 
+

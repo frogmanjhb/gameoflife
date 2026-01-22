@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { TownSettings as TownSettingsType } from '../../types';
 import { useTown } from '../../contexts/TownContext';
 import api, { treasuryApi } from '../../services/api';
-import { Save, Building2, ToggleLeft, ToggleRight, Wallet } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Wallet, AlertTriangle } from 'lucide-react';
 
 const TownSettings: React.FC = () => {
   const { allTowns, refreshTown } = useTown();
   const [selectedTownId, setSelectedTownId] = useState<number | null>(allTowns[0]?.id || null);
   const [formData, setFormData] = useState<Partial<TownSettingsType>>({});
   const [saving, setSaving] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   const selectedTown = allTowns.find(t => t.id === selectedTownId);
 
@@ -56,6 +58,32 @@ const TownSettings: React.FC = () => {
       alert(error.response?.data?.error || 'Failed to update town settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleFactoryReset = async () => {
+    if (resetConfirm !== 'RESET') {
+      alert('Type RESET to confirm the factory reset.');
+      return;
+    }
+
+    const ok = window.confirm(
+      'This will DELETE ALL students, loans, tenders, land ownership, transactions, announcements, and reset treasury/settings for ALL towns.\n\nThis cannot be undone.\n\nClick OK to proceed.'
+    );
+    if (!ok) return;
+
+    setResetting(true);
+    try {
+      await api.post('/admin/factory-reset', { confirm: 'RESET' });
+      setResetConfirm('');
+      await refreshTown();
+      alert('Factory reset completed. You may need to refresh the page.');
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Factory reset failed:', error);
+      alert(error.response?.data?.error || 'Factory reset failed');
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -180,6 +208,44 @@ const TownSettings: React.FC = () => {
             </button>
           </form>
         )}
+      </div>
+
+      {/* Factory Reset */}
+      <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6">
+        <div className="flex items-start space-x-3">
+          <div className="p-2 rounded-lg bg-red-100">
+            <AlertTriangle className="h-5 w-5 text-red-700" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-lg font-semibold text-red-800">Factory Reset (Danger)</h4>
+            <p className="text-sm text-red-700 mt-1">
+              This resets the game to a clean state: deletes all students, loans, tenders, land ownership & requests,
+              transactions, and announcements. It also resets town treasury/settings for ALL towns.
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Type <span className="font-bold text-red-700">RESET</span> to confirm
+                </label>
+                <input
+                  value={resetConfirm}
+                  onChange={(e) => setResetConfirm(e.target.value)}
+                  className="w-full px-3 py-2 border border-red-300 rounded-lg focus:ring-red-500 focus:border-red-500"
+                  placeholder="RESET"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleFactoryReset}
+                disabled={resetting || resetConfirm !== 'RESET'}
+                className="w-full px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {resetting ? 'Resetting...' : 'Factory Reset'}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
