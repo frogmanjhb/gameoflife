@@ -99,6 +99,7 @@ export interface MathGameSession {
 
 export interface MathGameStatus {
   remaining_plays: number;
+  daily_limit: number;
   high_scores: {
     easy: number;
     medium: number;

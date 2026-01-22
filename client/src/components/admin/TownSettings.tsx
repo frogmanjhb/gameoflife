@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TownSettings as TownSettingsType } from '../../types';
 import { useTown } from '../../contexts/TownContext';
 import api, { treasuryApi } from '../../services/api';
-import { Save, ToggleLeft, ToggleRight, Wallet, AlertTriangle } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Wallet, AlertTriangle, Brain } from 'lucide-react';
 
 const TownSettings: React.FC = () => {
   const { allTowns, refreshTown } = useTown();
@@ -11,10 +11,30 @@ const TownSettings: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetting, setResetting] = useState(false);
+  
+  // Bank settings (global settings)
+  const [bankSettings, setBankSettings] = useState<Record<string, string>>({});
+  const [loadingBankSettings, setLoadingBankSettings] = useState(true);
+  const [savingBankSettings, setSavingBankSettings] = useState(false);
 
   const selectedTown = allTowns.find(t => t.id === selectedTownId);
 
-  React.useEffect(() => {
+  // Fetch bank settings on mount
+  useEffect(() => {
+    const fetchBankSettings = async () => {
+      try {
+        const response = await api.get('/transactions/bank-settings');
+        setBankSettings(response.data);
+      } catch (error) {
+        console.error('Failed to fetch bank settings:', error);
+      } finally {
+        setLoadingBankSettings(false);
+      }
+    };
+    fetchBankSettings();
+  }, []);
+
+  useEffect(() => {
     if (selectedTown) {
       setFormData({
         town_name: selectedTown.town_name,
@@ -24,6 +44,19 @@ const TownSettings: React.FC = () => {
       });
     }
   }, [selectedTown]);
+
+  const updateBankSetting = async (key: string, value: string) => {
+    setSavingBankSettings(true);
+    try {
+      await api.put(`/transactions/bank-settings/${key}`, { value });
+      setBankSettings({ ...bankSettings, [key]: value });
+    } catch (error: any) {
+      console.error('Failed to update bank setting:', error);
+      alert(error.response?.data?.error || 'Failed to update setting');
+    } finally {
+      setSavingBankSettings(false);
+    }
+  };
 
   const handleToggleTax = async () => {
     if (!selectedTown) return;
@@ -207,6 +240,60 @@ const TownSettings: React.FC = () => {
               <span>{saving ? 'Saving...' : 'Save Settings'}</span>
             </button>
           </form>
+        )}
+      </div>
+
+      {/* Math Game Settings */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-start space-x-3 mb-4">
+          <div className="p-2 rounded-lg bg-purple-100">
+            <Brain className="h-5 w-5 text-purple-700" />
+          </div>
+          <div>
+            <h4 className="text-lg font-semibold text-gray-900">Math Game Settings</h4>
+            <p className="text-sm text-gray-500 mt-1">
+              Configure the math game settings for all students
+            </p>
+          </div>
+        </div>
+
+        {loadingBankSettings ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Daily Game Limit
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Number of math games each student can play per day (resets at 6 AM)
+              </p>
+              <div className="flex items-center space-x-3">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={bankSettings.math_game_daily_limit || '3'}
+                  onChange={(e) => setBankSettings({ ...bankSettings, math_game_daily_limit: e.target.value })}
+                  className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500"
+                />
+                <span className="text-sm text-gray-600">games per day</span>
+                <button
+                  onClick={() => updateBankSetting('math_game_daily_limit', bankSettings.math_game_daily_limit || '3')}
+                  disabled={savingBankSettings}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>{savingBankSettings ? 'Saving...' : 'Save'}</span>
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Set to 0 to disable math games entirely
+              </p>
+            </div>
+          </div>
         )}
       </div>
 

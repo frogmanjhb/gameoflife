@@ -15,7 +15,8 @@ VALUES
   ('basic_salary_amount', '1500', 'Amount of basic salary paid to unemployed students'),
   ('basic_salary_day', '1', 'Day of week for basic salary (1=Monday, 7=Sunday)'),
   ('basic_salary_hour', '7', 'Hour of day for basic salary processing (24h format)'),
-  ('last_basic_salary_run', '', 'Timestamp of last basic salary processing')
+  ('last_basic_salary_run', '', 'Timestamp of last basic salary processing'),
+  ('math_game_daily_limit', '3', 'Number of math games each student can play per day')
 ON CONFLICT (setting_key) DO NOTHING;
 
 

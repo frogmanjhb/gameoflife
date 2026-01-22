@@ -1273,7 +1273,7 @@ const StudentBankView: React.FC<StudentBankViewProps> = ({ bankPlugin }) => {
                     <Clock className="h-5 w-5 text-blue-600" />
                   </div>
                   <div className="text-3xl font-bold text-blue-600 mb-2">
-                    {mathGameStatus?.remaining_plays || 0}/3
+                    {mathGameStatus?.remaining_plays || 0}/{mathGameStatus?.daily_limit || 3}
                   </div>
                   <p className="text-sm text-gray-500">Resets daily at 6 AM</p>
                 </div>

@@ -5,6 +5,17 @@ import { MathGameStartRequest, MathGameSubmitRequest, MathGameStatus, MathGameSe
 
 const router = Router();
 
+// Helper function to get math game daily limit from settings
+async function getMathGameDailyLimit(): Promise<number> {
+  try {
+    const setting = await database.get('SELECT setting_value FROM bank_settings WHERE setting_key = $1', ['math_game_daily_limit']);
+    return parseInt(setting?.setting_value || '3', 10);
+  } catch (error) {
+    console.log('Could not fetch math game daily limit, using default of 3');
+    return 3;
+  }
+}
+
 // Get math game status (remaining plays, high scores, recent sessions)
 router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -13,6 +24,9 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
     }
 
     const userId = req.user.id;
+    
+    // Get daily limit from settings
+    const dailyLimit = await getMathGameDailyLimit();
 
     // Check if math game tables exist, if not return default status
     try {
@@ -20,7 +34,8 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
     } catch (tableError) {
       console.log('Math game tables not found, returning default status');
       return res.json({
-        remaining_plays: 3,
+        remaining_plays: dailyLimit,
+        daily_limit: dailyLimit,
         high_scores: { easy: 0, medium: 0, hard: 0 },
         recent_sessions: []
       });
@@ -39,7 +54,7 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
       )
     `, [userId]);
 
-    const remainingPlays = Math.max(0, 3 - parseInt(todayPlays[0].count));
+    const remainingPlays = Math.max(0, dailyLimit - parseInt(todayPlays[0].count));
 
     // Get high scores for each difficulty
     const highScores = await database.query(`
@@ -69,8 +84,9 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
       LIMIT 5
     `, [userId]);
 
-    const status: MathGameStatus = {
+    const status = {
       remaining_plays: remainingPlays,
+      daily_limit: dailyLimit,
       high_scores: highScoreMap,
       recent_sessions: recentSessions
     };
@@ -96,6 +112,9 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
     }
 
     const userId = req.user.id;
+    
+    // Get daily limit from settings
+    const dailyLimit = await getMathGameDailyLimit();
 
     // Check if math game tables exist
     try {
@@ -117,7 +136,7 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
       )
     `, [userId]);
 
-    const remainingPlays = 3 - parseInt(todayPlays[0].count);
+    const remainingPlays = dailyLimit - parseInt(todayPlays[0].count);
     
     if (remainingPlays <= 0) {
       return res.status(400).json({ error: 'No plays remaining today. Try again tomorrow!' });
