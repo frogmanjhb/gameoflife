@@ -1,0 +1,508 @@
+import React, { useState, useEffect } from 'react';
+import { usePlugins } from '../../contexts/PluginContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { Navigate } from 'react-router-dom';
+import { 
+  ShoppingBag, Loader2, AlertCircle, CheckCircle, XCircle, 
+  Clock, Gift, Sparkles, ShoppingCart, History, TrendingUp,
+  DollarSign, Package, Star
+} from 'lucide-react';
+import api from '../../services/api';
+
+interface ShopItem {
+  id: number;
+  name: string;
+  category: 'consumable' | 'privilege';
+  price: number;
+  description: string | null;
+  notes: string | null;
+  available: boolean;
+  event_day_only: boolean;
+}
+
+interface Purchase {
+  id: number;
+  item_id: number;
+  item_name: string;
+  item_category: string;
+  item_description: string | null;
+  price_paid: number;
+  purchase_date: string;
+  week_start_date: string;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  class?: string;
+}
+
+const WinkelPlugin: React.FC = () => {
+  const { plugins, loading: pluginsLoading } = usePlugins();
+  const { user } = useAuth();
+  const winkelPlugin = plugins.find(p => p.route_path === '/winkel');
+
+  const [items, setItems] = useState<ShopItem[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [canPurchase, setCanPurchase] = useState(true);
+  const [purchasing, setPurchasing] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [activeTab, setActiveTab] = useState<'shop' | 'history' | 'stats'>('shop');
+  const [accountBalance, setAccountBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (winkelPlugin && winkelPlugin.enabled) {
+      fetchData();
+    }
+  }, [winkelPlugin]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [itemsRes, purchasesRes, canPurchaseRes, accountRes] = await Promise.all([
+        api.get('/winkel/items'),
+        api.get('/winkel/purchases'),
+        user?.role === 'student' ? api.get('/winkel/can-purchase') : Promise.resolve({ data: { canPurchase: true } }),
+        user?.role === 'student' ? api.get('/transactions/history').then(() => {
+          // Get account balance from auth context or separate call
+          return api.get('/transactions/history').then(() => {
+            // We'll get balance from the user context or make a separate call
+            return Promise.resolve({ data: null });
+          });
+        }) : Promise.resolve({ data: null })
+      ]);
+
+      setItems(itemsRes.data);
+      setPurchases(purchasesRes.data);
+      setCanPurchase(canPurchaseRes.data.canPurchase);
+
+      // Get account balance for students
+      if (user?.role === 'student') {
+        try {
+          const transactions = await api.get('/transactions/history');
+          // Calculate balance from transactions or get from account
+          // For now, we'll fetch it separately if needed
+        } catch (err) {
+          console.error('Failed to fetch balance:', err);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch shop data:', error);
+      setError('Failed to load shop data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePurchase = async (itemId: number) => {
+    try {
+      setPurchasing(itemId);
+      setError('');
+      setSuccess('');
+
+      const response = await api.post('/winkel/purchase', { item_id: itemId });
+      
+      setSuccess(response.data.message || 'Purchase successful!');
+      setCanPurchase(false);
+      
+      // Refresh data
+      await fetchData();
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to make purchase');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setPurchasing(null);
+    }
+  };
+
+  const consumables = items.filter(item => item.category === 'consumable');
+  const privileges = items.filter(item => item.category === 'privilege');
+
+  // Wait for plugins to load before checking
+  if (pluginsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
+      </div>
+    );
+  }
+
+  if (!winkelPlugin || !winkelPlugin.enabled) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (user?.role === 'teacher') {
+    return <TeacherWinkelView purchases={purchases} items={items} loading={loading} />;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="bg-white/20 rounded-full p-4">
+              <ShoppingBag className="h-8 w-8" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold">The Winkel</h1>
+              <p className="text-orange-100">Your weekly shopping destination</p>
+            </div>
+          </div>
+          {!canPurchase && (
+            <div className="bg-white/20 rounded-lg px-4 py-2 flex items-center space-x-2">
+              <Clock className="h-5 w-5" />
+              <span className="font-semibold">Come back next week!</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Messages */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-center space-x-3">
+          <AlertCircle className="h-5 w-5 text-red-500" />
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg flex items-center space-x-3">
+          <CheckCircle className="h-5 w-5 text-green-500" />
+          <p className="text-green-700">{success}</p>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('shop')}
+            className={`flex-1 px-6 py-4 font-semibold transition-colors ${
+              activeTab === 'shop'
+                ? 'text-primary-600 border-b-2 border-primary-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <div className="flex items-center justify-center space-x-2">
+              <ShoppingCart className="h-5 w-5" />
+              <span>Shop</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 px-6 py-4 font-semibold transition-colors ${
+              activeTab === 'history'
+                ? 'text-primary-600 border-b-2 border-primary-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <div className="flex items-center justify-center space-x-2">
+              <History className="h-5 w-5" />
+              <span>My Purchases</span>
+            </div>
+          </button>
+        </div>
+
+        <div className="p-6">
+          {activeTab === 'shop' && (
+            <div className="space-y-8">
+              {!canPurchase && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                  <p className="text-amber-800 font-semibold">
+                    ⏰ You've already made your weekly purchase! Come back next week for more shopping.
+                  </p>
+                </div>
+              )}
+
+              {/* Consumables Section */}
+              <div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <Gift className="h-6 w-6 text-purple-600" />
+                  <h2 className="text-2xl font-bold text-gray-900">🍬 Consumables</h2>
+                  <span className="text-sm text-gray-500">(Impulse Spending)</span>
+                </div>
+                <p className="text-gray-600 mb-6">These drain money without long-term advantage.</p>
+                
+                {loading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {consumables.map((item) => (
+                      <ShopItemCard
+                        key={item.id}
+                        item={item}
+                        onPurchase={handlePurchase}
+                        canPurchase={canPurchase}
+                        purchasing={purchasing === item.id}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Privileges Section */}
+              <div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <Star className="h-6 w-6 text-yellow-600" />
+                  <h2 className="text-2xl font-bold text-gray-900">⏱️ Time & Comfort Privileges</h2>
+                  <span className="text-sm text-gray-500">(Very Powerful)</span>
+                </div>
+                <p className="text-gray-600 mb-6">Time is the most valuable currency in class.</p>
+                
+                {loading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {privileges.map((item) => (
+                      <ShopItemCard
+                        key={item.id}
+                        item={item}
+                        onPurchase={handlePurchase}
+                        canPurchase={canPurchase}
+                        purchasing={purchasing === item.id}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'history' && (
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Purchase History</h2>
+              {purchases.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <ShoppingBag className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                  <p>No purchases yet. Start shopping!</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {purchases.map((purchase) => (
+                    <div
+                      key={purchase.id}
+                      className="bg-gray-50 rounded-lg p-4 border border-gray-200 flex items-center justify-between"
+                    >
+                      <div>
+                        <p className="font-semibold text-gray-900">{purchase.item_name}</p>
+                        <p className="text-sm text-gray-600">
+                          {purchase.item_category === 'consumable' ? '🍬 Consumable' : '⏱️ Privilege'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Purchased: {new Date(purchase.purchase_date).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-primary-600">R{purchase.price_paid.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface ShopItemCardProps {
+  item: ShopItem;
+  onPurchase: (itemId: number) => void;
+  canPurchase: boolean;
+  purchasing: boolean;
+}
+
+const ShopItemCard: React.FC<ShopItemCardProps> = ({ item, onPurchase, canPurchase, purchasing }) => {
+  return (
+    <div className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-primary-400 hover:shadow-lg transition-all">
+      <div className="flex items-start justify-between mb-3">
+        <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
+        <div className="bg-primary-100 text-primary-700 px-3 py-1 rounded-full text-sm font-semibold">
+          R{item.price.toFixed(2)}
+        </div>
+      </div>
+      
+      {item.description && (
+        <p className="text-gray-600 text-sm mb-2">{item.description}</p>
+      )}
+      
+      {item.notes && (
+        <p className="text-xs text-gray-500 italic mb-4">{item.notes}</p>
+      )}
+
+      <button
+        onClick={() => onPurchase(item.id)}
+        disabled={!canPurchase || purchasing}
+        className={`w-full py-3 rounded-lg font-semibold transition-all ${
+          !canPurchase || purchasing
+            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            : 'bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 shadow-md hover:shadow-lg'
+        }`}
+      >
+        {purchasing ? (
+          <div className="flex items-center justify-center space-x-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Processing...</span>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center space-x-2">
+            <ShoppingCart className="h-4 w-4" />
+            <span>Buy Now</span>
+          </div>
+        )}
+      </button>
+    </div>
+  );
+};
+
+interface TeacherWinkelViewProps {
+  purchases: Purchase[];
+  items: ShopItem[];
+  loading: boolean;
+}
+
+const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items, loading }) => {
+  const [stats, setStats] = useState<any>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      setStatsLoading(true);
+      const response = await api.get('/winkel/stats');
+      setStats(response.data);
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex items-center space-x-4">
+          <div className="bg-white/20 rounded-full p-4">
+            <ShoppingBag className="h-8 w-8" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold">The Winkel</h1>
+            <p className="text-orange-100">Shop Management & Analytics</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Overview */}
+      {!statsLoading && stats && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Purchases</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.total_purchases}</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-primary-600" />
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Revenue</p>
+                <p className="text-3xl font-bold text-gray-900">R{stats.total_revenue.toFixed(2)}</p>
+              </div>
+              <DollarSign className="h-8 w-8 text-green-600" />
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Active Items</p>
+                <p className="text-3xl font-bold text-gray-900">{items.filter(i => i.available).length}</p>
+              </div>
+              <Package className="h-8 w-8 text-blue-600" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Purchases Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900">All Purchases</h2>
+        </div>
+        <div className="overflow-x-auto">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+            </div>
+          ) : purchases.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <ShoppingBag className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+              <p>No purchases yet.</p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {purchases.map((purchase) => (
+                  <tr key={purchase.id}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {purchase.first_name} {purchase.last_name}
+                        </p>
+                        <p className="text-sm text-gray-500">{purchase.username} ({purchase.class})</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <p className="text-sm text-gray-900">{purchase.item_name}</p>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                        purchase.item_category === 'consumable'
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {purchase.item_category === 'consumable' ? '🍬 Consumable' : '⏱️ Privilege'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-primary-600">
+                      R{purchase.price_paid.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(purchase.purchase_date).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default WinkelPlugin;

@@ -69,7 +69,8 @@ async function seedDatabase() {
       { name: 'Town News', route_path: '/news', icon: '📰', description: 'Local news and updates' },
       { name: 'Government', route_path: '/government', icon: '🏛️', description: 'Town government services' },
       { name: 'Tenders', route_path: '/tenders', icon: '📑', description: 'Building jobs that need to happen on the game board' },
-      { name: 'Town Rules', route_path: '/town-rules', icon: '📜', description: 'Town-specific rules and regulations' }
+      { name: 'Town Rules', route_path: '/town-rules', icon: '📜', description: 'Town-specific rules and regulations' },
+      { name: 'The Winkel', route_path: '/winkel', icon: '🛒', description: 'Weekly shop for consumables and privileges' }
     ];
 
     for (const plugin of plugins) {
@@ -81,6 +82,117 @@ async function seedDatabase() {
       );
     }
     console.log('✅ Plugins seeded');
+
+    // Seed Shop Items (The Winkel)
+    console.log('🛒 Seeding shop items...');
+    
+    // Check if shop_items table exists
+    try {
+      await pool.query('SELECT 1 FROM shop_items LIMIT 1');
+      console.log('✅ Shop items table exists');
+    } catch (error) {
+      console.log('⚠️ Shop items table not found. Please run migration 010_winkel_shop.sql first.');
+    }
+
+    // Prices with 40% increase from original
+    const shopItems = [
+      // Consumables
+      {
+        name: 'Sweet / Lolly',
+        category: 'consumable',
+        price: 350.00, // Average of R280-R420 (original R200-R300 + 40%)
+        description: 'A delicious sweet treat',
+        notes: 'One-off purchase',
+        available: true,
+        event_day_only: false
+      },
+      {
+        name: 'Chocolate Square',
+        category: 'consumable',
+        price: 560.00, // R400 + 40%
+        description: 'Premium chocolate square',
+        notes: 'Premium sweet',
+        available: true,
+        event_day_only: false
+      },
+      {
+        name: 'Sticker',
+        category: 'consumable',
+        price: 420.00, // R300 + 40%
+        description: 'Choose your favorite sticker',
+        notes: 'Let them choose',
+        available: true,
+        event_day_only: false
+      },
+      {
+        name: 'Extra Sticker Pack',
+        category: 'consumable',
+        price: 1120.00, // R800 + 40%
+        description: 'A bundle of stickers',
+        notes: 'Bundled value',
+        available: true,
+        event_day_only: false
+      },
+      {
+        name: 'Popcorn (Small Cup)',
+        category: 'consumable',
+        price: 700.00, // R500 + 40%
+        description: 'Fresh popcorn in a small cup',
+        notes: 'Event day only',
+        available: true,
+        event_day_only: true
+      },
+      {
+        name: 'Jelly Baby / Gummy',
+        category: 'consumable',
+        price: 350.00, // R250 + 40%
+        description: 'Chewy gummy treat',
+        notes: 'Easy win',
+        available: true,
+        event_day_only: false
+      },
+      // Privileges
+      {
+        name: '5 min Free Time',
+        category: 'privilege',
+        price: 1400.00, // R1,000 + 40%
+        description: '5 minutes of free time during class',
+        notes: 'Once per week max',
+        available: true,
+        event_day_only: false
+      },
+      {
+        name: '10 min Free Time',
+        category: 'privilege',
+        price: 2520.00, // R1,800 + 40%
+        description: '10 minutes of free time during class',
+        notes: 'Cap weekly',
+        available: true,
+        event_day_only: false
+      },
+      {
+        name: 'Cushion to Sit On (Day)',
+        category: 'privilege',
+        price: 1680.00, // R1,200 + 40%
+        description: 'Comfortable cushion for the day',
+        notes: 'Comfort matters',
+        available: true,
+        event_day_only: false
+      }
+    ];
+
+    for (const item of shopItems) {
+      // Check if item already exists
+      const existing = await pool.query('SELECT id FROM shop_items WHERE name = $1', [item.name]);
+      if (existing.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO shop_items (name, category, price, description, notes, available, event_day_only)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [item.name, item.category, item.price, item.description, item.notes, item.available, item.event_day_only]
+        );
+      }
+    }
+    console.log('✅ Shop items seeded');
 
     // Seed Jobs
     // Note: All salaries are in South African Rands (ZAR)
@@ -329,7 +441,8 @@ async function seedDatabase() {
 
     console.log('🎉 Town Hub seed completed successfully!');
     console.log('\n📋 Summary:');
-    console.log('  - Plugins: 5 (all enabled)');
+    console.log('  - Plugins: 8 (all enabled)');
+    console.log(`  - Shop Items: ${shopItems.length} (consumables & privileges)`);
     console.log(`  - Jobs: ${jobs.length} (all categories)`);
     console.log('  - Towns: 3 (6A, 6B, 6C)');
     console.log('  - Users: 1 teacher, 3 students');

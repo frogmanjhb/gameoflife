@@ -20,6 +20,7 @@ import jobRoutes from './routes/jobs';
 import landRoutes from './routes/land';
 import tenderRoutes from './routes/tenders';
 import townRulesRoutes from './routes/town-rules';
+import winkelRoutes from './routes/winkel';
 import adminRoutes from './routes/admin';
 import database from './database/database-prod';
 
@@ -155,6 +156,7 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/land', landRoutes);
 app.use('/api/tenders', tenderRoutes);
 app.use('/api/town-rules', townRulesRoutes);
+app.use('/api/winkel', winkelRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Error handling middleware

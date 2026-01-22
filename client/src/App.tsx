@@ -14,6 +14,7 @@ import NewsPlugin from './components/plugins/NewsPlugin';
 import GovernmentPlugin from './components/plugins/GovernmentPlugin';
 import TendersPlugin from './components/plugins/TendersPlugin';
 import TownRulesPlugin from './components/plugins/TownRulesPlugin';
+import WinkelPlugin from './components/plugins/WinkelPlugin';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -135,6 +136,18 @@ const AppContent: React.FC = () => {
                 <PluginProvider>
                   <TownProvider>
                     <TownRulesPlugin />
+                  </TownProvider>
+                </PluginProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/winkel"
+            element={
+              <ProtectedRoute>
+                <PluginProvider>
+                  <TownProvider>
+                    <WinkelPlugin />
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
