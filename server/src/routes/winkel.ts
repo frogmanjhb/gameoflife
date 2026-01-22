@@ -185,21 +185,72 @@ router.post(
         });
       }
 
+      // Get or create shop account
+      let shopAccount = await database.get(
+        `SELECT a.* FROM accounts a 
+         JOIN users u ON a.user_id = u.id 
+         WHERE u.username = 'shop_system' LIMIT 1`
+      );
+
+      if (!shopAccount) {
+        // Create shop system user and account if it doesn't exist
+        const shopUser = await database.get('SELECT id FROM users WHERE username = $1', ['shop_system']);
+        let shopUserId;
+        
+        if (!shopUser) {
+          const newShopUserResult = await database.query(
+            `INSERT INTO users (username, password_hash, role, first_name, last_name) 
+             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+            ['shop_system', 'system_account', 'teacher', 'Shop', 'System']
+          );
+          shopUserId = newShopUserResult[0]?.id;
+        } else {
+          shopUserId = shopUser.id;
+        }
+
+        if (shopUserId) {
+          const accountNumber = `SHOP${Date.now()}`;
+          await database.run(
+            `INSERT INTO accounts (user_id, account_number, balance) 
+             VALUES ($1, $2, $3)`,
+            [shopUserId, accountNumber, 0.00]
+          );
+          // Get the newly created account
+          const accounts = await database.query(
+            `SELECT a.* FROM accounts a WHERE a.user_id = $1`,
+            [shopUserId]
+          );
+          shopAccount = accounts[0];
+        }
+      }
+
       // Start transaction
       await database.run('BEGIN');
 
       try {
-        // Deduct from account
+        // Deduct from student account
         await database.run(
           'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
           [price, account.id]
         );
 
-        // Record transaction
+        // Add to shop account
         await database.run(
-          `INSERT INTO transactions (from_account_id, amount, transaction_type, description) 
-           VALUES ($1, $2, $3, $4)`,
-          [account.id, price, 'withdrawal', `Purchase: ${item.name}`]
+          'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [price, shopAccount.id]
+        );
+
+        // Update shop balance table (always id=1)
+        await database.run(
+          `UPDATE shop_balance SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
+          [price]
+        );
+
+        // Record transaction (from student to shop)
+        await database.run(
+          `INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description) 
+           VALUES ($1, $2, $3, $4, $5)`,
+          [account.id, shopAccount.id, price, 'transfer', `Shop Purchase: ${item.name}`]
         );
 
         // Record purchase
@@ -246,6 +297,19 @@ router.post(
   }
 );
 
+// GET /api/winkel/balance - Get shop balance (teacher only)
+router.get('/balance', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const shopBalance = await database.get('SELECT balance FROM shop_balance WHERE id = 1');
+    res.json({ 
+      balance: shopBalance ? parseFloat(shopBalance.balance) : 0.00 
+    });
+  } catch (error) {
+    console.error('Failed to fetch shop balance:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/winkel/stats - Get shop statistics (teacher only)
 router.get('/stats', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -269,10 +333,13 @@ router.get('/stats', authenticateToken, requireRole(['teacher']), async (req: Au
       'SELECT COALESCE(SUM(price_paid), 0) as total FROM shop_purchases'
     );
 
+    const shopBalance = await database.get('SELECT balance FROM shop_balance WHERE id = 1');
+
     res.json({
       item_stats: stats,
       total_purchases: parseInt(totalPurchases.count),
-      total_revenue: parseFloat(totalRevenue.total)
+      total_revenue: parseFloat(totalRevenue.total),
+      shop_balance: shopBalance ? parseFloat(shopBalance.balance) : 0.00
     });
   } catch (error) {
     console.error('Failed to fetch shop stats:', error);

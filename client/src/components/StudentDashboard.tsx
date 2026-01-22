@@ -107,12 +107,7 @@ const StudentDashboard: React.FC = () => {
         <MyPropertyCard />
       </div>
 
-      {/* My Tenders */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <MyTendersCard />
-      </div>
-
-      {/* Plugin Cards Grid */}
+      {/* Plugin Cards Grid - Available Systems */}
       <div>
         <div className="flex items-center space-x-2 mb-4">
           <Grid className="h-5 w-5 text-primary-600" />
@@ -132,6 +127,11 @@ const StudentDashboard: React.FC = () => {
             ))}
           </div>
         )}
+      </div>
+
+      {/* My Tenders */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <MyTendersCard />
       </div>
     </div>
   );

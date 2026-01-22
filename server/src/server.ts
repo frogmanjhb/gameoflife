@@ -325,6 +325,18 @@ async function initializeDatabase() {
       console.log('⚠️ Winkel Shop migration may have already been applied:', migrationError);
     }
 
+    // Run Shop Balance migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '012_shop_balance.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Shop Balance migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Shop Balance migration may have already been applied:', migrationError);
+    }
+
     // Add missing plugins (Town Rules and The Winkel)
     try {
       const migrationPath = join(__dirname, '..', 'migrations', '011_add_winkel_and_town_rules_plugins.sql');

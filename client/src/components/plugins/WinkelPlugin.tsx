@@ -48,6 +48,7 @@ const WinkelPlugin: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState<'shop' | 'history' | 'stats'>('shop');
+  const [shopCategoryTab, setShopCategoryTab] = useState<'consumables' | 'privileges'>('consumables');
   const [accountBalance, setAccountBalance] = useState<number | null>(null);
 
   useEffect(() => {
@@ -209,7 +210,7 @@ const WinkelPlugin: React.FC = () => {
 
         <div className="p-6">
           {activeTab === 'shop' && (
-            <div className="space-y-8">
+            <div className="space-y-6">
               {!canPurchase && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
                   <p className="text-amber-800 font-semibold">
@@ -218,61 +219,105 @@ const WinkelPlugin: React.FC = () => {
                 </div>
               )}
 
-              {/* Consumables Section */}
-              <div>
-                <div className="flex items-center space-x-2 mb-4">
-                  <Gift className="h-6 w-6 text-purple-600" />
-                  <h2 className="text-2xl font-bold text-gray-900">🍬 Consumables</h2>
-                  <span className="text-sm text-gray-500">(Impulse Spending)</span>
-                </div>
-                <p className="text-gray-600 mb-6">These drain money without long-term advantage.</p>
-                
-                {loading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+              {/* Category Tabs */}
+              <div className="flex border-b border-gray-200">
+                <button
+                  onClick={() => setShopCategoryTab('consumables')}
+                  className={`flex-1 px-6 py-3 font-semibold transition-colors ${
+                    shopCategoryTab === 'consumables'
+                      ? 'text-primary-600 border-b-2 border-primary-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-center space-x-2">
+                    <Gift className="h-5 w-5" />
+                    <span>🍬 Consumables</span>
+                    <span className="text-xs text-gray-500">(Impulse Spending)</span>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {consumables.map((item) => (
-                      <ShopItemCard
-                        key={item.id}
-                        item={item}
-                        onPurchase={handlePurchase}
-                        canPurchase={canPurchase}
-                        purchasing={purchasing === item.id}
-                      />
-                    ))}
+                </button>
+                <button
+                  onClick={() => setShopCategoryTab('privileges')}
+                  className={`flex-1 px-6 py-3 font-semibold transition-colors ${
+                    shopCategoryTab === 'privileges'
+                      ? 'text-primary-600 border-b-2 border-primary-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-center space-x-2">
+                    <Star className="h-5 w-5" />
+                    <span>⏱️ Time & Privileges</span>
+                    <span className="text-xs text-gray-500">(Very Powerful)</span>
                   </div>
-                )}
+                </button>
               </div>
 
-              {/* Privileges Section */}
-              <div>
-                <div className="flex items-center space-x-2 mb-4">
-                  <Star className="h-6 w-6 text-yellow-600" />
-                  <h2 className="text-2xl font-bold text-gray-900">⏱️ Time & Comfort Privileges</h2>
-                  <span className="text-sm text-gray-500">(Very Powerful)</span>
+              {/* Consumables Tab Content */}
+              {shopCategoryTab === 'consumables' && (
+                <div>
+                  <div className="mb-6">
+                    <p className="text-gray-600">
+                      These items drain money without long-term advantage. Perfect for impulse spending!
+                    </p>
+                  </div>
+                  
+                  {loading ? (
+                    <div className="flex justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+                    </div>
+                  ) : consumables.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <Gift className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                      <p>No consumables available at this time.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {consumables.map((item) => (
+                        <ShopItemCard
+                          key={item.id}
+                          item={item}
+                          onPurchase={handlePurchase}
+                          canPurchase={canPurchase}
+                          purchasing={purchasing === item.id}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <p className="text-gray-600 mb-6">Time is the most valuable currency in class.</p>
-                
-                {loading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+              )}
+
+              {/* Privileges Tab Content */}
+              {shopCategoryTab === 'privileges' && (
+                <div>
+                  <div className="mb-6">
+                    <p className="text-gray-600">
+                      Time is the most valuable currency in class. These privileges give you comfort and freedom!
+                    </p>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {privileges.map((item) => (
-                      <ShopItemCard
-                        key={item.id}
-                        item={item}
-                        onPurchase={handlePurchase}
-                        canPurchase={canPurchase}
-                        purchasing={purchasing === item.id}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+                  
+                  {loading ? (
+                    <div className="flex justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+                    </div>
+                  ) : privileges.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <Star className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                      <p>No privileges available at this time.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {privileges.map((item) => (
+                        <ShopItemCard
+                          key={item.id}
+                          item={item}
+                          onPurchase={handlePurchase}
+                          canPurchase={canPurchase}
+                          purchasing={purchasing === item.id}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -408,7 +453,17 @@ const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items,
 
       {/* Stats Overview */}
       {!statsLoading && stats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Shop Balance</p>
+                <p className="text-3xl font-bold text-emerald-600">R{stats.shop_balance?.toFixed(2) || '0.00'}</p>
+              </div>
+              <ShoppingBag className="h-8 w-8 text-emerald-600" />
+            </div>
+            <p className="text-xs text-gray-500 mt-2">Total money in shop account</p>
+          </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between">
               <div>
