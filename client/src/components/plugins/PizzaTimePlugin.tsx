@@ -1,0 +1,549 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { usePlugins } from '../../contexts/PluginContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { Navigate } from 'react-router-dom';
+import { 
+  Pizza, Loader2, AlertCircle, CheckCircle, XCircle, 
+  Power, TrendingUp, Users, DollarSign, BarChart3
+} from 'lucide-react';
+import api from '../../services/api';
+
+interface PizzaTimeStatus {
+  id: number;
+  class: string;
+  is_active: boolean;
+  current_fund: number;
+  goal_amount: number;
+  donations: Array<{
+    id: number;
+    amount: number;
+    username: string;
+    first_name?: string;
+    last_name?: string;
+    created_at: string;
+  }>;
+  donation_count: number;
+  donation_history: Array<{
+    date: string;
+    daily_total: number;
+    donation_count: number;
+  }>;
+}
+
+const PizzaTimePlugin: React.FC = () => {
+  const { plugins, loading: pluginsLoading } = usePlugins();
+  const { user, account } = useAuth();
+  const pizzaTimePlugin = plugins.find(p => p.route_path === '/pizza-time');
+
+  const [status, setStatus] = useState<PizzaTimeStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [donating, setDonating] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [toggling, setToggling] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    if (pizzaTimePlugin && pizzaTimePlugin.enabled) {
+      fetchStatus();
+      // Poll for updates every 5 seconds
+      const interval = setInterval(fetchStatus, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [pizzaTimePlugin]);
+
+  const fetchStatus = async () => {
+    try {
+      const response = await api.get('/pizza-time/status');
+      setStatus(response.data);
+    } catch (error) {
+      console.error('Failed to fetch pizza time status:', error);
+      setError('Failed to load pizza time status');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDonate = async (amount: number) => {
+    if (!account || account.balance < amount) {
+      setError('Insufficient funds');
+      setTimeout(() => setError(''), 5000);
+      return;
+    }
+
+    try {
+      setDonating(amount);
+      setError('');
+      setSuccess('');
+
+      const response = await api.post('/pizza-time/donate', { amount });
+      
+      setSuccess(`Donated R${amount.toFixed(2)}! Thank you for your contribution! 🍕`);
+      await fetchStatus();
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to make donation');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setDonating(null);
+    }
+  };
+
+  const handleToggle = async () => {
+    if (!status || !user?.class) return;
+
+    try {
+      setToggling(true);
+      setError('');
+      setSuccess('');
+
+      const response = await api.post('/pizza-time/toggle', {
+        class: user.class,
+        is_active: !status.is_active
+      });
+      
+      setSuccess(response.data.message);
+      await fetchStatus();
+      
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to toggle pizza time');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!status || !user?.class) return;
+
+    if (!window.confirm('Are you sure you want to reset the pizza time fund? This will set the fund to R0.00 but keep donation history.')) {
+      return;
+    }
+
+    try {
+      setResetting(true);
+      setError('');
+      setSuccess('');
+
+      const response = await api.post('/pizza-time/reset', {
+        class: user.class
+      });
+      
+      setSuccess(response.data.message);
+      await fetchStatus();
+      
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to reset pizza time');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  // Calculate progress percentage
+  const progressPercentage = useMemo(() => {
+    if (!status) return 0;
+    return Math.min((status.current_fund / status.goal_amount) * 100, 100);
+  }, [status]);
+
+  // Prepare data for bar graph
+  const graphData = useMemo(() => {
+    if (!status || !status.donation_history || status.donation_history.length === 0) {
+      return [];
+    }
+
+    // Get cumulative totals for each day
+    let cumulative = 0;
+    return status.donation_history.map(day => {
+      cumulative += day.daily_total;
+      return {
+        date: day.date,
+        amount: cumulative,
+        daily_total: day.daily_total,
+        donation_count: day.donation_count
+      };
+    });
+  }, [status]);
+
+  // Wait for plugins to load
+  if (pluginsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
+      </div>
+    );
+  }
+
+  if (!pizzaTimePlugin || !pizzaTimePlugin.enabled) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
+      </div>
+    );
+  }
+
+  if (!status) {
+    return (
+      <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+        <p className="text-red-700">Failed to load pizza time status</p>
+      </div>
+    );
+  }
+
+  // Teacher View
+  if (user?.role === 'teacher') {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 rounded-2xl p-6 text-white shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="bg-white/20 rounded-full p-4">
+                <Pizza className="h-8 w-8" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold">Pizza Time</h1>
+                <p className="text-orange-100">Class donation tracker for pizza party</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className={`px-4 py-2 rounded-lg font-semibold ${
+                status.is_active 
+                  ? 'bg-green-500/30 border-2 border-green-300' 
+                  : 'bg-gray-500/30 border-2 border-gray-300'
+              }`}>
+                {status.is_active ? '🟢 Active' : '⚫ Inactive'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Messages */}
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-center space-x-3">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <p className="text-red-700">{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg flex items-center space-x-3">
+            <CheckCircle className="h-5 w-5 text-green-500" />
+            <p className="text-green-700">{success}</p>
+          </div>
+        )}
+
+        {/* Progress Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-800">Fund Progress</h2>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-primary-600">
+                R{status.current_fund.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="text-sm text-gray-500">
+                of R{status.goal_amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} goal
+              </div>
+            </div>
+          </div>
+          
+          {/* Progress Bar */}
+          <div className="w-full bg-gray-200 rounded-full h-8 mb-2">
+            <div
+              className="bg-gradient-to-r from-orange-500 to-red-500 h-8 rounded-full flex items-center justify-end pr-2 transition-all duration-500"
+              style={{ width: `${progressPercentage}%` }}
+            >
+              {progressPercentage > 10 && (
+                <span className="text-white text-sm font-semibold">
+                  {progressPercentage.toFixed(1)}%
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="text-sm text-gray-600">
+            {status.donation_count} donation{status.donation_count !== 1 ? 's' : ''} received
+          </div>
+        </div>
+
+        {/* Bar Graph */}
+        {graphData.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center space-x-2">
+              <BarChart3 className="h-5 w-5" />
+              <span>Fund Growth Over Time</span>
+            </h2>
+            <div className="h-64 flex items-end space-x-1">
+              {graphData.map((day, index) => {
+                const maxAmount = Math.max(...graphData.map(d => d.amount), status.goal_amount);
+                const barHeight = (day.amount / maxAmount) * 100;
+                return (
+                  <div
+                    key={day.date}
+                    className="flex-1 group relative"
+                    style={{ minWidth: '20px' }}
+                  >
+                    <div
+                      className="w-full bg-gradient-to-t from-orange-500 to-red-500 rounded-t transition-all duration-300 hover:opacity-80 cursor-pointer"
+                      style={{ height: `${barHeight}%` }}
+                      title={`${new Date(day.date).toLocaleDateString()}: R${day.amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${day.donation_count} donation${day.donation_count !== 1 ? 's' : ''})`}
+                    >
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">
+                        <div className="font-semibold">{new Date(day.date).toLocaleDateString()}</div>
+                        <div>R{day.amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        <div className="text-gray-300">{day.donation_count} donation{day.donation_count !== 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-4 text-sm text-gray-600 text-center">
+              Hover over bars to see details
+            </div>
+          </div>
+        )}
+
+        {/* Controls */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Controls</h2>
+          <div className="flex space-x-4">
+            <button
+              onClick={handleToggle}
+              disabled={toggling}
+              className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2 ${
+                status.is_active
+                  ? 'bg-red-500 hover:bg-red-600 text-white'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+              } disabled:opacity-50`}
+            >
+              {toggling ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  <Power className="h-5 w-5" />
+                  <span>{status.is_active ? 'Deactivate' : 'Activate'} Pizza Time</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleReset}
+              disabled={resetting || status.current_fund === 0}
+              className="px-6 py-3 rounded-lg font-semibold bg-gray-500 hover:bg-gray-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            >
+              {resetting ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  <XCircle className="h-5 w-5" />
+                  <span>Reset Fund</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Recent Donations */}
+        {status.donations && status.donations.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center space-x-2">
+              <Users className="h-5 w-5" />
+              <span>Recent Donations</span>
+            </h2>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {status.donations.map((donation) => (
+                <div
+                  key={donation.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div>
+                    <div className="font-semibold text-gray-800">
+                      {donation.first_name && donation.last_name
+                        ? `${donation.first_name} ${donation.last_name}`
+                        : donation.username}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {new Date(donation.created_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="text-lg font-bold text-primary-600">
+                    R{donation.amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Student View
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="bg-white/20 rounded-full p-4">
+              <Pizza className="h-8 w-8" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold">Pizza Time</h1>
+              <p className="text-orange-100">Help your class reach the pizza party goal!</p>
+            </div>
+          </div>
+          {!status.is_active && (
+            <div className="bg-white/20 rounded-lg px-4 py-2 flex items-center space-x-2">
+              <AlertCircle className="h-5 w-5" />
+              <span className="font-semibold">Pizza Time is not active</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Messages */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-center space-x-3">
+          <AlertCircle className="h-5 w-5 text-red-500" />
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg flex items-center space-x-3">
+          <CheckCircle className="h-5 w-5 text-green-500" />
+          <p className="text-green-700">{success}</p>
+        </div>
+      )}
+
+      {!status.is_active && (
+        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg">
+          <p className="text-amber-800 font-semibold">
+            Pizza Time is currently inactive. Your teacher needs to activate it before you can donate.
+          </p>
+        </div>
+      )}
+
+      {/* Progress Card */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-gray-800">Fund Progress</h2>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-primary-600">
+              R{status.current_fund.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-sm text-gray-500">
+              of R{status.goal_amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} goal
+            </div>
+          </div>
+        </div>
+        
+        {/* Progress Bar */}
+        <div className="w-full bg-gray-200 rounded-full h-8 mb-2">
+          <div
+            className="bg-gradient-to-r from-orange-500 to-red-500 h-8 rounded-full flex items-center justify-end pr-2 transition-all duration-500"
+            style={{ width: `${progressPercentage}%` }}
+          >
+            {progressPercentage > 10 && (
+              <span className="text-white text-sm font-semibold">
+                {progressPercentage.toFixed(1)}%
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="text-sm text-gray-600">
+          {status.donation_count} donation{status.donation_count !== 1 ? 's' : ''} received
+        </div>
+      </div>
+
+      {/* Bar Graph */}
+      {graphData.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center space-x-2">
+            <BarChart3 className="h-5 w-5" />
+            <span>Fund Growth Over Time</span>
+          </h2>
+          <div className="h-64 flex items-end space-x-1">
+            {graphData.map((day) => {
+              const maxAmount = Math.max(...graphData.map(d => d.amount), status.goal_amount);
+              const barHeight = (day.amount / maxAmount) * 100;
+              return (
+                <div
+                  key={day.date}
+                  className="flex-1 group relative"
+                  style={{ minWidth: '20px' }}
+                >
+                  <div
+                    className="w-full bg-gradient-to-t from-orange-500 to-red-500 rounded-t transition-all duration-300 hover:opacity-80 cursor-pointer"
+                    style={{ height: `${barHeight}%` }}
+                    title={`${new Date(day.date).toLocaleDateString()}: R${day.amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${day.donation_count} donation${day.donation_count !== 1 ? 's' : ''})`}
+                  >
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">
+                      <div className="font-semibold">{new Date(day.date).toLocaleDateString()}</div>
+                      <div>R{day.amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      <div className="text-gray-300">{day.donation_count} donation{day.donation_count !== 1 ? 's' : ''}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 text-sm text-gray-600 text-center">
+            Hover over bars to see details
+          </div>
+        </div>
+      )}
+
+      {/* Donation Buttons */}
+      {status.is_active && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center space-x-2">
+            <DollarSign className="h-5 w-5" />
+            <span>Make a Donation</span>
+          </h2>
+          {account && (
+            <div className="mb-4 text-sm text-gray-600">
+              Your balance: <span className="font-semibold text-primary-600">R{account.balance.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          )}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[500, 1000, 2000, 5000].map((amount) => {
+              const canAfford = account ? account.balance >= amount : false;
+              return (
+                <button
+                  key={amount}
+                  onClick={() => handleDonate(amount)}
+                  disabled={!canAfford || donating === amount || !status.is_active}
+                  className={`px-6 py-4 rounded-lg font-bold text-lg transition-all ${
+                    canAfford && status.is_active
+                      ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2`}
+                >
+                  {donating === amount ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Pizza className="h-5 w-5" />
+                      <span>R{amount.toLocaleString()}</span>
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default PizzaTimePlugin;

@@ -21,6 +21,7 @@ import landRoutes from './routes/land';
 import tenderRoutes from './routes/tenders';
 import townRulesRoutes from './routes/town-rules';
 import winkelRoutes from './routes/winkel';
+import pizzaTimeRoutes from './routes/pizza-time';
 import adminRoutes from './routes/admin';
 import database from './database/database-prod';
 
@@ -157,6 +158,7 @@ app.use('/api/land', landRoutes);
 app.use('/api/tenders', tenderRoutes);
 app.use('/api/town-rules', townRulesRoutes);
 app.use('/api/winkel', winkelRoutes);
+app.use('/api/pizza-time', pizzaTimeRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Error handling middleware
@@ -349,6 +351,18 @@ async function initializeDatabase() {
       console.log('⚠️ Shop items may have already been seeded:', migrationError);
     }
 
+    // Run Pizza Time migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '014_pizza_time.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Pizza Time migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Pizza Time migration may have already been applied:', migrationError);
+    }
+
     // Add missing plugins (Town Rules and The Winkel)
     try {
       const migrationPath = join(__dirname, '..', 'migrations', '011_add_winkel_and_town_rules_plugins.sql');
@@ -359,6 +373,18 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Plugin migration may have already been applied:', migrationError);
+    }
+
+    // Add Pizza Time plugin
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '015_add_pizza_time_plugin.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Pizza Time plugin added');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Pizza Time plugin may have already been added:', migrationError);
     }
     
     const schema = readFileSync(schemaPath, 'utf8');

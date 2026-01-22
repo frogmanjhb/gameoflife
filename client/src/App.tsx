@@ -15,6 +15,7 @@ import GovernmentPlugin from './components/plugins/GovernmentPlugin';
 import TendersPlugin from './components/plugins/TendersPlugin';
 import TownRulesPlugin from './components/plugins/TownRulesPlugin';
 import WinkelPlugin from './components/plugins/WinkelPlugin';
+import PizzaTimePlugin from './components/plugins/PizzaTimePlugin';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -148,6 +149,18 @@ const AppContent: React.FC = () => {
                 <PluginProvider>
                   <TownProvider>
                     <WinkelPlugin />
+                  </TownProvider>
+                </PluginProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pizza-time"
+            element={
+              <ProtectedRoute>
+                <PluginProvider>
+                  <TownProvider>
+                    <PizzaTimePlugin />
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
