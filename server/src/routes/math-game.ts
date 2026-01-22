@@ -150,6 +150,48 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.status(400).json({ error: 'Invalid game data' });
     }
 
+    // SECURITY: Validate game data integrity
+    const MAX_PROBLEMS_PER_GAME = 30; // Maximum allowed problems per game session
+    const MAX_CORRECT_ANSWERS = MAX_PROBLEMS_PER_GAME;
+    const MAX_EARNINGS_PER_GAME = 150; // Maximum R150 per game (30 correct * 1.5 hard * 2.5 streak bonus, rounded up)
+    
+    // Validate total_problems is reasonable
+    if (total_problems > MAX_PROBLEMS_PER_GAME) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} attempted to submit game with ${total_problems} problems (max: ${MAX_PROBLEMS_PER_GAME})`);
+      return res.status(400).json({ error: 'Invalid game data: too many problems' });
+    }
+    
+    // Validate correct_answers doesn't exceed total_problems
+    if (correct_answers > total_problems) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} attempted to submit ${correct_answers} correct answers for ${total_problems} problems`);
+      return res.status(400).json({ error: 'Invalid game data: correct answers cannot exceed total problems' });
+    }
+    
+    // Validate correct_answers doesn't exceed maximum
+    if (correct_answers > MAX_CORRECT_ANSWERS) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} attempted to submit ${correct_answers} correct answers (max: ${MAX_CORRECT_ANSWERS})`);
+      return res.status(400).json({ error: 'Invalid game data: too many correct answers' });
+    }
+    
+    // Validate answer_sequence length matches total_problems
+    if (!Array.isArray(answer_sequence) || answer_sequence.length !== total_problems) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} submitted answer_sequence length ${answer_sequence?.length} for ${total_problems} problems`);
+      return res.status(400).json({ error: 'Invalid game data: answer sequence mismatch' });
+    }
+    
+    // Validate answer_sequence content (must be array of booleans)
+    if (!answer_sequence.every(a => typeof a === 'boolean')) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} submitted invalid answer_sequence content`);
+      return res.status(400).json({ error: 'Invalid game data: answer sequence must contain only boolean values' });
+    }
+    
+    // Validate that correct_answers matches the number of trues in answer_sequence
+    const actualCorrectCount = answer_sequence.filter(a => a === true).length;
+    if (actualCorrectCount !== correct_answers) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} claimed ${correct_answers} correct but sequence shows ${actualCorrectCount}`);
+      return res.status(400).json({ error: 'Invalid game data: correct answer count mismatch' });
+    }
+
     const userId = req.user.id;
 
     // Check if math game tables exist
@@ -159,7 +201,7 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.status(503).json({ error: 'Math game feature not available yet. Please try again later.' });
     }
 
-    // Verify session belongs to user
+    // Verify session belongs to user and hasn't been submitted already
     const session = await database.get(`
       SELECT * FROM math_game_sessions 
       WHERE id = $1 AND user_id = $2
@@ -167,6 +209,12 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
 
     if (!session) {
       return res.status(404).json({ error: 'Game session not found' });
+    }
+    
+    // SECURITY: Check if session has already been submitted (earnings > 0 means already submitted)
+    if (parseFloat(session.earnings) > 0) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} attempted to resubmit session ${session_id} (already has earnings: ${session.earnings})`);
+      return res.status(400).json({ error: 'Game session has already been submitted' });
     }
 
     // Calculate streak bonus
@@ -190,12 +238,18 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       return 1.0;
     };
 
-    // Calculate earnings
+    // Calculate earnings with server-side validation
     const difficultyMultipliers: Record<string, number> = { easy: 1.0, medium: 1.2, hard: 1.5 };
     const basePoints = correct_answers * 1; // 1 point per correct answer
     const difficultyMultiplier = difficultyMultipliers[session.difficulty] || 1.0;
     const streakBonus = calculateStreakBonus(answer_sequence);
-    const totalEarnings = basePoints * difficultyMultiplier * streakBonus;
+    let totalEarnings = basePoints * difficultyMultiplier * streakBonus;
+    
+    // SECURITY: Cap earnings at maximum per game
+    if (totalEarnings > MAX_EARNINGS_PER_GAME) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} earnings ${totalEarnings} capped at ${MAX_EARNINGS_PER_GAME}`);
+      totalEarnings = MAX_EARNINGS_PER_GAME;
+    }
 
     // Update session with results
     await database.query(`
