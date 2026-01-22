@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { usePlugins } from '../../contexts/PluginContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTown } from '../../contexts/TownContext';
 import { Navigate } from 'react-router-dom';
 import { 
   Pizza, Loader2, AlertCircle, CheckCircle, XCircle, 
@@ -33,6 +34,7 @@ interface PizzaTimeStatus {
 const PizzaTimePlugin: React.FC = () => {
   const { plugins, loading: pluginsLoading } = usePlugins();
   const { user, account } = useAuth();
+  const { currentTownClass } = useTown();
   const pizzaTimePlugin = plugins.find(p => p.route_path === '/pizza-time');
 
   const [status, setStatus] = useState<PizzaTimeStatus | null>(null);
@@ -50,12 +52,16 @@ const PizzaTimePlugin: React.FC = () => {
       const interval = setInterval(fetchStatus, 5000);
       return () => clearInterval(interval);
     }
-  }, [pizzaTimePlugin]);
+  }, [pizzaTimePlugin, currentTownClass]);
 
   const fetchStatus = async () => {
     try {
       setError('');
-      const response = await api.get('/pizza-time/status');
+      // For teachers, pass the current town class as a query parameter
+      const url = user?.role === 'teacher' && currentTownClass 
+        ? `/pizza-time/status?class=${currentTownClass}`
+        : '/pizza-time/status';
+      const response = await api.get(url);
       setStatus(response.data);
     } catch (error: any) {
       console.error('Failed to fetch pizza time status:', error);
@@ -94,7 +100,17 @@ const PizzaTimePlugin: React.FC = () => {
   };
 
   const handleToggle = async () => {
-    if (!status || !user?.class) return;
+    if (!status) return;
+    
+    // For teachers, use currentTownClass; for students, use their class
+    const targetClass = user?.role === 'teacher' 
+      ? (currentTownClass || '6A')
+      : user?.class;
+    
+    if (!targetClass) {
+      setError('No class selected. Please select a class first.');
+      return;
+    }
 
     try {
       setToggling(true);
@@ -102,7 +118,7 @@ const PizzaTimePlugin: React.FC = () => {
       setSuccess('');
 
       const response = await api.post('/pizza-time/toggle', {
-        class: user.class,
+        class: targetClass,
         is_active: !status.is_active
       });
       
@@ -119,7 +135,17 @@ const PizzaTimePlugin: React.FC = () => {
   };
 
   const handleReset = async () => {
-    if (!status || !user?.class) return;
+    if (!status) return;
+    
+    // For teachers, use currentTownClass; for students, use their class
+    const targetClass = user?.role === 'teacher' 
+      ? (currentTownClass || '6A')
+      : user?.class;
+    
+    if (!targetClass) {
+      setError('No class selected. Please select a class first.');
+      return;
+    }
 
     if (!window.confirm('Are you sure you want to reset the pizza time fund? This will set the fund to R0.00 but keep donation history.')) {
       return;
@@ -131,7 +157,7 @@ const PizzaTimePlugin: React.FC = () => {
       setSuccess('');
 
       const response = await api.post('/pizza-time/reset', {
-        class: user.class
+        class: targetClass
       });
       
       setSuccess(response.data.message);
@@ -243,9 +269,18 @@ const PizzaTimePlugin: React.FC = () => {
 
         {/* Messages */}
         {error && (
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-center space-x-3">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            <p className="text-red-700">{error}</p>
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-red-700 font-semibold">{error}</p>
+                {error.includes('class assigned') && (
+                  <p className="text-red-600 text-sm mt-2">
+                    Please contact your teacher to assign you to a class (6A, 6B, or 6C) before using Pizza Time.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -426,9 +461,18 @@ const PizzaTimePlugin: React.FC = () => {
 
       {/* Messages */}
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-center space-x-3">
-          <AlertCircle className="h-5 w-5 text-red-500" />
-          <p className="text-red-700">{error}</p>
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-red-700 font-semibold">{error}</p>
+              {error.includes('class assigned') && (
+                <p className="text-red-600 text-sm mt-2">
+                  Please contact your teacher to assign you to a class (6A, 6B, or 6C) before using Pizza Time.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

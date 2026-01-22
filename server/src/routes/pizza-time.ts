@@ -17,9 +17,33 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
       return res.status(401).json({ error: 'User not found' });
     }
 
-    const userClass = req.user.class;
-    if (!userClass || !isValidTownClass(userClass)) {
-      return res.status(400).json({ error: 'Invalid class' });
+    // For teachers, allow specifying a class via query param, or use their class if they have one
+    let userClass: '6A' | '6B' | '6C' | null = null;
+    
+    if (req.user.role === 'teacher') {
+      const requestedClass = req.query.class as string;
+      if (requestedClass && isValidTownClass(requestedClass)) {
+        userClass = requestedClass;
+      } else if (req.user.class && isValidTownClass(req.user.class)) {
+        userClass = req.user.class;
+      } else {
+        // Default to 6A for teachers without a class
+        userClass = '6A';
+      }
+    } else {
+      // For students, must have a valid class
+      if (!req.user.class || !isValidTownClass(req.user.class)) {
+        console.log('⚠️ Student has no valid class:', { 
+          username: req.user.username, 
+          class: req.user.class,
+          role: req.user.role 
+        });
+        return res.status(400).json({ 
+          error: 'You do not have a valid class assigned. Please contact your teacher to assign you to a class (6A, 6B, or 6C).',
+          details: `Your current class value: ${req.user.class || 'null'}`
+        });
+      }
+      userClass = req.user.class;
     }
 
     // Check if pizza_time table exists
@@ -140,9 +164,17 @@ router.post(
         });
       }
 
+      // Students must have a valid class
       const userClass = req.user.class;
       if (!userClass || !isValidTownClass(userClass)) {
-        return res.status(400).json({ error: 'Invalid class' });
+        console.log('⚠️ Student has no valid class for donation:', { 
+          username: req.user.username, 
+          class: req.user.class 
+        });
+        return res.status(400).json({ 
+          error: 'You do not have a valid class assigned. Please contact your teacher to assign you to a class (6A, 6B, or 6C).',
+          details: `Your current class value: ${userClass || 'null'}`
+        });
       }
 
       // Get pizza time for this class
