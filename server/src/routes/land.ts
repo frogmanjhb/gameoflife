@@ -220,6 +220,16 @@ router.post('/purchase-request',
         return res.status(400).json({ error: 'This parcel is already owned' });
       }
 
+      // SECURITY: Validate offered price is at least 90% of parcel value (allow small negotiation room)
+      const parcelValue = parseFloat(parcel.value);
+      const offeredAmount = parseFloat(offered_price);
+      const minimumOffer = parcelValue * 0.9; // Allow up to 10% discount
+      if (offeredAmount < minimumOffer) {
+        return res.status(400).json({ 
+          error: `Offered price (R${offeredAmount.toFixed(2)}) is too low. Minimum offer is R${minimumOffer.toFixed(2)} (90% of land value)` 
+        });
+      }
+
       // Check if user already has a pending request for this parcel
       const existingRequest = await database.get(`
         SELECT * FROM land_purchase_requests 

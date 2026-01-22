@@ -4,16 +4,26 @@ import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import database from '../database/database-prod';
 import { CreateUserRequest, LoginRequest, AuthResponse } from '../types';
-import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // Register new user
+// SECURITY: Only students can self-register. Teachers must be created by other teachers.
 router.post('/register', [
   body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['student', 'teacher']).withMessage('Role must be student or teacher'),
+  body('role').custom((value) => {
+    // SECURITY: Block self-registration as teacher - must use /auth/register-teacher endpoint
+    if (value === 'teacher') {
+      throw new Error('Teacher registration requires admin authorization');
+    }
+    if (value !== 'student') {
+      throw new Error('Invalid role');
+    }
+    return true;
+  }),
   body('first_name').optional().custom((value) => {
     if (value && value.length < 1) {
       throw new Error('First name must be at least 1 character');
@@ -110,6 +120,49 @@ router.post('/register', [
     res.status(201).json(response);
   } catch (error) {
     console.error('Registration error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Register teacher (requires existing teacher authentication)
+// SECURITY: Only authenticated teachers can create new teacher accounts
+router.post('/register-teacher', [
+  body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('first_name').optional().isString(),
+  body('last_name').optional().isString(),
+  body('email').optional().isEmail().withMessage('Valid email required')
+], authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { username, password, first_name, last_name, email } = req.body;
+
+    // Check if user already exists
+    const existingUser = await database.get('SELECT id FROM users WHERE username = $1', [username]);
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create teacher user
+    const result = await database.run(
+      'INSERT INTO users (username, password_hash, role, first_name, last_name, email) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [username, passwordHash, 'teacher', first_name || null, last_name || null, email || null]
+    );
+
+    const userId = result.lastID;
+    const user = await database.get('SELECT id, username, role, first_name, last_name, email, created_at, updated_at FROM users WHERE id = $1', [userId]);
+
+    console.log(`✅ Teacher account created by ${req.user?.username}: ${username}`);
+    res.status(201).json({ message: 'Teacher account created successfully', user });
+  } catch (error) {
+    console.error('Teacher registration error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
