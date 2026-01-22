@@ -19,6 +19,7 @@ import townRoutes from './routes/town';
 import jobRoutes from './routes/jobs';
 import landRoutes from './routes/land';
 import tenderRoutes from './routes/tenders';
+import townRulesRoutes from './routes/town-rules';
 import adminRoutes from './routes/admin';
 import database from './database/database-prod';
 
@@ -153,6 +154,7 @@ app.use('/api/town', townRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/land', landRoutes);
 app.use('/api/tenders', tenderRoutes);
+app.use('/api/town-rules', townRulesRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Error handling middleware
@@ -295,6 +297,18 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Tender Payments migration may have already been applied:', migrationError);
+    }
+
+    // Run Town Rules migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '009_town_rules.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Town Rules migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Town Rules migration may have already been applied:', migrationError);
     }
     
     const schema = readFileSync(schemaPath, 'utf8');

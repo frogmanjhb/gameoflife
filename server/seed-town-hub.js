@@ -68,7 +68,8 @@ async function seedDatabase() {
       { name: 'Jobs', route_path: '/jobs', icon: '💼', description: 'Employment board and job listings' },
       { name: 'Town News', route_path: '/news', icon: '📰', description: 'Local news and updates' },
       { name: 'Government', route_path: '/government', icon: '🏛️', description: 'Town government services' },
-      { name: 'Tenders', route_path: '/tenders', icon: '📑', description: 'Building jobs that need to happen on the game board' }
+      { name: 'Tenders', route_path: '/tenders', icon: '📑', description: 'Building jobs that need to happen on the game board' },
+      { name: 'Town Rules', route_path: '/town-rules', icon: '📜', description: 'Town-specific rules and regulations' }
     ];
 
     for (const plugin of plugins) {

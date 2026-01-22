@@ -2,7 +2,7 @@ import { BiomeType, BiomeConfig, RiskLevel } from '../../types';
 
 export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
   'Savanna': {
-    baseValue: 5000,
+    baseValue: 20000,
     risk: 'medium',
     color: '#c4a747',
     lightColor: '#e8d999',
@@ -10,7 +10,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Seasonal droughts', 'Fire risk', 'Limited water sources']
   },
   'Grassland': {
-    baseValue: 4000,
+    baseValue: 15000,
     risk: 'low',
     color: '#7cb342',
     lightColor: '#aed581',
@@ -18,7 +18,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Soil erosion risk', 'Limited shade', 'Overgrazing concerns']
   },
   'Forest': {
-    baseValue: 8000,
+    baseValue: 35000,
     risk: 'medium',
     color: '#2e7d32',
     lightColor: '#66bb6a',
@@ -26,7 +26,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Fire risk', 'Clearing restrictions', 'Difficult access']
   },
   'Fynbos': {
-    baseValue: 10000,
+    baseValue: 45000,
     risk: 'high',
     color: '#9c27b0',
     lightColor: '#ce93d8',
@@ -34,7 +34,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Fire-dependent ecosystem', 'Strict conservation laws', 'Limited development']
   },
   'Nama Karoo': {
-    baseValue: 3000,
+    baseValue: 10000,
     risk: 'medium',
     color: '#8d6e63',
     lightColor: '#bcaaa4',
@@ -50,7 +50,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Extreme temperatures', 'Water scarcity', 'Conservation restrictions']
   },
   'Desert': {
-    baseValue: 2000,
+    baseValue: 8000,
     risk: 'high',
     color: '#ffd54f',
     lightColor: '#ffee58',
@@ -58,7 +58,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Extreme conditions', 'No water', 'Uninhabitable without infrastructure']
   },
   'Thicket': {
-    baseValue: 6000,
+    baseValue: 25000,
     risk: 'low',
     color: '#558b2f',
     lightColor: '#8bc34a',
@@ -66,7 +66,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Dense vegetation', 'Clearing needed', 'Elephant damage risk']
   },
   'Indian Ocean Coastal Belt': {
-    baseValue: 12000,
+    baseValue: 60000,
     risk: 'medium',
     color: '#0288d1',
     lightColor: '#4fc3f7',
