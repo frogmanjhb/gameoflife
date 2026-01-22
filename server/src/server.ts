@@ -337,6 +337,18 @@ async function initializeDatabase() {
       console.log('⚠️ Shop Balance migration may have already been applied:', migrationError);
     }
 
+    // Seed Shop Items
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '013_seed_shop_items.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Shop items seeded');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Shop items may have already been seeded:', migrationError);
+    }
+
     // Add missing plugins (Town Rules and The Winkel)
     try {
       const migrationPath = join(__dirname, '..', 'migrations', '011_add_winkel_and_town_rules_plugins.sql');
