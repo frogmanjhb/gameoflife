@@ -166,21 +166,7 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
     }
   };
 
-  // Timer effect
-  useEffect(() => {
-    if (gameState === 'playing' && timeLeft > 0) {
-      const timer = setTimeout(() => {
-        setTimeLeft(prev => prev - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else if (gameState === 'playing' && timeLeft === 0) {
-      // Game over - call endGame
-      console.log('Timer reached 0, ending game...');
-      endGame();
-    }
-  }, [gameState, timeLeft, endGame]);
-
-  // End game and submit results
+  // End game and submit results - MUST be defined before the timer useEffect that uses it
   const endGame = useCallback(async () => {
     if (!sessionId) {
       console.error('No session ID available');
@@ -242,6 +228,20 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
       setIsSubmitting(false);
     }
   }, [sessionId, score, answerSequence, isSubmitting, onGameComplete]);
+
+  // Timer effect - uses endGame which must be defined above
+  useEffect(() => {
+    if (gameState === 'playing' && timeLeft > 0) {
+      const timer = setTimeout(() => {
+        setTimeLeft(prev => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (gameState === 'playing' && timeLeft === 0) {
+      // Game over - call endGame
+      console.log('Timer reached 0, ending game...');
+      endGame();
+    }
+  }, [gameState, timeLeft, endGame]);
 
   // Reset modal
   const resetModal = () => {
