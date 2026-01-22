@@ -73,8 +73,18 @@ const WinkelPlugin: React.FC = () => {
         }) : Promise.resolve({ data: null })
       ]);
 
-      setItems(itemsRes.data);
-      setPurchases(purchasesRes.data);
+      // Convert prices to numbers (PostgreSQL returns DECIMAL as strings)
+      const itemsWithNumericPrices = itemsRes.data.map((item: any) => ({
+        ...item,
+        price: parseFloat(item.price) || 0
+      }));
+      const purchasesWithNumericPrices = purchasesRes.data.map((purchase: any) => ({
+        ...purchase,
+        price_paid: parseFloat(purchase.price_paid) || 0
+      }));
+      
+      setItems(itemsWithNumericPrices);
+      setPurchases(purchasesWithNumericPrices);
       setCanPurchase(canPurchaseRes.data.canPurchase);
 
       // Get account balance for students
@@ -346,7 +356,7 @@ const WinkelPlugin: React.FC = () => {
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-primary-600">R{purchase.price_paid.toFixed(2)}</p>
+                        <p className="font-bold text-primary-600">R{(parseFloat(purchase.price_paid) || 0).toFixed(2)}</p>
                       </div>
                     </div>
                   ))}
@@ -373,7 +383,7 @@ const ShopItemCard: React.FC<ShopItemCardProps> = ({ item, onPurchase, canPurcha
       <div className="flex items-start justify-between mb-3">
         <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
         <div className="bg-primary-100 text-primary-700 px-3 py-1 rounded-full text-sm font-semibold">
-          R{item.price.toFixed(2)}
+          R{(parseFloat(item.price) || 0).toFixed(2)}
         </div>
       </div>
       
@@ -458,7 +468,7 @@ const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items,
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Shop Balance</p>
-                <p className="text-3xl font-bold text-emerald-600">R{stats.shop_balance?.toFixed(2) || '0.00'}</p>
+                <p className="text-3xl font-bold text-emerald-600">R{(parseFloat(stats.shop_balance) || 0).toFixed(2)}</p>
               </div>
               <ShoppingBag className="h-8 w-8 text-emerald-600" />
             </div>
@@ -477,7 +487,7 @@ const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items,
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Revenue</p>
-                <p className="text-3xl font-bold text-gray-900">R{stats.total_revenue.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-gray-900">R{(parseFloat(stats.total_revenue) || 0).toFixed(2)}</p>
               </div>
               <DollarSign className="h-8 w-8 text-green-600" />
             </div>
@@ -544,7 +554,7 @@ const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items,
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-primary-600">
-                      R{purchase.price_paid.toFixed(2)}
+                      R{(parseFloat(purchase.price_paid) || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(purchase.purchase_date).toLocaleDateString()}
