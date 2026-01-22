@@ -174,17 +174,35 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
       }, 1000);
       return () => clearTimeout(timer);
     } else if (gameState === 'playing' && timeLeft === 0) {
-      // Game over
+      // Game over - call endGame
+      console.log('Timer reached 0, ending game...');
       endGame();
     }
-  }, [gameState, timeLeft]);
+  }, [gameState, timeLeft, endGame]);
 
   // End game and submit results
-  const endGame = async () => {
-    if (!sessionId) return;
+  const endGame = useCallback(async () => {
+    if (!sessionId) {
+      console.error('No session ID available');
+      return;
+    }
+
+    // Prevent multiple submissions
+    if (isSubmitting) {
+      console.log('Already submitting, skipping...');
+      return;
+    }
 
     setIsSubmitting(true);
+    setGameState('results'); // Immediately show results state to prevent re-triggering
+    
     try {
+      console.log('Submitting game:', { 
+        sessionId, 
+        score, 
+        answerSequenceLength: answerSequence.length 
+      });
+      
       const response = await mathGameApi.submitGame({
         session_id: sessionId,
         score,
@@ -192,6 +210,8 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
         total_problems: answerSequence.length,
         answer_sequence: answerSequence
       });
+
+      console.log('Game submission successful:', response.data);
 
       setGameResults({
         score,
@@ -202,15 +222,26 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
         accuracy: answerSequence.length > 0 ? (score / answerSequence.length) * 100 : 0
       });
 
-      setGameState('results');
       onGameComplete();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to submit game:', error);
-      alert('Failed to submit game results. Please try again.');
+      const errorMessage = error.response?.data?.error || 'Failed to submit game results';
+      console.error('Error details:', errorMessage);
+      
+      // Still show results even if submission failed
+      setGameResults({
+        score,
+        correctAnswers: score,
+        totalProblems: answerSequence.length,
+        earnings: 0,
+        isNewHighScore: false,
+        accuracy: answerSequence.length > 0 ? (score / answerSequence.length) * 100 : 0,
+        error: errorMessage
+      });
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [sessionId, score, answerSequence, isSubmitting, onGameComplete]);
 
   // Reset modal
   const resetModal = () => {
@@ -409,13 +440,23 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
                 <p className="text-gray-400">Here's how you did:</p>
               </div>
 
+              {gameResults.error && (
+                <div className="bg-red-600 text-white p-4 rounded-lg">
+                  <p className="font-semibold">⚠️ Error saving results</p>
+                  <p className="text-sm mt-1">{gameResults.error}</p>
+                  <p className="text-xs mt-2 opacity-75">Your earnings may not have been recorded. Please contact your teacher.</p>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-800 rounded-lg p-4">
                   <div className="text-3xl font-bold text-white">{gameResults.score}</div>
                   <div className="text-sm text-gray-400">Score</div>
                 </div>
                 <div className="bg-gray-800 rounded-lg p-4">
-                  <div className="text-3xl font-bold text-green-500">R{Number(gameResults.earnings || 0).toFixed(2)}</div>
+                  <div className={`text-3xl font-bold ${gameResults.error ? 'text-gray-500' : 'text-green-500'}`}>
+                    R{Number(gameResults.earnings || 0).toFixed(2)}
+                  </div>
                   <div className="text-sm text-gray-400">Earned</div>
                 </div>
                 <div className="bg-gray-800 rounded-lg p-4">
@@ -428,7 +469,7 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
                 </div>
               </div>
 
-              {gameResults.isNewHighScore && (
+              {gameResults.isNewHighScore && !gameResults.error && (
                 <div className="bg-yellow-600 text-white p-4 rounded-lg flex items-center justify-center space-x-2">
                   <Trophy className="h-5 w-5" />
                   <span className="font-semibold">New High Score!</span>
