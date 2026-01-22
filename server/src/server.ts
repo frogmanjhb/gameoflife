@@ -312,6 +312,30 @@ async function initializeDatabase() {
     } catch (migrationError) {
       console.log('⚠️ Town Rules migration may have already been applied:', migrationError);
     }
+
+    // Run Winkel Shop migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '010_winkel_shop.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Winkel Shop migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Winkel Shop migration may have already been applied:', migrationError);
+    }
+
+    // Add missing plugins (Town Rules and The Winkel)
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '011_add_winkel_and_town_rules_plugins.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Missing plugins added');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Plugin migration may have already been applied:', migrationError);
+    }
     
     const schema = readFileSync(schemaPath, 'utf8');
     await database.query(schema);

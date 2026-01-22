@@ -77,7 +77,10 @@ async function seedDatabase() {
       await pool.query(
         `INSERT INTO plugins (name, enabled, route_path, icon, description)
          VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (name) DO NOTHING`,
+         ON CONFLICT (name) DO UPDATE SET
+           route_path = EXCLUDED.route_path,
+           icon = EXCLUDED.icon,
+           description = EXCLUDED.description`,
         [plugin.name, true, plugin.route_path, plugin.icon, plugin.description]
       );
     }
