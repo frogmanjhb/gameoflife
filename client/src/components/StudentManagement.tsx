@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Minus, DollarSign, User, Search, Users, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Minus, DollarSign, User, Search, Users, Trash2, AlertTriangle, ChevronDown, ChevronUp, Copy, RefreshCw } from 'lucide-react';
 import api from '../services/api';
 import { Student } from '../types';
 
@@ -23,6 +23,9 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState<string>('all');
+  const [expandedStudents, setExpandedStudents] = useState<Set<number>>(new Set());
+  const [studentPasswords, setStudentPasswords] = useState<Record<number, string>>({});
+  const [resettingPassword, setResettingPassword] = useState<number | null>(null);
 
   // Group students by class
   const studentsByClass = useMemo(() => {
@@ -138,6 +141,47 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
     }).format(amount);
   };
 
+  const toggleStudentExpanded = (studentId: number) => {
+    const newExpanded = new Set(expandedStudents);
+    if (newExpanded.has(studentId)) {
+      newExpanded.delete(studentId);
+    } else {
+      newExpanded.add(studentId);
+    }
+    setExpandedStudents(newExpanded);
+  };
+
+  const handleResetPassword = async (student: Student) => {
+    setResettingPassword(student.id);
+    setError('');
+    setSuccess('');
+    
+    try {
+      const response = await api.post(`/students/${student.username}/reset-password`);
+      const newPassword = response.data.temporary_password;
+      setStudentPasswords({ ...studentPasswords, [student.id]: newPassword });
+      setSuccess(`Password reset for ${student.username}. New password: ${newPassword}`);
+      
+      // Expand the student card to show the new password
+      if (!expandedStudents.has(student.id)) {
+        toggleStudentExpanded(student.id);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to reset password');
+    } finally {
+      setResettingPassword(null);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setSuccess('Copied to clipboard!');
+      setTimeout(() => setSuccess(''), 2000);
+    }).catch(() => {
+      setError('Failed to copy to clipboard');
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Search */}
@@ -241,84 +285,174 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredStudents.map((student) => (
-          <div
-            key={student.id}
-            className={`card cursor-pointer transition-all duration-200 ${
-              selectedStudent?.id === student.id
-                ? 'ring-2 ring-primary-500 bg-primary-50'
-                : 'hover:shadow-md'
-            }`}
-            onClick={() => setSelectedStudent(student)}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-3">
-                <div className="bg-primary-100 p-2 rounded-full">
-                  <User className="h-5 w-5 text-primary-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">
-                    {student.first_name && student.last_name 
-                      ? `${student.first_name} ${student.last_name}` 
-                      : student.username
-                    }
-                  </h3>
-                  <p className="text-sm text-gray-500">@{student.username}</p>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <span className="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded-full">
-                      {student.class || 'Unassigned'}
-                    </span>
-                    {student.email && (
-                      <span className="text-xs text-gray-500">{student.email}</span>
-                    )}
+          {filteredStudents.map((student) => {
+            const isExpanded = expandedStudents.has(student.id);
+            const hasPassword = studentPasswords[student.id];
+            
+            return (
+            <div
+              key={student.id}
+              className={`card transition-all duration-200 ${
+                selectedStudent?.id === student.id
+                  ? 'ring-2 ring-primary-500 bg-primary-50'
+                  : 'hover:shadow-md'
+              }`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center space-x-3 flex-1 min-w-0">
+                  <div className="bg-primary-100 p-2 rounded-full flex-shrink-0">
+                    <User className="h-5 w-5 text-primary-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 truncate">
+                      {student.first_name && student.last_name 
+                        ? `${student.first_name} ${student.last_name}` 
+                        : student.username
+                      }
+                    </h3>
+                    <p className="text-sm text-gray-500 truncate">@{student.username}</p>
+                    <div className="flex items-center space-x-2 mt-1 flex-wrap">
+                      <span className="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded-full">
+                        {student.class || 'Unassigned'}
+                      </span>
+                    </div>
                   </div>
                 </div>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <p className="text-lg font-bold text-success-600">
+                    {formatCurrency(student.balance)}
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-lg font-bold text-success-600">
-                  {formatCurrency(student.balance)}
-                </p>
-                <p className="text-xs text-gray-500">Account: {student.account_number}</p>
-              </div>
-            </div>
 
-            <div className="flex space-x-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedStudent(student);
-                  setShowDepositForm(true);
-                }}
-                className="flex-1 btn-success text-sm"
-              >
-                <Plus className="h-4 w-4 inline mr-1" />
-                Add Money
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedStudent(student);
-                  setShowWithdrawForm(true);
-                }}
-                className="flex-1 btn-warning text-sm"
-              >
-                <Minus className="h-4 w-4 inline mr-1" />
-                Remove Money
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setStudentToDelete(student);
-                  setShowDeleteConfirm(true);
-                }}
-                className="px-3 py-2 bg-red-100 text-red-600 hover:bg-red-200 rounded-lg transition-colors text-sm"
-                title="Delete Student"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {/* Email and Account Number - Better Layout */}
+              <div className="mb-3 space-y-1">
+                {student.email && (
+                  <p className="text-xs text-gray-600 truncate" title={student.email}>
+                    {student.email}
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 truncate" title={`Account: ${student.account_number}`}>
+                  Account: {student.account_number}
+                </p>
+              </div>
+
+              {/* Expandable Credentials Section */}
+              <div className="mb-3 border-t border-gray-200 pt-3">
+                <button
+                  onClick={() => toggleStudentExpanded(student.id)}
+                  className="w-full flex items-center justify-between text-sm text-gray-700 hover:text-primary-600 transition-colors"
+                >
+                  <span className="flex items-center">
+                    {isExpanded ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                    Credentials
+                  </span>
+                </button>
+                
+                {isExpanded && (
+                  <div className="mt-2 p-3 bg-gray-50 rounded-lg space-y-2">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">Username</label>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={student.username}
+                          className="flex-1 text-sm px-2 py-1 bg-white border border-gray-300 rounded text-gray-900"
+                          onClick={(e) => e.currentTarget.select()}
+                        />
+                        <button
+                          onClick={() => copyToClipboard(student.username)}
+                          className="p-1 text-gray-600 hover:text-primary-600 transition-colors"
+                          title="Copy username"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">Password</label>
+                      {hasPassword ? (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={hasPassword}
+                            className="flex-1 text-sm px-2 py-1 bg-white border border-gray-300 rounded text-gray-900 font-mono"
+                            onClick={(e) => e.currentTarget.select()}
+                          />
+                          <button
+                            onClick={() => copyToClipboard(hasPassword)}
+                            className="p-1 text-gray-600 hover:text-primary-600 transition-colors"
+                            title="Copy password"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleResetPassword(student)}
+                          disabled={resettingPassword === student.id}
+                          className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-primary-100 text-primary-700 hover:bg-primary-200 rounded text-sm transition-colors disabled:opacity-50"
+                        >
+                          <RefreshCw className={`h-4 w-4 ${resettingPassword === student.id ? 'animate-spin' : ''}`} />
+                          <span>{resettingPassword === student.id ? 'Resetting...' : 'Reset Password'}</span>
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* Copy All Button */}
+                    {hasPassword && (
+                      <button
+                        onClick={() => copyToClipboard(`Username: ${student.username}\nPassword: ${hasPassword}`)}
+                        className="w-full px-3 py-2 bg-primary-600 text-white hover:bg-primary-700 rounded text-sm transition-colors"
+                      >
+                        <Copy className="h-4 w-4 inline mr-1" />
+                        Copy All
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex space-x-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedStudent(student);
+                    setShowDepositForm(true);
+                  }}
+                  className="flex-1 btn-success text-sm"
+                >
+                  <Plus className="h-4 w-4 inline mr-1" />
+                  Add Money
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedStudent(student);
+                    setShowWithdrawForm(true);
+                  }}
+                  className="flex-1 btn-warning text-sm"
+                >
+                  <Minus className="h-4 w-4 inline mr-1" />
+                  Remove Money
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setStudentToDelete(student);
+                    setShowDeleteConfirm(true);
+                  }}
+                  className="px-3 py-2 bg-red-100 text-red-600 hover:bg-red-200 rounded-lg transition-colors text-sm"
+                  title="Delete Student"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          )})}
         </div>
       )}
 

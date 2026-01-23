@@ -6,9 +6,11 @@ const LoginForm: React.FC = () => {
   const { login, register } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     password: '',
+    confirmPassword: '',
     role: 'student' as 'student' | 'teacher',
     first_name: '',
     last_name: '',
@@ -21,6 +23,13 @@ const LoginForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    // Validate password confirmation for signup
+    if (!isLogin && formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -122,6 +131,38 @@ const LoginForm: React.FC = () => {
                 </button>
               </div>
             </div>
+
+            {!isLogin && (
+              <div>
+                <label htmlFor="confirmPassword" className="label">
+                  <Lock className="h-4 w-4 inline mr-1" />
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    className="input-field pr-10"
+                    placeholder="Confirm your password"
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-400" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {!isLogin && (
               <>
@@ -229,7 +270,20 @@ const LoginForm: React.FC = () => {
             <div className="text-center">
               <button
                 type="button"
-                onClick={() => setIsLogin(!isLogin)}
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setFormData({
+                    username: '',
+                    password: '',
+                    confirmPassword: '',
+                    role: 'student',
+                    first_name: '',
+                    last_name: '',
+                    class: '',
+                    email: ''
+                  });
+                  setError('');
+                }}
                 className="text-primary-600 hover:text-primary-500 font-medium"
               >
                 {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}

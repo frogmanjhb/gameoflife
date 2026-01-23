@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import bcrypt from 'bcryptjs';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 
@@ -138,6 +139,54 @@ router.delete('/:username', authenticateToken, requireRole(['teacher']), async (
     res.json({ message: `Student ${username} has been deleted successfully` });
   } catch (error) {
     console.error('Delete student error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Reset student password (teachers only)
+router.post('/:username/reset-password', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { username } = req.params;
+
+    // Get student info
+    const student = await database.get(`
+      SELECT u.id, u.username, u.role
+      FROM users u
+      WHERE u.username = $1 AND u.role = 'student'
+    `, [username]);
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    // Generate a temporary password (8 characters, alphanumeric)
+    const generateTempPassword = () => {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+      let password = '';
+      for (let i = 0; i < 8; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return password;
+    };
+
+    const temporaryPassword = generateTempPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+
+    // Update the student's password
+    await database.run(
+      'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [passwordHash, student.id]
+    );
+
+    console.log(`🔑 Teacher ${req.user?.username} reset password for student ${username}`);
+    
+    res.json({
+      message: 'Password reset successfully',
+      temporary_password: temporaryPassword,
+      username: student.username
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

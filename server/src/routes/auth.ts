@@ -14,6 +14,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 router.post('/register', [
   body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('confirmPassword').notEmpty().withMessage('Password confirmation is required').custom((value, { req }) => {
+    if (value !== req.body.password) {
+      throw new Error('Passwords do not match');
+    }
+    return true;
+  }),
   body('role').custom((value) => {
     // SECURITY: Block self-registration as teacher - must use /auth/register-teacher endpoint
     if (value === 'teacher') {
