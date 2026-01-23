@@ -41,15 +41,15 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
       });
     }
 
-    // Check remaining plays today (resets at 6 AM)
+    // Check remaining plays today (resets at 4 AM UTC = 6 AM SAST)
     const todayPlays = await database.query(`
       SELECT COUNT(*) as count FROM math_game_sessions 
       WHERE user_id = $1 
       AND played_at >= (
         CASE 
-          WHEN CURRENT_TIME < '06:00:00' 
-          THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '6 hours'
-          ELSE CURRENT_DATE + INTERVAL '6 hours'
+          WHEN CURRENT_TIME < '04:00:00' 
+          THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '4 hours'
+          ELSE CURRENT_DATE + INTERVAL '4 hours'
         END
       )
     `, [userId]);
@@ -123,15 +123,15 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
       return res.status(503).json({ error: 'Math game feature not available yet. Please try again later.' });
     }
 
-    // Check remaining plays today
+    // Check remaining plays today (resets at 4 AM UTC = 6 AM SAST)
     const todayPlays = await database.query(`
       SELECT COUNT(*) as count FROM math_game_sessions 
       WHERE user_id = $1 
       AND played_at >= (
         CASE 
-          WHEN CURRENT_TIME < '06:00:00' 
-          THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '6 hours'
-          ELSE CURRENT_DATE + INTERVAL '6 hours'
+          WHEN CURRENT_TIME < '04:00:00' 
+          THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '4 hours'
+          ELSE CURRENT_DATE + INTERVAL '4 hours'
         END
       )
     `, [userId]);
