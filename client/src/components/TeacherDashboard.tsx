@@ -11,9 +11,10 @@ import TownSettings from './admin/TownSettings';
 import JobManagement from './admin/JobManagement';
 import TreasuryManagement from './admin/TreasuryManagement';
 import StudentManagement from './StudentManagement';
+import PendingStudents from './PendingStudents';
 import { 
   Grid, Settings, Briefcase, Building2, Users, Wallet, 
-  TrendingUp, CreditCard, Megaphone, MapPin, Landmark
+  TrendingUp, CreditCard, Megaphone, MapPin, Landmark, Clock
 } from 'lucide-react';
 import api from '../services/api';
 import { Student, Loan, Transaction } from '../types';
@@ -31,7 +32,8 @@ const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
   const { enabledPlugins, plugins, loading: pluginsLoading, refreshPlugins } = usePlugins();
   const { currentTown, currentTownClass, allTowns, announcements, loading: townLoading, setCurrentTownClass, refreshAnnouncements } = useTown();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs' | 'students'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs' | 'students' | 'pending'>('dashboard');
+  const [pendingCount, setPendingCount] = useState(0);
   
   // Data for town stats
   const [students, setStudents] = useState<Student[]>([]);
@@ -48,12 +50,14 @@ const TeacherDashboard: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [studentsRes, loansRes] = await Promise.all([
+      const [studentsRes, loansRes, pendingRes] = await Promise.all([
         api.get('/students'),
-        api.get('/loans')
+        api.get('/loans'),
+        api.get('/students/pending').catch(() => ({ data: [] })) // Don't fail if endpoint doesn't exist yet
       ]);
       setStudents(studentsRes.data);
       setLoans(loansRes.data);
+      setPendingCount(pendingRes.data?.length || 0);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -127,6 +131,29 @@ const TeacherDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Pending Students Alert Banner */}
+      {pendingCount > 0 && activeTab !== 'pending' && (
+        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Clock className="h-5 w-5 text-amber-600" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">
+                  {pendingCount} new student{pendingCount !== 1 ? 's' : ''} waiting for approval
+                </p>
+                <p className="text-xs text-amber-600">Click "New Students" tab to review and approve</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('pending')}
+              className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+            >
+              Review Now
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Town Tabs */}
       {allTowns.length > 0 && (
@@ -243,17 +270,18 @@ const TeacherDashboard: React.FC = () => {
           <nav className="flex space-x-8 px-6">
             {[
               { id: 'dashboard', label: 'Overview', icon: Grid },
+              { id: 'pending', label: 'New Students', icon: Clock, badge: pendingCount },
               { id: 'students', label: 'Students', icon: Users },
               { id: 'treasury', label: 'Treasury', icon: Landmark },
               { id: 'jobs', label: 'Jobs', icon: Briefcase },
               { id: 'plugins', label: 'Plugins', icon: Settings },
               { id: 'announcements', label: 'Announcements', icon: Megaphone },
               { id: 'town', label: 'Town Settings', icon: Building2 }
-            ].map(({ id, label, icon: Icon }) => (
+            ].map(({ id, label, icon: Icon, badge }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id as any)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 relative ${
                   activeTab === id
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -261,6 +289,11 @@ const TeacherDashboard: React.FC = () => {
               >
                 <Icon className="h-4 w-4" />
                 <span>{label}</span>
+                {badge !== undefined && badge > 0 && (
+                  <span className="ml-1 bg-amber-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
+                    {badge}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -351,6 +384,11 @@ const TeacherDashboard: React.FC = () => {
                 )}
               </div>
             </div>
+          )}
+
+          {/* Pending Students Tab */}
+          {activeTab === 'pending' && (
+            <PendingStudents onUpdate={fetchData} />
           )}
 
           {/* Students Tab */}

@@ -68,6 +68,7 @@ export interface Student {
   last_name?: string;
   class?: string;
   email?: string;
+  status?: 'pending' | 'approved' | 'denied';
   created_at: string;
   account_number: string;
   balance: number;
@@ -81,7 +82,7 @@ export interface AuthContextType {
   user: User | null;
   account: Account | null;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string, role: 'student' | 'teacher', first_name?: string, last_name?: string, studentClass?: string, email?: string) => Promise<void>;
+  register: (username: string, password: string, role: 'student' | 'teacher', first_name?: string, last_name?: string, studentClass?: string, email?: string) => Promise<any>;
   logout: () => void;
   loading: boolean;
 }

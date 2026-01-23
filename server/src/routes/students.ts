@@ -55,6 +55,7 @@ router.get('/', authenticateToken, requireRole(['teacher']), async (req: Authent
         u.class,
         u.email,
         u.job_id,
+        u.status,
         u.created_at,
         a.account_number,
         a.balance,
@@ -73,6 +74,106 @@ router.get('/', authenticateToken, requireRole(['teacher']), async (req: Authent
     res.json(students);
   } catch (error) {
     console.error('Get students error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get pending students (teachers only)
+router.get('/pending', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log('🔍 Getting pending students for teacher:', req.user?.username);
+    
+    const pendingStudents = await database.query(`
+      SELECT 
+        u.id,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class,
+        u.email,
+        u.status,
+        u.created_at,
+        a.account_number,
+        a.balance
+      FROM users u
+      LEFT JOIN accounts a ON u.id = a.user_id
+      WHERE u.role = 'student' AND u.status = 'pending'
+      ORDER BY u.created_at ASC
+    `);
+
+    console.log('📊 Found pending students:', pendingStudents.length);
+    res.json(pendingStudents);
+  } catch (error) {
+    console.error('Get pending students error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Approve a pending student (teachers only)
+router.post('/:username/approve', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { username } = req.params;
+
+    // Get student info
+    const student = await database.get(`
+      SELECT u.id, u.username, u.role, u.status
+      FROM users u
+      WHERE u.username = $1 AND u.role = 'student'
+    `, [username]);
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    if (student.status !== 'pending') {
+      return res.status(400).json({ error: `Student is already ${student.status}` });
+    }
+
+    // Update student status to approved
+    await database.run(
+      'UPDATE users SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      ['approved', student.id]
+    );
+
+    console.log(`✅ Teacher ${req.user?.username} approved student ${username}`);
+    res.json({ message: `Student ${username} has been approved successfully` });
+  } catch (error) {
+    console.error('Approve student error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Deny a pending student (teachers only)
+router.post('/:username/deny', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { username } = req.params;
+    const { reason } = req.body;
+
+    // Get student info
+    const student = await database.get(`
+      SELECT u.id, u.username, u.role, u.status
+      FROM users u
+      WHERE u.username = $1 AND u.role = 'student'
+    `, [username]);
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    if (student.status !== 'pending') {
+      return res.status(400).json({ error: `Student is already ${student.status}` });
+    }
+
+    // Update student status to denied
+    await database.run(
+      'UPDATE users SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      ['denied', student.id]
+    );
+
+    console.log(`❌ Teacher ${req.user?.username} denied student ${username}${reason ? `: ${reason}` : ''}`);
+    res.json({ message: `Student ${username} has been denied` });
+  } catch (error) {
+    console.error('Deny student error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

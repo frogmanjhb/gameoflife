@@ -18,6 +18,7 @@ const LoginForm: React.FC = () => {
     email: ''
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,7 +37,7 @@ const LoginForm: React.FC = () => {
       if (isLogin) {
         await login(formData.username, formData.password);
       } else {
-        await register(
+        const response = await register(
           formData.username, 
           formData.password, 
           formData.role,
@@ -45,6 +46,29 @@ const LoginForm: React.FC = () => {
           formData.class,
           formData.email
         );
+        
+        // Check if registration requires approval (for students)
+        if (response && (response as any).requires_approval) {
+          setError(''); // Clear any errors
+          setSuccess('Registration successful! Your account is pending teacher approval. You will be able to log in once a teacher approves your account.');
+          // Reset form
+          setFormData({
+            username: '',
+            password: '',
+            confirmPassword: '',
+            role: 'student',
+            first_name: '',
+            last_name: '',
+            class: '',
+            email: ''
+          });
+          // Switch to login after 3 seconds
+          setTimeout(() => {
+            setIsLogin(true);
+            setSuccess('');
+          }, 5000);
+          return;
+        }
       }
     } catch (err: any) {
       setError(err.message);
@@ -82,6 +106,12 @@ const LoginForm: React.FC = () => {
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                 {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-success-50 border border-success-200 text-success-700 px-4 py-3 rounded-lg">
+                {success}
               </div>
             )}
 

@@ -80,6 +80,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         email 
       });
       console.log('Registration response:', response.data);
+      
+      // Check if registration requires approval
+      if (response.data.requires_approval) {
+        return response.data; // Return the response so LoginForm can handle it
+      }
+      
       const { token, user, account } = response.data;
       
       localStorage.setItem('token', token);

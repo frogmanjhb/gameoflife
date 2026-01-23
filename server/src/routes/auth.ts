@@ -86,15 +86,18 @@ router.post('/register', [
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Set status: students need approval, teachers are auto-approved
+    const userStatus = role === 'student' ? 'pending' : 'approved';
+
     // Create user
     const result = await database.run(
-      'INSERT INTO users (username, password_hash, role, first_name, last_name, class, email) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-      [username, passwordHash, role, firstName, lastName, studentClassName, emailAddress]
+      'INSERT INTO users (username, password_hash, role, first_name, last_name, class, email, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
+      [username, passwordHash, role, firstName, lastName, studentClassName, emailAddress, userStatus]
     );
 
     const userId = result.lastID;
 
-    // Create bank account for student
+    // Create bank account for student (only if approved, but we'll create it anyway for pending students)
     if (role === 'student') {
       const accountNumber = `ACC${Date.now()}${Math.floor(Math.random() * 1000)}`;
       console.log('🏦 Creating account for student:', userId, accountNumber);
@@ -105,11 +108,20 @@ router.post('/register', [
       console.log('✅ Account created successfully');
     }
 
-    // Generate JWT token
+    // For pending students, don't generate a token - they need approval first
+    if (role === 'student' && userStatus === 'pending') {
+      res.status(201).json({ 
+        message: 'Registration successful. Your account is pending teacher approval. You will be able to log in once a teacher approves your account.',
+        requires_approval: true
+      });
+      return;
+    }
+
+    // Generate JWT token for approved users
     const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '24h' });
 
     // Get user data
-    const user = await database.get('SELECT id, username, role, first_name, last_name, class, email, created_at, updated_at FROM users WHERE id = $1', [userId]);
+    const user = await database.get('SELECT id, username, role, first_name, last_name, class, email, status, created_at, updated_at FROM users WHERE id = $1', [userId]);
     
     // Get account data for students
     let account = null;
@@ -190,6 +202,16 @@ router.post('/login', [
     const user = await database.get('SELECT * FROM users WHERE username = $1', [username]);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check if student account is pending approval
+    if (user.role === 'student' && user.status === 'pending') {
+      return res.status(403).json({ error: 'Your account is pending teacher approval. Please wait for a teacher to approve your account before logging in.' });
+    }
+
+    // Check if account was denied
+    if (user.status === 'denied') {
+      return res.status(403).json({ error: 'Your account has been denied. Please contact a teacher for assistance.' });
     }
 
     // Verify password
