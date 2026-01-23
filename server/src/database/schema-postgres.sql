@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     class VARCHAR(10),
     email VARCHAR(255) UNIQUE,
     job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+    status VARCHAR(20) DEFAULT 'approved' CHECK (status IN ('pending', 'approved', 'denied')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -211,6 +212,8 @@ CREATE INDEX IF NOT EXISTS idx_announcements_town_class ON announcements(town_cl
 CREATE INDEX IF NOT EXISTS idx_announcements_created_at ON announcements(created_at);
 CREATE INDEX IF NOT EXISTS idx_town_settings_class ON town_settings(class);
 CREATE INDEX IF NOT EXISTS idx_users_job_id ON users(job_id);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_users_role_status ON users(role, status);
 CREATE INDEX IF NOT EXISTS idx_land_parcels_grid_code ON land_parcels(grid_code);
 CREATE INDEX IF NOT EXISTS idx_land_parcels_owner_id ON land_parcels(owner_id);
 CREATE INDEX IF NOT EXISTS idx_land_parcels_biome_type ON land_parcels(biome_type);

@@ -399,6 +399,9 @@ async function initializeDatabase() {
 
 // Start server
 async function startServer() {
+  // Run critical startup migrations first (like adding status column)
+  await database.runStartupMigrations();
+  
   // Initialize database in background, don't block server startup
   initializeDatabase().catch(console.error);
   
