@@ -141,14 +141,40 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
     }).format(amount);
   };
 
-  const toggleStudentExpanded = (studentId: number) => {
+  const toggleStudentExpanded = (student: Student) => {
+    const studentId = student.id;
+    const isCurrentlyExpanded = expandedStudents.has(studentId);
+    const hasPassword = studentPasswords[studentId];
+
     const newExpanded = new Set(expandedStudents);
-    if (newExpanded.has(studentId)) {
+    if (isCurrentlyExpanded) {
       newExpanded.delete(studentId);
-    } else {
-      newExpanded.add(studentId);
+      setExpandedStudents(newExpanded);
+      return;
     }
+
+    newExpanded.add(studentId);
     setExpandedStudents(newExpanded);
+
+    // When expanding: if we don't have a password yet, auto-fetch via reset so they can see both
+    if (!hasPassword) {
+      fetchPasswordForStudent(student);
+    }
+  };
+
+  const fetchPasswordForStudent = async (student: Student) => {
+    setResettingPassword(student.id);
+    setError('');
+    
+    try {
+      const response = await api.post(`/students/${student.username}/reset-password`);
+      const newPassword = response.data.temporary_password;
+      setStudentPasswords((prev) => ({ ...prev, [student.id]: newPassword }));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to fetch password');
+    } finally {
+      setResettingPassword(null);
+    }
   };
 
   const handleResetPassword = async (student: Student) => {
@@ -159,12 +185,11 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
     try {
       const response = await api.post(`/students/${student.username}/reset-password`);
       const newPassword = response.data.temporary_password;
-      setStudentPasswords({ ...studentPasswords, [student.id]: newPassword });
-      setSuccess(`Password reset for ${student.username}. New password: ${newPassword}`);
+      setStudentPasswords((prev) => ({ ...prev, [student.id]: newPassword }));
+      setSuccess(`Password reset for ${student.username}. Share the new password with the student.`);
       
-      // Expand the student card to show the new password
       if (!expandedStudents.has(student.id)) {
-        toggleStudentExpanded(student.id);
+        setExpandedStudents((prev) => new Set(prev).add(student.id));
       }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to reset password');
@@ -340,7 +365,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
               {/* Expandable Credentials Section */}
               <div className="mb-3 border-t border-gray-200 pt-3">
                 <button
-                  onClick={() => toggleStudentExpanded(student.id)}
+                  onClick={() => toggleStudentExpanded(student)}
                   className="w-full flex items-center justify-between text-sm text-gray-700 hover:text-primary-600 transition-colors"
                 >
                   <span className="flex items-center">
@@ -350,7 +375,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                 </button>
                 
                 {isExpanded && (
-                  <div className="mt-2 p-3 bg-gray-50 rounded-lg space-y-2">
+                  <div className="mt-2 p-3 bg-gray-50 rounded-lg space-y-3">
                     <div>
                       <label className="text-xs font-medium text-gray-600 block mb-1">Username</label>
                       <div className="flex items-center space-x-2">
@@ -358,12 +383,12 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                           type="text"
                           readOnly
                           value={student.username}
-                          className="flex-1 text-sm px-2 py-1 bg-white border border-gray-300 rounded text-gray-900"
+                          className="flex-1 text-sm px-2 py-1.5 bg-white border border-gray-300 rounded text-gray-900 font-mono"
                           onClick={(e) => e.currentTarget.select()}
                         />
                         <button
                           onClick={() => copyToClipboard(student.username)}
-                          className="p-1 text-gray-600 hover:text-primary-600 transition-colors"
+                          className="p-1.5 text-gray-600 hover:text-primary-600 transition-colors rounded hover:bg-gray-200"
                           title="Copy username"
                         >
                           <Copy className="h-4 w-4" />
@@ -379,37 +404,46 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                             type="text"
                             readOnly
                             value={hasPassword}
-                            className="flex-1 text-sm px-2 py-1 bg-white border border-gray-300 rounded text-gray-900 font-mono"
+                            className="flex-1 text-sm px-2 py-1.5 bg-white border border-gray-300 rounded text-gray-900 font-mono"
                             onClick={(e) => e.currentTarget.select()}
                           />
                           <button
                             onClick={() => copyToClipboard(hasPassword)}
-                            className="p-1 text-gray-600 hover:text-primary-600 transition-colors"
+                            className="p-1.5 text-gray-600 hover:text-primary-600 transition-colors rounded hover:bg-gray-200"
                             title="Copy password"
                           >
                             <Copy className="h-4 w-4" />
                           </button>
                         </div>
+                      ) : resettingPassword === student.id ? (
+                        <div className="flex items-center space-x-2 px-3 py-2 bg-white border border-gray-300 rounded">
+                          <RefreshCw className="h-4 w-4 animate-spin text-primary-600" />
+                          <span className="text-sm text-gray-500">Loading password…</span>
+                        </div>
                       ) : (
-                        <button
-                          onClick={() => handleResetPassword(student)}
-                          disabled={resettingPassword === student.id}
-                          className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-primary-100 text-primary-700 hover:bg-primary-200 rounded text-sm transition-colors disabled:opacity-50"
-                        >
-                          <RefreshCw className={`h-4 w-4 ${resettingPassword === student.id ? 'animate-spin' : ''}`} />
-                          <span>{resettingPassword === student.id ? 'Resetting...' : 'Reset Password'}</span>
-                        </button>
+                        <div className="flex items-center space-x-2">
+                          <div className="flex-1 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+                            Password not loaded yet. Click Reset to generate a new one.
+                          </div>
+                          <button
+                            onClick={() => handleResetPassword(student)}
+                            disabled={resettingPassword === student.id}
+                            className="flex items-center justify-center space-x-2 px-3 py-2 bg-primary-100 text-primary-700 hover:bg-primary-200 rounded text-sm transition-colors disabled:opacity-50"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            <span>Reset</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                     
-                    {/* Copy All Button */}
                     {hasPassword && (
                       <button
                         onClick={() => copyToClipboard(`Username: ${student.username}\nPassword: ${hasPassword}`)}
-                        className="w-full px-3 py-2 bg-primary-600 text-white hover:bg-primary-700 rounded text-sm transition-colors"
+                        className="w-full px-3 py-2 bg-primary-600 text-white hover:bg-primary-700 rounded text-sm transition-colors flex items-center justify-center space-x-2"
                       >
-                        <Copy className="h-4 w-4 inline mr-1" />
-                        Copy All
+                        <Copy className="h-4 w-4" />
+                        <span>Copy username and password</span>
                       </button>
                     )}
                   </div>
