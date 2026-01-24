@@ -12,10 +12,26 @@ const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 // Register new user
+// SECURITY: Only students can self-register. Teachers must be created by other teachers.
 router.post('/register', [
     (0, express_validator_1.body)('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
     (0, express_validator_1.body)('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-    (0, express_validator_1.body)('role').isIn(['student', 'teacher']).withMessage('Role must be student or teacher'),
+    (0, express_validator_1.body)('confirmPassword').notEmpty().withMessage('Password confirmation is required').custom((value, { req }) => {
+        if (value !== req.body.password) {
+            throw new Error('Passwords do not match');
+        }
+        return true;
+    }),
+    (0, express_validator_1.body)('role').custom((value) => {
+        // SECURITY: Block self-registration as teacher - must use /auth/register-teacher endpoint
+        if (value === 'teacher') {
+            throw new Error('Teacher registration requires admin authorization');
+        }
+        if (value !== 'student') {
+            throw new Error('Invalid role');
+        }
+        return true;
+    }),
     (0, express_validator_1.body)('first_name').optional().custom((value) => {
         if (value && value.length < 1) {
             throw new Error('First name must be at least 1 character');
@@ -67,20 +83,30 @@ router.post('/register', [
         }
         // Hash password
         const passwordHash = await bcryptjs_1.default.hash(password, 10);
+        // Set status: students need approval, teachers are auto-approved
+        const userStatus = role === 'student' ? 'pending' : 'approved';
         // Create user
-        const result = await database_prod_1.default.run('INSERT INTO users (username, password_hash, role, first_name, last_name, class, email) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id', [username, passwordHash, role, firstName, lastName, studentClassName, emailAddress]);
+        const result = await database_prod_1.default.run('INSERT INTO users (username, password_hash, role, first_name, last_name, class, email, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id', [username, passwordHash, role, firstName, lastName, studentClassName, emailAddress, userStatus]);
         const userId = result.lastID;
-        // Create bank account for student
+        // Create bank account for student (only if approved, but we'll create it anyway for pending students)
         if (role === 'student') {
             const accountNumber = `ACC${Date.now()}${Math.floor(Math.random() * 1000)}`;
             console.log('🏦 Creating account for student:', userId, accountNumber);
             await database_prod_1.default.run('INSERT INTO accounts (user_id, account_number, balance) VALUES ($1, $2, $3)', [userId, accountNumber, 0.00]);
             console.log('✅ Account created successfully');
         }
-        // Generate JWT token
+        // For pending students, don't generate a token - they need approval first
+        if (role === 'student' && userStatus === 'pending') {
+            res.status(201).json({
+                message: 'Registration successful. Your account is pending teacher approval. You will be able to log in once a teacher approves your account.',
+                requires_approval: true
+            });
+            return;
+        }
+        // Generate JWT token for approved users
         const token = jsonwebtoken_1.default.sign({ userId }, JWT_SECRET, { expiresIn: '24h' });
         // Get user data
-        const user = await database_prod_1.default.get('SELECT id, username, role, first_name, last_name, class, email, created_at, updated_at FROM users WHERE id = $1', [userId]);
+        const user = await database_prod_1.default.get('SELECT id, username, role, first_name, last_name, class, email, status, created_at, updated_at FROM users WHERE id = $1', [userId]);
         // Get account data for students
         let account = null;
         if (role === 'student') {
@@ -95,6 +121,40 @@ router.post('/register', [
     }
     catch (error) {
         console.error('Registration error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Register teacher (requires existing teacher authentication)
+// SECURITY: Only authenticated teachers can create new teacher accounts
+router.post('/register-teacher', [
+    (0, express_validator_1.body)('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
+    (0, express_validator_1.body)('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    (0, express_validator_1.body)('first_name').optional().isString(),
+    (0, express_validator_1.body)('last_name').optional().isString(),
+    (0, express_validator_1.body)('email').optional().isEmail().withMessage('Valid email required')
+], auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { username, password, first_name, last_name, email } = req.body;
+        // Check if user already exists
+        const existingUser = await database_prod_1.default.get('SELECT id FROM users WHERE username = $1', [username]);
+        if (existingUser) {
+            return res.status(400).json({ error: 'Username already exists' });
+        }
+        // Hash password
+        const passwordHash = await bcryptjs_1.default.hash(password, 10);
+        // Create teacher user
+        const result = await database_prod_1.default.run('INSERT INTO users (username, password_hash, role, first_name, last_name, email) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id', [username, passwordHash, 'teacher', first_name || null, last_name || null, email || null]);
+        const userId = result.lastID;
+        const user = await database_prod_1.default.get('SELECT id, username, role, first_name, last_name, email, created_at, updated_at FROM users WHERE id = $1', [userId]);
+        console.log(`✅ Teacher account created by ${req.user?.username}: ${username}`);
+        res.status(201).json({ message: 'Teacher account created successfully', user });
+    }
+    catch (error) {
+        console.error('Teacher registration error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -113,6 +173,14 @@ router.post('/login', [
         const user = await database_prod_1.default.get('SELECT * FROM users WHERE username = $1', [username]);
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        // Check if student account is pending approval
+        if (user.role === 'student' && user.status === 'pending') {
+            return res.status(403).json({ error: 'Your account is pending teacher approval. Please wait for a teacher to approve your account before logging in.' });
+        }
+        // Check if account was denied
+        if (user.status === 'denied') {
+            return res.status(403).json({ error: 'Your account has been denied. Please contact a teacher for assistance.' });
         }
         // Verify password
         const isValidPassword = await bcryptjs_1.default.compare(password, user.password_hash);

@@ -17,6 +17,7 @@ import TendersPlugin from './components/plugins/TendersPlugin';
 import TownRulesPlugin from './components/plugins/TownRulesPlugin';
 import WinkelPlugin from './components/plugins/WinkelPlugin';
 import PizzaTimePlugin from './components/plugins/PizzaTimePlugin';
+import LeaderboardPlugin from './components/plugins/LeaderboardPlugin';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -174,6 +175,18 @@ const AppContent: React.FC = () => {
                 <PluginProvider>
                   <TownProvider>
                     <PizzaTimePlugin />
+                  </TownProvider>
+                </PluginProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/leaderboard"
+            element={
+              <ProtectedRoute>
+                <PluginProvider>
+                  <TownProvider>
+                    <LeaderboardPlugin />
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>

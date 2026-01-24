@@ -148,6 +148,42 @@ class Database {
     get pool() {
         return this._pool;
     }
+    // Auto-run critical migrations on startup
+    async runStartupMigrations() {
+        try {
+            console.log('🔄 Running startup migrations...');
+            // Check if status column exists on users table
+            const columnCheck = await this.get(`
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'status'
+      `);
+            if (!columnCheck) {
+                console.log('📝 Adding missing status column to users table...');
+                await this.run(`
+          ALTER TABLE users 
+          ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'approved'
+        `);
+                await this.run(`
+          UPDATE users SET status = 'approved' WHERE status IS NULL
+        `);
+                await this.run(`
+          CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)
+        `);
+                await this.run(`
+          CREATE INDEX IF NOT EXISTS idx_users_role_status ON users(role, status)
+        `);
+                console.log('✅ Status column added and all users set to approved');
+            }
+            else {
+                console.log('✅ Status column already exists');
+            }
+            console.log('✅ Startup migrations complete');
+        }
+        catch (error) {
+            console.error('❌ Startup migration error:', error);
+            // Don't throw - let the server continue even if migration fails
+        }
+    }
 }
 exports.default = new Database();
 //# sourceMappingURL=database-prod.js.map

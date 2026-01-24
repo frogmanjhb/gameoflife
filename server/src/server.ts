@@ -22,6 +22,7 @@ import tenderRoutes from './routes/tenders';
 import townRulesRoutes from './routes/town-rules';
 import winkelRoutes from './routes/winkel';
 import pizzaTimeRoutes from './routes/pizza-time';
+import leaderboardRoutes from './routes/leaderboard';
 import adminRoutes from './routes/admin';
 import database from './database/database-prod';
 
@@ -159,6 +160,7 @@ app.use('/api/tenders', tenderRoutes);
 app.use('/api/town-rules', townRulesRoutes);
 app.use('/api/winkel', winkelRoutes);
 app.use('/api/pizza-time', pizzaTimeRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Error handling middleware

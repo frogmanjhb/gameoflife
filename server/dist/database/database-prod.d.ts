@@ -11,6 +11,7 @@ declare class Database {
     getClient(): Promise<import("pg").PoolClient>;
     close(): Promise<void>;
     get pool(): Pool;
+    runStartupMigrations(): Promise<void>;
 }
 declare const _default: Database;
 export default _default;

@@ -7,6 +7,17 @@ const express_1 = require("express");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
+// Helper function to get math game daily limit from settings
+async function getMathGameDailyLimit() {
+    try {
+        const setting = await database_prod_1.default.get('SELECT setting_value FROM bank_settings WHERE setting_key = $1', ['math_game_daily_limit']);
+        return parseInt(setting?.setting_value || '3', 10);
+    }
+    catch (error) {
+        console.log('Could not fetch math game daily limit, using default of 3');
+        return 3;
+    }
+}
 // Get math game status (remaining plays, high scores, recent sessions)
 router.get('/status', auth_1.authenticateToken, async (req, res) => {
     try {
@@ -14,6 +25,8 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'Only students can access math game' });
         }
         const userId = req.user.id;
+        // Get daily limit from settings
+        const dailyLimit = await getMathGameDailyLimit();
         // Check if math game tables exist, if not return default status
         try {
             await database_prod_1.default.query('SELECT 1 FROM math_game_sessions LIMIT 1');
@@ -21,24 +34,25 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
         catch (tableError) {
             console.log('Math game tables not found, returning default status');
             return res.json({
-                remaining_plays: 3,
+                remaining_plays: dailyLimit,
+                daily_limit: dailyLimit,
                 high_scores: { easy: 0, medium: 0, hard: 0 },
                 recent_sessions: []
             });
         }
-        // Check remaining plays today (resets at 6 AM)
+        // Check remaining plays today (resets at 4 AM UTC = 6 AM SAST)
         const todayPlays = await database_prod_1.default.query(`
       SELECT COUNT(*) as count FROM math_game_sessions 
       WHERE user_id = $1 
       AND played_at >= (
         CASE 
-          WHEN CURRENT_TIME < '06:00:00' 
-          THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '6 hours'
-          ELSE CURRENT_DATE + INTERVAL '6 hours'
+          WHEN CURRENT_TIME < '04:00:00' 
+          THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '4 hours'
+          ELSE CURRENT_DATE + INTERVAL '4 hours'
         END
       )
     `, [userId]);
-        const remainingPlays = Math.max(0, 3 - parseInt(todayPlays[0].count));
+        const remainingPlays = Math.max(0, dailyLimit - parseInt(todayPlays[0].count));
         // Get high scores for each difficulty
         const highScores = await database_prod_1.default.query(`
       SELECT difficulty, high_score 
@@ -65,6 +79,7 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
     `, [userId]);
         const status = {
             remaining_plays: remainingPlays,
+            daily_limit: dailyLimit,
             high_scores: highScoreMap,
             recent_sessions: recentSessions
         };
@@ -86,6 +101,8 @@ router.post('/start', auth_1.authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Invalid difficulty level' });
         }
         const userId = req.user.id;
+        // Get daily limit from settings
+        const dailyLimit = await getMathGameDailyLimit();
         // Check if math game tables exist
         try {
             await database_prod_1.default.query('SELECT 1 FROM math_game_sessions LIMIT 1');
@@ -93,19 +110,19 @@ router.post('/start', auth_1.authenticateToken, async (req, res) => {
         catch (tableError) {
             return res.status(503).json({ error: 'Math game feature not available yet. Please try again later.' });
         }
-        // Check remaining plays today
+        // Check remaining plays today (resets at 4 AM UTC = 6 AM SAST)
         const todayPlays = await database_prod_1.default.query(`
       SELECT COUNT(*) as count FROM math_game_sessions 
       WHERE user_id = $1 
       AND played_at >= (
         CASE 
-          WHEN CURRENT_TIME < '06:00:00' 
-          THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '6 hours'
-          ELSE CURRENT_DATE + INTERVAL '6 hours'
+          WHEN CURRENT_TIME < '04:00:00' 
+          THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '4 hours'
+          ELSE CURRENT_DATE + INTERVAL '4 hours'
         END
       )
     `, [userId]);
-        const remainingPlays = 3 - parseInt(todayPlays[0].count);
+        const remainingPlays = dailyLimit - parseInt(todayPlays[0].count);
         if (remainingPlays <= 0) {
             return res.status(400).json({ error: 'No plays remaining today. Try again tomorrow!' });
         }
@@ -129,8 +146,53 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'Only students can submit math games' });
         }
         const { session_id, score, correct_answers, total_problems, answer_sequence } = req.body;
+        console.log(`📝 Math game submission from ${req.user.username}:`, {
+            session_id,
+            score,
+            correct_answers,
+            total_problems,
+            answer_sequence_length: answer_sequence?.length
+        });
         if (!session_id || score < 0 || correct_answers < 0 || total_problems < 0) {
+            console.warn(`❌ Invalid game data from ${req.user.username}: missing or negative values`);
             return res.status(400).json({ error: 'Invalid game data' });
+        }
+        // SECURITY: Validate game data integrity
+        const MAX_PROBLEMS_PER_GAME = 60; // Increased to 60 to allow for fast players (1 problem per second)
+        const MAX_CORRECT_ANSWERS = MAX_PROBLEMS_PER_GAME;
+        const MAX_EARNINGS_PER_GAME = 150; // Maximum R150 per game
+        // Validate total_problems is reasonable
+        if (total_problems > MAX_PROBLEMS_PER_GAME) {
+            console.warn(`🚨 SECURITY: User ${req.user.username} attempted to submit game with ${total_problems} problems (max: ${MAX_PROBLEMS_PER_GAME})`);
+            return res.status(400).json({ error: 'Invalid game data: too many problems' });
+        }
+        // Validate correct_answers doesn't exceed total_problems
+        if (correct_answers > total_problems) {
+            console.warn(`🚨 SECURITY: User ${req.user.username} attempted to submit ${correct_answers} correct answers for ${total_problems} problems`);
+            return res.status(400).json({ error: 'Invalid game data: correct answers cannot exceed total problems' });
+        }
+        // Validate correct_answers doesn't exceed maximum
+        if (correct_answers > MAX_CORRECT_ANSWERS) {
+            console.warn(`🚨 SECURITY: User ${req.user.username} attempted to submit ${correct_answers} correct answers (max: ${MAX_CORRECT_ANSWERS})`);
+            return res.status(400).json({ error: 'Invalid game data: too many correct answers' });
+        }
+        // Validate answer_sequence - allow empty array if no problems were answered
+        const safeAnswerSequence = Array.isArray(answer_sequence) ? answer_sequence : [];
+        // Validate answer_sequence length matches total_problems
+        if (safeAnswerSequence.length !== total_problems) {
+            console.warn(`🚨 SECURITY: User ${req.user.username} submitted answer_sequence length ${safeAnswerSequence.length} for ${total_problems} problems`);
+            return res.status(400).json({ error: 'Invalid game data: answer sequence mismatch' });
+        }
+        // Validate answer_sequence content (must be array of booleans) - skip for empty arrays
+        if (safeAnswerSequence.length > 0 && !safeAnswerSequence.every(a => typeof a === 'boolean')) {
+            console.warn(`🚨 SECURITY: User ${req.user.username} submitted invalid answer_sequence content`);
+            return res.status(400).json({ error: 'Invalid game data: answer sequence must contain only boolean values' });
+        }
+        // Validate that correct_answers matches the number of trues in answer_sequence
+        const actualCorrectCount = safeAnswerSequence.filter(a => a === true).length;
+        if (actualCorrectCount !== correct_answers) {
+            console.warn(`🚨 SECURITY: User ${req.user.username} claimed ${correct_answers} correct but sequence shows ${actualCorrectCount}`);
+            return res.status(400).json({ error: 'Invalid game data: correct answer count mismatch' });
         }
         const userId = req.user.id;
         // Check if math game tables exist
@@ -140,13 +202,29 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
         catch (tableError) {
             return res.status(503).json({ error: 'Math game feature not available yet. Please try again later.' });
         }
-        // Verify session belongs to user
+        // Verify session belongs to user and hasn't been submitted already
         const session = await database_prod_1.default.get(`
       SELECT * FROM math_game_sessions 
       WHERE id = $1 AND user_id = $2
     `, [session_id, userId]);
         if (!session) {
+            console.warn(`❌ Session ${session_id} not found for user ${req.user.username}`);
             return res.status(404).json({ error: 'Game session not found' });
+        }
+        console.log(`📋 Found session:`, {
+            id: session.id,
+            user_id: session.user_id,
+            difficulty: session.difficulty,
+            score: session.score,
+            earnings: session.earnings
+        });
+        // SECURITY: Check if session has already been submitted
+        // A session is considered submitted if it has a score > 0 OR earnings > 0
+        const sessionEarnings = parseFloat(session.earnings || '0');
+        const sessionScore = parseInt(session.score || '0');
+        if (sessionEarnings > 0 || sessionScore > 0) {
+            console.warn(`🚨 SECURITY: User ${req.user.username} attempted to resubmit session ${session_id} (score: ${sessionScore}, earnings: ${sessionEarnings})`);
+            return res.status(400).json({ error: 'Game session has already been submitted' });
         }
         // Calculate streak bonus
         const calculateStreakBonus = (sequence) => {
@@ -170,12 +248,23 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
                 return 1.5;
             return 1.0;
         };
-        // Calculate earnings
+        // Calculate earnings with server-side validation
         const difficultyMultipliers = { easy: 1.0, medium: 1.2, hard: 1.5 };
         const basePoints = correct_answers * 1; // 1 point per correct answer
         const difficultyMultiplier = difficultyMultipliers[session.difficulty] || 1.0;
-        const streakBonus = calculateStreakBonus(answer_sequence);
-        const totalEarnings = basePoints * difficultyMultiplier * streakBonus;
+        const streakBonus = calculateStreakBonus(safeAnswerSequence);
+        let totalEarnings = basePoints * difficultyMultiplier * streakBonus;
+        console.log(`💰 Earnings calculation for ${req.user.username}:`, {
+            basePoints,
+            difficultyMultiplier,
+            streakBonus,
+            totalEarnings
+        });
+        // SECURITY: Cap earnings at maximum per game
+        if (totalEarnings > MAX_EARNINGS_PER_GAME) {
+            console.warn(`🚨 SECURITY: User ${req.user.username} earnings ${totalEarnings} capped at ${MAX_EARNINGS_PER_GAME}`);
+            totalEarnings = MAX_EARNINGS_PER_GAME;
+        }
         // Update session with results
         await database_prod_1.default.query(`
       UPDATE math_game_sessions 

@@ -11,31 +11,31 @@ const router = (0, express_1.Router)();
 // Biome configuration with pros/cons and base values
 const BIOME_CONFIG = {
     'Savanna': {
-        baseValue: 5000,
+        baseValue: 20000,
         risk: 'medium',
         pros: ['Good grazing land', 'Wildlife tourism potential', 'Moderate rainfall'],
         cons: ['Seasonal droughts', 'Fire risk', 'Limited water sources']
     },
     'Grassland': {
-        baseValue: 4000,
+        baseValue: 15000,
         risk: 'low',
         pros: ['Excellent farming potential', 'Easy to develop', 'Stable ecosystem'],
         cons: ['Soil erosion risk', 'Limited shade', 'Overgrazing concerns']
     },
     'Forest': {
-        baseValue: 8000,
+        baseValue: 35000,
         risk: 'medium',
         pros: ['Rich biodiversity', 'Timber resources', 'Carbon credits potential'],
         cons: ['Fire risk', 'Clearing restrictions', 'Difficult access']
     },
     'Fynbos': {
-        baseValue: 10000,
+        baseValue: 45000,
         risk: 'high',
         pros: ['Unique biodiversity', 'Eco-tourism value', 'Protected species habitat'],
         cons: ['Fire-dependent ecosystem', 'Strict conservation laws', 'Limited development']
     },
     'Nama Karoo': {
-        baseValue: 3000,
+        baseValue: 10000,
         risk: 'medium',
         pros: ['Sheep farming suited', 'Low land cost', 'Unique landscape'],
         cons: ['Very dry climate', 'Limited water', 'Remote location']
@@ -47,19 +47,19 @@ const BIOME_CONFIG = {
         cons: ['Extreme temperatures', 'Water scarcity', 'Conservation restrictions']
     },
     'Desert': {
-        baseValue: 2000,
+        baseValue: 8000,
         risk: 'high',
         pros: ['Solar energy potential', 'Low land price', 'Mineral deposits'],
         cons: ['Extreme conditions', 'No water', 'Uninhabitable without infrastructure']
     },
     'Thicket': {
-        baseValue: 6000,
+        baseValue: 25000,
         risk: 'low',
         pros: ['Carbon storage', 'Game farming potential', 'Drought resistant'],
         cons: ['Dense vegetation', 'Clearing needed', 'Elephant damage risk']
     },
     'Indian Ocean Coastal Belt': {
-        baseValue: 12000,
+        baseValue: 60000,
         risk: 'medium',
         pros: ['High property value', 'Tourism potential', 'Port access'],
         cons: ['Coastal erosion', 'Cyclone risk', 'High development costs']
@@ -195,6 +195,15 @@ router.post('/purchase-request', auth_1.authenticateToken, [
         }
         if (parcel.owner_id) {
             return res.status(400).json({ error: 'This parcel is already owned' });
+        }
+        // SECURITY: Validate offered price is at least 90% of parcel value (allow small negotiation room)
+        const parcelValue = parseFloat(parcel.value);
+        const offeredAmount = parseFloat(offered_price);
+        const minimumOffer = parcelValue * 0.9; // Allow up to 10% discount
+        if (offeredAmount < minimumOffer) {
+            return res.status(400).json({
+                error: `Offered price (R${offeredAmount.toFixed(2)}) is too low. Minimum offer is R${minimumOffer.toFixed(2)} (90% of land value)`
+            });
         }
         // Check if user already has a pending request for this parcel
         const existingRequest = await database_prod_1.default.get(`

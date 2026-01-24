@@ -109,8 +109,11 @@ router.post('/transfer', [
         if (!fromAccount) {
             return res.status(404).json({ error: 'Account not found' });
         }
-        // Check sufficient balance
-        if (fromAccount.balance < amount) {
+        // SECURITY: Parse balance as number to ensure proper comparison (PostgreSQL returns NUMERIC as string)
+        const senderBalance = parseFloat(fromAccount.balance);
+        const transferAmount = parseFloat(amount.toString());
+        // Check sufficient balance with type-safe comparison
+        if (isNaN(senderBalance) || isNaN(transferAmount) || senderBalance < transferAmount) {
             return res.status(400).json({ error: 'Insufficient funds' });
         }
         // Get recipient's account

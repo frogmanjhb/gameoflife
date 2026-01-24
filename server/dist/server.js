@@ -23,6 +23,10 @@ const town_1 = __importDefault(require("./routes/town"));
 const jobs_1 = __importDefault(require("./routes/jobs"));
 const land_1 = __importDefault(require("./routes/land"));
 const tenders_1 = __importDefault(require("./routes/tenders"));
+const town_rules_1 = __importDefault(require("./routes/town-rules"));
+const winkel_1 = __importDefault(require("./routes/winkel"));
+const pizza_time_1 = __importDefault(require("./routes/pizza-time"));
+const leaderboard_1 = __importDefault(require("./routes/leaderboard"));
 const admin_1 = __importDefault(require("./routes/admin"));
 const database_prod_1 = __importDefault(require("./database/database-prod"));
 const app = (0, express_1.default)();
@@ -136,6 +140,10 @@ app.use('/api/town', town_1.default);
 app.use('/api/jobs', jobs_1.default);
 app.use('/api/land', land_1.default);
 app.use('/api/tenders', tenders_1.default);
+app.use('/api/town-rules', town_rules_1.default);
+app.use('/api/winkel', winkel_1.default);
+app.use('/api/pizza-time', pizza_time_1.default);
+app.use('/api/leaderboard', leaderboard_1.default);
 app.use('/api/admin', admin_1.default);
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -275,6 +283,90 @@ async function initializeDatabase() {
         catch (migrationError) {
             console.log('⚠️ Tender Payments migration may have already been applied:', migrationError);
         }
+        // Run Town Rules migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '009_town_rules.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Town Rules migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Town Rules migration may have already been applied:', migrationError);
+        }
+        // Run Winkel Shop migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '010_winkel_shop.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Winkel Shop migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Winkel Shop migration may have already been applied:', migrationError);
+        }
+        // Run Shop Balance migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '012_shop_balance.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Shop Balance migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Shop Balance migration may have already been applied:', migrationError);
+        }
+        // Seed Shop Items
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '013_seed_shop_items.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Shop items seeded');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Shop items may have already been seeded:', migrationError);
+        }
+        // Run Pizza Time migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '014_pizza_time.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Pizza Time migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Pizza Time migration may have already been applied:', migrationError);
+        }
+        // Add missing plugins (Town Rules and The Winkel)
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '011_add_winkel_and_town_rules_plugins.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Missing plugins added');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Plugin migration may have already been applied:', migrationError);
+        }
+        // Add Pizza Time plugin
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '015_add_pizza_time_plugin.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Pizza Time plugin added');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Pizza Time plugin may have already been added:', migrationError);
+        }
         const schema = (0, fs_1.readFileSync)(schemaPath, 'utf8');
         await database_prod_1.default.query(schema);
         console.log('✅ Database schema initialized successfully');
@@ -287,6 +379,8 @@ async function initializeDatabase() {
 }
 // Start server
 async function startServer() {
+    // Run critical startup migrations first (like adding status column)
+    await database_prod_1.default.runStartupMigrations();
     // Initialize database in background, don't block server startup
     initializeDatabase().catch(console.error);
     const server = app.listen(PORT, () => {
