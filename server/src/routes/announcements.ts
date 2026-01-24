@@ -39,7 +39,9 @@ router.post('/',
   [
     body('title').notEmpty().withMessage('Title is required'),
     body('content').notEmpty().withMessage('Content is required'),
-    body('town_class').isIn(['6A', '6B', '6C']).withMessage('Town class must be 6A, 6B, or 6C')
+    body('town_class').isIn(['6A', '6B', '6C']).withMessage('Town class must be 6A, 6B, or 6C'),
+    body('background_color').optional().isIn(['blue', 'green', 'yellow', 'red', 'purple']).withMessage('Invalid color'),
+    body('enable_wiggle').optional().isBoolean().withMessage('enable_wiggle must be boolean')
   ],
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -48,15 +50,15 @@ router.post('/',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { title, content, town_class } = req.body;
+      const { title, content, town_class, background_color = 'blue', enable_wiggle = false } = req.body;
       
       if (!req.user) {
         return res.status(401).json({ error: 'User not found' });
       }
 
       const result = await database.run(
-        'INSERT INTO announcements (title, content, town_class, created_by) VALUES ($1, $2, $3, $4) RETURNING id',
-        [title, content, town_class, req.user.id]
+        'INSERT INTO announcements (title, content, town_class, created_by, background_color, enable_wiggle) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+        [title, content, town_class, req.user.id, background_color, enable_wiggle]
       );
 
       const announcement = await database.get(
@@ -79,7 +81,9 @@ router.put('/:id',
   [
     body('title').optional().notEmpty().withMessage('Title cannot be empty'),
     body('content').optional().notEmpty().withMessage('Content cannot be empty'),
-    body('town_class').optional().isIn(['6A', '6B', '6C']).withMessage('Town class must be 6A, 6B, or 6C')
+    body('town_class').optional().isIn(['6A', '6B', '6C']).withMessage('Town class must be 6A, 6B, or 6C'),
+    body('background_color').optional().isIn(['blue', 'green', 'yellow', 'red', 'purple']).withMessage('Invalid color'),
+    body('enable_wiggle').optional().isBoolean().withMessage('enable_wiggle must be boolean')
   ],
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -98,7 +102,7 @@ router.put('/:id',
         return res.status(404).json({ error: 'Announcement not found' });
       }
 
-      const { title, content, town_class } = req.body;
+      const { title, content, town_class, background_color, enable_wiggle } = req.body;
       const updates: string[] = [];
       const params: any[] = [];
       let paramIndex = 1;
@@ -114,6 +118,14 @@ router.put('/:id',
       if (town_class !== undefined) {
         updates.push(`town_class = $${paramIndex++}`);
         params.push(town_class);
+      }
+      if (background_color !== undefined) {
+        updates.push(`background_color = $${paramIndex++}`);
+        params.push(background_color);
+      }
+      if (enable_wiggle !== undefined) {
+        updates.push(`enable_wiggle = $${paramIndex++}`);
+        params.push(enable_wiggle);
       }
 
       if (updates.length === 0) {

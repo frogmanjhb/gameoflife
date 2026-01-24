@@ -86,6 +86,27 @@
     animation: wiggle-subtle 0.4s ease-in-out;
   }
 
+  /* Announcement Wiggle Animation */
+  @keyframes announcement-wiggle {
+    0%, 100% {
+      transform: rotate(0deg);
+    }
+    25% {
+      transform: rotate(-0.8deg);
+    }
+    75% {
+      transform: rotate(0.8deg);
+    }
+  }
+
+  .announcement-wiggle {
+    animation: announcement-wiggle 2.5s ease-in-out infinite;
+  }
+
+  .announcement-wiggle:hover {
+    animation-play-state: paused;
+  }
+
   /* Pushpin Styles */
   .pushpin {
     position: absolute;

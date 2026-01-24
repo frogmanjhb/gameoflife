@@ -18,6 +18,22 @@ const AnnouncementsPanel: React.FC<AnnouncementsPanelProps> = ({ announcements, 
     });
   };
 
+  const getColorClasses = (color?: string) => {
+    switch (color) {
+      case 'green':
+        return { border: 'border-green-500', bg: 'bg-green-50', text: 'text-green-900' };
+      case 'yellow':
+        return { border: 'border-yellow-500', bg: 'bg-yellow-50', text: 'text-yellow-900' };
+      case 'red':
+        return { border: 'border-red-500', bg: 'bg-red-50', text: 'text-red-900' };
+      case 'purple':
+        return { border: 'border-purple-500', bg: 'bg-purple-50', text: 'text-purple-900' };
+      case 'blue':
+      default:
+        return { border: 'border-primary-500', bg: 'bg-primary-50', text: 'text-gray-900' };
+    }
+  };
+
   if (announcements.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -46,26 +62,31 @@ const AnnouncementsPanel: React.FC<AnnouncementsPanelProps> = ({ announcements, 
         )}
       </div>
       <div className="space-y-4">
-        {displayAnnouncements.map((announcement) => (
-          <div
-            key={announcement.id}
-            className="border-l-4 border-primary-500 pl-4 py-2 bg-primary-50 rounded-r-lg"
-          >
-            <div className="flex items-start justify-between mb-1">
-              <h3 className="font-semibold text-gray-900">{announcement.title}</h3>
-              <div className="flex items-center space-x-1 text-xs text-gray-500 ml-2">
-                <Clock className="h-3 w-3" />
-                <span>{formatDate(announcement.created_at)}</span>
+        {displayAnnouncements.map((announcement) => {
+          const colors = getColorClasses(announcement.background_color);
+          return (
+            <div
+              key={announcement.id}
+              className={`border-l-4 ${colors.border} pl-4 py-2 ${colors.bg} rounded-r-lg ${
+                announcement.enable_wiggle ? 'announcement-wiggle' : ''
+              }`}
+            >
+              <div className="flex items-start justify-between mb-1">
+                <h3 className={`font-semibold ${colors.text}`}>{announcement.title}</h3>
+                <div className="flex items-center space-x-1 text-xs text-gray-500 ml-2">
+                  <Clock className="h-3 w-3" />
+                  <span>{formatDate(announcement.created_at)}</span>
+                </div>
               </div>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{announcement.content}</p>
+              {announcement.created_by_username && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Posted by {announcement.created_by_username}
+                </p>
+              )}
             </div>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{announcement.content}</p>
-            {announcement.created_by_username && (
-              <p className="text-xs text-gray-500 mt-1">
-                Posted by {announcement.created_by_username}
-              </p>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

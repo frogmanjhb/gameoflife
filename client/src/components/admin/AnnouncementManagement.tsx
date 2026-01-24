@@ -16,7 +16,9 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
   const [formData, setFormData] = useState({
     title: '',
     content: '',
-    town_class: currentTownClass || '6A'
+    town_class: currentTownClass || '6A',
+    background_color: 'blue' as 'blue' | 'green' | 'yellow' | 'red' | 'purple',
+    enable_wiggle: false
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -25,7 +27,9 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
       setFormData({
         title: editing.title,
         content: editing.content,
-        town_class: editing.town_class
+        town_class: editing.town_class,
+        background_color: editing.background_color || 'blue',
+        enable_wiggle: editing.enable_wiggle || false
       });
       setShowForm(true);
     }
@@ -78,7 +82,7 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
           onClick={() => {
             setShowForm(true);
             setEditing(null);
-            setFormData({ title: '', content: '', town_class: currentTownClass || '6A' });
+            setFormData({ title: '', content: '', town_class: currentTownClass || '6A', background_color: 'blue', enable_wiggle: false });
           }}
           className="btn-primary flex items-center space-x-2"
         >
@@ -97,7 +101,7 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
               onClick={() => {
                 setShowForm(false);
                 setEditing(null);
-                setFormData({ title: '', content: '', town_class: currentTownClass || '6A' });
+                setFormData({ title: '', content: '', town_class: currentTownClass || '6A', background_color: 'blue', enable_wiggle: false });
               }}
               className="text-gray-400 hover:text-gray-600"
             >
@@ -148,6 +152,61 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Background Color
+              </label>
+              <div className="grid grid-cols-5 gap-3">
+                {[
+                  { value: 'blue', label: 'Blue', bgClass: 'bg-blue-500', hoverClass: 'hover:bg-blue-600' },
+                  { value: 'green', label: 'Green', bgClass: 'bg-green-500', hoverClass: 'hover:bg-green-600' },
+                  { value: 'yellow', label: 'Yellow', bgClass: 'bg-yellow-500', hoverClass: 'hover:bg-yellow-600' },
+                  { value: 'red', label: 'Red', bgClass: 'bg-red-500', hoverClass: 'hover:bg-red-600' },
+                  { value: 'purple', label: 'Purple', bgClass: 'bg-purple-500', hoverClass: 'hover:bg-purple-600' }
+                ].map((color) => (
+                  <button
+                    key={color.value}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, background_color: color.value as any })}
+                    className={`relative p-4 rounded-lg transition-all ${color.bgClass} ${color.hoverClass} ${
+                      formData.background_color === color.value
+                        ? 'ring-4 ring-primary-600 ring-offset-2 scale-105'
+                        : 'opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    {formData.background_color === color.value && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="bg-white rounded-full p-1">
+                          <svg className="w-4 h-4 text-primary-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      </div>
+                    )}
+                    <span className="text-xs font-medium text-white opacity-0">{color.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Selected: <span className="font-medium capitalize">{formData.background_color}</span>
+              </p>
+            </div>
+
+            <div>
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.enable_wiggle}
+                  onChange={(e) => setFormData({ ...formData, enable_wiggle: e.target.checked })}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Enable wiggle animation</span>
+                  <p className="text-xs text-gray-500">Adds a subtle wiggle effect for extra attention</p>
+                </div>
+              </label>
+            </div>
+
             <div className="flex space-x-3">
               <button
                 type="submit"
@@ -161,7 +220,7 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
                 onClick={() => {
                   setShowForm(false);
                   setEditing(null);
-                  setFormData({ title: '', content: '', town_class: currentTownClass || '6A' });
+                  setFormData({ title: '', content: '', town_class: currentTownClass || '6A', background_color: 'blue', enable_wiggle: false });
                 }}
                 className="btn-secondary"
               >

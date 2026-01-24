@@ -146,6 +146,8 @@ export interface Announcement {
   town_class: '6A' | '6B' | '6C';
   created_by: number;
   created_by_username?: string;
+  background_color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple';
+  enable_wiggle?: boolean;
   created_at: string;
   updated_at: string;
 }
