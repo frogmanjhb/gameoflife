@@ -99,19 +99,11 @@ const StudentDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Town Info, Announcements, My Job, and Properties */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
-        <TownInfo town={currentTown} readOnly={true} />
-        <AnnouncementsPanel announcements={announcements} />
-        {user && <MyJobCard user={user} />}
-        <MyPropertyCard />
-      </div>
-
-      {/* Plugin Cards Grid - Available Systems */}
+      {/* Plugin Cards Grid - Available Systems (Highly Visible) */}
       <div>
         <div className="flex items-center space-x-2 mb-4">
           <Grid className="h-5 w-5 text-primary-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Available Systems</h2>
+          <h2 className="text-xl font-bold text-gray-900">Available Systems</h2>
         </div>
         
         {enabledPlugins.length === 0 ? (
@@ -121,12 +113,20 @@ const StudentDashboard: React.FC = () => {
             <p className="text-sm text-gray-400 mt-1">Check back later for updates</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {enabledPlugins.map((plugin) => (
               <PluginCard key={plugin.id} plugin={plugin} />
             ))}
           </div>
         )}
+      </div>
+
+      {/* Town Info, Announcements, My Job, and Properties */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
+        <TownInfo town={currentTown} readOnly={true} />
+        <AnnouncementsPanel announcements={announcements} />
+        {user && <MyJobCard user={user} />}
+        <MyPropertyCard />
       </div>
 
       {/* My Tenders */}

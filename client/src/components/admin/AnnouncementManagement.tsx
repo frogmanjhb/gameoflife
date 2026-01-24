@@ -17,6 +17,7 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
     title: '',
     content: '',
     town_class: currentTownClass || '6A',
+    post_to_all: false,
     background_color: 'blue' as 'blue' | 'green' | 'yellow' | 'red' | 'purple',
     enable_wiggle: false
   });
@@ -28,6 +29,7 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
         title: editing.title,
         content: editing.content,
         town_class: editing.town_class,
+        post_to_all: false,
         background_color: editing.background_color || 'blue',
         enable_wiggle: editing.enable_wiggle || false
       });
@@ -41,13 +43,44 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
 
     try {
       if (editing) {
-        await api.put(`/announcements/${editing.id}`, formData);
+        // When editing, we don't support posting to all classes
+        await api.put(`/announcements/${editing.id}`, {
+          title: formData.title,
+          content: formData.content,
+          town_class: formData.town_class,
+          background_color: formData.background_color,
+          enable_wiggle: formData.enable_wiggle
+        });
       } else {
-        await api.post('/announcements', formData);
+        // When creating new announcement
+        if (formData.post_to_all) {
+          // Post to all three classes
+          const classes: ('6A' | '6B' | '6C')[] = ['6A', '6B', '6C'];
+          await Promise.all(
+            classes.map(cls =>
+              api.post('/announcements', {
+                title: formData.title,
+                content: formData.content,
+                town_class: cls,
+                background_color: formData.background_color,
+                enable_wiggle: formData.enable_wiggle
+              })
+            )
+          );
+        } else {
+          // Post to single class
+          await api.post('/announcements', {
+            title: formData.title,
+            content: formData.content,
+            town_class: formData.town_class,
+            background_color: formData.background_color,
+            enable_wiggle: formData.enable_wiggle
+          });
+        }
       }
       setShowForm(false);
       setEditing(null);
-      setFormData({ title: '', content: '', town_class: currentTownClass || '6A' });
+      setFormData({ title: '', content: '', town_class: currentTownClass || '6A', post_to_all: false, background_color: 'blue', enable_wiggle: false });
       onUpdate();
     } catch (error: any) {
       console.error('Failed to save announcement:', error);
@@ -82,7 +115,7 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
           onClick={() => {
             setShowForm(true);
             setEditing(null);
-            setFormData({ title: '', content: '', town_class: currentTownClass || '6A', background_color: 'blue', enable_wiggle: false });
+            setFormData({ title: '', content: '', town_class: currentTownClass || '6A', post_to_all: false, background_color: 'blue', enable_wiggle: false });
           }}
           className="btn-primary flex items-center space-x-2"
         >
@@ -101,7 +134,7 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
               onClick={() => {
                 setShowForm(false);
                 setEditing(null);
-                setFormData({ title: '', content: '', town_class: currentTownClass || '6A', background_color: 'blue', enable_wiggle: false });
+                setFormData({ title: '', content: '', town_class: currentTownClass || '6A', post_to_all: false, background_color: 'blue', enable_wiggle: false });
               }}
               className="text-gray-400 hover:text-gray-600"
             >
@@ -110,20 +143,45 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {!editing && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <label className="flex items-start space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.post_to_all}
+                    onChange={(e) => setFormData({ ...formData, post_to_all: e.target.checked })}
+                    className="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900">📢 Post to All Classes</span>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      This will create the same announcement for all three classes (6A, 6B, and 6C)
+                    </p>
+                  </div>
+                </label>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Town
+                {formData.post_to_all ? 'Target Classes' : 'Town'}
               </label>
-              <select
-                value={formData.town_class}
-                onChange={(e) => setFormData({ ...formData, town_class: e.target.value as '6A' | '6B' | '6C' })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
-                required
-              >
-                <option value="6A">6A Town</option>
-                <option value="6B">6B Town</option>
-                <option value="6C">6C Town</option>
-              </select>
+              {formData.post_to_all ? (
+                <div className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-700">
+                  <span className="font-medium">All Classes:</span> 6A Town, 6B Town, 6C Town
+                </div>
+              ) : (
+                <select
+                  value={formData.town_class}
+                  onChange={(e) => setFormData({ ...formData, town_class: e.target.value as '6A' | '6B' | '6C' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  required
+                >
+                  <option value="6A">6A Town</option>
+                  <option value="6B">6B Town</option>
+                  <option value="6C">6C Town</option>
+                </select>
+              )}
             </div>
 
             <div>
@@ -220,7 +278,7 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
                 onClick={() => {
                   setShowForm(false);
                   setEditing(null);
-                  setFormData({ title: '', content: '', town_class: currentTownClass || '6A', background_color: 'blue', enable_wiggle: false });
+                  setFormData({ title: '', content: '', town_class: currentTownClass || '6A', post_to_all: false, background_color: 'blue', enable_wiggle: false });
                 }}
                 className="btn-secondary"
               >
