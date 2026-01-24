@@ -292,7 +292,193 @@ router.post('/:username/reset-password', authenticateToken, requireRole(['teache
   }
 });
 
-// Get student details with loan information (teachers only)
+// Get comprehensive student details (teachers only)
+router.get('/:username/details', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { username } = req.params;
+
+    // Get student info with job details
+    const student = await database.get(`
+      SELECT 
+        u.id,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class,
+        u.email,
+        u.status,
+        u.created_at,
+        u.updated_at,
+        u.job_id,
+        j.name as job_name,
+        j.description as job_description,
+        j.salary as job_salary,
+        j.company_name as job_company_name,
+        a.account_number,
+        a.balance,
+        a.updated_at as last_activity
+      FROM users u
+      LEFT JOIN accounts a ON u.id = a.user_id
+      LEFT JOIN jobs j ON u.job_id = j.id
+      WHERE u.username = $1 AND u.role = 'student'
+    `, [username]);
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [student.id]);
+
+    // Get all transactions
+    let transactions = [];
+    if (account) {
+      transactions = await database.query(`
+        SELECT 
+          t.*,
+          fu.username as from_username,
+          fu.first_name as from_first_name,
+          fu.last_name as from_last_name,
+          tu.username as to_username,
+          tu.first_name as to_first_name,
+          tu.last_name as to_last_name
+        FROM transactions t
+        LEFT JOIN accounts fa ON t.from_account_id = fa.id
+        LEFT JOIN users fu ON fa.user_id = fu.id
+        LEFT JOIN accounts ta ON t.to_account_id = ta.id
+        LEFT JOIN users tu ON ta.user_id = tu.id
+        WHERE t.from_account_id = $1 OR t.to_account_id = $2
+        ORDER BY t.created_at DESC
+      `, [account.id, account.id]);
+    }
+
+    // Get loans
+    const loans = await database.query(`
+      SELECT 
+        l.*,
+        COALESCE(SUM(lp.amount), 0) as total_paid,
+        CASE 
+          WHEN l.status = 'active' AND l.monthly_payment > 0 THEN 
+            GREATEST(0, CEIL(l.outstanding_balance / (l.monthly_payment / 4.33)))
+          ELSE 0 
+        END as payments_remaining
+      FROM loans l
+      LEFT JOIN loan_payments lp ON l.id = lp.loan_id
+      WHERE l.borrower_id = $1
+      GROUP BY l.id
+      ORDER BY l.created_at DESC
+    `, [student.id]);
+
+    // Get land parcels owned
+    const landParcels = await database.query(`
+      SELECT 
+        id,
+        grid_code,
+        biome_type,
+        value,
+        risk_level,
+        purchased_at
+      FROM land_parcels
+      WHERE owner_id = $1
+      ORDER BY purchased_at DESC
+    `, [student.id]);
+
+    // Get math game sessions
+    const mathGameSessions = await database.query(`
+      SELECT 
+        id,
+        difficulty,
+        score,
+        correct_answers,
+        total_problems,
+        earnings,
+        played_at
+      FROM math_game_sessions
+      WHERE user_id = $1
+      ORDER BY played_at DESC
+    `, [student.id]);
+
+    // Get pizza time contributions
+    const pizzaContributions = await database.query(`
+      SELECT 
+        t.amount,
+        t.description,
+        t.created_at
+      FROM transactions t
+      JOIN accounts a ON t.from_account_id = a.id
+      WHERE a.user_id = $1 AND t.description LIKE '%pizza%'
+      ORDER BY t.created_at DESC
+    `, [student.id]);
+
+    // Get Winkel (shop) purchases
+    const shopPurchases = await database.query(`
+      SELECT 
+        t.amount,
+        t.description,
+        t.created_at
+      FROM transactions t
+      JOIN accounts a ON t.from_account_id = a.id
+      WHERE a.user_id = $1 AND t.description LIKE '%Winkel%'
+      ORDER BY t.created_at DESC
+    `, [student.id]);
+
+    // Get job application history
+    const jobApplications = await database.query(`
+      SELECT 
+        ja.id,
+        ja.status,
+        ja.created_at,
+        ja.reviewed_at,
+        j.name as job_name,
+        j.salary as job_salary
+      FROM job_applications ja
+      JOIN jobs j ON ja.job_id = j.id
+      WHERE ja.user_id = $1
+      ORDER BY ja.created_at DESC
+    `, [student.id]);
+
+    // Calculate statistics
+    const stats = {
+      total_transactions: transactions.length,
+      total_transfers_sent: transactions.filter(t => 
+        t.transaction_type === 'transfer' && t.from_username === student.username
+      ).reduce((sum, t) => sum + parseFloat(t.amount), 0),
+      total_transfers_received: transactions.filter(t => 
+        t.transaction_type === 'transfer' && t.to_username === student.username
+      ).reduce((sum, t) => sum + parseFloat(t.amount), 0),
+      total_deposits: transactions.filter(t => 
+        t.transaction_type === 'deposit'
+      ).reduce((sum, t) => sum + parseFloat(t.amount), 0),
+      total_withdrawals: transactions.filter(t => 
+        t.transaction_type === 'withdrawal'
+      ).reduce((sum, t) => sum + parseFloat(t.amount), 0),
+      math_games_played: mathGameSessions.length,
+      total_math_earnings: mathGameSessions.reduce((sum, s) => sum + parseFloat(s.earnings), 0),
+      pizza_contributions_total: pizzaContributions.reduce((sum, p) => sum + parseFloat(p.amount), 0),
+      shop_purchases_total: shopPurchases.reduce((sum, s) => sum + parseFloat(s.amount), 0),
+      land_parcels_owned: landParcels.length,
+      land_value_total: landParcels.reduce((sum, l) => sum + parseFloat(l.value), 0),
+      active_loans: loans.filter(l => l.status === 'active').length,
+      total_loan_debt: loans.filter(l => l.status === 'active').reduce((sum, l) => sum + parseFloat(l.outstanding_balance), 0)
+    };
+
+    res.json({
+      student,
+      transactions,
+      loans,
+      landParcels,
+      mathGameSessions,
+      pizzaContributions,
+      shopPurchases,
+      jobApplications,
+      stats
+    });
+  } catch (error) {
+    console.error('Get student details error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get student details with loan information (teachers only) - Legacy endpoint
 router.get('/:username', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { username } = req.params;

@@ -7,6 +7,7 @@ import Layout from './components/Layout';
 import LoginForm from './components/LoginForm';
 import StudentDashboard from './components/StudentDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
+import StudentDetailView from './components/StudentDetailView';
 import BankPlugin from './components/plugins/BankPlugin';
 import LandPlugin from './components/plugins/LandPlugin';
 import JobsPlugin from './components/plugins/JobsPlugin';
@@ -53,6 +54,18 @@ const AppContent: React.FC = () => {
             <PluginProvider>
               <TownProvider>
                 {user?.role === 'teacher' ? <TeacherDashboard /> : <StudentDashboard />}
+              </TownProvider>
+            </PluginProvider>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/:username"
+        element={
+          <ProtectedRoute>
+            <PluginProvider>
+              <TownProvider>
+                <StudentDetailView />
               </TownProvider>
             </PluginProvider>
           </ProtectedRoute>

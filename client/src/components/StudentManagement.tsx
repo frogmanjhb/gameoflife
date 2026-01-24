@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Minus, DollarSign, User, Search, Users, Trash2, AlertTriangle, ChevronDown, ChevronUp, Copy, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Minus, DollarSign, User, Search, Users, Trash2, AlertTriangle, ChevronDown, ChevronUp, Copy, RefreshCw, Eye } from 'lucide-react';
 import api from '../services/api';
 import { Student } from '../types';
 
@@ -9,6 +10,7 @@ interface StudentManagementProps {
 }
 
 const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdate }) => {
+  const navigate = useNavigate();
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showDepositForm, setShowDepositForm] = useState(false);
   const [showWithdrawForm, setShowWithdrawForm] = useState(false);
@@ -451,6 +453,17 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
               </div>
 
               <div className="flex space-x-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/student/${student.username}`);
+                  }}
+                  className="flex-1 bg-primary-100 text-primary-700 hover:bg-primary-200 px-3 py-2 rounded-lg transition-colors text-sm flex items-center justify-center space-x-1"
+                  title="View detailed profile"
+                >
+                  <Eye className="h-4 w-4" />
+                  <span>View Details</span>
+                </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
