@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, User, Menu, X, Home } from 'lucide-react';
+import { LogOut, Menu, X, Home } from 'lucide-react';
+import ProfileBadge from './ProfileBadge';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -66,12 +67,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
             {user && (
               <div className="hidden md:flex items-center space-x-4">
-                <div className="flex items-center space-x-2 text-sm text-gray-600">
-                  <User className="h-4 w-4" />
-                  <span className="font-medium">{user.username}</span>
-                  <span className="px-2 py-1 bg-primary-100 text-primary-800 rounded-full text-xs font-medium">
-                    {user.role === 'teacher' ? '👨‍🏫 Teacher' : '🎓 Student'}
-                  </span>
+                <div className="flex items-center space-x-3 text-sm text-gray-600">
+                  <ProfileBadge user={user} size="md" />
+                  <div className="flex flex-col">
+                    <span className="font-medium text-gray-900">{user.username}</span>
+                    <span className="px-2 py-0.5 bg-primary-100 text-primary-800 rounded-full text-xs font-medium">
+                      {user.role === 'teacher' ? '👨‍🏫 Teacher' : '🎓 Student'}
+                    </span>
+                  </div>
                 </div>
                 <button
                   onClick={handleLogout}
@@ -119,11 +122,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <>
                   <div className="border-t border-gray-200 my-2"></div>
                   <div className="px-4 py-2 text-sm text-gray-600">
-                    <div className="flex items-center space-x-2">
-                      <User className="h-4 w-4" />
-                      <span className="font-medium">{user.username}</span>
+                    <div className="flex items-center space-x-3 mb-2">
+                      <ProfileBadge user={user} size="md" />
+                      <span className="font-medium text-gray-900">{user.username}</span>
                     </div>
-                    <span className="px-2 py-1 bg-primary-100 text-primary-800 rounded-full text-xs font-medium mt-1 inline-block">
+                    <span className="px-2 py-1 bg-primary-100 text-primary-800 rounded-full text-xs font-medium inline-block">
                       {user.role === 'teacher' ? '👨‍🏫 Teacher' : '🎓 Student'}
                     </span>
                   </div>

@@ -12,7 +12,7 @@ import api from '../../services/api';
 interface ShopItem {
   id: number;
   name: string;
-  category: 'consumable' | 'privilege';
+  category: 'consumable' | 'privilege' | 'profile';
   price: number;
   description: string | null;
   notes: string | null;
@@ -48,8 +48,9 @@ const WinkelPlugin: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState<'shop' | 'history' | 'stats'>('shop');
-  const [shopCategoryTab, setShopCategoryTab] = useState<'consumables' | 'privileges'>('consumables');
+  const [shopCategoryTab, setShopCategoryTab] = useState<'consumables' | 'privileges' | 'profile'>('consumables');
   const [accountBalance, setAccountBalance] = useState<number | null>(null);
+  const [ownedEmojis, setOwnedEmojis] = useState<any[]>([]);
 
   useEffect(() => {
     if (winkelPlugin && winkelPlugin.enabled) {
@@ -60,7 +61,7 @@ const WinkelPlugin: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [itemsRes, purchasesRes, canPurchaseRes, accountRes] = await Promise.all([
+      const [itemsRes, purchasesRes, canPurchaseRes, accountRes, ownedEmojisRes] = await Promise.all([
         api.get('/winkel/items'),
         api.get('/winkel/purchases'),
         user?.role === 'student' ? api.get('/winkel/can-purchase') : Promise.resolve({ data: { canPurchase: true } }),
@@ -70,7 +71,8 @@ const WinkelPlugin: React.FC = () => {
             // We'll get balance from the user context or make a separate call
             return Promise.resolve({ data: null });
           });
-        }) : Promise.resolve({ data: null })
+        }) : Promise.resolve({ data: null }),
+        user?.role === 'student' ? api.get('/winkel/owned-emojis') : Promise.resolve({ data: [] })
       ]);
 
       // Convert prices to numbers (PostgreSQL returns DECIMAL as strings)
@@ -86,6 +88,7 @@ const WinkelPlugin: React.FC = () => {
       setItems(itemsWithNumericPrices);
       setPurchases(purchasesWithNumericPrices);
       setCanPurchase(canPurchaseRes.data.canPurchase);
+      setOwnedEmojis(ownedEmojisRes.data || []);
 
       // Get account balance for students
       if (user?.role === 'student') {
@@ -131,6 +134,7 @@ const WinkelPlugin: React.FC = () => {
 
   const consumables = items.filter(item => item.category === 'consumable');
   const privileges = items.filter(item => item.category === 'privilege');
+  const profileItems = items.filter(item => item.category === 'profile');
 
   // Wait for plugins to load before checking
   if (pluginsLoading) {
@@ -259,6 +263,20 @@ const WinkelPlugin: React.FC = () => {
                     <span className="text-xs text-gray-500">(Very Powerful)</span>
                   </div>
                 </button>
+                <button
+                  onClick={() => setShopCategoryTab('profile')}
+                  className={`flex-1 px-6 py-3 font-semibold transition-colors ${
+                    shopCategoryTab === 'profile'
+                      ? 'text-primary-600 border-b-2 border-primary-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-center space-x-2">
+                    <span className="text-xl">😎</span>
+                    <span>Profile Emojis</span>
+                    <span className="text-xs text-gray-500">(Permanent)</span>
+                  </div>
+                </button>
               </div>
 
               {/* Consumables Tab Content */}
@@ -324,6 +342,99 @@ const WinkelPlugin: React.FC = () => {
                           purchasing={purchasing === item.id}
                         />
                       ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Profile Emojis Tab Content */}
+              {shopCategoryTab === 'profile' && (
+                <div>
+                  <div className="mb-6">
+                    <p className="text-gray-600 mb-3">
+                      Customize your profile with a fun emoji! These are permanent and you can switch between owned emojis anytime.
+                    </p>
+                    {ownedEmojis.length > 0 && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <p className="text-sm font-semibold text-blue-900 mb-2">Your Owned Emojis:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {ownedEmojis.map((emoji: any) => {
+                            const emojiChar = emoji.name.match(/^([\u{1F300}-\u{1F9FF}])/u)?.[1];
+                            return (
+                              <button
+                                key={emoji.id}
+                                onClick={async () => {
+                                  try {
+                                    await api.post('/winkel/change-emoji', { item_id: emoji.id });
+                                    setSuccess('Profile emoji changed!');
+                                    setTimeout(() => setSuccess(''), 3000);
+                                    // Refresh to update user context
+                                    window.location.reload();
+                                  } catch (err: any) {
+                                    setError(err.response?.data?.error || 'Failed to change emoji');
+                                  }
+                                }}
+                                className="text-3xl p-2 hover:scale-110 transition-transform bg-white rounded-lg border-2 border-blue-300 hover:border-blue-500"
+                                title="Click to use this emoji"
+                              >
+                                {emojiChar}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-blue-700 mt-2">Click any emoji to use it on your profile</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {loading ? (
+                    <div className="flex justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+                    </div>
+                  ) : profileItems.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <span className="text-6xl mb-4 block">😎</span>
+                      <p>No profile emojis available at this time.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                      {profileItems.map((item) => {
+                        const emojiChar = item.name.match(/^([\u{1F300}-\u{1F9FF}])/u)?.[1];
+                        const isOwned = ownedEmojis.some((e: any) => e.id === item.id);
+                        return (
+                          <div
+                            key={item.id}
+                            className={`bg-white rounded-xl shadow-sm border-2 p-4 text-center transition-all ${
+                              isOwned
+                                ? 'border-green-400 bg-green-50'
+                                : 'border-gray-200 hover:border-primary-300 hover:shadow-md'
+                            }`}
+                          >
+                            <div className="text-5xl mb-3">{emojiChar}</div>
+                            <p className="font-semibold text-gray-900 text-sm mb-2">
+                              {item.name.replace(/^[\u{1F300}-\u{1F9FF}]\s*/u, '')}
+                            </p>
+                            <p className="text-xs text-gray-600 mb-3 line-clamp-2">{item.description}</p>
+                            {isOwned ? (
+                              <div className="bg-green-500 text-white px-3 py-2 rounded-lg font-semibold text-sm">
+                                ✓ Owned
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handlePurchase(item.id)}
+                                disabled={purchasing === item.id}
+                                className="w-full bg-primary-600 text-white px-3 py-2 rounded-lg font-semibold hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                              >
+                                {purchasing === item.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                                ) : (
+                                  `Buy R${item.price.toFixed(0)}`
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

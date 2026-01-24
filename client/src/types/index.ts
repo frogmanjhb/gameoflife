@@ -13,6 +13,7 @@ export interface User {
   job_requirements?: string;
   job_company_name?: string;
   job_location?: string;
+  profile_emoji?: string;
   created_at: string;
   updated_at: string;
 }

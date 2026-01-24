@@ -112,13 +112,25 @@ router.post('/purchase', auth_1.authenticateToken, [
         }
         // Check if item is event-day only (for future implementation)
         // For now, we'll allow all items
-        // Check if student has already made a purchase this week
+        // Profile items have no weekly limit, but check if student already owns this emoji
         const weekStart = formatDate(getWeekStartDate());
-        const existingPurchase = await database_prod_1.default.get('SELECT id FROM shop_purchases WHERE user_id = $1 AND week_start_date = $2', [req.user.id, weekStart]);
-        if (existingPurchase) {
-            return res.status(400).json({
-                error: 'You have already made a purchase this week. Come back next week!'
-            });
+        if (item.category === 'profile') {
+            // Check if student already purchased this emoji
+            const existingEmojiPurchase = await database_prod_1.default.get('SELECT id FROM shop_purchases WHERE user_id = $1 AND item_id = $2', [req.user.id, item_id]);
+            if (existingEmojiPurchase) {
+                return res.status(400).json({
+                    error: 'You already own this emoji!'
+                });
+            }
+        }
+        else {
+            // Check if student has already made a purchase this week (non-profile items only)
+            const existingPurchase = await database_prod_1.default.get('SELECT id FROM shop_purchases WHERE user_id = $1 AND week_start_date = $2', [req.user.id, weekStart]);
+            if (existingPurchase) {
+                return res.status(400).json({
+                    error: 'You have already made a purchase this week. Come back next week!'
+                });
+            }
         }
         // Get student's account
         const account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
@@ -201,6 +213,14 @@ router.post('/purchase', auth_1.authenticateToken, [
                 }
                 throw insertError;
             }
+            // If this is a profile emoji, extract the emoji and update user profile
+            if (item.category === 'profile' && item.name) {
+                const emojiMatch = item.name.match(/^([\u{1F300}-\u{1F9FF}])/u);
+                if (emojiMatch) {
+                    const emoji = emojiMatch[1];
+                    await database_prod_1.default.run('UPDATE users SET profile_emoji = $1 WHERE id = $2', [emoji, req.user.id]);
+                }
+            }
             await database_prod_1.default.run('COMMIT');
             // Get updated account balance
             const updatedAccount = await database_prod_1.default.get('SELECT balance FROM accounts WHERE id = $1', [account.id]);
@@ -261,6 +281,72 @@ router.get('/stats', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher
     }
     catch (error) {
         console.error('Failed to fetch shop stats:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// POST /api/winkel/change-emoji - Change profile emoji (must be owned)
+router.post('/change-emoji', auth_1.authenticateToken, [
+    (0, express_validator_1.body)('item_id').isInt().withMessage('Item ID must be an integer'),
+], async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        if (req.user.role !== 'student') {
+            return res.status(403).json({ error: 'Only students can change profile emoji' });
+        }
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { item_id } = req.body;
+        // Get the item
+        const item = await database_prod_1.default.get('SELECT * FROM shop_items WHERE id = $1 AND category = $2', [item_id, 'profile']);
+        if (!item) {
+            return res.status(404).json({ error: 'Profile emoji not found' });
+        }
+        // Check if student owns this emoji
+        const purchase = await database_prod_1.default.get('SELECT id FROM shop_purchases WHERE user_id = $1 AND item_id = $2', [req.user.id, item_id]);
+        if (!purchase) {
+            return res.status(400).json({ error: 'You do not own this emoji. Purchase it from the shop first!' });
+        }
+        // Extract emoji from item name
+        const emojiMatch = item.name.match(/^([\u{1F300}-\u{1F9FF}])/u);
+        if (!emojiMatch) {
+            return res.status(400).json({ error: 'Invalid emoji item' });
+        }
+        const emoji = emojiMatch[1];
+        // Update user profile
+        await database_prod_1.default.run('UPDATE users SET profile_emoji = $1 WHERE id = $2', [emoji, req.user.id]);
+        res.json({
+            message: 'Profile emoji updated successfully!',
+            emoji: emoji
+        });
+    }
+    catch (error) {
+        console.error('Change emoji error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// GET /api/winkel/owned-emojis - Get all profile emojis owned by student
+router.get('/owned-emojis', auth_1.authenticateToken, async (req, res) => {
+    try {
+        if (!req.user || req.user.role !== 'student') {
+            return res.status(403).json({ error: 'Only students can view owned emojis' });
+        }
+        const ownedEmojis = await database_prod_1.default.query(`SELECT 
+        si.id,
+        si.name,
+        si.description,
+        sp.purchase_date
+       FROM shop_purchases sp
+       JOIN shop_items si ON sp.item_id = si.id
+       WHERE sp.user_id = $1 AND si.category = 'profile'
+       ORDER BY sp.purchase_date DESC`, [req.user.id]);
+        res.json(ownedEmojis);
+    }
+    catch (error) {
+        console.error('Failed to fetch owned emojis:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
