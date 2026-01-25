@@ -25,6 +25,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'surname' | 'balance'>('surname');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [expandedStudents, setExpandedStudents] = useState<Set<number>>(new Set());
   const [studentPasswords, setStudentPasswords] = useState<Record<number, string>>({});
   const [resettingPassword, setResettingPassword] = useState<number | null>(null);
@@ -63,6 +65,37 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
     (student.first_name && student.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (student.last_name && student.last_name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const displayedStudents = useMemo(() => {
+    const dir = sortDirection === 'asc' ? 1 : -1;
+
+    // Stable sort: include index tie-breaker
+    return filteredStudents
+      .map((s, idx) => ({ s, idx }))
+      .sort((a, b) => {
+        if (sortBy === 'balance') {
+          const balA = Number(a.s.balance) || 0;
+          const balB = Number(b.s.balance) || 0;
+          const diff = balA - balB;
+          if (diff !== 0) return diff * dir;
+        } else {
+          const lastA = (a.s.last_name || '').toLowerCase();
+          const lastB = (b.s.last_name || '').toLowerCase();
+          if (lastA !== lastB) return lastA.localeCompare(lastB) * dir;
+
+          const firstA = (a.s.first_name || '').toLowerCase();
+          const firstB = (b.s.first_name || '').toLowerCase();
+          if (firstA !== firstB) return firstA.localeCompare(firstB) * dir;
+
+          const userA = (a.s.username || '').toLowerCase();
+          const userB = (b.s.username || '').toLowerCase();
+          if (userA !== userB) return userA.localeCompare(userB) * dir;
+        }
+
+        return a.idx - b.idx;
+      })
+      .map(({ s }) => s);
+  }, [filteredStudents, sortBy, sortDirection]);
 
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,16 +244,38 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
 
   return (
     <div className="space-y-6">
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search students by name or username..."
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+      {/* Search + Sort */}
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search students by name or username..."
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Sort by</label>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as 'surname' | 'balance')}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+          >
+            <option value="surname">Surname</option>
+            <option value="balance">Bank balance</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+            className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+            title={sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+          >
+            {sortDirection === 'asc' ? 'A→Z' : 'Z→A'}
+          </button>
+        </div>
       </div>
 
       {/* Class Tabs */}
@@ -295,7 +350,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
       )}
 
       {/* Students List */}
-      {filteredStudents.length === 0 ? (
+      {displayedStudents.length === 0 ? (
         <div className="text-center py-12">
           <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -312,7 +367,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredStudents.map((student) => {
+          {displayedStudents.map((student) => {
             const isExpanded = expandedStudents.has(student.id);
             const hasPassword = studentPasswords[student.id];
             
