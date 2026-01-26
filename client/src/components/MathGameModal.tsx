@@ -33,6 +33,21 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
   const [showFeedback, setShowFeedback] = useState(false);
   const [gameResults, setGameResults] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [spamMessage, setSpamMessage] = useState<string | null>(null);
+
+  // Funny messages for spam attempts
+  const spamMessages = [
+    "Nice try, cheater! 🙅",
+    "Nope! One answer per question!",
+    "Did you really think that would work? 😏",
+    "NO! Wait for the next question!",
+    "Spam detected! -0 points for effort 😂",
+    "Slow down there, speedster!",
+    "Patience, young grasshopper 🦗",
+    "Your keyboard is not a money printer!",
+    "Error 418: I'm a teapot, not a fool ☕",
+    "BONK! No cheating! 🔨",
+  ];
 
   // Problem generation
   const generateProblem = useCallback((diff: Difficulty): MathProblem => {
@@ -121,6 +136,16 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
 
   // Handle answer submission
   const handleAnswerSubmit = () => {
+    // Detect and shame spam attempts during feedback delay
+    if (showFeedback) {
+      const randomMessage = spamMessages[Math.floor(Math.random() * spamMessages.length)];
+      setSpamMessage(randomMessage);
+      // Clear the message after a short delay
+      setTimeout(() => setSpamMessage(null), 1500);
+      return;
+    }
+    
+    // Prevent submissions without valid data
     if (!currentProblem || !userAnswer.trim()) return;
 
     const userAnswerNum = parseInt(userAnswer);
@@ -258,6 +283,7 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
     setShowFeedback(false);
     setGameResults(null);
     setIsSubmitting(false);
+    setSpamMessage(null);
   };
 
   // Close modal
@@ -366,6 +392,13 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
                 </div>
               </div>
 
+              {/* Spam Warning Message */}
+              {spamMessage && (
+                <div className="bg-red-500 text-white px-4 py-3 rounded-lg text-center font-bold animate-pulse mb-4">
+                  {spamMessage}
+                </div>
+              )}
+
               {/* Problem */}
               <div className="bg-gray-800 rounded-xl p-8 text-center">
                 <div className="text-4xl font-bold text-white mb-6">
@@ -380,7 +413,8 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
                     onChange={(e) => setUserAnswer(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="?"
-                    className="w-32 text-3xl font-bold text-center bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-pink-500"
+                    disabled={showFeedback}
+                    className="w-32 text-3xl font-bold text-center bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-pink-500 disabled:opacity-50"
                     autoFocus
                   />
                   {showFeedback && (
@@ -408,7 +442,8 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
                       <button
                         key={value}
                         onClick={() => handleNumberInput(value)}
-                        className={`py-4 px-6 rounded-lg font-semibold text-white transition-colors text-lg ${
+                        disabled={showFeedback}
+                        className={`py-4 px-6 rounded-lg font-semibold text-white transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed ${
                           value === 'clear' || value === 'backspace'
                             ? 'bg-gray-600 hover:bg-gray-500'
                             : 'bg-gray-700 hover:bg-gray-600'
@@ -424,7 +459,7 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
               {/* Submit Button */}
               <button
                 onClick={handleAnswerSubmit}
-                disabled={!userAnswer.trim()}
+                disabled={!userAnswer.trim() || showFeedback}
                 className="w-full bg-pink-600 text-white py-3 rounded-lg font-semibold hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Submit Answer
