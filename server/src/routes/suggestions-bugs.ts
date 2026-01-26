@@ -156,6 +156,50 @@ router.get('/admin/queue', authenticateToken, requireRole(['teacher']), async (_
   }
 });
 
+// Teacher: all suggestions/bugs (for tabs: approved/denied/pending)
+router.get('/admin/all', authenticateToken, requireRole(['teacher']), async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const suggestions = await database.query(
+      `
+      SELECT
+        s.*,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class,
+        ru.username as reviewed_by_username
+      FROM suggestions s
+      JOIN users u ON s.user_id = u.id
+      LEFT JOIN users ru ON s.reviewed_by = ru.id
+      ORDER BY s.created_at DESC
+      LIMIT 500
+      `
+    );
+
+    const bugReports = await database.query(
+      `
+      SELECT
+        b.*,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class,
+        ru.username as reviewed_by_username
+      FROM bug_reports b
+      JOIN users u ON b.user_id = u.id
+      LEFT JOIN users ru ON b.reviewed_by = ru.id
+      ORDER BY b.created_at DESC
+      LIMIT 500
+      `
+    );
+
+    res.json({ suggestions, bugReports });
+  } catch (error) {
+    console.error('Get all suggestions/bugs error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Teacher: review suggestion (approve/deny). Approve auto-pays reward once.
 router.put(
   '/admin/suggestions/:id/review',

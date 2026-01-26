@@ -72,6 +72,7 @@ const SuggestionsBugsPlugin: React.FC = () => {
   const { user } = useAuth();
 
   const [tab, setTab] = useState<'my' | 'submit' | 'review'>('my');
+  const [teacherReviewTab, setTeacherReviewTab] = useState<'pending' | 'approved' | 'denied'>('pending');
 
   // Student state
   const [myLoading, setMyLoading] = useState(false);
@@ -84,6 +85,8 @@ const SuggestionsBugsPlugin: React.FC = () => {
   const [queueError, setQueueError] = useState<string | null>(null);
   const [queueSuggestions, setQueueSuggestions] = useState<TeacherQueueSuggestion[]>([]);
   const [queueBugReports, setQueueBugReports] = useState<TeacherQueueBug[]>([]);
+  const [allSuggestions, setAllSuggestions] = useState<TeacherQueueSuggestion[]>([]);
+  const [allBugReports, setAllBugReports] = useState<TeacherQueueBug[]>([]);
 
   // Submit forms
   const [submitTab, setSubmitTab] = useState<'suggestion' | 'bug'>('bug');
@@ -102,6 +105,7 @@ const SuggestionsBugsPlugin: React.FC = () => {
     if (!pluginsLoading && plugin?.enabled) {
       // default tab by role
       setTab(isTeacher ? 'review' : 'my');
+      if (isTeacher) setTeacherReviewTab('pending');
     }
   }, [pluginsLoading, plugin?.enabled, isTeacher]);
 
@@ -133,6 +137,20 @@ const SuggestionsBugsPlugin: React.FC = () => {
     }
   };
 
+  const fetchAllForTeacher = async () => {
+    try {
+      setQueueLoading(true);
+      setQueueError(null);
+      const res = await api.get('/suggestions-bugs/admin/all');
+      setAllSuggestions(res.data.suggestions || []);
+      setAllBugReports(res.data.bugReports || []);
+    } catch (e: any) {
+      setQueueError(e.response?.data?.error || 'Failed to load suggestions & bugs');
+    } finally {
+      setQueueLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!plugin?.enabled) return;
     if (!user) return;
@@ -140,6 +158,7 @@ const SuggestionsBugsPlugin: React.FC = () => {
       fetchMy();
     } else {
       fetchQueue();
+      fetchAllForTeacher();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plugin?.enabled, user?.role]);
@@ -181,6 +200,7 @@ const SuggestionsBugsPlugin: React.FC = () => {
     try {
       await api.put(`/suggestions-bugs/admin/suggestions/${id}/review`, { status });
       await fetchQueue();
+      await fetchAllForTeacher();
     } catch (e: any) {
       setQueueError(e.response?.data?.error || 'Failed to update suggestion');
     }
@@ -190,10 +210,29 @@ const SuggestionsBugsPlugin: React.FC = () => {
     try {
       await api.put(`/suggestions-bugs/admin/bugs/${id}/review`, { status });
       await fetchQueue();
+      await fetchAllForTeacher();
     } catch (e: any) {
       setQueueError(e.response?.data?.error || 'Failed to update bug report');
     }
   };
+
+  const approvedSuggestions = useMemo(
+    () => allSuggestions.filter(s => s.status === 'approved'),
+    [allSuggestions]
+  );
+  const deniedSuggestions = useMemo(
+    () => allSuggestions.filter(s => s.status === 'denied'),
+    [allSuggestions]
+  );
+
+  const approvedBugReports = useMemo(
+    () => allBugReports.filter(b => b.status === 'verified'),
+    [allBugReports]
+  );
+  const deniedBugReports = useMemo(
+    () => allBugReports.filter(b => b.status === 'denied'),
+    [allBugReports]
+  );
 
   if (pluginsLoading) {
     return (
@@ -412,85 +451,244 @@ const SuggestionsBugsPlugin: React.FC = () => {
                   <p className="text-gray-600">Loading review queue...</p>
                 </div>
               ) : (
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-semibold text-gray-900">Pending suggestions</h3>
-                      <span className="text-xs text-gray-500">{queueSuggestions.length}</span>
-                    </div>
-                    {queueSuggestions.length === 0 ? (
-                      <p className="text-sm text-gray-600">Nothing to review.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {queueSuggestions.map(s => (
-                          <div key={s.id} className="bg-white rounded-lg border border-gray-200 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="text-xs text-gray-600">
-                                <span className="font-medium">{s.first_name && s.last_name ? `${s.first_name} ${s.last_name}` : s.username}</span>
-                                {s.class ? <span className="ml-2 text-gray-500">({s.class})</span> : null}
-                              </div>
-                              <span className="text-xs text-gray-500">{formatDate(s.created_at)}</span>
-                            </div>
-                            <p className="text-sm text-gray-800 mt-2 whitespace-pre-wrap">{s.content}</p>
-                            <div className="flex justify-end gap-2 mt-3">
-                              <button
-                                onClick={() => reviewSuggestion(s.id, 'denied')}
-                                className="px-3 py-1.5 text-sm rounded-lg border border-red-300 text-red-700 hover:bg-red-50"
-                              >
-                                Deny ❌
-                              </button>
-                              <button
-                                onClick={() => reviewSuggestion(s.id, 'approved')}
-                                className="px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700"
-                              >
-                                Approve ✅ (+R1000)
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setTeacherReviewTab('pending')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                        teacherReviewTab === 'pending'
+                          ? 'bg-primary-600 text-white border-primary-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      Pending ({queueSuggestions.length + queueBugReports.length})
+                    </button>
+                    <button
+                      onClick={() => setTeacherReviewTab('approved')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                        teacherReviewTab === 'approved'
+                          ? 'bg-primary-600 text-white border-primary-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      Approved ({approvedSuggestions.length + approvedBugReports.length})
+                    </button>
+                    <button
+                      onClick={() => setTeacherReviewTab('denied')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                        teacherReviewTab === 'denied'
+                          ? 'bg-primary-600 text-white border-primary-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      Denied ({deniedSuggestions.length + deniedBugReports.length})
+                    </button>
                   </div>
 
-                  <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-semibold text-gray-900">Pending bug reports</h3>
-                      <span className="text-xs text-gray-500">{queueBugReports.length}</span>
-                    </div>
-                    {queueBugReports.length === 0 ? (
-                      <p className="text-sm text-gray-600">Nothing to review.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {queueBugReports.map(b => (
-                          <div key={b.id} className="bg-white rounded-lg border border-gray-200 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="text-xs text-gray-600">
-                                <span className="font-medium">{b.first_name && b.last_name ? `${b.first_name} ${b.last_name}` : b.username}</span>
-                                {b.class ? <span className="ml-2 text-gray-500">({b.class})</span> : null}
+                  {teacherReviewTab === 'pending' && (
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-semibold text-gray-900">Pending suggestions</h3>
+                          <span className="text-xs text-gray-500">{queueSuggestions.length}</span>
+                        </div>
+                        {queueSuggestions.length === 0 ? (
+                          <p className="text-sm text-gray-600">Nothing to review.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {queueSuggestions.map(s => (
+                              <div key={s.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-xs text-gray-600">
+                                    <span className="font-medium">{s.first_name && s.last_name ? `${s.first_name} ${s.last_name}` : s.username}</span>
+                                    {s.class ? <span className="ml-2 text-gray-500">({s.class})</span> : null}
+                                  </div>
+                                  <span className="text-xs text-gray-500">{formatDate(s.created_at)}</span>
+                                </div>
+                                <p className="text-sm text-gray-800 mt-2 whitespace-pre-wrap">{s.content}</p>
+                                <div className="flex justify-end gap-2 mt-3">
+                                  <button
+                                    onClick={() => reviewSuggestion(s.id, 'denied')}
+                                    className="px-3 py-1.5 text-sm rounded-lg border border-red-300 text-red-700 hover:bg-red-50"
+                                  >
+                                    Deny ❌
+                                  </button>
+                                  <button
+                                    onClick={() => reviewSuggestion(s.id, 'approved')}
+                                    className="px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700"
+                                  >
+                                    Approve ✅ (+R1000)
+                                  </button>
+                                </div>
                               </div>
-                              <span className="text-xs text-gray-500">{formatDate(b.created_at)}</span>
-                            </div>
-                            <p className="text-sm font-semibold text-gray-900 mt-2">{b.title}</p>
-                            <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap">{b.description}</p>
-                            <div className="flex justify-end gap-2 mt-3">
-                              <button
-                                onClick={() => reviewBug(b.id, 'denied')}
-                                className="px-3 py-1.5 text-sm rounded-lg border border-red-300 text-red-700 hover:bg-red-50"
-                              >
-                                Deny ❌
-                              </button>
-                              <button
-                                onClick={() => reviewBug(b.id, 'verified')}
-                                className="px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700"
-                              >
-                                Approve ✅ (+R1000)
-                              </button>
-                            </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
-                  </div>
+
+                      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-semibold text-gray-900">Pending bug reports</h3>
+                          <span className="text-xs text-gray-500">{queueBugReports.length}</span>
+                        </div>
+                        {queueBugReports.length === 0 ? (
+                          <p className="text-sm text-gray-600">Nothing to review.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {queueBugReports.map(b => (
+                              <div key={b.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-xs text-gray-600">
+                                    <span className="font-medium">{b.first_name && b.last_name ? `${b.first_name} ${b.last_name}` : b.username}</span>
+                                    {b.class ? <span className="ml-2 text-gray-500">({b.class})</span> : null}
+                                  </div>
+                                  <span className="text-xs text-gray-500">{formatDate(b.created_at)}</span>
+                                </div>
+                                <p className="text-sm font-semibold text-gray-900 mt-2">{b.title}</p>
+                                <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap">{b.description}</p>
+                                <div className="flex justify-end gap-2 mt-3">
+                                  <button
+                                    onClick={() => reviewBug(b.id, 'denied')}
+                                    className="px-3 py-1.5 text-sm rounded-lg border border-red-300 text-red-700 hover:bg-red-50"
+                                  >
+                                    Deny ❌
+                                  </button>
+                                  <button
+                                    onClick={() => reviewBug(b.id, 'verified')}
+                                    className="px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700"
+                                  >
+                                    Approve ✅ (+R1000)
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {teacherReviewTab === 'approved' && (
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-semibold text-gray-900">Approved suggestions</h3>
+                          <span className="text-xs text-gray-500">{approvedSuggestions.length}</span>
+                        </div>
+                        {approvedSuggestions.length === 0 ? (
+                          <p className="text-sm text-gray-600">No approved suggestions yet.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {approvedSuggestions.map(s => (
+                              <div key={s.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-xs text-gray-600">
+                                    <span className="font-medium">{s.first_name && s.last_name ? `${s.first_name} ${s.last_name}` : s.username}</span>
+                                    {s.class ? <span className="ml-2 text-gray-500">({s.class})</span> : null}
+                                  </div>
+                                  <StatusPill status={s.status} />
+                                </div>
+                                <p className="text-sm text-gray-800 mt-2 whitespace-pre-wrap">{s.content}</p>
+                                <p className="text-xs text-gray-500 mt-2">
+                                  Reviewed {s.reviewed_at ? `on ${formatDate(s.reviewed_at)}` : ''}{s.reviewed_by_username ? ` by ${s.reviewed_by_username}` : ''}{s.reward_paid ? ' • Reward paid ✅' : ' • Reward pending'}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-semibold text-gray-900">Approved bug reports</h3>
+                          <span className="text-xs text-gray-500">{approvedBugReports.length}</span>
+                        </div>
+                        {approvedBugReports.length === 0 ? (
+                          <p className="text-sm text-gray-600">No approved bug reports yet.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {approvedBugReports.map(b => (
+                              <div key={b.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-xs text-gray-600">
+                                    <span className="font-medium">{b.first_name && b.last_name ? `${b.first_name} ${b.last_name}` : b.username}</span>
+                                    {b.class ? <span className="ml-2 text-gray-500">({b.class})</span> : null}
+                                  </div>
+                                  <StatusPill status={b.status} />
+                                </div>
+                                <p className="text-sm font-semibold text-gray-900 mt-2">{b.title}</p>
+                                <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap">{b.description}</p>
+                                <p className="text-xs text-gray-500 mt-2">
+                                  Reviewed {b.reviewed_at ? `on ${formatDate(b.reviewed_at)}` : ''}{b.reviewed_by_username ? ` by ${b.reviewed_by_username}` : ''}{b.reward_paid ? ' • Reward paid ✅' : ' • Reward pending'}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {teacherReviewTab === 'denied' && (
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-semibold text-gray-900">Denied suggestions</h3>
+                          <span className="text-xs text-gray-500">{deniedSuggestions.length}</span>
+                        </div>
+                        {deniedSuggestions.length === 0 ? (
+                          <p className="text-sm text-gray-600">No denied suggestions.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {deniedSuggestions.map(s => (
+                              <div key={s.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-xs text-gray-600">
+                                    <span className="font-medium">{s.first_name && s.last_name ? `${s.first_name} ${s.last_name}` : s.username}</span>
+                                    {s.class ? <span className="ml-2 text-gray-500">({s.class})</span> : null}
+                                  </div>
+                                  <StatusPill status={s.status} />
+                                </div>
+                                <p className="text-sm text-gray-800 mt-2 whitespace-pre-wrap">{s.content}</p>
+                                <p className="text-xs text-gray-500 mt-2">
+                                  Reviewed {s.reviewed_at ? `on ${formatDate(s.reviewed_at)}` : ''}{s.reviewed_by_username ? ` by ${s.reviewed_by_username}` : ''}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-semibold text-gray-900">Denied bug reports</h3>
+                          <span className="text-xs text-gray-500">{deniedBugReports.length}</span>
+                        </div>
+                        {deniedBugReports.length === 0 ? (
+                          <p className="text-sm text-gray-600">No denied bug reports.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {deniedBugReports.map(b => (
+                              <div key={b.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-xs text-gray-600">
+                                    <span className="font-medium">{b.first_name && b.last_name ? `${b.first_name} ${b.last_name}` : b.username}</span>
+                                    {b.class ? <span className="ml-2 text-gray-500">({b.class})</span> : null}
+                                  </div>
+                                  <StatusPill status={b.status} />
+                                </div>
+                                <p className="text-sm font-semibold text-gray-900 mt-2">{b.title}</p>
+                                <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap">{b.description}</p>
+                                <p className="text-xs text-gray-500 mt-2">
+                                  Reviewed {b.reviewed_at ? `on ${formatDate(b.reviewed_at)}` : ''}{b.reviewed_by_username ? ` by ${b.reviewed_by_username}` : ''}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

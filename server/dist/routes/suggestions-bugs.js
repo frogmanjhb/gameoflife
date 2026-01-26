@@ -117,6 +117,44 @@ router.get('/admin/queue', auth_1.authenticateToken, (0, auth_1.requireRole)(['t
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+// Teacher: all suggestions/bugs (for tabs: approved/denied/pending)
+router.get('/admin/all', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (_req, res) => {
+    try {
+        const suggestions = await database_prod_1.default.query(`
+      SELECT
+        s.*,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class,
+        ru.username as reviewed_by_username
+      FROM suggestions s
+      JOIN users u ON s.user_id = u.id
+      LEFT JOIN users ru ON s.reviewed_by = ru.id
+      ORDER BY s.created_at DESC
+      LIMIT 500
+      `);
+        const bugReports = await database_prod_1.default.query(`
+      SELECT
+        b.*,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class,
+        ru.username as reviewed_by_username
+      FROM bug_reports b
+      JOIN users u ON b.user_id = u.id
+      LEFT JOIN users ru ON b.reviewed_by = ru.id
+      ORDER BY b.created_at DESC
+      LIMIT 500
+      `);
+        res.json({ suggestions, bugReports });
+    }
+    catch (error) {
+        console.error('Get all suggestions/bugs error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 // Teacher: review suggestion (approve/deny). Approve auto-pays reward once.
 router.put('/admin/suggestions/:id/review', [(0, express_validator_1.body)('status').isIn(['approved', 'denied']).withMessage('Status must be approved or denied')], auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     const errors = (0, express_validator_1.validationResult)(req);
