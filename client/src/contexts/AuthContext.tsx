@@ -103,6 +103,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    sessionStorage.removeItem('student_header_color_index'); // Reset random header color for next login
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
     setAccount(null);

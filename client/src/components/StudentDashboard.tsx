@@ -12,10 +12,35 @@ import { Grid } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, X } from 'lucide-react';
 
+// Header color themes for student dashboard - changes randomly each login
+const headerColorThemes = [
+  { gradient: 'bg-gradient-to-r from-red-500 to-red-700', text: 'text-white', subtext: 'text-red-100' },
+  { gradient: 'bg-gradient-to-r from-blue-500 to-blue-700', text: 'text-white', subtext: 'text-blue-100' },
+  { gradient: 'bg-gradient-to-r from-yellow-400 to-yellow-600', text: 'text-gray-900', subtext: 'text-yellow-900' },
+];
+
+const getRandomHeaderColor = () => {
+  // Check if we already have a color for this session
+  const storedIndex = sessionStorage.getItem('student_header_color_index');
+  if (storedIndex !== null) {
+    const index = parseInt(storedIndex, 10);
+    if (index >= 0 && index < headerColorThemes.length) {
+      return headerColorThemes[index];
+    }
+  }
+  // Pick a random color and store it for this session
+  const randomIndex = Math.floor(Math.random() * headerColorThemes.length);
+  sessionStorage.setItem('student_header_color_index', String(randomIndex));
+  return headerColorThemes[randomIndex];
+};
+
 const StudentDashboard: React.FC = () => {
   const { user } = useAuth();
   const { enabledPlugins, loading: pluginsLoading } = usePlugins();
   const { currentTown, announcements, loading: townLoading } = useTown();
+  
+  // Get header color theme (set once per login session)
+  const [headerTheme] = useState(getRandomHeaderColor);
 
   const displayName = user?.first_name && user?.last_name
     ? `${user.first_name} ${user.last_name}`
@@ -53,10 +78,10 @@ const StudentDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">Welcome, {displayName}! 🎓</h1>
-        <p className="text-primary-100">
+      {/* Welcome Banner - color changes randomly each login */}
+      <div className={`${headerTheme.gradient} rounded-2xl p-6`}>
+        <h1 className={`text-2xl font-bold mb-2 ${headerTheme.text}`}>Welcome, {displayName}! 🎓</h1>
+        <p className={headerTheme.subtext}>
           {currentTown ? `Welcome to ${currentTown.town_name}!` : 'Welcome to Town Hub!'}
           {jobName !== 'No job assigned' && ` • Your job: ${jobName}`}
         </p>
