@@ -114,7 +114,7 @@ export interface MathProblem {
   num1: number;
   num2: number;
   operation: '+' | '-' | '×' | '÷';
-  answer?: number; // Optional - server does NOT send this to prevent cheating
+  answer: number;
   display: string;
 }
 
@@ -122,31 +122,12 @@ export interface MathGameStartRequest {
   difficulty: 'easy' | 'medium' | 'hard';
 }
 
-export interface MathGameStartResponse {
-  session: MathGameSession;
-  problems: MathProblem[]; // Server-generated problems (without answers)
-}
-
-export interface MathGameAnswer {
-  problem_index: number;
-  answer: number;
-}
-
 export interface MathGameSubmitRequest {
   session_id: number;
-  answers: MathGameAnswer[]; // Each answer with its problem index
-}
-
-export interface MathGameSubmitResponse {
-  success: boolean;
   score: number;
-  earnings: number;
-  isNewHighScore: boolean;
-}
-
-export interface MathGameAnswerResponse {
-  correct: boolean;
-  problem_index: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
 }
 
 export interface Plugin {
