@@ -5,6 +5,97 @@ import { MathGameStartRequest, MathGameSubmitRequest, MathGameStatus, MathGameSe
 
 const router = Router();
 
+// Security constants
+const GAME_DURATION_SECONDS = 60;
+const MAX_PROBLEMS_PER_GAME = 60; // Maximum 1 problem per second
+const MIN_PROBLEMS_PER_GAME = 0; // Allow submitting with 0 if they ran out of time
+const MAX_EARNINGS_PER_GAME = 150;
+const MIN_GAME_DURATION_SECONDS = 55; // Must play for at least 55 seconds (allows for some network latency)
+
+// Problem configuration by difficulty
+const DIFFICULTY_CONFIG = {
+  easy: {
+    addition: { max: 20, min: 1 },
+    subtraction: { max: 20, min: 1 },
+    multiplication: { max: 12, min: 1 },
+    division: { max: 12, min: 2 }
+  },
+  medium: {
+    addition: { max: 50, min: 1 },
+    subtraction: { max: 50, min: 1 },
+    multiplication: { max: 15, min: 1 },
+    division: { max: 15, min: 2 }
+  },
+  hard: {
+    addition: { max: 100, min: 1 },
+    subtraction: { max: 100, min: 1 },
+    multiplication: { max: 20, min: 1 },
+    division: { max: 20, min: 2 }
+  }
+};
+
+interface MathProblem {
+  num1: number;
+  num2: number;
+  operation: string;
+  answer: number;
+  display: string;
+}
+
+// Generate a single math problem server-side
+function generateProblem(difficulty: 'easy' | 'medium' | 'hard'): MathProblem {
+  const ranges = DIFFICULTY_CONFIG[difficulty];
+  const operations = ['+', '-', '×', '÷'] as const;
+  const operation = operations[Math.floor(Math.random() * operations.length)];
+
+  let num1: number, num2: number, answer: number;
+
+  switch (operation) {
+    case '+':
+      num1 = Math.floor(Math.random() * (ranges.addition.max - ranges.addition.min + 1)) + ranges.addition.min;
+      num2 = Math.floor(Math.random() * (ranges.addition.max - ranges.addition.min + 1)) + ranges.addition.min;
+      answer = num1 + num2;
+      break;
+    case '-':
+      num1 = Math.floor(Math.random() * (ranges.subtraction.max - ranges.subtraction.min + 1)) + ranges.subtraction.min;
+      num2 = Math.floor(Math.random() * (ranges.subtraction.max - ranges.subtraction.min + 1)) + ranges.subtraction.min;
+      if (num1 < num2) [num1, num2] = [num2, num1];
+      answer = num1 - num2;
+      break;
+    case '×':
+      num1 = Math.floor(Math.random() * (ranges.multiplication.max - ranges.multiplication.min + 1)) + ranges.multiplication.min;
+      num2 = Math.floor(Math.random() * (ranges.multiplication.max - ranges.multiplication.min + 1)) + ranges.multiplication.min;
+      answer = num1 * num2;
+      break;
+    case '÷':
+      answer = Math.floor(Math.random() * (ranges.division.max - ranges.division.min + 1)) + ranges.division.min;
+      num2 = Math.floor(Math.random() * (ranges.division.max - ranges.division.min + 1)) + ranges.division.min;
+      num1 = num2 * answer;
+      break;
+    default:
+      num1 = 1;
+      num2 = 1;
+      answer = 2;
+  }
+
+  return {
+    num1,
+    num2,
+    operation,
+    answer,
+    display: `${num1} ${operation} ${num2} =`
+  };
+}
+
+// Generate all problems for a game session
+function generateProblemsForSession(difficulty: 'easy' | 'medium' | 'hard', count: number): MathProblem[] {
+  const problems: MathProblem[] = [];
+  for (let i = 0; i < count; i++) {
+    problems.push(generateProblem(difficulty));
+  }
+  return problems;
+}
+
 // Helper function to get math game daily limit from settings
 async function getMathGameDailyLimit(): Promise<number> {
   try {
@@ -98,7 +189,7 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
   }
 });
 
-// Start a new math game session
+// Start a new math game session with server-generated problems
 router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user || req.user.role !== 'student') {
@@ -142,88 +233,126 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
       return res.status(400).json({ error: 'No plays remaining today. Try again tomorrow!' });
     }
 
-    // Create new session
+    // SECURITY: Generate problems server-side
+    const problems = generateProblemsForSession(difficulty as 'easy' | 'medium' | 'hard', MAX_PROBLEMS_PER_GAME);
+    
+    // Create new session with server-generated problems
     const session = await database.query(`
-      INSERT INTO math_game_sessions (user_id, difficulty, score, correct_answers, total_problems, earnings)
-      VALUES ($1, $2, 0, 0, 0, 0.00)
-      RETURNING *
-    `, [userId, difficulty]);
+      INSERT INTO math_game_sessions (user_id, difficulty, score, correct_answers, total_problems, earnings, problems, started_at, submitted, current_problem_index, server_validated_score)
+      VALUES ($1, $2, 0, 0, 0, 0.00, $3, CURRENT_TIMESTAMP, FALSE, 0, 0)
+      RETURNING id, user_id, difficulty, score, correct_answers, total_problems, earnings, started_at
+    `, [userId, difficulty, JSON.stringify(problems)]);
 
-    res.json({ session: session[0] });
+    // Return problems WITHOUT answers to the client
+    const clientProblems = problems.map((p: MathProblem) => ({
+      num1: p.num1,
+      num2: p.num2,
+      operation: p.operation,
+      display: p.display
+      // NOTE: answer is NOT included - this is the key security feature
+    }));
+
+    console.log(`🎮 Started secure math game for ${req.user.username} (session ${session[0].id}) with ${problems.length} server-generated problems`);
+
+    res.json({ 
+      session: session[0],
+      problems: clientProblems // Send problems without answers
+    });
   } catch (error) {
     console.error('Start math game error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Submit math game results
+// Submit an individual answer for real-time validation
+router.post('/answer', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'student') {
+      return res.status(403).json({ error: 'Only students can submit answers' });
+    }
+
+    const { session_id, problem_index, answer } = req.body;
+    const userId = req.user.id;
+
+    if (session_id === undefined || problem_index === undefined || answer === undefined) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Get session with problems
+    const session = await database.get(`
+      SELECT * FROM math_game_sessions 
+      WHERE id = $1 AND user_id = $2
+    `, [session_id, userId]);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Game session not found' });
+    }
+
+    if (session.submitted) {
+      return res.status(400).json({ error: 'Game already submitted' });
+    }
+
+    // Parse stored problems
+    const problems: MathProblem[] = typeof session.problems === 'string' 
+      ? JSON.parse(session.problems) 
+      : session.problems;
+
+    if (!problems || problem_index < 0 || problem_index >= problems.length) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} submitted invalid problem index ${problem_index}`);
+      return res.status(400).json({ error: 'Invalid problem index' });
+    }
+
+    // SECURITY: Validate answer against server-stored problem
+    const problem = problems[problem_index];
+    const userAnswer = parseInt(answer);
+    const isCorrect = userAnswer === problem.answer;
+
+    // Update server-validated score if correct
+    if (isCorrect) {
+      await database.query(`
+        UPDATE math_game_sessions 
+        SET server_validated_score = server_validated_score + 1,
+            current_problem_index = $1
+        WHERE id = $2
+      `, [problem_index + 1, session_id]);
+    } else {
+      await database.query(`
+        UPDATE math_game_sessions 
+        SET current_problem_index = $1
+        WHERE id = $2
+      `, [problem_index + 1, session_id]);
+    }
+
+    // Return result (but NOT the correct answer to prevent reverse engineering)
+    res.json({ 
+      correct: isCorrect,
+      problem_index
+    });
+  } catch (error) {
+    console.error('Submit answer error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Submit math game results (finalize game)
 router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user || req.user.role !== 'student') {
       return res.status(403).json({ error: 'Only students can submit math games' });
     }
 
-    const { session_id, score, correct_answers, total_problems, answer_sequence }: MathGameSubmitRequest = req.body;
+    const { session_id, answers }: { session_id: number; answers: { problem_index: number; answer: number }[] } = req.body;
+    const userId = req.user.id;
 
     console.log(`📝 Math game submission from ${req.user.username}:`, {
       session_id,
-      score,
-      correct_answers,
-      total_problems,
-      answer_sequence_length: answer_sequence?.length
+      answers_count: answers?.length
     });
 
-    if (!session_id || score < 0 || correct_answers < 0 || total_problems < 0) {
-      console.warn(`❌ Invalid game data from ${req.user.username}: missing or negative values`);
+    if (!session_id) {
+      console.warn(`❌ Invalid game data from ${req.user.username}: missing session_id`);
       return res.status(400).json({ error: 'Invalid game data' });
     }
-
-    // SECURITY: Validate game data integrity
-    const MAX_PROBLEMS_PER_GAME = 60; // Increased to 60 to allow for fast players (1 problem per second)
-    const MAX_CORRECT_ANSWERS = MAX_PROBLEMS_PER_GAME;
-    const MAX_EARNINGS_PER_GAME = 150; // Maximum R150 per game
-    
-    // Validate total_problems is reasonable
-    if (total_problems > MAX_PROBLEMS_PER_GAME) {
-      console.warn(`🚨 SECURITY: User ${req.user.username} attempted to submit game with ${total_problems} problems (max: ${MAX_PROBLEMS_PER_GAME})`);
-      return res.status(400).json({ error: 'Invalid game data: too many problems' });
-    }
-    
-    // Validate correct_answers doesn't exceed total_problems
-    if (correct_answers > total_problems) {
-      console.warn(`🚨 SECURITY: User ${req.user.username} attempted to submit ${correct_answers} correct answers for ${total_problems} problems`);
-      return res.status(400).json({ error: 'Invalid game data: correct answers cannot exceed total problems' });
-    }
-    
-    // Validate correct_answers doesn't exceed maximum
-    if (correct_answers > MAX_CORRECT_ANSWERS) {
-      console.warn(`🚨 SECURITY: User ${req.user.username} attempted to submit ${correct_answers} correct answers (max: ${MAX_CORRECT_ANSWERS})`);
-      return res.status(400).json({ error: 'Invalid game data: too many correct answers' });
-    }
-    
-    // Validate answer_sequence - allow empty array if no problems were answered
-    const safeAnswerSequence = Array.isArray(answer_sequence) ? answer_sequence : [];
-    
-    // Validate answer_sequence length matches total_problems
-    if (safeAnswerSequence.length !== total_problems) {
-      console.warn(`🚨 SECURITY: User ${req.user.username} submitted answer_sequence length ${safeAnswerSequence.length} for ${total_problems} problems`);
-      return res.status(400).json({ error: 'Invalid game data: answer sequence mismatch' });
-    }
-    
-    // Validate answer_sequence content (must be array of booleans) - skip for empty arrays
-    if (safeAnswerSequence.length > 0 && !safeAnswerSequence.every(a => typeof a === 'boolean')) {
-      console.warn(`🚨 SECURITY: User ${req.user.username} submitted invalid answer_sequence content`);
-      return res.status(400).json({ error: 'Invalid game data: answer sequence must contain only boolean values' });
-    }
-    
-    // Validate that correct_answers matches the number of trues in answer_sequence
-    const actualCorrectCount = safeAnswerSequence.filter(a => a === true).length;
-    if (actualCorrectCount !== correct_answers) {
-      console.warn(`🚨 SECURITY: User ${req.user.username} claimed ${correct_answers} correct but sequence shows ${actualCorrectCount}`);
-      return res.status(400).json({ error: 'Invalid game data: correct answer count mismatch' });
-    }
-
-    const userId = req.user.id;
 
     // Check if math game tables exist
     try {
@@ -232,7 +361,7 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.status(503).json({ error: 'Math game feature not available yet. Please try again later.' });
     }
 
-    // Verify session belongs to user and hasn't been submitted already
+    // Verify session belongs to user
     const session = await database.get(`
       SELECT * FROM math_game_sessions 
       WHERE id = $1 AND user_id = $2
@@ -243,24 +372,56 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.status(404).json({ error: 'Game session not found' });
     }
 
-    console.log(`📋 Found session:`, {
-      id: session.id,
-      user_id: session.user_id,
-      difficulty: session.difficulty,
-      score: session.score,
-      earnings: session.earnings
-    });
-    
     // SECURITY: Check if session has already been submitted
-    // A session is considered submitted if it has a score > 0 OR earnings > 0
-    const sessionEarnings = parseFloat(session.earnings || '0');
-    const sessionScore = parseInt(session.score || '0');
-    if (sessionEarnings > 0 || sessionScore > 0) {
-      console.warn(`🚨 SECURITY: User ${req.user.username} attempted to resubmit session ${session_id} (score: ${sessionScore}, earnings: ${sessionEarnings})`);
+    if (session.submitted) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} attempted to resubmit session ${session_id}`);
       return res.status(400).json({ error: 'Game session has already been submitted' });
     }
 
-    // Calculate streak bonus
+    // SECURITY: Validate game duration
+    const startedAt = new Date(session.started_at);
+    const now = new Date();
+    const durationSeconds = (now.getTime() - startedAt.getTime()) / 1000;
+    
+    if (durationSeconds < MIN_GAME_DURATION_SECONDS) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} submitted game after only ${durationSeconds.toFixed(1)}s (min: ${MIN_GAME_DURATION_SECONDS}s)`);
+      return res.status(400).json({ error: 'Game submitted too quickly. Please play the full game.' });
+    }
+
+    // Parse stored problems
+    const problems: MathProblem[] = typeof session.problems === 'string' 
+      ? JSON.parse(session.problems) 
+      : session.problems;
+
+    if (!problems) {
+      console.error(`❌ No problems found for session ${session_id}`);
+      return res.status(500).json({ error: 'Session data corrupted' });
+    }
+
+    // SECURITY: Validate all answers server-side
+    const safeAnswers = Array.isArray(answers) ? answers : [];
+    let correctCount = 0;
+    const answerSequence: boolean[] = [];
+
+    // Validate each answer against server-stored problems
+    for (const { problem_index, answer } of safeAnswers) {
+      if (problem_index < 0 || problem_index >= problems.length) {
+        console.warn(`🚨 SECURITY: User ${req.user.username} submitted invalid problem_index ${problem_index}`);
+        continue;
+      }
+      
+      const problem = problems[problem_index];
+      const isCorrect = parseInt(String(answer)) === problem.answer;
+      answerSequence.push(isCorrect);
+      
+      if (isCorrect) {
+        correctCount++;
+      }
+    }
+
+    console.log(`✅ Server-validated results for ${req.user.username}: ${correctCount}/${safeAnswers.length} correct`);
+
+    // Calculate streak bonus from validated answers
     const calculateStreakBonus = (sequence: boolean[]): number => {
       let maxStreak = 0;
       let currentStreak = 0;
@@ -274,18 +435,17 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
         }
       }
       
-      // Streak bonus: 5+ streak = 1.5x, 10+ streak = 2x, 15+ streak = 2.5x
       if (maxStreak >= 15) return 2.5;
       if (maxStreak >= 10) return 2.0;
       if (maxStreak >= 5) return 1.5;
       return 1.0;
     };
 
-    // Calculate earnings with server-side validation
+    // Calculate earnings using SERVER-VALIDATED score
     const difficultyMultipliers: Record<string, number> = { easy: 1.0, medium: 1.2, hard: 1.5 };
-    const basePoints = correct_answers * 1; // 1 point per correct answer
+    const basePoints = correctCount * 1;
     const difficultyMultiplier = difficultyMultipliers[session.difficulty] || 1.0;
-    const streakBonus = calculateStreakBonus(safeAnswerSequence);
+    const streakBonus = calculateStreakBonus(answerSequence);
     let totalEarnings = basePoints * difficultyMultiplier * streakBonus;
     
     console.log(`💰 Earnings calculation for ${req.user.username}:`, {
@@ -301,12 +461,12 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       totalEarnings = MAX_EARNINGS_PER_GAME;
     }
 
-    // Update session with results
+    // Update session with SERVER-VALIDATED results
     await database.query(`
       UPDATE math_game_sessions 
-      SET score = $1, correct_answers = $2, total_problems = $3, earnings = $4
+      SET score = $1, correct_answers = $2, total_problems = $3, earnings = $4, submitted = TRUE, server_validated_score = $2
       WHERE id = $5
-    `, [score, correct_answers, total_problems, totalEarnings, session_id]);
+    `, [correctCount, correctCount, safeAnswers.length, totalEarnings, session_id]);
 
     // Update high score if this is a new record
     const currentHighScore = await database.get(`
@@ -314,36 +474,37 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       WHERE user_id = $1 AND difficulty = $2
     `, [userId, session.difficulty]);
 
-    if (!currentHighScore || score > currentHighScore.high_score) {
+    if (!currentHighScore || correctCount > currentHighScore.high_score) {
       await database.query(`
         INSERT INTO math_game_high_scores (user_id, difficulty, high_score)
         VALUES ($1, $2, $3)
         ON CONFLICT (user_id, difficulty) 
         DO UPDATE SET high_score = $3, achieved_at = CURRENT_TIMESTAMP
-      `, [userId, session.difficulty, score]);
+      `, [userId, session.difficulty, correctCount]);
     }
 
     // Add earnings to account balance
     const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [userId]);
     if (account) {
-      // Update account balance
       await database.query(`
         UPDATE accounts 
         SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP
         WHERE id = $2
       `, [totalEarnings, account.id]);
 
-      // Create transaction record
       await database.query(`
         INSERT INTO transactions (to_account_id, amount, transaction_type, description)
         VALUES ($1, $2, 'deposit', $3)
       `, [account.id, totalEarnings, `Math Game Earnings - ${session.difficulty.charAt(0).toUpperCase() + session.difficulty.slice(1)}`]);
     }
 
+    console.log(`🎉 Game completed for ${req.user.username}: Score ${correctCount}, Earned R${totalEarnings.toFixed(2)}`);
+
     res.json({ 
       success: true, 
+      score: correctCount,
       earnings: totalEarnings,
-      isNewHighScore: !currentHighScore || score > currentHighScore.high_score
+      isNewHighScore: !currentHighScore || correctCount > currentHighScore.high_score
     });
   } catch (error) {
     console.error('Submit math game error:', error);

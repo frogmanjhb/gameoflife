@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { 
   MathGameStatus, MathGameStartRequest, MathGameSubmitRequest, 
+  MathGameStartResponse, MathGameSubmitResponse, MathGameAnswerResponse,
   Job, JobApplication, LandParcel, LandPurchaseRequest, 
   LandStats, MyPropertiesResponse, BiomeConfig, BiomeType,
   TaxBracket, TreasuryInfo, TaxReport, SalaryPaymentResult, TownSettings,
@@ -71,13 +72,18 @@ export const mathGameApi = {
     return api.get('/math-game/status');
   },
 
-  // Start a new math game session
-  startGame: (data: MathGameStartRequest): Promise<{ data: { session: any } }> => {
+  // Start a new math game session (returns server-generated problems WITHOUT answers)
+  startGame: (data: MathGameStartRequest): Promise<{ data: MathGameStartResponse }> => {
     return api.post('/math-game/start', data);
   },
 
-  // Submit math game results
-  submitGame: (data: MathGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; isNewHighScore: boolean } }> => {
+  // Submit an individual answer for real-time server validation
+  submitAnswer: (data: { session_id: number; problem_index: number; answer: number }): Promise<{ data: MathGameAnswerResponse }> => {
+    return api.post('/math-game/answer', data);
+  },
+
+  // Submit final game results (server validates all answers)
+  submitGame: (data: MathGameSubmitRequest): Promise<{ data: MathGameSubmitResponse }> => {
     return api.post('/math-game/submit', data);
   }
 };

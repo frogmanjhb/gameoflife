@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { X, Play, Trophy, Clock, Target, Zap, CheckCircle, XCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { X, Play, Trophy, Clock, Target, Zap, CheckCircle, XCircle, Shield } from 'lucide-react';
 import { mathGameApi } from '../services/api';
-import { MathProblem, MathGameStatus } from '../types';
+import { MathProblem, MathGameStatus, MathGameAnswer } from '../types';
 
 interface MathGameModalProps {
   isOpen: boolean;
@@ -24,9 +24,7 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(60);
   const [score, setScore] = useState(0);
-  const [currentProblem, setCurrentProblem] = useState<MathProblem | null>(null);
   const [userAnswer, setUserAnswer] = useState('');
-  const [answerSequence, setAnswerSequence] = useState<boolean[]>([]);
   const [streak, setStreak] = useState(0);
   const [maxStreak, setMaxStreak] = useState(0);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
@@ -34,6 +32,14 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
   const [gameResults, setGameResults] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [spamMessage, setSpamMessage] = useState<string | null>(null);
+  
+  // SERVER-SIDE SECURITY: Problems are now provided by the server
+  const [serverProblems, setServerProblems] = useState<MathProblem[]>([]);
+  const [currentProblemIndex, setCurrentProblemIndex] = useState(0);
+  const [submittedAnswers, setSubmittedAnswers] = useState<MathGameAnswer[]>([]);
+  
+  // Use ref to track answers for the endGame callback
+  const submittedAnswersRef = useRef<MathGameAnswer[]>([]);
 
   // Funny messages for spam attempts
   const spamMessages = [
@@ -49,128 +55,99 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
     "BONK! No cheating! 🔨",
   ];
 
-  // Problem generation
-  const generateProblem = useCallback((diff: Difficulty): MathProblem => {
-    // Define appropriate ranges for each difficulty and operation
-    const config = {
-      easy: {
-        addition: { max: 20, min: 1 },
-        subtraction: { max: 20, min: 1 },
-        multiplication: { max: 12, min: 1 },
-        division: { max: 12, min: 2 }
-      },
-      medium: {
-        addition: { max: 50, min: 1 },
-        subtraction: { max: 50, min: 1 },
-        multiplication: { max: 15, min: 1 },
-        division: { max: 15, min: 2 }
-      },
-      hard: {
-        addition: { max: 100, min: 1 },
-        subtraction: { max: 100, min: 1 },
-        multiplication: { max: 20, min: 1 },
-        division: { max: 20, min: 2 }
-      }
-    };
+  // Get current problem from server-provided list
+  const currentProblem = serverProblems[currentProblemIndex] || null;
 
-    const ranges = config[diff];
-    const operations = ['+', '-', '×', '÷'] as const;
-    const operation = operations[Math.floor(Math.random() * operations.length)];
-
-    let num1: number, num2: number, answer: number;
-
-    switch (operation) {
-      case '+':
-        num1 = Math.floor(Math.random() * (ranges.addition.max - ranges.addition.min + 1)) + ranges.addition.min;
-        num2 = Math.floor(Math.random() * (ranges.addition.max - ranges.addition.min + 1)) + ranges.addition.min;
-        answer = num1 + num2;
-        break;
-      case '-':
-        num1 = Math.floor(Math.random() * (ranges.subtraction.max - ranges.subtraction.min + 1)) + ranges.subtraction.min;
-        num2 = Math.floor(Math.random() * (ranges.subtraction.max - ranges.subtraction.min + 1)) + ranges.subtraction.min;
-        // Ensure positive result
-        if (num1 < num2) [num1, num2] = [num2, num1];
-        answer = num1 - num2;
-        break;
-      case '×':
-        num1 = Math.floor(Math.random() * (ranges.multiplication.max - ranges.multiplication.min + 1)) + ranges.multiplication.min;
-        num2 = Math.floor(Math.random() * (ranges.multiplication.max - ranges.multiplication.min + 1)) + ranges.multiplication.min;
-        answer = num1 * num2;
-        break;
-      case '÷':
-        // Ensure no remainders - generate answer first, then divisor
-        answer = Math.floor(Math.random() * (ranges.division.max - ranges.division.min + 1)) + ranges.division.min;
-        num2 = Math.floor(Math.random() * (ranges.division.max - ranges.division.min + 1)) + ranges.division.min;
-        num1 = num2 * answer;
-        break;
-    }
-
-    return {
-      num1,
-      num2,
-      operation,
-      answer,
-      display: `${num1} ${operation} ${num2} =`
-    };
-  }, []);
-
-  // Start game
+  // Start game - now receives server-generated problems
   const startGame = async (diff: Difficulty) => {
     try {
       setDifficulty(diff);
       const response = await mathGameApi.startGame({ difficulty: diff });
+      
+      // Store session and SERVER-GENERATED problems (without answers!)
       setSessionId(response.data.session.id);
+      setServerProblems(response.data.problems);
+      setCurrentProblemIndex(0);
+      setSubmittedAnswers([]);
+      submittedAnswersRef.current = [];
+      
       setGameState('playing');
       setTimeLeft(60);
       setScore(0);
-      setAnswerSequence([]);
       setStreak(0);
       setMaxStreak(0);
       setUserAnswer('');
-      setCurrentProblem(generateProblem(diff));
+      
+      console.log(`🔒 Started secure game with ${response.data.problems.length} server-generated problems`);
     } catch (error) {
       console.error('Failed to start game:', error);
       alert('Failed to start game. Please try again.');
     }
   };
 
-  // Handle answer submission
-  const handleAnswerSubmit = () => {
+  // Handle answer submission - now validates with server
+  const handleAnswerSubmit = async () => {
     // Detect and shame spam attempts during feedback delay
     if (showFeedback) {
       const randomMessage = spamMessages[Math.floor(Math.random() * spamMessages.length)];
       setSpamMessage(randomMessage);
-      // Clear the message after a short delay
       setTimeout(() => setSpamMessage(null), 1500);
       return;
     }
     
     // Prevent submissions without valid data
-    if (!currentProblem || !userAnswer.trim()) return;
+    if (!currentProblem || !userAnswer.trim() || !sessionId) return;
 
     const userAnswerNum = parseInt(userAnswer);
-    const correct = userAnswerNum === currentProblem.answer;
     
-    setIsCorrect(correct);
+    // Record the answer for final submission
+    const newAnswer: MathGameAnswer = {
+      problem_index: currentProblemIndex,
+      answer: userAnswerNum
+    };
+    
+    // Update both state and ref
+    setSubmittedAnswers(prev => {
+      const updated = [...prev, newAnswer];
+      submittedAnswersRef.current = updated;
+      return updated;
+    });
+    
     setShowFeedback(true);
-    setAnswerSequence(prev => [...prev, correct]);
+    
+    try {
+      // SERVER-SIDE VALIDATION: Send answer to server for verification
+      const response = await mathGameApi.submitAnswer({
+        session_id: sessionId,
+        problem_index: currentProblemIndex,
+        answer: userAnswerNum
+      });
+      
+      const correct = response.data.correct;
+      setIsCorrect(correct);
 
-    if (correct) {
-      const newStreak = streak + 1;
-      setStreak(newStreak);
-      setMaxStreak(prev => Math.max(prev, newStreak));
-      setScore(prev => prev + 1);
-    } else {
+      if (correct) {
+        const newStreak = streak + 1;
+        setStreak(newStreak);
+        setMaxStreak(prev => Math.max(prev, newStreak));
+        setScore(prev => prev + 1);
+      } else {
+        setStreak(0);
+      }
+    } catch (error) {
+      console.error('Failed to validate answer:', error);
+      // On network error, assume incorrect to prevent cheating
+      setIsCorrect(false);
       setStreak(0);
     }
 
-    // Clear input and generate new problem after brief delay
+    // Move to next problem after brief delay
     setTimeout(() => {
       setUserAnswer('');
-      setCurrentProblem(generateProblem(difficulty));
+      setCurrentProblemIndex(prev => prev + 1);
       setIsCorrect(null);
       setShowFeedback(false);
-    }, 1000);
+    }, 800); // Slightly shorter delay for better UX
   };
 
   // Handle key press
@@ -207,30 +184,33 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
     setIsSubmitting(true);
     setGameState('results'); // Immediately show results state to prevent re-triggering
     
+    // Use ref to get current answers (state may be stale in callback)
+    const currentAnswers = submittedAnswersRef.current;
+    
     try {
-      console.log('Submitting game:', { 
+      console.log('Submitting game for SERVER-SIDE validation:', { 
         sessionId, 
-        score, 
-        answerSequenceLength: answerSequence.length 
+        answersCount: currentAnswers.length 
       });
       
+      // SERVER-SIDE VALIDATION: Send all answers for final verification
       const response = await mathGameApi.submitGame({
         session_id: sessionId,
-        score,
-        correct_answers: score,
-        total_problems: answerSequence.length,
-        answer_sequence: answerSequence
+        answers: currentAnswers
       });
 
       console.log('Game submission successful:', response.data);
 
+      // Use SERVER-VALIDATED score, not client score
+      const serverScore = response.data.score;
+      
       setGameResults({
-        score,
-        correctAnswers: score,
-        totalProblems: answerSequence.length,
+        score: serverScore,
+        correctAnswers: serverScore,
+        totalProblems: currentAnswers.length,
         earnings: response.data.earnings,
         isNewHighScore: response.data.isNewHighScore,
-        accuracy: answerSequence.length > 0 ? (score / answerSequence.length) * 100 : 0
+        accuracy: currentAnswers.length > 0 ? (serverScore / currentAnswers.length) * 100 : 0
       });
 
       onGameComplete();
@@ -241,18 +221,18 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
       
       // Still show results even if submission failed
       setGameResults({
-        score,
-        correctAnswers: score,
-        totalProblems: answerSequence.length,
+        score: 0,
+        correctAnswers: 0,
+        totalProblems: currentAnswers.length,
         earnings: 0,
         isNewHighScore: false,
-        accuracy: answerSequence.length > 0 ? (score / answerSequence.length) * 100 : 0,
+        accuracy: 0,
         error: errorMessage
       });
     } finally {
       setIsSubmitting(false);
     }
-  }, [sessionId, score, answerSequence, isSubmitting, onGameComplete]);
+  }, [sessionId, isSubmitting, onGameComplete]);
 
   // Timer effect - uses endGame which must be defined above
   useEffect(() => {
@@ -274,9 +254,7 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
     setSessionId(null);
     setTimeLeft(60);
     setScore(0);
-    setCurrentProblem(null);
     setUserAnswer('');
-    setAnswerSequence([]);
     setStreak(0);
     setMaxStreak(0);
     setIsCorrect(null);
@@ -284,6 +262,11 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
     setGameResults(null);
     setIsSubmitting(false);
     setSpamMessage(null);
+    // Reset server-side problem tracking
+    setServerProblems([]);
+    setCurrentProblemIndex(0);
+    setSubmittedAnswers([]);
+    submittedAnswersRef.current = [];
   };
 
   // Close modal
@@ -299,7 +282,15 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
       <div className="bg-gray-900 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">Math Game</h2>
+          <div className="flex items-center space-x-2">
+            <h2 className="text-xl font-bold text-white">Math Game</h2>
+            {gameState === 'playing' && (
+              <div className="flex items-center text-green-400 text-xs" title="Answers validated by server">
+                <Shield className="h-4 w-4 mr-1" />
+                <span>Secure</span>
+              </div>
+            )}
+          </div>
           <button
             onClick={handleClose}
             className="text-gray-400 hover:text-white transition-colors"
@@ -402,7 +393,9 @@ const MathGameModal: React.FC<MathGameModalProps> = ({
               {/* Problem */}
               <div className="bg-gray-800 rounded-xl p-8 text-center">
                 <div className="text-4xl font-bold text-white mb-6">
-                  {currentProblem?.display}
+                  {currentProblem?.display || (
+                    <span className="text-gray-500">Waiting for next problem...</span>
+                  )}
                 </div>
                 
                 {/* Input Field */}

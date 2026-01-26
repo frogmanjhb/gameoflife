@@ -156,12 +156,14 @@ export interface MathGameStartRequest {
   difficulty: 'easy' | 'medium' | 'hard';
 }
 
+export interface MathGameAnswer {
+  problem_index: number;
+  answer: number;
+}
+
 export interface MathGameSubmitRequest {
   session_id: number;
-  score: number;
-  correct_answers: number;
-  total_problems: number;
-  answer_sequence: boolean[]; // true for correct, false for incorrect
+  answers: MathGameAnswer[]; // Each answer with its problem index for server validation
 }
 
 // Land Registry Types
