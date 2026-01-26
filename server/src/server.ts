@@ -23,6 +23,7 @@ import townRulesRoutes from './routes/town-rules';
 import winkelRoutes from './routes/winkel';
 import pizzaTimeRoutes from './routes/pizza-time';
 import leaderboardRoutes from './routes/leaderboard';
+import suggestionsBugsRoutes from './routes/suggestions-bugs';
 import adminRoutes from './routes/admin';
 import database from './database/database-prod';
 
@@ -161,6 +162,7 @@ app.use('/api/town-rules', townRulesRoutes);
 app.use('/api/winkel', winkelRoutes);
 app.use('/api/pizza-time', pizzaTimeRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/suggestions-bugs', suggestionsBugsRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Error handling middleware
@@ -387,6 +389,78 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Pizza Time plugin may have already been added:', migrationError);
+    }
+
+    // Run User Approval Status migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '016_add_user_approval_status.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ User approval status migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ User approval status migration may have already been applied:', migrationError);
+    }
+
+    // Run Announcement customization migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '017_add_announcement_customization.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Announcement customization migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Announcement customization migration may have already been applied:', migrationError);
+    }
+
+    // Add Leaderboard plugin
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '018_add_leaderboard_plugin.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Leaderboard plugin added');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Leaderboard plugin may have already been added:', migrationError);
+    }
+
+    // Run Profile Emoji migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '019_profile_emoji_system.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Profile emoji migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Profile emoji migration may have already been applied:', migrationError);
+    }
+
+    // Run Suggestion Box tables migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '020_suggestion_box.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Suggestions & bug reports tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Suggestions & bug reports tables may have already been applied:', migrationError);
+    }
+
+    // Add Suggestions & Bugs plugin
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '021_add_suggestions_bugs_plugin.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Suggestions & Bugs plugin added');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Suggestions & Bugs plugin may have already been added:', migrationError);
     }
     
     const schema = readFileSync(schemaPath, 'utf8');

@@ -248,6 +248,7 @@ router.delete('/:username', authenticateToken, requireRole(['teacher']), async (
 router.post('/:username/reset-password', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { username } = req.params;
+    const reveal = req.body?.reveal === true;
 
     // Get student info
     const student = await database.get(`
@@ -281,11 +282,18 @@ router.post('/:username/reset-password', authenticateToken, requireRole(['teache
 
     console.log(`🔑 Teacher ${req.user?.username} reset password for student ${username}`);
     
-    res.json({
-      message: 'Password reset successfully',
-      temporary_password: temporaryPassword,
-      username: student.username
-    });
+    res.json(
+      reveal
+        ? {
+            message: 'Password reset successfully',
+            temporary_password: temporaryPassword,
+            username: student.username
+          }
+        : {
+            message: 'Password reset successfully',
+            username: student.username
+          }
+    );
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -436,6 +444,42 @@ router.get('/:username/details', authenticateToken, requireRole(['teacher']), as
       ORDER BY ja.created_at DESC
     `, [student.id]);
 
+    // Get Suggestions & Bug reports (recent)
+    const suggestions = await database.query(
+      `
+      SELECT
+        id,
+        content,
+        status,
+        reviewed_at,
+        reward_paid,
+        created_at
+      FROM suggestions
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 10
+      `,
+      [student.id]
+    );
+
+    const bugReports = await database.query(
+      `
+      SELECT
+        id,
+        title,
+        description,
+        status,
+        reviewed_at,
+        reward_paid,
+        created_at
+      FROM bug_reports
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 10
+      `,
+      [student.id]
+    );
+
     // Calculate statistics
     const stats = {
       total_transactions: transactions.length,
@@ -470,6 +514,8 @@ router.get('/:username/details', authenticateToken, requireRole(['teacher']), as
       pizzaContributions,
       shopPurchases,
       jobApplications,
+      suggestions,
+      bugReports,
       stats
     });
   } catch (error) {

@@ -27,6 +27,7 @@ const town_rules_1 = __importDefault(require("./routes/town-rules"));
 const winkel_1 = __importDefault(require("./routes/winkel"));
 const pizza_time_1 = __importDefault(require("./routes/pizza-time"));
 const leaderboard_1 = __importDefault(require("./routes/leaderboard"));
+const suggestions_bugs_1 = __importDefault(require("./routes/suggestions-bugs"));
 const admin_1 = __importDefault(require("./routes/admin"));
 const database_prod_1 = __importDefault(require("./database/database-prod"));
 const app = (0, express_1.default)();
@@ -144,6 +145,7 @@ app.use('/api/town-rules', town_rules_1.default);
 app.use('/api/winkel', winkel_1.default);
 app.use('/api/pizza-time', pizza_time_1.default);
 app.use('/api/leaderboard', leaderboard_1.default);
+app.use('/api/suggestions-bugs', suggestions_bugs_1.default);
 app.use('/api/admin', admin_1.default);
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -366,6 +368,78 @@ async function initializeDatabase() {
         }
         catch (migrationError) {
             console.log('⚠️ Pizza Time plugin may have already been added:', migrationError);
+        }
+        // Run User Approval Status migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '016_add_user_approval_status.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ User approval status migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ User approval status migration may have already been applied:', migrationError);
+        }
+        // Run Announcement customization migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '017_add_announcement_customization.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Announcement customization migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Announcement customization migration may have already been applied:', migrationError);
+        }
+        // Add Leaderboard plugin
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '018_add_leaderboard_plugin.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Leaderboard plugin added');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Leaderboard plugin may have already been added:', migrationError);
+        }
+        // Run Profile Emoji migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '019_profile_emoji_system.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Profile emoji migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Profile emoji migration may have already been applied:', migrationError);
+        }
+        // Run Suggestion Box tables migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '020_suggestion_box.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Suggestions & bug reports tables migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Suggestions & bug reports tables may have already been applied:', migrationError);
+        }
+        // Add Suggestions & Bugs plugin
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '021_add_suggestions_bugs_plugin.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Suggestions & Bugs plugin added');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Suggestions & Bugs plugin may have already been added:', migrationError);
         }
         const schema = (0, fs_1.readFileSync)(schemaPath, 'utf8');
         await database_prod_1.default.query(schema);

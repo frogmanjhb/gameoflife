@@ -1,0 +1,249 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const express_validator_1 = require("express-validator");
+const database_prod_1 = __importDefault(require("../database/database-prod"));
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+const REWARD_AMOUNT = 1000;
+// Student: submit a suggestion
+router.post('/suggestions', [
+    (0, express_validator_1.body)('content').isString().trim().isLength({ min: 5, max: 5000 }).withMessage('Content must be 5-5000 characters')
+], auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        const { content } = req.body;
+        const created = await database_prod_1.default.run('INSERT INTO suggestions (user_id, content) VALUES ($1, $2) RETURNING id', [req.user.id, content]);
+        res.json({ message: 'Suggestion submitted', id: created.lastID });
+    }
+    catch (error) {
+        console.error('Submit suggestion error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Student: submit a bug report
+router.post('/bugs', [
+    (0, express_validator_1.body)('title').isString().trim().isLength({ min: 3, max: 255 }).withMessage('Title must be 3-255 characters'),
+    (0, express_validator_1.body)('description').isString().trim().isLength({ min: 10, max: 10000 }).withMessage('Description must be 10-10000 characters')
+], auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        const { title, description } = req.body;
+        const created = await database_prod_1.default.run('INSERT INTO bug_reports (user_id, title, description) VALUES ($1, $2, $3) RETURNING id', [req.user.id, title, description]);
+        res.json({ message: 'Bug report submitted', id: created.lastID });
+    }
+    catch (error) {
+        console.error('Submit bug report error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Student: view my submissions
+router.get('/my', auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        const suggestions = await database_prod_1.default.query(`
+      SELECT
+        s.*,
+        ru.username as reviewed_by_username
+      FROM suggestions s
+      LEFT JOIN users ru ON s.reviewed_by = ru.id
+      WHERE s.user_id = $1
+      ORDER BY s.created_at DESC
+      `, [req.user.id]);
+        const bugReports = await database_prod_1.default.query(`
+      SELECT
+        b.*,
+        ru.username as reviewed_by_username
+      FROM bug_reports b
+      LEFT JOIN users ru ON b.reviewed_by = ru.id
+      WHERE b.user_id = $1
+      ORDER BY b.created_at DESC
+      `, [req.user.id]);
+        res.json({ suggestions, bugReports });
+    }
+    catch (error) {
+        console.error('Get my suggestions/bugs error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Teacher: review queue (pending only)
+router.get('/admin/queue', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (_req, res) => {
+    try {
+        const suggestions = await database_prod_1.default.query(`
+      SELECT
+        s.*,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class
+      FROM suggestions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.status = 'pending'
+      ORDER BY s.created_at ASC
+      `);
+        const bugReports = await database_prod_1.default.query(`
+      SELECT
+        b.*,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class
+      FROM bug_reports b
+      JOIN users u ON b.user_id = u.id
+      WHERE b.status = 'pending'
+      ORDER BY b.created_at ASC
+      `);
+        res.json({ suggestions, bugReports });
+    }
+    catch (error) {
+        console.error('Get review queue error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Teacher: review suggestion (approve/deny). Approve auto-pays reward once.
+router.put('/admin/suggestions/:id/review', [(0, express_validator_1.body)('status').isIn(['approved', 'denied']).withMessage('Status must be approved or denied')], auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    const errors = (0, express_validator_1.validationResult)(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+    if (!req.user) {
+        return res.status(401).json({ error: 'User not found' });
+    }
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid suggestion id' });
+    }
+    const { status } = req.body;
+    const client = await database_prod_1.default.pool.connect();
+    try {
+        await client.query('BEGIN');
+        const suggestionRes = await client.query('SELECT * FROM suggestions WHERE id = $1 FOR UPDATE', [id]);
+        const suggestion = suggestionRes.rows?.[0];
+        if (!suggestion) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Suggestion not found' });
+        }
+        if (suggestion.status !== 'pending') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: `Suggestion is already ${suggestion.status}` });
+        }
+        await client.query(`
+        UPDATE suggestions
+        SET status = $1,
+            reviewed_by = $2,
+            reviewed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3
+        `, [status, req.user.id, id]);
+        let rewardPaid = false;
+        if (status === 'approved' && !suggestion.reward_paid) {
+            const accountRes = await client.query('SELECT id FROM accounts WHERE user_id = $1', [suggestion.user_id]);
+            const accountId = accountRes.rows?.[0]?.id;
+            if (accountId) {
+                await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [REWARD_AMOUNT, accountId]);
+                await client.query('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [accountId, REWARD_AMOUNT, 'deposit', 'Reward for approved suggestion']);
+                await client.query(`
+            UPDATE suggestions
+            SET reward_paid = true,
+                reward_paid_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+            `, [id]);
+                rewardPaid = true;
+            }
+        }
+        await client.query('COMMIT');
+        res.json({ message: `Suggestion ${status}`, reward_paid: rewardPaid });
+    }
+    catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Review suggestion error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+    finally {
+        client.release();
+    }
+});
+// Teacher: review bug report (verify/deny). Verify auto-pays reward once.
+router.put('/admin/bugs/:id/review', [(0, express_validator_1.body)('status').isIn(['verified', 'denied']).withMessage('Status must be verified or denied')], auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    const errors = (0, express_validator_1.validationResult)(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+    if (!req.user) {
+        return res.status(401).json({ error: 'User not found' });
+    }
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid bug report id' });
+    }
+    const { status } = req.body;
+    const client = await database_prod_1.default.pool.connect();
+    try {
+        await client.query('BEGIN');
+        const bugRes = await client.query('SELECT * FROM bug_reports WHERE id = $1 FOR UPDATE', [id]);
+        const bug = bugRes.rows?.[0];
+        if (!bug) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Bug report not found' });
+        }
+        if (bug.status !== 'pending') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: `Bug report is already ${bug.status}` });
+        }
+        await client.query(`
+        UPDATE bug_reports
+        SET status = $1,
+            reviewed_by = $2,
+            reviewed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3
+        `, [status, req.user.id, id]);
+        let rewardPaid = false;
+        if (status === 'verified' && !bug.reward_paid) {
+            const accountRes = await client.query('SELECT id FROM accounts WHERE user_id = $1', [bug.user_id]);
+            const accountId = accountRes.rows?.[0]?.id;
+            if (accountId) {
+                await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [REWARD_AMOUNT, accountId]);
+                await client.query('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [accountId, REWARD_AMOUNT, 'deposit', 'Reward for verified bug report']);
+                await client.query(`
+            UPDATE bug_reports
+            SET reward_paid = true,
+                reward_paid_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+            `, [id]);
+                rewardPaid = true;
+            }
+        }
+        await client.query('COMMIT');
+        res.json({ message: `Bug report ${status}`, reward_paid: rewardPaid });
+    }
+    catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Review bug report error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+    finally {
+        client.release();
+    }
+});
+exports.default = router;
+//# sourceMappingURL=suggestions-bugs.js.map

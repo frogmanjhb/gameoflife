@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "rm -rf dist && node node_modules/typescript/lib/tsc.js && node node_modules/copyfiles/index.js src/database/*.sql dist/database/ --flat && node node_modules/copyfiles/index.js migrations/*.sql dist/migrations/ --flat && node node_modules/copyfiles/index.js seed-town-hub.js dist/",
+    "build": "rimraf dist && node node_modules/typescript/lib/tsc.js && node node_modules/copyfiles/index.js src/database/*.sql dist/database/ --flat && node node_modules/copyfiles/index.js migrations/*.sql dist/migrations/ --flat && node node_modules/copyfiles/index.js seed-town-hub.js dist/",
     "start": "node dist/server.js"
   },
   "dependencies": {
@@ -25,6 +25,7 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.3",
+    "rimraf": "^6.1.2",
     "sqlite3": "^5.1.7",
     "tsx": "^4.6.2",
     "typescript": "^5.3.3",

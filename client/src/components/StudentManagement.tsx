@@ -179,7 +179,6 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const toggleStudentExpanded = (student: Student) => {
     const studentId = student.id;
     const isCurrentlyExpanded = expandedStudents.has(studentId);
-    const hasPassword = studentPasswords[studentId];
 
     const newExpanded = new Set(expandedStudents);
     if (isCurrentlyExpanded) {
@@ -190,26 +189,6 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
 
     newExpanded.add(studentId);
     setExpandedStudents(newExpanded);
-
-    // When expanding: if we don't have a password yet, auto-fetch via reset so they can see both
-    if (!hasPassword) {
-      fetchPasswordForStudent(student);
-    }
-  };
-
-  const fetchPasswordForStudent = async (student: Student) => {
-    setResettingPassword(student.id);
-    setError('');
-    
-    try {
-      const response = await api.post(`/students/${student.username}/reset-password`);
-      const newPassword = response.data.temporary_password;
-      setStudentPasswords((prev) => ({ ...prev, [student.id]: newPassword }));
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to fetch password');
-    } finally {
-      setResettingPassword(null);
-    }
   };
 
   const handleResetPassword = async (student: Student) => {
@@ -218,8 +197,12 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
     setSuccess('');
     
     try {
-      const response = await api.post(`/students/${student.username}/reset-password`);
+      const response = await api.post(`/students/${student.username}/reset-password`, { reveal: true });
       const newPassword = response.data.temporary_password;
+      if (!newPassword) {
+        setSuccess(`Password reset for ${student.username}. (Password not returned by server)`);
+        return;
+      }
       setStudentPasswords((prev) => ({ ...prev, [student.id]: newPassword }));
       setSuccess(`Password reset for ${student.username}. Share the new password with the student.`);
       

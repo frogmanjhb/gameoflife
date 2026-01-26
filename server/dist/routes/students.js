@@ -213,6 +213,7 @@ router.delete('/:username', auth_1.authenticateToken, (0, auth_1.requireRole)(['
 router.post('/:username/reset-password', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         const { username } = req.params;
+        const reveal = req.body?.reveal === true;
         // Get student info
         const student = await database_prod_1.default.get(`
       SELECT u.id, u.username, u.role
@@ -236,11 +237,16 @@ router.post('/:username/reset-password', auth_1.authenticateToken, (0, auth_1.re
         // Update the student's password
         await database_prod_1.default.run('UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [passwordHash, student.id]);
         console.log(`🔑 Teacher ${req.user?.username} reset password for student ${username}`);
-        res.json({
-            message: 'Password reset successfully',
-            temporary_password: temporaryPassword,
-            username: student.username
-        });
+        res.json(reveal
+            ? {
+                message: 'Password reset successfully',
+                temporary_password: temporaryPassword,
+                username: student.username
+            }
+            : {
+                message: 'Password reset successfully',
+                username: student.username
+            });
     }
     catch (error) {
         console.error('Reset password error:', error);
@@ -380,6 +386,34 @@ router.get('/:username/details', auth_1.authenticateToken, (0, auth_1.requireRol
       WHERE ja.user_id = $1
       ORDER BY ja.created_at DESC
     `, [student.id]);
+        // Get Suggestions & Bug reports (recent)
+        const suggestions = await database_prod_1.default.query(`
+      SELECT
+        id,
+        content,
+        status,
+        reviewed_at,
+        reward_paid,
+        created_at
+      FROM suggestions
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 10
+      `, [student.id]);
+        const bugReports = await database_prod_1.default.query(`
+      SELECT
+        id,
+        title,
+        description,
+        status,
+        reviewed_at,
+        reward_paid,
+        created_at
+      FROM bug_reports
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 10
+      `, [student.id]);
         // Calculate statistics
         const stats = {
             total_transactions: transactions.length,
@@ -405,6 +439,8 @@ router.get('/:username/details', auth_1.authenticateToken, (0, auth_1.requireRol
             pizzaContributions,
             shopPurchases,
             jobApplications,
+            suggestions,
+            bugReports,
             stats
         });
     }

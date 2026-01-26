@@ -85,6 +85,25 @@ interface JobApplication {
   job_salary: number;
 }
 
+interface SuggestionItem {
+  id: number;
+  content: string;
+  status: 'pending' | 'approved' | 'denied';
+  reviewed_at?: string;
+  reward_paid?: boolean;
+  created_at: string;
+}
+
+interface BugReportItem {
+  id: number;
+  title: string;
+  description: string;
+  status: 'pending' | 'verified' | 'denied';
+  reviewed_at?: string;
+  reward_paid?: boolean;
+  created_at: string;
+}
+
 interface Stats {
   total_transactions: number;
   total_transfers_sent: number;
@@ -110,6 +129,8 @@ interface StudentDetailData {
   pizzaContributions: any[];
   shopPurchases: any[];
   jobApplications: JobApplication[];
+  suggestions: SuggestionItem[];
+  bugReports: BugReportItem[];
   stats: Stats;
 }
 
@@ -160,6 +181,32 @@ const StudentDetailView: React.FC = () => {
       day: 'numeric',
       year: 'numeric'
     });
+  };
+
+  const renderStatusPill = (status: string, rewardPaid?: boolean) => {
+    const base = 'text-xs px-2 py-1 rounded-full flex items-center space-x-1';
+    if (status === 'approved' || status === 'verified') {
+      return (
+        <span className={`${base} bg-green-100 text-green-700`}>
+          <CheckCircle className="h-3 w-3" />
+          <span>{rewardPaid ? 'Approved • Paid' : 'Approved'}</span>
+        </span>
+      );
+    }
+    if (status === 'denied') {
+      return (
+        <span className={`${base} bg-red-100 text-red-700`}>
+          <XCircle className="h-3 w-3" />
+          <span>Denied</span>
+        </span>
+      );
+    }
+    return (
+      <span className={`${base} bg-yellow-100 text-yellow-700`}>
+        <AlertCircle className="h-3 w-3" />
+        <span>Pending</span>
+      </span>
+    );
   };
 
   const getDisplayName = (student: StudentDetail) => {
@@ -216,7 +263,7 @@ const StudentDetailView: React.FC = () => {
     );
   }
 
-  const { student, transactions, loans, landParcels, mathGameSessions, pizzaContributions, shopPurchases, jobApplications, stats } = data;
+  const { student, transactions, loans, landParcels, mathGameSessions, pizzaContributions, shopPurchases, jobApplications, suggestions, bugReports, stats } = data;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-12">
@@ -755,6 +802,59 @@ const StudentDetailView: React.FC = () => {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Suggestions & Bugs */}
+                {(suggestions.length > 0 || bugReports.length > 0) && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Suggestions &amp; Bugs</h3>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="font-semibold text-gray-900">Suggestions</p>
+                          <p className="text-xs text-gray-500">{suggestions.length}</p>
+                        </div>
+                        {suggestions.length === 0 ? (
+                          <p className="text-sm text-gray-600">No suggestions submitted.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {suggestions.map((s) => (
+                              <div key={s.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                                <div className="flex items-center justify-between">
+                                  {renderStatusPill(s.status, s.reward_paid)}
+                                  <span className="text-xs text-gray-500">{formatShortDate(s.created_at)}</span>
+                                </div>
+                                <p className="text-sm text-gray-800 mt-2 whitespace-pre-wrap">{s.content}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="font-semibold text-gray-900">Bug Reports</p>
+                          <p className="text-xs text-gray-500">{bugReports.length}</p>
+                        </div>
+                        {bugReports.length === 0 ? (
+                          <p className="text-sm text-gray-600">No bugs reported.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {bugReports.map((b) => (
+                              <div key={b.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                                <div className="flex items-center justify-between">
+                                  {renderStatusPill(b.status, b.reward_paid)}
+                                  <span className="text-xs text-gray-500">{formatShortDate(b.created_at)}</span>
+                                </div>
+                                <p className="text-sm font-semibold text-gray-900 mt-2">{b.title}</p>
+                                <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap">{b.description}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
