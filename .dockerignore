@@ -1,0 +1,17 @@
+**/node_modules
+**/dist
+**/build
+**/.cache
+**/.vite
+**/.turbo
+**/.next
+**/coverage
+
+.git
+.gitignore
+.github
+.vscode
+
+**/*.log
+**/.DS_Store
+
