@@ -72,7 +72,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('Attempting registration for:', username, role);
       const response = await api.post('/auth/register', { 
         username, 
-        password, 
+        password,
+        confirmPassword: password, // Backend requires this for validation
         role, 
         first_name, 
         last_name, 
