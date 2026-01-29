@@ -83,6 +83,14 @@ router.post('/register', [
       return res.status(400).json({ error: 'Username already exists' });
     }
 
+    // Check if email already exists (if provided)
+    if (emailAddress) {
+      const existingEmail = await database.get('SELECT id FROM users WHERE email = $1', [emailAddress]);
+      if (existingEmail) {
+        return res.status(400).json({ error: 'Email address is already registered. Please use a different email.' });
+      }
+    }
+
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -136,9 +144,29 @@ router.post('/register', [
     };
 
     res.status(201).json(response);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Registration error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    
+    // Handle specific database errors
+    if (error.code === '23505') { // PostgreSQL unique violation
+      if (error.constraint === 'users_username_key' || error.detail?.includes('username')) {
+        return res.status(400).json({ error: 'Username already exists' });
+      }
+      if (error.constraint === 'users_email_key' || error.detail?.includes('email')) {
+        return res.status(400).json({ error: 'Email address is already registered' });
+      }
+      return res.status(400).json({ error: 'A user with these details already exists' });
+    }
+    
+    // Log the full error for debugging
+    console.error('Full registration error details:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      constraint: error.constraint
+    });
+    
+    res.status(500).json({ error: 'Registration failed. Please try again or contact support.' });
   }
 });
 

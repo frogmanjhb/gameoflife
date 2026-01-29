@@ -98,6 +98,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       window.location.href = '/';
     } catch (error: any) {
       console.error('Registration error:', error);
+      console.error('Error response data:', error.response?.data);
+      
+      // Handle validation errors array from express-validator
+      if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
+        const firstError = error.response.data.errors[0];
+        throw new Error(firstError.msg || firstError.message || 'Validation failed');
+      }
+      
+      // Handle single error message
       throw new Error(error.response?.data?.error || 'Registration failed');
     }
   };
