@@ -588,6 +588,316 @@ router.get('/:username/details', authenticateToken, requireRole(['teacher']), as
   }
 });
 
+// Delete an account by account number (teachers only) - for orphaned accounts
+router.delete('/account/:accountNumber', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { accountNumber } = req.params;
+
+    // Get account info
+    const account = await database.get('SELECT id, user_id FROM accounts WHERE account_number = $1', [accountNumber]);
+
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    // If account has a user, check if user exists
+    let user = null;
+    if (account.user_id) {
+      user = await database.get('SELECT id, username, role FROM users WHERE id = $1', [account.user_id]);
+    }
+
+    // Delete related data in order (respecting foreign key constraints)
+    // 1. Delete transactions involving this account
+    await database.run('DELETE FROM transactions WHERE from_account_id = $1 OR to_account_id = $1', [account.id]);
+
+    // 2. If user exists, delete user-related data
+    if (user && user.role === 'student') {
+      // Delete loan payments for loans where student is borrower
+      await database.run(`
+        DELETE FROM loan_payments WHERE loan_id IN (
+          SELECT id FROM loans WHERE borrower_id = $1
+        )
+      `, [user.id]);
+
+      // Delete loans where student is borrower
+      await database.run('DELETE FROM loans WHERE borrower_id = $1', [user.id]);
+
+      // Delete job applications
+      await database.run('DELETE FROM job_applications WHERE user_id = $1', [user.id]);
+
+      // Delete land purchase requests
+      await database.run('DELETE FROM land_purchase_requests WHERE user_id = $1', [user.id]);
+
+      // Update owned land parcels (set owner to null)
+      await database.run('UPDATE land_parcels SET owner_id = NULL WHERE owner_id = $1', [user.id]);
+
+      // Delete tender applications
+      await database.run('DELETE FROM tender_applications WHERE applicant_id = $1', [user.id]);
+
+      // Delete math game sessions
+      await database.run('DELETE FROM math_game_sessions WHERE user_id = $1', [user.id]);
+
+      // Delete the user
+      await database.run('DELETE FROM users WHERE id = $1', [user.id]);
+    }
+
+    // Delete the account
+    await database.run('DELETE FROM accounts WHERE id = $1', [account.id]);
+
+    console.log(`🗑️ Teacher ${req.user?.username} deleted account ${accountNumber}${user ? ` (and associated user ${user.username})` : ' (orphaned account)'}`);
+    res.json({ 
+      message: `Account ${accountNumber} has been deleted successfully${user ? ` along with associated student account` : ' (orphaned account)'}` 
+    });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get account details by account number (teachers only) - for orphaned accounts
+router.get('/account/:accountNumber/details', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { accountNumber } = req.params;
+
+    // Get account with user info
+    const account = await database.get(`
+      SELECT 
+        a.id as account_id,
+        a.account_number,
+        a.balance,
+        a.created_at as account_created_at,
+        a.updated_at as last_activity,
+        u.id as user_id,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class,
+        u.email,
+        u.status,
+        u.created_at as user_created_at,
+        u.updated_at as user_updated_at,
+        u.job_id,
+        j.name as job_name,
+        j.description as job_description,
+        j.salary as job_salary,
+        j.company_name as job_company_name
+      FROM accounts a
+      LEFT JOIN users u ON a.user_id = u.id
+      LEFT JOIN jobs j ON u.job_id = j.id
+      WHERE a.account_number = $1
+    `, [accountNumber]);
+
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    // If no user associated, return account info only
+    if (!account.user_id) {
+      return res.json({
+        account: {
+          account_number: account.account_number,
+          balance: account.balance,
+          created_at: account.account_created_at,
+          last_activity: account.last_activity,
+          orphaned: true
+        },
+        student: null,
+        transactions: [],
+        loans: [],
+        landParcels: [],
+        mathGameSessions: [],
+        pizzaContributions: [],
+        shopPurchases: [],
+        jobApplications: [],
+        suggestions: [],
+        bugReports: [],
+        stats: {
+          total_transactions: 0,
+          total_transfers_sent: 0,
+          total_transfers_received: 0,
+          total_deposits: 0,
+          total_withdrawals: 0,
+          math_games_played: 0,
+          total_math_earnings: 0,
+          pizza_contributions_total: 0,
+          shop_purchases_total: 0,
+          land_parcels_owned: 0,
+          land_value_total: 0,
+          active_loans: 0,
+          total_loan_debt: 0
+        }
+      });
+    }
+
+    // Get all transactions
+    const transactions = await database.query(`
+      SELECT 
+        t.*,
+        fu.username as from_username,
+        fu.first_name as from_first_name,
+        fu.last_name as from_last_name,
+        tu.username as to_username,
+        tu.first_name as to_first_name,
+        tu.last_name as to_last_name
+      FROM transactions t
+      LEFT JOIN accounts fa ON t.from_account_id = fa.id
+      LEFT JOIN users fu ON fa.user_id = fu.id
+      LEFT JOIN accounts ta ON t.to_account_id = ta.id
+      LEFT JOIN users tu ON ta.user_id = tu.id
+      WHERE t.from_account_id = $1 OR t.to_account_id = $2
+      ORDER BY t.created_at DESC
+    `, [account.account_id, account.account_id]);
+
+    // Get loans
+    const loans = await database.query(`
+      SELECT 
+        l.*,
+        COALESCE(SUM(lp.amount), 0) as total_paid
+      FROM loans l
+      LEFT JOIN loan_payments lp ON l.id = lp.loan_id
+      WHERE l.borrower_id = $1
+      GROUP BY l.id
+      ORDER BY l.created_at DESC
+    `, [account.user_id]);
+
+    // Get land parcels
+    const landParcels = await database.query(`
+      SELECT * FROM land_parcels
+      WHERE owner_id = $1
+      ORDER BY purchased_at DESC
+    `, [account.user_id]);
+
+    // Get math game sessions
+    const mathGameSessions = await database.query(`
+      SELECT * FROM math_game_sessions
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 50
+    `, [account.user_id]);
+
+    // Get pizza contributions
+    const pizzaContributions = await database.query(`
+      SELECT * FROM pizza_time_contributions
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 50
+    `, [account.user_id]);
+
+    // Get shop purchases
+    const shopPurchases = await database.query(`
+      SELECT * FROM shop_purchases
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 50
+    `, [account.user_id]);
+
+    // Get job applications
+    const jobApplications = await database.query(`
+      SELECT * FROM job_applications
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `, [account.user_id]);
+
+    // Get suggestions
+    const suggestions = await database.query(`
+      SELECT
+        id,
+        title,
+        description,
+        status,
+        reviewed_at,
+        reward_paid,
+        created_at
+      FROM suggestions
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 10
+    `, [account.user_id]);
+
+    // Get bug reports
+    const bugReports = await database.query(`
+      SELECT
+        id,
+        title,
+        description,
+        status,
+        reviewed_at,
+        reward_paid,
+        created_at
+      FROM bug_reports
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 10
+    `, [account.user_id]);
+
+    // Calculate statistics
+    const stats = {
+      total_transactions: transactions.length,
+      total_transfers_sent: transactions.filter(t => 
+        t.transaction_type === 'transfer' && t.from_username === account.username
+      ).reduce((sum, t) => sum + parseFloat(t.amount), 0),
+      total_transfers_received: transactions.filter(t => 
+        t.transaction_type === 'transfer' && t.to_username === account.username
+      ).reduce((sum, t) => sum + parseFloat(t.amount), 0),
+      total_deposits: transactions.filter(t => 
+        t.transaction_type === 'deposit'
+      ).reduce((sum, t) => sum + parseFloat(t.amount), 0),
+      total_withdrawals: transactions.filter(t => 
+        t.transaction_type === 'withdrawal'
+      ).reduce((sum, t) => sum + parseFloat(t.amount), 0),
+      math_games_played: mathGameSessions.length,
+      total_math_earnings: mathGameSessions.reduce((sum, s) => sum + parseFloat(s.earnings), 0),
+      pizza_contributions_total: pizzaContributions.reduce((sum, p) => sum + parseFloat(p.amount), 0),
+      shop_purchases_total: shopPurchases.reduce((sum, s) => sum + parseFloat(s.amount), 0),
+      land_parcels_owned: landParcels.length,
+      land_value_total: landParcels.reduce((sum, l) => sum + parseFloat(l.value), 0),
+      active_loans: loans.filter(l => l.status === 'active').length,
+      total_loan_debt: loans.filter(l => l.status === 'active').reduce((sum, l) => sum + parseFloat(l.outstanding_balance), 0)
+    };
+
+    res.json({
+      account: {
+        account_number: account.account_number,
+        balance: account.balance,
+        created_at: account.account_created_at,
+        last_activity: account.last_activity
+      },
+      student: {
+        id: account.user_id,
+        username: account.username,
+        first_name: account.first_name,
+        last_name: account.last_name,
+        class: account.class,
+        email: account.email,
+        status: account.status,
+        created_at: account.user_created_at,
+        updated_at: account.user_updated_at,
+        job_id: account.job_id,
+        job_name: account.job_name,
+        job_description: account.job_description,
+        job_salary: account.job_salary,
+        job_company_name: account.job_company_name,
+        account_number: account.account_number,
+        balance: account.balance,
+        last_activity: account.last_activity
+      },
+      transactions,
+      loans,
+      landParcels,
+      mathGameSessions,
+      pizzaContributions,
+      shopPurchases,
+      jobApplications,
+      suggestions,
+      bugReports,
+      stats
+    });
+  } catch (error) {
+    console.error('Get account details error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get student details with loan information (teachers only) - Legacy endpoint
 router.get('/:username', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {

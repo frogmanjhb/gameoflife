@@ -8,15 +8,15 @@ import {
 import api from '../services/api';
 
 interface StudentDetail {
-  id: number;
-  username: string;
+  id?: number;
+  username?: string;
   first_name?: string;
   last_name?: string;
   class?: string;
   email?: string;
   status?: string;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
   job_id?: number;
   job_name?: string;
   job_description?: string;
@@ -24,7 +24,7 @@ interface StudentDetail {
   job_company_name?: string;
   account_number: string;
   balance: number;
-  last_activity: string;
+  last_activity?: string;
 }
 
 interface Transaction {
@@ -121,7 +121,14 @@ interface Stats {
 }
 
 interface StudentDetailData {
-  student: StudentDetail;
+  account?: {
+    account_number: string;
+    balance: number;
+    created_at?: string;
+    last_activity?: string;
+    orphaned?: boolean;
+  };
+  student: StudentDetail | null;
   transactions: Transaction[];
   loans: Loan[];
   landParcels: LandParcel[];
@@ -135,7 +142,9 @@ interface StudentDetailData {
 }
 
 const StudentDetailView: React.FC = () => {
-  const { username } = useParams<{ username: string }>();
+  const { username } = useParams<{ username?: string }>();
+  const { accountNumber } = useParams<{ accountNumber?: string }>();
+  const identifier = accountNumber || username || '';
   const navigate = useNavigate();
   const [data, setData] = useState<StudentDetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -144,12 +153,39 @@ const StudentDetailView: React.FC = () => {
 
   useEffect(() => {
     fetchStudentDetails();
-  }, [username]);
+  }, [identifier]);
 
   const fetchStudentDetails = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/students/${username}/details`);
+      setError('');
+      
+      // Check if we have accountNumber param or if identifier looks like an account number (starts with ACC)
+      const isAccountNumber = accountNumber || identifier?.startsWith('ACC');
+      
+      let response;
+      if (isAccountNumber) {
+        // Try account number endpoint first
+        try {
+          response = await api.get(`/students/account/${identifier}/details`);
+        } catch (accountErr: any) {
+          // If account endpoint fails, try username endpoint as fallback
+          response = await api.get(`/students/${identifier}/details`);
+        }
+      } else {
+        // Try username endpoint first
+        try {
+          response = await api.get(`/students/${identifier}/details`);
+        } catch (usernameErr: any) {
+          // If username fails with 404, it might be an account number
+          if (usernameErr.response?.status === 404) {
+            response = await api.get(`/students/account/${identifier}/details`);
+          } else {
+            throw usernameErr;
+          }
+        }
+      }
+      
       setData(response.data);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load student details');
@@ -209,11 +245,12 @@ const StudentDetailView: React.FC = () => {
     );
   };
 
-  const getDisplayName = (student: StudentDetail) => {
+  const getDisplayName = (student: StudentDetail | null) => {
+    if (!student) return 'Unknown';
     if (student.first_name && student.last_name) {
       return `${student.first_name} ${student.last_name}`;
     }
-    return student.username;
+    return student.username || student.account_number || 'Unknown';
   };
 
   const getTransactionLabel = (tx: Transaction, currentUsername: string) => {
@@ -263,7 +300,33 @@ const StudentDetailView: React.FC = () => {
     );
   }
 
-  const { student, transactions, loans, landParcels, mathGameSessions, pizzaContributions, shopPurchases, jobApplications, suggestions, bugReports, stats } = data;
+  const { account, student, transactions, loans, landParcels, mathGameSessions, pizzaContributions, shopPurchases, jobApplications, suggestions, bugReports, stats } = data;
+  
+  // Handle orphaned accounts (account without student)
+  const displayStudent = student || (account ? {
+    account_number: account.account_number,
+    balance: account.balance,
+    username: account.account_number,
+    first_name: undefined,
+    last_name: undefined
+  } : null);
+  
+  if (!displayStudent) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">No account or student data found</p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-12">
@@ -291,26 +354,31 @@ const StudentDetailView: React.FC = () => {
                 <User className="h-12 w-12" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold mb-1">{getDisplayName(student)}</h1>
-                <p className="text-primary-100 mb-2">@{student.username}</p>
+                <h1 className="text-3xl font-bold mb-1">{getDisplayName(displayStudent)}</h1>
+                <p className="text-primary-100 mb-2">@{displayStudent.username || displayStudent.account_number}</p>
                 <div className="flex items-center space-x-3">
-                  {student.class && (
+                  {displayStudent.class && (
                     <span className="bg-white/20 px-3 py-1 rounded-full text-sm">
-                      Class {student.class}
+                      Class {displayStudent.class}
                     </span>
                   )}
-                  {student.email && (
-                    <span className="text-sm text-primary-100">{student.email}</span>
+                  {displayStudent.email && (
+                    <span className="text-sm text-primary-100">{displayStudent.email}</span>
+                  )}
+                  {account?.orphaned && (
+                    <span className="bg-yellow-500/20 px-3 py-1 rounded-full text-sm text-yellow-200">
+                      Orphaned Account
+                    </span>
                   )}
                 </div>
               </div>
             </div>
             <div className="text-right">
               <p className="text-primary-100 text-sm mb-1">Current Balance</p>
-              <p className={`text-4xl font-bold ${Number(student.balance) < 0 ? 'text-red-300' : 'text-white'}`}>
-                {formatCurrency(student.balance)}
+              <p className={`text-4xl font-bold ${Number(displayStudent.balance) < 0 ? 'text-red-300' : 'text-white'}`}>
+                {formatCurrency(displayStudent.balance)}
               </p>
-              <p className="text-xs text-primary-200 mt-1">Account: {student.account_number}</p>
+              <p className="text-xs text-primary-200 mt-1">Account: {displayStudent.account_number}</p>
             </div>
           </div>
         </div>
@@ -361,7 +429,7 @@ const StudentDetailView: React.FC = () => {
         </div>
 
         {/* Job Info */}
-        {student.job_name && (
+        {displayStudent.job_name && (
           <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <div className="flex items-center space-x-3 mb-4">
               <div className="bg-blue-100 p-3 rounded-lg">
@@ -385,12 +453,12 @@ const StudentDetailView: React.FC = () => {
               )}
               <div>
                 <p className="text-sm text-gray-500">Salary</p>
-                <p className="text-lg font-semibold text-green-600">{formatCurrency(student.job_salary || 0)}</p>
+                <p className="text-lg font-semibold text-green-600">{formatCurrency(displayStudent.job_salary || 0)}</p>
               </div>
-              {student.job_description && (
+              {displayStudent.job_description && (
                 <div className="md:col-span-2">
                   <p className="text-sm text-gray-500">Description</p>
-                  <p className="text-gray-700">{student.job_description}</p>
+                  <p className="text-gray-700">{displayStudent.job_description}</p>
                 </div>
               )}
             </div>
@@ -491,7 +559,7 @@ const StudentDetailView: React.FC = () => {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
                   <div className="space-y-2">
                     {transactions.slice(0, 5).map((tx) => {
-                      const isOutgoing = tx.from_username === student.username;
+                      const isOutgoing = tx.from_username === (displayStudent.username || displayStudent.account_number);
                       return (
                         <div key={tx.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                           <div className="flex items-center space-x-3">
@@ -503,7 +571,7 @@ const StudentDetailView: React.FC = () => {
                               )}
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-gray-900">{getTransactionLabel(tx, student.username)}</p>
+                              <p className="text-sm font-medium text-gray-900">{getTransactionLabel(tx, displayStudent.username || displayStudent.account_number || '')}</p>
                               <p className="text-xs text-gray-500">{tx.description || tx.transaction_type}</p>
                             </div>
                           </div>
@@ -535,7 +603,7 @@ const StudentDetailView: React.FC = () => {
                 ) : (
                   <div className="space-y-2">
                     {transactions.map((tx) => {
-                      const isOutgoing = tx.from_username === student.username;
+                      const isOutgoing = tx.from_username === (displayStudent.username || displayStudent.account_number);
                       return (
                         <div key={tx.id} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
                           <div className="flex items-start justify-between">
@@ -549,7 +617,7 @@ const StudentDetailView: React.FC = () => {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center space-x-2 mb-1">
-                                  <p className="text-sm font-medium text-gray-900">{getTransactionLabel(tx, student.username)}</p>
+                                  <p className="text-sm font-medium text-gray-900">{getTransactionLabel(tx, displayStudent.username || displayStudent.account_number || '')}</p>
                                   <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
                                     {tx.transaction_type}
                                   </span>

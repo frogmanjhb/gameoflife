@@ -73,6 +73,18 @@ const AppContent: React.FC = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/account/:accountNumber"
+        element={
+          <ProtectedRoute>
+            <PluginProvider>
+              <TownProvider>
+                <StudentDetailView />
+              </TownProvider>
+            </PluginProvider>
+          </ProtectedRoute>
+        }
+      />
           <Route
             path="/bank"
             element={

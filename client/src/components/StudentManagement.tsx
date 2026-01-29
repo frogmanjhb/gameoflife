@@ -157,11 +157,25 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
     setLoading(true);
 
     try {
-      await api.delete(`/students/${studentToDelete.username}`);
-      setSuccess(`Student ${studentToDelete.username} has been deleted successfully`);
-      setShowDeleteConfirm(false);
-      setStudentToDelete(null);
-      onUpdate();
+      // First try deleting by username
+      try {
+        await api.delete(`/students/${studentToDelete.username}`);
+        setSuccess(`Student ${studentToDelete.username} has been deleted successfully`);
+        setShowDeleteConfirm(false);
+        setStudentToDelete(null);
+        onUpdate();
+      } catch (usernameErr: any) {
+        // If student not found by username, try by account number
+        if (usernameErr.response?.status === 404 && studentToDelete.account_number) {
+          await api.delete(`/students/account/${studentToDelete.account_number}`);
+          setSuccess(`Account ${studentToDelete.account_number} has been deleted successfully`);
+          setShowDeleteConfirm(false);
+          setStudentToDelete(null);
+          onUpdate();
+        } else {
+          throw usernameErr;
+        }
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to delete student');
     } finally {
@@ -494,7 +508,12 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate(`/student/${student.username}`);
+                    // If account_number exists, try account route first, otherwise use username route
+                    if (student.account_number) {
+                      navigate(`/account/${student.account_number}`);
+                    } else {
+                      navigate(`/student/${student.username}`);
+                    }
                   }}
                   className="flex-1 bg-primary-100 text-primary-700 hover:bg-primary-200 px-3 py-2 rounded-lg transition-colors text-sm flex items-center justify-center space-x-1"
                   title="View detailed profile"
