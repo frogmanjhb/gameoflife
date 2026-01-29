@@ -165,29 +165,7 @@ router.post(
         }
       }
 
-      // Get student's account
-      const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
-      if (!account) {
-        return res.status(404).json({ error: 'Account not found' });
-      }
-
-      // Check if student has enough balance
-      const price = parseFloat(item.price);
-      if (parseFloat(account.balance) < price) {
-        return res.status(400).json({ 
-          error: `Insufficient funds. You need R${price.toFixed(2)} but only have R${parseFloat(account.balance).toFixed(2)}` 
-        });
-      }
-
-      // Check if student can make transactions (negative balance or overdue loan check)
-      // This uses the same logic as transfers
-      const accountBalance = parseFloat(account.balance);
-      if (accountBalance < 0) {
-        return res.status(400).json({ 
-          error: 'Your account has a negative balance. Please clear your debt before making any purchases.' 
-        });
-      }
-
+      // Check for overdue loans first (this doesn't need to be in the transaction)
       const activeLoan = await database.get(
         `SELECT id, monthly_payment, due_date, outstanding_balance 
          FROM loans 
@@ -201,7 +179,7 @@ router.post(
         });
       }
 
-      // Get or create shop account
+      // Get or create shop account (do this before the transaction)
       let shopAccount = await database.get(
         `SELECT a.* FROM accounts a 
          JOIN users u ON a.user_id = u.id 
@@ -240,30 +218,68 @@ router.post(
         }
       }
 
-      // Start transaction
-      await database.run('BEGIN');
+      const price = parseFloat(item.price);
+      if (isNaN(price) || price <= 0) {
+        return res.status(400).json({ error: 'Invalid item price' });
+      }
+
+      // SECURITY FIX: Use a single database client for proper transaction handling
+      // This prevents race conditions where students could exploit timing
+      const client = await database.pool.connect();
 
       try {
+        await client.query('BEGIN');
+
+        // SECURITY: Lock the student's account row with FOR UPDATE
+        // This prevents concurrent purchases from bypassing balance checks
+        const accountResult = await client.query(
+          'SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE',
+          [req.user.id]
+        );
+        const account = accountResult.rows[0];
+
+        if (!account) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ error: 'Account not found' });
+        }
+
+        // SECURITY: Validate balance INSIDE the transaction with the locked row
+        const accountBalance = parseFloat(account.balance);
+        
+        if (accountBalance < 0) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ 
+            error: 'Your account has a negative balance. Please clear your debt before making any purchases.' 
+          });
+        }
+
+        if (accountBalance < price) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ 
+            error: `Insufficient funds. You need R${price.toFixed(2)} but only have R${accountBalance.toFixed(2)}` 
+          });
+        }
+
         // Deduct from student account
-        await database.run(
+        await client.query(
           'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
           [price, account.id]
         );
 
-        // Add to shop account
-        await database.run(
+        // Add to shop account (lock it too)
+        await client.query(
           'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
           [price, shopAccount.id]
         );
 
         // Update shop balance table (always id=1)
-        await database.run(
+        await client.query(
           `UPDATE shop_balance SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
           [price]
         );
 
         // Record transaction (from student to shop)
-        await database.run(
+        await client.query(
           `INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description) 
            VALUES ($1, $2, $3, $4, $5)`,
           [account.id, shopAccount.id, price, 'transfer', `Shop Purchase: ${item.name}`]
@@ -272,7 +288,7 @@ router.post(
         // Record purchase
         const purchaseDate = formatDate(new Date());
         try {
-          await database.run(
+          await client.query(
             `INSERT INTO shop_purchases (user_id, item_id, price_paid, purchase_date, week_start_date) 
              VALUES ($1, $2, $3, $4, $5)`,
             [req.user.id, item_id, price, purchaseDate, weekStart]
@@ -280,7 +296,7 @@ router.post(
         } catch (insertError: any) {
           // Handle unique constraint violation (race condition)
           if (insertError.code === '23505' || insertError.message?.includes('unique')) {
-            await database.run('ROLLBACK');
+            await client.query('ROLLBACK');
             return res.status(400).json({ 
               error: 'You have already made a purchase this week. Come back next week!' 
             });
@@ -293,16 +309,16 @@ router.post(
           const emojiMatch = item.name.match(/^([\u{1F300}-\u{1F9FF}])/u);
           if (emojiMatch) {
             const emoji = emojiMatch[1];
-            await database.run(
+            await client.query(
               'UPDATE users SET profile_emoji = $1 WHERE id = $2',
               [emoji, req.user.id]
             );
           }
         }
 
-        await database.run('COMMIT');
+        await client.query('COMMIT');
 
-        // Get updated account balance
+        // Get updated account balance (outside transaction is fine)
         const updatedAccount = await database.get('SELECT balance FROM accounts WHERE id = $1', [account.id]);
 
         res.json({
@@ -315,8 +331,10 @@ router.post(
           }
         });
       } catch (error) {
-        await database.run('ROLLBACK');
+        await client.query('ROLLBACK');
         throw error;
+      } finally {
+        client.release();
       }
     } catch (error) {
       console.error('Purchase error:', error);

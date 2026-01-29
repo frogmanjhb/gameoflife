@@ -119,65 +119,92 @@ router.post('/transfer', [
       return res.status(400).json({ error: canTransactResult.reason });
     }
 
-    // Get sender's account
-    const fromAccount = await database.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
-    if (!fromAccount) {
-      return res.status(404).json({ error: 'Account not found' });
-    }
-
-    // SECURITY: Parse balance as number to ensure proper comparison (PostgreSQL returns NUMERIC as string)
-    const senderBalance = parseFloat(fromAccount.balance);
+    // Parse and validate transfer amount early
     const transferAmount = parseFloat(amount.toString());
-    
-    // Check sufficient balance with type-safe comparison
-    if (isNaN(senderBalance) || isNaN(transferAmount) || senderBalance < transferAmount) {
-      return res.status(400).json({ error: 'Insufficient funds' });
+    if (isNaN(transferAmount) || transferAmount <= 0) {
+      return res.status(400).json({ error: 'Invalid transfer amount' });
     }
 
-    // Get recipient's account
+    // Get recipient info before starting transaction (doesn't need locking)
     const toUser = await database.get('SELECT * FROM users WHERE username = $1 AND role = $2', [to_username, 'student']);
     if (!toUser) {
       return res.status(404).json({ error: 'Recipient not found' });
     }
 
-    const toAccount = await database.get('SELECT * FROM accounts WHERE user_id = $1', [toUser.id]);
-    if (!toAccount) {
-      return res.status(404).json({ error: 'Recipient account not found' });
-    }
-
-    // Prevent self-transfer
-    if (fromAccount.id === toAccount.id) {
-      return res.status(400).json({ error: 'Cannot transfer to yourself' });
-    }
-
-    // Start transaction
-    await database.run('BEGIN TRANSACTION');
-
+    // SECURITY FIX: Use a single database client for the entire transaction
+    // This prevents race conditions where multiple concurrent transfers could
+    // all pass balance checks before any of them deduct money
+    const client = await database.pool.connect();
+    
     try {
+      await client.query('BEGIN');
+
+      // SECURITY: Lock the sender's row with FOR UPDATE to prevent concurrent modifications
+      // This ensures no other transaction can read or modify this row until we commit/rollback
+      const fromAccountResult = await client.query(
+        'SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE',
+        [req.user.id]
+      );
+      const fromAccount = fromAccountResult.rows[0];
+      
+      if (!fromAccount) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Account not found' });
+      }
+
+      // SECURITY: Validate balance INSIDE the transaction with the locked row
+      // This is the authoritative balance check - client-side values are ignored
+      const senderBalance = parseFloat(fromAccount.balance);
+      
+      if (isNaN(senderBalance) || senderBalance < transferAmount) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Insufficient funds' });
+      }
+
+      // Get recipient's account (also lock it to ensure atomic update)
+      const toAccountResult = await client.query(
+        'SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE',
+        [toUser.id]
+      );
+      const toAccount = toAccountResult.rows[0];
+      
+      if (!toAccount) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Recipient account not found' });
+      }
+
+      // Prevent self-transfer
+      if (fromAccount.id === toAccount.id) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Cannot transfer to yourself' });
+      }
+
       // Update sender's balance
-      await database.run(
+      await client.query(
         'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [amount, fromAccount.id]
+        [transferAmount, fromAccount.id]
       );
 
       // Update recipient's balance
-      await database.run(
+      await client.query(
         'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [amount, toAccount.id]
+        [transferAmount, toAccount.id]
       );
 
       // Record transaction
-      await database.run(
+      await client.query(
         'INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4, $5)',
-        [fromAccount.id, toAccount.id, amount, 'transfer', description || `Transfer to ${to_username}`]
+        [fromAccount.id, toAccount.id, transferAmount, 'transfer', description || `Transfer to ${to_username}`]
       );
 
-      await database.run('COMMIT');
+      await client.query('COMMIT');
 
       res.json({ message: 'Transfer successful' });
     } catch (error) {
-      await database.run('ROLLBACK');
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
   } catch (error) {
     console.error('Transfer error:', error);
@@ -308,20 +335,22 @@ router.post('/bulk-payment', [
 
     let updatedCount = 0;
 
-    // Start transaction
-    await database.run('BEGIN TRANSACTION');
+    // Use a single client connection for proper transaction handling
+    const client = await database.pool.connect();
 
     try {
+      await client.query('BEGIN');
+
       for (const student of students) {
         if (student.account_id) {
           // Update balance
-          await database.run(
+          await client.query(
             'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
             [amount, student.account_id]
           );
 
           // Record transaction
-          await database.run(
+          await client.query(
             'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
             [student.account_id, amount, 'deposit', description || `Bulk payment to ${class_name}`]
           );
@@ -330,12 +359,14 @@ router.post('/bulk-payment', [
         }
       }
 
-      await database.run('COMMIT');
+      await client.query('COMMIT');
       console.log('✅ Bulk payment completed for', updatedCount, 'students');
       res.json({ message: 'Bulk payment successful', updated_count: updatedCount });
     } catch (error) {
-      await database.run('ROLLBACK');
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
   } catch (error) {
     console.error('Bulk payment error:', error);
@@ -373,20 +404,22 @@ router.post('/bulk-removal', [
 
     let updatedCount = 0;
 
-    // Start transaction
-    await database.run('BEGIN TRANSACTION');
+    // Use a single client connection for proper transaction handling
+    const client = await database.pool.connect();
 
     try {
+      await client.query('BEGIN');
+
       for (const student of students) {
         if (student.account_id) {
           // Update balance
-          await database.run(
+          await client.query(
             'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
             [amount, student.account_id]
           );
 
           // Record transaction
-          await database.run(
+          await client.query(
             'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
             [student.account_id, amount, 'withdrawal', description || `Bulk removal from ${class_name}`]
           );
@@ -395,12 +428,14 @@ router.post('/bulk-removal', [
         }
       }
 
-      await database.run('COMMIT');
+      await client.query('COMMIT');
       console.log('✅ Bulk removal completed for', updatedCount, 'students');
       res.json({ message: 'Bulk removal successful', updated_count: updatedCount });
     } catch (error) {
-      await database.run('ROLLBACK');
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
   } catch (error) {
     console.error('Bulk removal error:', error);

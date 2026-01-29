@@ -5,6 +5,66 @@ import { authenticateToken, AuthenticatedRequest, requireRole } from '../middlew
 
 const router = Router();
 
+// TEMPORARY: Diagnose student data issues (teachers only)
+router.get('/diagnose/:searchTerm', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { searchTerm } = req.params;
+    const searchLower = `%${searchTerm.toLowerCase()}%`;
+    
+    // Search for students by name or username (case-insensitive)
+    const students = await database.query(`
+      SELECT 
+        u.id,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class,
+        u.email,
+        u.status,
+        u.role,
+        u.created_at,
+        u.password_hash IS NOT NULL as has_password,
+        LENGTH(u.password_hash) as password_hash_length,
+        a.id as account_id,
+        a.account_number,
+        a.balance
+      FROM users u
+      LEFT JOIN accounts a ON u.id = a.user_id
+      WHERE (LOWER(u.first_name) LIKE $1 
+         OR LOWER(u.last_name) LIKE $1 
+         OR LOWER(u.username) LIKE $1)
+        AND u.role = 'student'
+    `, [searchLower]);
+
+    // Get additional info for each student found
+    const diagnosticInfo = students.map((s: any) => ({
+      ...s,
+      username_encoded: encodeURIComponent(s.username || ''),
+      username_length: s.username ? s.username.length : 0,
+      username_chars: s.username ? s.username.split('').map((c: string) => `${c}(${c.charCodeAt(0)})`) : [],
+      issues: []
+    }));
+
+    // Check for potential issues
+    diagnosticInfo.forEach((s: any) => {
+      if (!s.username) s.issues.push('Missing username');
+      if (!s.has_password) s.issues.push('Missing password hash');
+      if (!s.account_id) s.issues.push('Missing bank account');
+      if (s.status !== 'approved') s.issues.push(`Status is "${s.status}" (not approved)`);
+      if (s.username && s.username !== s.username.trim()) s.issues.push('Username has leading/trailing whitespace');
+    });
+
+    res.json({
+      searchTerm,
+      found: students.length,
+      students: diagnosticInfo
+    });
+  } catch (error) {
+    console.error('Diagnose student error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get students in the same class as the current student
 router.get('/classmates', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -304,6 +364,10 @@ router.post('/:username/reset-password', authenticateToken, requireRole(['teache
 router.get('/:username/details', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { username } = req.params;
+    
+    console.log('🔍 Looking up student details for username:', JSON.stringify(username));
+    console.log('🔍 Username length:', username?.length);
+    console.log('🔍 Username chars:', username?.split('').map(c => `${c}(${c.charCodeAt(0)})`));
 
     // Get student info with job details
     const student = await database.get(`
