@@ -1,6 +1,5 @@
-// Fix Daniel Bailey's account issue
+// Fix Daniel Bailey's username (contains a space which causes issues)
 // Run this on Railway: node fix-daniel-bailey.js
-// Or locally with DATABASE_URL set
 
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
@@ -14,8 +13,8 @@ async function fixDanielBailey() {
   try {
     console.log('🔗 Connecting to database...');
     
-    // 1. Find all students named Daniel or Bailey
-    console.log('\n=== Searching for Daniel Bailey ===\n');
+    // Find Daniel Bailey by name or username with space
+    console.log('\n=== Finding Daniel Bailey ===\n');
     const searchResult = await pool.query(`
       SELECT 
         id,
@@ -25,136 +24,106 @@ async function fixDanielBailey() {
         class,
         email,
         status,
-        password_hash IS NOT NULL as has_password,
-        LENGTH(password_hash) as password_length,
-        created_at
+        password_hash IS NOT NULL as has_password
       FROM users 
-      WHERE (LOWER(first_name) LIKE '%daniel%' OR LOWER(last_name) LIKE '%bailey%')
-        AND role = 'student'
+      WHERE username = 'Daniel Bailey'
+         OR (LOWER(first_name) = 'daniel' AND LOWER(last_name) = 'bailey')
     `);
 
     if (searchResult.rows.length === 0) {
-      console.log('❌ No students found with name containing Daniel or Bailey');
-      
-      // Check all 6B students
-      console.log('\n=== All students in class 6B ===\n');
-      const class6bResult = await pool.query(`
-        SELECT 
-          id,
-          username,
-          first_name,
-          last_name,
-          status,
-          password_hash IS NOT NULL as has_password
-        FROM users 
-        WHERE class = '6B' AND role = 'student'
-        ORDER BY last_name, first_name
-      `);
-      
-      if (class6bResult.rows.length === 0) {
-        console.log('No students in class 6B');
-      } else {
-        class6bResult.rows.forEach(row => {
-          console.log(`  ID: ${row.id}, Username: "${row.username}", Name: "${row.first_name} ${row.last_name}", Status: ${row.status}, Has Password: ${row.has_password}`);
-        });
-      }
+      console.log('❌ Daniel Bailey not found in database');
       return;
     }
 
-    console.log('Found students:');
-    searchResult.rows.forEach(row => {
-      console.log(`  ID: ${row.id}`);
-      console.log(`  Username: "${row.username}" (length: ${row.username ? row.username.length : 'null'})`);
-      console.log(`  Name: "${row.first_name} ${row.last_name}"`);
-      console.log(`  Class: ${row.class}`);
-      console.log(`  Status: ${row.status}`);
-      console.log(`  Has Password: ${row.has_password} (hash length: ${row.password_length})`);
-      console.log(`  Created: ${row.created_at}`);
-      console.log('');
-      
-      // Check for issues
-      if (!row.username || row.username.trim() === '') {
-        console.log('  ⚠️ ISSUE: Username is null or empty!');
-      }
-      if (!row.has_password) {
-        console.log('  ⚠️ ISSUE: Password hash is missing!');
-      }
-      if (row.status !== 'approved') {
-        console.log(`  ⚠️ ISSUE: Status is "${row.status}", not "approved"!`);
-      }
-    });
+    const student = searchResult.rows[0];
+    console.log('Found student:');
+    console.log(`  ID: ${student.id}`);
+    console.log(`  Current Username: "${student.username}"`);
+    console.log(`  Name: ${student.first_name} ${student.last_name}`);
+    console.log(`  Class: ${student.class}`);
+    console.log(`  Status: ${student.status}`);
+    console.log(`  Has Password: ${student.has_password}`);
 
-    // 2. Check if any need fixing
-    const studentToFix = searchResult.rows.find(r => 
-      !r.username || r.username.trim() === '' || !r.has_password || r.status !== 'approved'
-    );
-
-    if (studentToFix) {
-      console.log('\n=== Fixing Issues ===\n');
+    // Check if username has a space (the problem)
+    if (student.username && student.username.includes(' ')) {
+      console.log('\n⚠️ ISSUE FOUND: Username contains a space!');
       
-      // Fix username if missing
-      if (!studentToFix.username || studentToFix.username.trim() === '') {
-        // Generate a username from first_name and last_name
-        const newUsername = `${studentToFix.first_name || 'student'}${studentToFix.last_name || studentToFix.id}`.toLowerCase().replace(/\s+/g, '');
-        console.log(`📝 Setting username to: "${newUsername}"`);
-        await pool.query('UPDATE users SET username = $1 WHERE id = $2', [newUsername, studentToFix.id]);
-        console.log('✅ Username updated');
-      }
+      // Generate new username without space
+      const newUsername = student.username.toLowerCase().replace(/\s+/g, '');
+      console.log(`\n📝 Fixing username: "${student.username}" → "${newUsername}"`);
       
-      // Fix password if missing - set to a default that can be reset
-      if (!studentToFix.has_password) {
-        const tempPassword = 'password123'; // Teacher should reset this
-        const passwordHash = await bcrypt.hash(tempPassword, 10);
-        console.log(`📝 Setting temporary password to: "${tempPassword}"`);
-        await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, studentToFix.id]);
-        console.log('✅ Password hash set - TEACHER SHOULD RESET THIS!');
+      // Check if new username already exists
+      const existingUser = await pool.query('SELECT id FROM users WHERE username = $1', [newUsername]);
+      if (existingUser.rows.length > 0) {
+        // Use alternative format
+        const altUsername = `${student.first_name.toLowerCase()}.${student.last_name.toLowerCase()}`;
+        console.log(`   Username "${newUsername}" already exists, trying "${altUsername}"`);
+        
+        const existingAlt = await pool.query('SELECT id FROM users WHERE username = $1', [altUsername]);
+        if (existingAlt.rows.length > 0) {
+          // Use format with number
+          const finalUsername = `${student.first_name.toLowerCase()}${student.last_name.toLowerCase()}${student.id}`;
+          console.log(`   Username "${altUsername}" also exists, using "${finalUsername}"`);
+          await pool.query('UPDATE users SET username = $1 WHERE id = $2', [finalUsername, student.id]);
+          console.log(`✅ Username updated to: "${finalUsername}"`);
+        } else {
+          await pool.query('UPDATE users SET username = $1 WHERE id = $2', [altUsername, student.id]);
+          console.log(`✅ Username updated to: "${altUsername}"`);
+        }
+      } else {
+        await pool.query('UPDATE users SET username = $1 WHERE id = $2', [newUsername, student.id]);
+        console.log(`✅ Username updated to: "${newUsername}"`);
       }
-      
-      // Fix status if not approved
-      if (studentToFix.status !== 'approved') {
-        console.log(`📝 Changing status from "${studentToFix.status}" to "approved"`);
-        await pool.query('UPDATE users SET status = $1 WHERE id = $2', ['approved', studentToFix.id]);
-        console.log('✅ Status updated to approved');
-      }
-
-      // Check if has bank account
-      const accountResult = await pool.query('SELECT id FROM accounts WHERE user_id = $1', [studentToFix.id]);
-      if (accountResult.rows.length === 0) {
-        console.log('📝 Creating bank account...');
-        const accountNumber = `ACC${Date.now()}${Math.floor(Math.random() * 1000)}`;
-        await pool.query(
-          'INSERT INTO accounts (user_id, account_number, balance) VALUES ($1, $2, $3)',
-          [studentToFix.id, accountNumber, 0.00]
-        );
-        console.log(`✅ Bank account created: ${accountNumber}`);
-      }
-
-      // Show final state
-      console.log('\n=== Final State ===\n');
-      const finalResult = await pool.query(`
-        SELECT u.*, a.account_number, a.balance
-        FROM users u
-        LEFT JOIN accounts a ON u.id = a.user_id
-        WHERE u.id = $1
-      `, [studentToFix.id]);
-      
-      const final = finalResult.rows[0];
-      console.log(`  ID: ${final.id}`);
-      console.log(`  Username: "${final.username}"`);
-      console.log(`  Name: "${final.first_name} ${final.last_name}"`);
-      console.log(`  Class: ${final.class}`);
-      console.log(`  Status: ${final.status}`);
-      console.log(`  Account: ${final.account_number}`);
-      console.log(`  Balance: ${final.balance}`);
-      console.log('\n🎉 Fix completed! The student should now be able to log in.');
-      console.log('⚠️ NOTE: If password was set, the teacher should reset it using the "Reset Password" button.');
-    } else {
-      console.log('\n✅ No issues found with Daniel Bailey\'s account.');
-      console.log('The problem might be elsewhere. Check:');
-      console.log('  1. Is the username being typed correctly when logging in?');
-      console.log('  2. Is the password correct?');
-      console.log('  3. Try using the "Reset Password" button on the teacher dashboard.');
     }
+
+    // Reset password to a known value
+    console.log('\n📝 Resetting password...');
+    const tempPassword = 'password123';
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, student.id]);
+    console.log(`✅ Password reset to: "${tempPassword}"`);
+
+    // Ensure status is approved
+    if (student.status !== 'approved') {
+      console.log(`\n📝 Updating status from "${student.status}" to "approved"...`);
+      await pool.query('UPDATE users SET status = $1 WHERE id = $2', ['approved', student.id]);
+      console.log('✅ Status updated to approved');
+    }
+
+    // Verify bank account exists
+    const accountResult = await pool.query('SELECT * FROM accounts WHERE user_id = $1', [student.id]);
+    if (accountResult.rows.length === 0) {
+      console.log('\n📝 Creating bank account...');
+      const accountNumber = `ACC${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      await pool.query(
+        'INSERT INTO accounts (user_id, account_number, balance) VALUES ($1, $2, $3)',
+        [student.id, accountNumber, 0.00]
+      );
+      console.log(`✅ Bank account created: ${accountNumber}`);
+    } else {
+      console.log(`\n✅ Bank account exists: ${accountResult.rows[0].account_number}`);
+    }
+
+    // Show final state
+    console.log('\n=== FINAL STATE ===\n');
+    const finalResult = await pool.query(`
+      SELECT u.username, u.first_name, u.last_name, u.status, a.account_number, a.balance
+      FROM users u
+      LEFT JOIN accounts a ON u.id = a.user_id
+      WHERE u.id = $1
+    `, [student.id]);
+    
+    const final = finalResult.rows[0];
+    console.log(`  Username: "${final.username}"`);
+    console.log(`  Name: ${final.first_name} ${final.last_name}`);
+    console.log(`  Status: ${final.status}`);
+    console.log(`  Account: ${final.account_number}`);
+    console.log(`  Balance: R ${final.balance}`);
+    console.log(`\n  Temporary Password: "${tempPassword}"`);
+    console.log('\n🎉 Fix complete! Daniel Bailey can now login with:');
+    console.log(`   Username: ${final.username}`);
+    console.log(`   Password: ${tempPassword}`);
+    console.log('\n⚠️ Please use the "Reset Password" button to give him a new password!');
 
   } catch (error) {
     console.error('❌ Error:', error.message);

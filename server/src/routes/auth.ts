@@ -12,7 +12,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 // Register new user
 // SECURITY: Only students can self-register. Teachers must be created by other teachers.
 router.post('/register', [
-  body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
+  body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters')
+    .custom((value) => {
+      if (value && value.includes(' ')) {
+        throw new Error('Username cannot contain spaces');
+      }
+      return true;
+    }),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('confirmPassword').notEmpty().withMessage('Password confirmation is required').custom((value, { req }) => {
     if (value !== req.body.password) {
