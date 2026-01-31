@@ -260,6 +260,28 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.status(400).json({ error: 'Game session has already been submitted' });
     }
 
+    // SECURITY: Minimum game duration - each game runs 60 seconds client-side
+    // Reject if submitted too quickly (detects devtools/API abuse)
+    const sessionPlayedAt = new Date(session.played_at).getTime();
+    const minGameDurationMs = 45000; // 45 seconds (game is 60 sec, allow network lag)
+    if (Date.now() - sessionPlayedAt < minGameDurationMs) {
+      const elapsedSec = Math.floor((Date.now() - sessionPlayedAt) / 1000);
+      console.warn(`🚨 SECURITY: User ${req.user.username} submitted session ${session_id} after only ${elapsedSec}s (min 45s required)`);
+      return res.status(400).json({ error: 'Game submitted too quickly. Each game must run for at least 60 seconds.' });
+    }
+
+    // SECURITY: Rate limit - max 2 games per 3 minutes (each game = 60 sec minimum)
+    // Detects rapid-fire submissions (e.g. 9 games in 2 minutes)
+    const recentCompletions = await database.query(`
+      SELECT COUNT(*) as count FROM math_game_sessions 
+      WHERE user_id = $1 AND earnings > 0 
+      AND played_at > NOW() - INTERVAL '3 minutes'
+    `, [userId]);
+    if (parseInt(recentCompletions[0].count) >= 2) {
+      console.warn(`🚨 SECURITY: User ${req.user.username} exceeded rate limit - ${recentCompletions[0].count} games in last 3 minutes`);
+      return res.status(429).json({ error: 'Too many games completed recently. Please wait a few minutes before playing again.' });
+    }
+
     // Calculate streak bonus
     const calculateStreakBonus = (sequence: boolean[]): number => {
       let maxStreak = 0;
