@@ -508,11 +508,11 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    // If account_number exists, try account route first, otherwise use username route
-                    if (student.account_number) {
-                      navigate(`/account/${student.account_number}`);
-                    } else {
+                    // Use username for reliable lookup (account_number can cause route-matching issues)
+                    if (student.username) {
                       navigate(`/student/${student.username}`);
+                    } else {
+                      console.error('Student has no username:', student);
                     }
                   }}
                   className="flex-1 bg-primary-100 text-primary-700 hover:bg-primary-200 px-3 py-2 rounded-lg transition-colors text-sm flex items-center justify-center space-x-1"
