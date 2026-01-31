@@ -10,6 +10,102 @@ function isValidTownClass(townClass: any): townClass is '6A' | '6B' | '6C' {
   return ['6A', '6B', '6C'].includes(townClass);
 }
 
+const TOWN_CLASSES: ('6A' | '6B' | '6C')[] = ['6A', '6B', '6C'];
+
+// Helper: Fetch full status for one class
+async function getPizzaTimeStatusForClass(userClass: '6A' | '6B' | '6C') {
+  let pizzaTime = await database.get(
+    'SELECT * FROM pizza_time WHERE class = $1',
+    [userClass]
+  );
+
+  if (!pizzaTime) {
+    await database.run(
+      'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)',
+      [userClass, false, 0.00, 100000.00]
+    );
+    pizzaTime = await database.get(
+      'SELECT * FROM pizza_time WHERE class = $1',
+      [userClass]
+    );
+  }
+
+  const donations = await database.query(
+    `SELECT 
+      ptd.*,
+      u.username,
+      u.first_name,
+      u.last_name
+     FROM pizza_time_donations ptd
+     JOIN users u ON ptd.user_id = u.id
+     WHERE ptd.pizza_time_id = $1
+     ORDER BY ptd.created_at DESC
+     LIMIT 20`,
+    [pizzaTime.id]
+  );
+
+  const donationCount = await database.get(
+    'SELECT COUNT(*) as count FROM pizza_time_donations WHERE pizza_time_id = $1',
+    [pizzaTime.id]
+  );
+
+  const donationHistory = await database.query(
+    `SELECT 
+      DATE(created_at) as date,
+      SUM(amount) as daily_total,
+      COUNT(*) as donation_count
+     FROM pizza_time_donations
+     WHERE pizza_time_id = $1
+     GROUP BY DATE(created_at)
+     ORDER BY date ASC`,
+    [pizzaTime.id]
+  );
+
+  return {
+    ...pizzaTime,
+    current_fund: parseFloat(pizzaTime.current_fund),
+    goal_amount: parseFloat(pizzaTime.goal_amount),
+    donations: donations.map((d: any) => ({
+      ...d,
+      amount: parseFloat(d.amount)
+    })),
+    donation_count: parseInt(donationCount.count),
+    donation_history: donationHistory.map((h: any) => ({
+      ...h,
+      daily_total: parseFloat(h.daily_total),
+      donation_count: parseInt(h.donation_count)
+    }))
+  };
+}
+
+// GET /api/pizza-time/status/all - Get pizza time status for ALL classes (teachers only)
+router.get('/status/all', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    try {
+      await database.query('SELECT 1 FROM pizza_time LIMIT 1');
+    } catch (tableError: any) {
+      if (tableError.message && tableError.message.includes('does not exist')) {
+        return res.status(503).json({ error: 'Pizza Time feature is not available yet.' });
+      }
+      throw tableError;
+    }
+
+    const allStatus = await Promise.all(
+      TOWN_CLASSES.map(async (c) => getPizzaTimeStatusForClass(c))
+    );
+
+    res.json({
+      classes: TOWN_CLASSES.reduce((acc, cls, i) => {
+        acc[cls] = allStatus[i];
+        return acc;
+      }, {} as Record<string, any>)
+    });
+  } catch (error) {
+    console.error('Failed to fetch all pizza time status:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/pizza-time/status - Get pizza time status for current user's class
 router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -56,73 +152,8 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
       throw tableError;
     }
 
-    // Get or create pizza time for this class
-    let pizzaTime = await database.get(
-      'SELECT * FROM pizza_time WHERE class = $1',
-      [userClass]
-    );
-
-    if (!pizzaTime) {
-      // Create if it doesn't exist
-      await database.run(
-        'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)',
-        [userClass, false, 0.00, 100000.00]
-      );
-      pizzaTime = await database.get(
-        'SELECT * FROM pizza_time WHERE class = $1',
-        [userClass]
-      );
-    }
-
-    // Get donation history (last 20 donations)
-    const donations = await database.query(
-      `SELECT 
-        ptd.*,
-        u.username,
-        u.first_name,
-        u.last_name
-       FROM pizza_time_donations ptd
-       JOIN users u ON ptd.user_id = u.id
-       WHERE ptd.pizza_time_id = $1
-       ORDER BY ptd.created_at DESC
-       LIMIT 20`,
-      [pizzaTime.id]
-    );
-
-    // Get total donation count
-    const donationCount = await database.get(
-      'SELECT COUNT(*) as count FROM pizza_time_donations WHERE pizza_time_id = $1',
-      [pizzaTime.id]
-    );
-
-    // Get donation history over time (for graph)
-    const donationHistory = await database.query(
-      `SELECT 
-        DATE(created_at) as date,
-        SUM(amount) as daily_total,
-        COUNT(*) as donation_count
-       FROM pizza_time_donations
-       WHERE pizza_time_id = $1
-       GROUP BY DATE(created_at)
-       ORDER BY date ASC`,
-      [pizzaTime.id]
-    );
-
-    res.json({
-      ...pizzaTime,
-      current_fund: parseFloat(pizzaTime.current_fund),
-      goal_amount: parseFloat(pizzaTime.goal_amount),
-      donations: donations.map((d: any) => ({
-        ...d,
-        amount: parseFloat(d.amount)
-      })),
-      donation_count: parseInt(donationCount.count),
-      donation_history: donationHistory.map((h: any) => ({
-        ...h,
-        daily_total: parseFloat(h.daily_total),
-        donation_count: parseInt(h.donation_count)
-      }))
-    });
+    const status = await getPizzaTimeStatusForClass(userClass);
+    res.json(status);
   } catch (error) {
     console.error('Failed to fetch pizza time status:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
