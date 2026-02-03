@@ -33,6 +33,186 @@ router.get('/items', authenticateToken, async (req: AuthenticatedRequest, res: R
   }
 });
 
+// GET /api/winkel/items/all - Get ALL shop items including unavailable (teacher only)
+router.get('/items/all', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const items = await database.query(
+      'SELECT * FROM shop_items ORDER BY category, name'
+    );
+    res.json(items);
+  } catch (error) {
+    console.error('Failed to fetch all shop items:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/winkel/items - Create a new shop item (teacher only)
+router.post(
+  '/items',
+  authenticateToken,
+  requireRole(['teacher']),
+  [
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('category').isIn(['consumable', 'privilege', 'profile']).withMessage('Invalid category'),
+    body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
+    body('description').optional().trim(),
+    body('notes').optional().trim(),
+    body('available').optional().isBoolean(),
+    body('event_day_only').optional().isBoolean(),
+  ],
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { name, category, price, description, notes, available = true, event_day_only = false } = req.body;
+
+      const result = await database.query(
+        `INSERT INTO shop_items (name, category, price, description, notes, available, event_day_only)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [name, category, price, description || null, notes || null, available, event_day_only]
+      );
+
+      res.status(201).json(result[0]);
+    } catch (error) {
+      console.error('Failed to create shop item:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// PUT /api/winkel/items/:id - Update a shop item (teacher only)
+router.put(
+  '/items/:id',
+  authenticateToken,
+  requireRole(['teacher']),
+  [
+    body('name').optional().trim().notEmpty().withMessage('Name cannot be empty'),
+    body('category').optional().isIn(['consumable', 'privilege', 'profile']).withMessage('Invalid category'),
+    body('price').optional().isFloat({ min: 0 }).withMessage('Price must be a positive number'),
+    body('description').optional(),
+    body('notes').optional(),
+    body('available').optional().isBoolean(),
+    body('event_day_only').optional().isBoolean(),
+  ],
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { id } = req.params;
+      const { name, category, price, description, notes, available, event_day_only } = req.body;
+
+      // Check if item exists
+      const existingItem = await database.get('SELECT * FROM shop_items WHERE id = $1', [id]);
+      if (!existingItem) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+
+      // Build update query dynamically
+      const updates: string[] = [];
+      const values: any[] = [];
+      let paramIndex = 1;
+
+      if (name !== undefined) {
+        updates.push(`name = $${paramIndex++}`);
+        values.push(name);
+      }
+      if (category !== undefined) {
+        updates.push(`category = $${paramIndex++}`);
+        values.push(category);
+      }
+      if (price !== undefined) {
+        updates.push(`price = $${paramIndex++}`);
+        values.push(price);
+      }
+      if (description !== undefined) {
+        updates.push(`description = $${paramIndex++}`);
+        values.push(description || null);
+      }
+      if (notes !== undefined) {
+        updates.push(`notes = $${paramIndex++}`);
+        values.push(notes || null);
+      }
+      if (available !== undefined) {
+        updates.push(`available = $${paramIndex++}`);
+        values.push(available);
+      }
+      if (event_day_only !== undefined) {
+        updates.push(`event_day_only = $${paramIndex++}`);
+        values.push(event_day_only);
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: 'No fields to update' });
+      }
+
+      updates.push(`updated_at = CURRENT_TIMESTAMP`);
+      values.push(id);
+
+      const result = await database.query(
+        `UPDATE shop_items SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+        values
+      );
+
+      res.json(result[0]);
+    } catch (error) {
+      console.error('Failed to update shop item:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// DELETE /api/winkel/items/:id - Delete a shop item (teacher only)
+router.delete(
+  '/items/:id',
+  authenticateToken,
+  requireRole(['teacher']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      // Check if item exists
+      const existingItem = await database.get('SELECT * FROM shop_items WHERE id = $1', [id]);
+      if (!existingItem) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+
+      // Check if item has any purchases
+      const purchaseCount = await database.get(
+        'SELECT COUNT(*) as count FROM shop_purchases WHERE item_id = $1',
+        [id]
+      );
+
+      if (parseInt(purchaseCount.count) > 0) {
+        // Instead of deleting, just mark as unavailable to preserve purchase history
+        await database.run(
+          'UPDATE shop_items SET available = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+          [id]
+        );
+        return res.json({ 
+          message: 'Item has purchase history and was marked as unavailable instead of deleted',
+          deleted: false,
+          marked_unavailable: true
+        });
+      }
+
+      // Delete the item if no purchases exist
+      await database.run('DELETE FROM shop_items WHERE id = $1', [id]);
+
+      res.json({ message: 'Item deleted successfully', deleted: true });
+    } catch (error) {
+      console.error('Failed to delete shop item:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
 // GET /api/winkel/purchases - Get purchase history
 router.get('/purchases', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {

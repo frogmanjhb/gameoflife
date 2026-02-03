@@ -244,6 +244,74 @@ export const treasuryApi = {
   }
 };
 
+// Shop Item type for Winkel management
+export interface ShopItem {
+  id: number;
+  name: string;
+  category: 'consumable' | 'privilege' | 'profile';
+  price: number;
+  description: string | null;
+  notes: string | null;
+  available: boolean;
+  event_day_only: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Winkel (Shop) API methods
+export const winkelApi = {
+  // Get all items including unavailable (teachers only)
+  getAllItems: (): Promise<{ data: ShopItem[] }> => {
+    return api.get('/winkel/items/all');
+  },
+
+  // Create a new shop item
+  createItem: (data: {
+    name: string;
+    category: 'consumable' | 'privilege' | 'profile';
+    price: number;
+    description?: string;
+    notes?: string;
+    available?: boolean;
+    event_day_only?: boolean;
+  }): Promise<{ data: ShopItem }> => {
+    return api.post('/winkel/items', data);
+  },
+
+  // Update a shop item
+  updateItem: (id: number, data: Partial<{
+    name: string;
+    category: 'consumable' | 'privilege' | 'profile';
+    price: number;
+    description: string | null;
+    notes: string | null;
+    available: boolean;
+    event_day_only: boolean;
+  }>): Promise<{ data: ShopItem }> => {
+    return api.put(`/winkel/items/${id}`, data);
+  },
+
+  // Delete a shop item
+  deleteItem: (id: number): Promise<{ data: { message: string; deleted: boolean; marked_unavailable?: boolean } }> => {
+    return api.delete(`/winkel/items/${id}`);
+  },
+
+  // Get shop stats (teachers only)
+  getStats: (): Promise<{ data: { 
+    item_stats: any[]; 
+    total_purchases: number; 
+    total_revenue: number; 
+    shop_balance: number 
+  } }> => {
+    return api.get('/winkel/stats');
+  },
+
+  // Get all purchases (teachers only)
+  getPurchases: (): Promise<{ data: any[] }> => {
+    return api.get('/winkel/purchases');
+  }
+};
+
 // Tenders API methods
 export const tendersApi = {
   // List tenders (teachers should pass town_class; students are auto-scoped server-side)
