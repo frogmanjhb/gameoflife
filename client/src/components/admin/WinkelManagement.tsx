@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShoppingBag, Plus, Edit2, Trash2, Save, X, Loader2, 
   ToggleLeft, ToggleRight, Gift, Star, DollarSign, AlertCircle,
-  CheckCircle, Package
+  CheckCircle, Package, Settings, ShoppingCart
 } from 'lucide-react';
 import { winkelApi, ShopItem } from '../../services/api';
 
@@ -15,6 +15,8 @@ const WinkelManagement: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'consumable' | 'privilege' | 'profile'>('all');
+  const [weeklyLimit, setWeeklyLimit] = useState(1);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   // New item form state
   const [newItem, setNewItem] = useState({
@@ -29,6 +31,7 @@ const WinkelManagement: React.FC = () => {
 
   useEffect(() => {
     fetchItems();
+    fetchSettings();
   }, []);
 
   const fetchItems = async () => {
@@ -46,6 +49,30 @@ const WinkelManagement: React.FC = () => {
       setError(err.response?.data?.error || 'Failed to load shop items');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const response = await winkelApi.getSettings();
+      setWeeklyLimit(response.data.weekly_purchase_limit);
+    } catch (err: any) {
+      console.error('Failed to fetch shop settings:', err);
+    }
+  };
+
+  const handleSaveSettings = async (newLimit: number) => {
+    try {
+      setSavingSettings(true);
+      setError(null);
+      await winkelApi.updateSettings({ weekly_purchase_limit: newLimit });
+      setWeeklyLimit(newLimit);
+      setSuccess(`Weekly purchase limit updated to ${newLimit}`);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update settings');
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -195,6 +222,42 @@ const WinkelManagement: React.FC = () => {
           <Plus className="h-4 w-4" />
           <span>Add Item</span>
         </button>
+      </div>
+
+      {/* Weekly Purchase Limit Setting */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="bg-amber-500 rounded-full p-3">
+              <ShoppingCart className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900">Weekly Purchase Limit</h3>
+              <p className="text-sm text-gray-600">
+                Students can make up to <span className="font-bold text-amber-700">{weeklyLimit}</span> purchase{weeklyLimit !== 1 ? 's' : ''} per week
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                (Profile emojis are excluded from this limit)
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-3">
+            <label className="text-sm font-medium text-gray-700">Limit:</label>
+            <select
+              value={weeklyLimit}
+              onChange={(e) => handleSaveSettings(parseInt(e.target.value))}
+              disabled={savingSettings}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent disabled:opacity-50"
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                <option key={num} value={num}>
+                  {num} purchase{num !== 1 ? 's' : ''} per week
+                </option>
+              ))}
+            </select>
+            {savingSettings && <Loader2 className="h-5 w-5 animate-spin text-amber-600" />}
+          </div>
+        </div>
       </div>
 
       {/* Messages */}

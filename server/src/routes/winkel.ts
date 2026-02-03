@@ -20,6 +20,20 @@ function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
+// Helper: Get weekly purchase limit from settings (default: 1)
+async function getWeeklyPurchaseLimit(): Promise<number> {
+  try {
+    const setting = await database.get(
+      'SELECT setting_value FROM bank_settings WHERE setting_key = $1',
+      ['weekly_purchase_limit']
+    );
+    return setting ? parseInt(setting.setting_value) || 1 : 1;
+  } catch (error) {
+    console.error('Failed to get weekly purchase limit:', error);
+    return 1;
+  }
+}
+
 // GET /api/winkel/items - Get all shop items
 router.get('/items', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -262,6 +276,66 @@ router.get('/purchases', authenticateToken, async (req: AuthenticatedRequest, re
   }
 });
 
+// GET /api/winkel/settings - Get shop settings (weekly purchase limit)
+router.get('/settings', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const weeklyLimit = await getWeeklyPurchaseLimit();
+    res.json({ weekly_purchase_limit: weeklyLimit });
+  } catch (error) {
+    console.error('Failed to get shop settings:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/winkel/settings - Update shop settings (teacher only)
+router.put(
+  '/settings',
+  authenticateToken,
+  requireRole(['teacher']),
+  [
+    body('weekly_purchase_limit').optional().isInt({ min: 1, max: 10 }).withMessage('Weekly limit must be between 1 and 10'),
+  ],
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { weekly_purchase_limit } = req.body;
+
+      if (weekly_purchase_limit !== undefined) {
+        // Check if setting exists
+        const existing = await database.get(
+          'SELECT * FROM bank_settings WHERE setting_key = $1',
+          ['weekly_purchase_limit']
+        );
+
+        if (existing) {
+          await database.run(
+            'UPDATE bank_settings SET setting_value = $1, updated_at = CURRENT_TIMESTAMP, updated_by = $2 WHERE setting_key = $3',
+            [weekly_purchase_limit.toString(), req.user?.id, 'weekly_purchase_limit']
+          );
+        } else {
+          await database.run(
+            'INSERT INTO bank_settings (setting_key, setting_value, description, updated_by) VALUES ($1, $2, $3, $4)',
+            ['weekly_purchase_limit', weekly_purchase_limit.toString(), 'Maximum purchases per student per week', req.user?.id]
+          );
+        }
+      }
+
+      const newLimit = await getWeeklyPurchaseLimit();
+      res.json({ 
+        message: 'Shop settings updated successfully',
+        weekly_purchase_limit: newLimit 
+      });
+    } catch (error) {
+      console.error('Failed to update shop settings:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
 // GET /api/winkel/can-purchase - Check if student can make a purchase this week
 router.get('/can-purchase', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -270,13 +344,25 @@ router.get('/can-purchase', authenticateToken, async (req: AuthenticatedRequest,
     }
 
     const weekStart = formatDate(getWeekStartDate());
+    const weeklyLimit = await getWeeklyPurchaseLimit();
     
-    const existingPurchase = await database.get(
-      'SELECT id FROM shop_purchases WHERE user_id = $1 AND week_start_date = $2',
+    // Count non-profile purchases this week
+    const purchaseCount = await database.get(
+      `SELECT COUNT(*) as count FROM shop_purchases sp
+       JOIN shop_items si ON sp.item_id = si.id
+       WHERE sp.user_id = $1 AND sp.week_start_date = $2 AND si.category != 'profile'`,
       [req.user.id, weekStart]
     );
 
-    res.json({ canPurchase: !existingPurchase });
+    const currentCount = parseInt(purchaseCount?.count) || 0;
+    const remainingPurchases = Math.max(0, weeklyLimit - currentCount);
+
+    res.json({ 
+      canPurchase: currentCount < weeklyLimit,
+      weeklyLimit,
+      purchasesThisWeek: currentCount,
+      remainingPurchases
+    });
   } catch (error) {
     console.error('Failed to check purchase eligibility:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -318,6 +404,7 @@ router.post(
 
       // Profile items have no weekly limit, but check if student already owns this emoji
       const weekStart = formatDate(getWeekStartDate());
+      const weeklyLimit = await getWeeklyPurchaseLimit();
       
       if (item.category === 'profile') {
         // Check if student already purchased this emoji
@@ -332,15 +419,21 @@ router.post(
           });
         }
       } else {
-        // Check if student has already made a purchase this week (non-profile items only)
-        const existingPurchase = await database.get(
-          'SELECT id FROM shop_purchases WHERE user_id = $1 AND week_start_date = $2',
+        // Check if student has reached weekly purchase limit (non-profile items only)
+        const purchaseCount = await database.get(
+          `SELECT COUNT(*) as count FROM shop_purchases sp
+           JOIN shop_items si ON sp.item_id = si.id
+           WHERE sp.user_id = $1 AND sp.week_start_date = $2 AND si.category != 'profile'`,
           [req.user.id, weekStart]
         );
 
-        if (existingPurchase) {
+        const currentCount = parseInt(purchaseCount?.count) || 0;
+        if (currentCount >= weeklyLimit) {
+          const limitText = weeklyLimit === 1 
+            ? 'You have already made your weekly purchase.' 
+            : `You have reached your weekly limit of ${weeklyLimit} purchases.`;
           return res.status(400).json({ 
-            error: 'You have already made a purchase this week. Come back next week!' 
+            error: `${limitText} Come back next week!` 
           });
         }
       }

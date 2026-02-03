@@ -309,6 +309,26 @@ export const winkelApi = {
   // Get all purchases (teachers only)
   getPurchases: (): Promise<{ data: any[] }> => {
     return api.get('/winkel/purchases');
+  },
+
+  // Get shop settings
+  getSettings: (): Promise<{ data: { weekly_purchase_limit: number } }> => {
+    return api.get('/winkel/settings');
+  },
+
+  // Update shop settings (teachers only)
+  updateSettings: (data: { weekly_purchase_limit: number }): Promise<{ data: { message: string; weekly_purchase_limit: number } }> => {
+    return api.put('/winkel/settings', data);
+  },
+
+  // Check if student can purchase (returns limit info)
+  canPurchase: (): Promise<{ data: { 
+    canPurchase: boolean; 
+    weeklyLimit: number; 
+    purchasesThisWeek: number; 
+    remainingPurchases: number 
+  } }> => {
+    return api.get('/winkel/can-purchase');
   }
 };
 
