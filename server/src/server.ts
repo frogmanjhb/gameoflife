@@ -24,6 +24,7 @@ import winkelRoutes from './routes/winkel';
 import pizzaTimeRoutes from './routes/pizza-time';
 import leaderboardRoutes from './routes/leaderboard';
 import suggestionsBugsRoutes from './routes/suggestions-bugs';
+import disastersRoutes from './routes/disasters';
 import adminRoutes from './routes/admin';
 import database from './database/database-prod';
 
@@ -163,6 +164,7 @@ app.use('/api/winkel', winkelRoutes);
 app.use('/api/pizza-time', pizzaTimeRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/suggestions-bugs', suggestionsBugsRoutes);
+app.use('/api/disasters', disastersRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Error handling middleware
@@ -461,6 +463,18 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Suggestions & Bugs plugin may have already been added:', migrationError);
+    }
+
+    // Add Disasters plugin
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '022_add_disasters_plugin.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Disasters plugin added');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Disasters plugin may have already been added:', migrationError);
     }
     
     const schema = readFileSync(schemaPath, 'utf8');
