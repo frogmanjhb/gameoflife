@@ -239,6 +239,14 @@ const WinkelPlugin: React.FC = () => {
         <div className="p-6">
           {activeTab === 'shop' && (
             <div className="space-y-6">
+              {/* Purchase Info Banner */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center space-x-3">
+                <span className="text-2xl">📦</span>
+                <p className="text-blue-800 text-sm">
+                  <span className="font-semibold">Claim your purchases</span> during I&D or Inquiry lessons.
+                </p>
+              </div>
+
               {!canPurchase && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
                   <p className="text-amber-800 font-semibold">
