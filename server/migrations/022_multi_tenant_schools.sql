@@ -299,14 +299,10 @@ WHERE br.user_id = u.id AND br.school_id IS NULL;
 -- For now, keep existing plugins as global (school_id = NULL)
 -- This allows plugins to be shared or per-school
 
--- Add NOT NULL constraints after backfilling (where appropriate)
--- Note: We'll keep school_id nullable for super_admin users and global plugins
-ALTER TABLE users 
-ALTER COLUMN school_id SET NOT NULL;
-
--- But allow NULL for super_admin users - we'll handle this in application logic
-ALTER TABLE users 
-ALTER COLUMN school_id DROP NOT NULL;
+-- Note: school_id is kept nullable to allow:
+-- 1. super_admin users (school_id = NULL)
+-- 2. Global plugins (school_id = NULL)
+-- Application logic enforces that non-super_admin users must have school_id
 
 -- Add check constraint: super_admin must have school_id = NULL, others must have school_id
 -- Note: This constraint will fail if there are existing users, so we'll handle it in application logic

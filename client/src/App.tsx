@@ -20,6 +20,7 @@ import PizzaTimePlugin from './components/plugins/PizzaTimePlugin';
 import LeaderboardPlugin from './components/plugins/LeaderboardPlugin';
 import SuggestionsBugsPlugin from './components/plugins/SuggestionsBugsPlugin';
 import DisastersPlugin from './components/plugins/DisastersPlugin';
+import SuperAdminDashboard from './components/admin/SuperAdminDashboard';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -42,6 +43,27 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <Layout>{children}</Layout>;
 };
 
+const SuperAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || user.role !== 'super_admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
+
 const AppContent: React.FC = () => {
   const { user } = useAuth();
 
@@ -51,12 +73,26 @@ const AppContent: React.FC = () => {
     <Routes>
       <Route path="/login" element={<LoginForm />} />
       <Route
+        path="/admin"
+        element={
+          <SuperAdminRoute>
+            <SuperAdminDashboard />
+          </SuperAdminRoute>
+        }
+      />
+      <Route
         path="/"
         element={
           <ProtectedRoute>
             <PluginProvider>
               <TownProvider>
-                {user?.role === 'teacher' ? <TeacherDashboard /> : <StudentDashboard />}
+                {user?.role === 'super_admin' ? (
+                  <SuperAdminDashboard />
+                ) : user?.role === 'teacher' ? (
+                  <TeacherDashboard />
+                ) : (
+                  <StudentDashboard />
+                )}
               </TownProvider>
             </PluginProvider>
           </ProtectedRoute>
