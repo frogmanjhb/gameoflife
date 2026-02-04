@@ -46,7 +46,8 @@ const LoginForm: React.FC = () => {
     try {
       if (isLogin) {
         // For login, school_id is optional (super admin can login without it)
-        await login(formData.username, formData.password, formData.school_id || undefined);
+        const schoolId = formData.school_id ?? undefined;
+        await login(formData.username, formData.password, schoolId);
       } else {
         const response = await register(
           formData.username, 

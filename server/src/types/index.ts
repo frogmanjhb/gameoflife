@@ -73,7 +73,7 @@ export interface CreateUserRequest {
 export interface LoginRequest {
   username: string;
   password: string;
-  school_id: number;
+  school_id?: number; // Optional - super admin can login without school_id
 }
 
 export interface TransferRequest {

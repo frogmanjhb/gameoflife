@@ -48,7 +48,7 @@ const SchoolPicker: React.FC<SchoolPickerProps> = ({ value, onChange, required =
     <div className="relative">
       <label className="label">
         <School className="h-4 w-4 inline mr-1" />
-        School
+        School {!required && <span className="text-gray-500 text-xs">(optional)</span>}
       </label>
       <div className="relative">
         <button
@@ -119,7 +119,7 @@ const SchoolPicker: React.FC<SchoolPickerProps> = ({ value, onChange, required =
         )}
       </div>
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
-      {required && !value && (
+      {required && !value && !error && (
         <p className="mt-1 text-xs text-gray-500">Please select your school</p>
       )}
     </div>

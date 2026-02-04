@@ -478,6 +478,18 @@ async function initializeDatabase() {
     } catch (migrationError) {
       console.log('⚠️ Disasters plugin may have already been added:', migrationError);
     }
+
+    // Run Multi-Tenant Schools migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '022_multi_tenant_schools.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Multi-tenant schools migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Multi-tenant schools migration may have already been applied:', migrationError);
+    }
     
     const schema = readFileSync(schemaPath, 'utf8');
     await database.query(schema);
