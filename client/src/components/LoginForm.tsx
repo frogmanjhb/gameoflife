@@ -104,7 +104,7 @@ const LoginForm: React.FC = () => {
         <div className="text-center">
           <div className="mb-6">
             <div className="mx-auto flex items-center justify-center">
-              <img src="/logo.png" alt="Game of Life Town Hub" style={{ width: '180px', height: '180px' }} />
+              <img src="/logo.png" alt="SP Prep Schools" className="max-w-[240px] max-h-[180px] w-auto h-auto object-contain mx-auto" />
             </div>
           </div>
           <h2 className="text-3xl font-bold text-gray-900">
