@@ -51,6 +51,9 @@ const WinkelPlugin: React.FC = () => {
   const [shopCategoryTab, setShopCategoryTab] = useState<'consumables' | 'privileges' | 'profile'>('consumables');
   const [accountBalance, setAccountBalance] = useState<number | null>(null);
   const [ownedEmojis, setOwnedEmojis] = useState<any[]>([]);
+  const [weeklyLimit, setWeeklyLimit] = useState(1);
+  const [purchasesThisWeek, setPurchasesThisWeek] = useState(0);
+  const [remainingPurchases, setRemainingPurchases] = useState(1);
 
   useEffect(() => {
     if (winkelPlugin && winkelPlugin.enabled) {
@@ -64,7 +67,7 @@ const WinkelPlugin: React.FC = () => {
       const [itemsRes, purchasesRes, canPurchaseRes, accountRes, ownedEmojisRes] = await Promise.all([
         api.get('/winkel/items'),
         api.get('/winkel/purchases'),
-        user?.role === 'student' ? api.get('/winkel/can-purchase') : Promise.resolve({ data: { canPurchase: true } }),
+        user?.role === 'student' ? api.get('/winkel/can-purchase') : Promise.resolve({ data: { canPurchase: true, weeklyLimit: 1, purchasesThisWeek: 0, remainingPurchases: 1 } }),
         user?.role === 'student' ? api.get('/transactions/history').then(() => {
           // Get account balance from auth context or separate call
           return api.get('/transactions/history').then(() => {
@@ -88,6 +91,9 @@ const WinkelPlugin: React.FC = () => {
       setItems(itemsWithNumericPrices);
       setPurchases(purchasesWithNumericPrices);
       setCanPurchase(canPurchaseRes.data.canPurchase);
+      setWeeklyLimit(canPurchaseRes.data.weeklyLimit || 1);
+      setPurchasesThisWeek(canPurchaseRes.data.purchasesThisWeek || 0);
+      setRemainingPurchases(canPurchaseRes.data.remainingPurchases || 0);
       setOwnedEmojis(ownedEmojisRes.data || []);
 
       // Get account balance for students
@@ -117,9 +123,8 @@ const WinkelPlugin: React.FC = () => {
       const response = await api.post('/winkel/purchase', { item_id: itemId });
       
       setSuccess(response.data.message || 'Purchase successful!');
-      setCanPurchase(false);
       
-      // Refresh data
+      // Refresh data to update remaining purchases count
       await fetchData();
       
       // Clear success message after 3 seconds
@@ -164,15 +169,24 @@ const WinkelPlugin: React.FC = () => {
             </div>
             <div>
               <h1 className="text-3xl font-bold">The Winkel</h1>
-              <p className="text-orange-100">Your weekly shopping destination</p>
+              <p className="text-orange-100">
+                You may make {weeklyLimit} purchase{weeklyLimit !== 1 ? 's' : ''} per week
+              </p>
             </div>
           </div>
-          {!canPurchase && (
-            <div className="bg-white/20 rounded-lg px-4 py-2 flex items-center space-x-2">
-              <Clock className="h-5 w-5" />
-              <span className="font-semibold">Come back next week!</span>
-            </div>
-          )}
+          <div className="text-right">
+            {canPurchase ? (
+              <div className="bg-white/20 rounded-lg px-4 py-2">
+                <p className="font-semibold">{remainingPurchases} purchase{remainingPurchases !== 1 ? 's' : ''} remaining</p>
+                <p className="text-xs text-orange-100">{purchasesThisWeek} of {weeklyLimit} used this week</p>
+              </div>
+            ) : (
+              <div className="bg-white/20 rounded-lg px-4 py-2 flex items-center space-x-2">
+                <Clock className="h-5 w-5" />
+                <span className="font-semibold">Come back next week!</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -225,10 +239,20 @@ const WinkelPlugin: React.FC = () => {
         <div className="p-6">
           {activeTab === 'shop' && (
             <div className="space-y-6">
+              {/* Purchase Info Banner */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center space-x-3">
+                <span className="text-2xl">📦</span>
+                <p className="text-blue-800 text-sm">
+                  <span className="font-semibold">Claim your purchases</span> during I&D or Inquiry lessons.
+                </p>
+              </div>
+
               {!canPurchase && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
                   <p className="text-amber-800 font-semibold">
-                    ⏰ You've already made your weekly purchase! Come back next week for more shopping.
+                    ⏰ {weeklyLimit === 1 
+                      ? "You've already made your weekly purchase!" 
+                      : `You've reached your limit of ${weeklyLimit} purchases this week!`} Come back next week for more shopping.
                   </p>
                 </div>
               )}

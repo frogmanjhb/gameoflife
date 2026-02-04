@@ -10,11 +10,12 @@ import AnnouncementManagement from './admin/AnnouncementManagement';
 import TownSettings from './admin/TownSettings';
 import JobManagement from './admin/JobManagement';
 import TreasuryManagement from './admin/TreasuryManagement';
+import WinkelManagement from './admin/WinkelManagement';
 import StudentManagement from './StudentManagement';
 import PendingStudents from './PendingStudents';
 import { 
   Grid, Settings, Briefcase, Building2, Users, Wallet, 
-  TrendingUp, CreditCard, Megaphone, MapPin, Landmark, Clock
+  TrendingUp, CreditCard, Megaphone, MapPin, Landmark, Clock, ShoppingBag
 } from 'lucide-react';
 import api from '../services/api';
 import { Student, Loan, Transaction } from '../types';
@@ -32,7 +33,7 @@ const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
   const { enabledPlugins, plugins, loading: pluginsLoading, refreshPlugins } = usePlugins();
   const { currentTown, currentTownClass, allTowns, announcements, loading: townLoading, setCurrentTownClass, refreshAnnouncements } = useTown();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs' | 'students' | 'pending'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs' | 'students' | 'pending' | 'shop'>('dashboard');
   const [pendingCount, setPendingCount] = useState(0);
   
   // Data for town stats
@@ -274,6 +275,7 @@ const TeacherDashboard: React.FC = () => {
               { id: 'students', label: 'Students', icon: Users },
               { id: 'treasury', label: 'Treasury', icon: Landmark },
               { id: 'jobs', label: 'Jobs', icon: Briefcase },
+              { id: 'shop', label: 'Shop', icon: ShoppingBag },
               { id: 'plugins', label: 'Plugins', icon: Settings },
               { id: 'announcements', label: 'Announcements', icon: Megaphone },
               { id: 'town', label: 'Town Settings', icon: Building2 }
@@ -414,6 +416,11 @@ const TeacherDashboard: React.FC = () => {
           {/* Jobs Tab */}
           {activeTab === 'jobs' && (
             <JobManagement />
+          )}
+
+          {/* Shop Tab */}
+          {activeTab === 'shop' && (
+            <WinkelManagement />
           )}
 
           {/* Town Settings Tab */}
