@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "rimraf dist && node node_modules/typescript/lib/tsc.js && node node_modules/copyfiles/index.js src/database/*.sql dist/database/ --flat && node node_modules/copyfiles/index.js migrations/*.sql dist/migrations/ --flat && node node_modules/copyfiles/index.js seed-town-hub.js dist/",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "create-super-admin": "node create-super-admin.js"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
