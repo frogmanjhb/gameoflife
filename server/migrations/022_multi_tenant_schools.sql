@@ -236,7 +236,7 @@ WHERE tt.town_class = ts.class AND tt.school_id IS NULL;
 UPDATE job_applications ja
 SET school_id = u.school_id
 FROM users u
-WHERE ja.applicant_id = u.id AND ja.school_id IS NULL;
+WHERE ja.user_id = u.id AND ja.school_id IS NULL;
 
 -- Backfill tender_applications (via users)
 UPDATE tender_applications ta
