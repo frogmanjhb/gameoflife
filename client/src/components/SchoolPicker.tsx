@@ -13,9 +13,10 @@ interface SchoolPickerProps {
   onChange: (schoolId: number) => void;
   required?: boolean;
   error?: string;
+  showOptional?: boolean;
 }
 
-const SchoolPicker: React.FC<SchoolPickerProps> = ({ value, onChange, required = true, error }) => {
+const SchoolPicker: React.FC<SchoolPickerProps> = ({ value, onChange, required = true, error, showOptional }) => {
   const [schools, setSchools] = useState<School[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');

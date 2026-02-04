@@ -263,7 +263,7 @@ router.post('/register-teacher', [
 router.post('/login', [
   body('username').notEmpty().withMessage('Username is required'),
   body('password').notEmpty().withMessage('Password is required'),
-  body('school_id').notEmpty().withMessage('School selection is required').isInt().withMessage('Invalid school ID')
+  body('school_id').optional().isInt().withMessage('Invalid school ID')
 ], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
@@ -273,16 +273,37 @@ router.post('/login', [
 
     const { username, password, school_id }: LoginRequest = req.body;
 
-    // Validate school exists and is active
-    const school = await database.get('SELECT * FROM schools WHERE id = $1 AND archived = false', [school_id]);
-    if (!school) {
-      return res.status(400).json({ error: 'Invalid or inactive school' });
-    }
-
-    // Find user (check username and school_id match)
-    const user = await database.get('SELECT * FROM users WHERE username = $1 AND school_id = $2', [username, school_id]);
+    // First, try to find user by username only (to check if super_admin)
+    let user = await database.get('SELECT * FROM users WHERE username = $1', [username]);
+    
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // If user is super_admin, school_id is not required (should be NULL)
+    if (user.role === 'super_admin') {
+      if (user.school_id !== null) {
+        // Fix super_admin users that have school_id set incorrectly
+        await database.run('UPDATE users SET school_id = NULL WHERE id = $1', [user.id]);
+        user.school_id = null;
+      }
+      // school_id from request is ignored for super_admin
+    } else {
+      // For non-super_admin users, school_id is required
+      if (!school_id) {
+        return res.status(400).json({ error: 'School selection is required' });
+      }
+
+      // Validate school exists and is active
+      const school = await database.get('SELECT * FROM schools WHERE id = $1 AND archived = false', [school_id]);
+      if (!school) {
+        return res.status(400).json({ error: 'Invalid or inactive school' });
+      }
+
+      // Verify user belongs to the selected school
+      if (user.school_id !== school_id) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
     }
 
     // Check if student account is pending approval
@@ -302,9 +323,10 @@ router.post('/login', [
     }
 
     // Generate JWT token (include schoolId and role)
+    // For super_admin, schoolId is null
     const tokenPayload: JWTPayload = {
       userId: user.id,
-      schoolId: user.school_id,
+      schoolId: user.role === 'super_admin' ? null : user.school_id,
       role: user.role as 'student' | 'teacher' | 'super_admin'
     };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });

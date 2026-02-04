@@ -45,10 +45,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const login = async (username: string, password: string, schoolId: number) => {
+  const login = async (username: string, password: string, schoolId?: number | null) => {
     try {
       console.log('Attempting login for:', username, 'school:', schoolId);
-      const response = await api.post('/auth/login', { username, password, school_id: schoolId });
+      const response = await api.post('/auth/login', { 
+        username, 
+        password, 
+        ...(schoolId && { school_id: schoolId }) // Only include school_id if provided
+      });
       console.log('Login response:', response.data);
       const { token, user, account } = response.data;
       

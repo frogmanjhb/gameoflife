@@ -29,8 +29,8 @@ const LoginForm: React.FC = () => {
     setError('');
     setSchoolError('');
     
-    // Validate school selection
-    if (!formData.school_id) {
+    // Validate school selection (required for registration, optional for login - super admin can skip)
+    if (!isLogin && !formData.school_id) {
       setSchoolError('Please select your school');
       return;
     }
@@ -45,7 +45,8 @@ const LoginForm: React.FC = () => {
 
     try {
       if (isLogin) {
-        await login(formData.username, formData.password, formData.school_id!);
+        // For login, school_id is optional (super admin can login without it)
+        await login(formData.username, formData.password, formData.school_id || undefined);
       } else {
         const response = await register(
           formData.username, 
@@ -127,14 +128,22 @@ const LoginForm: React.FC = () => {
               </div>
             )}
 
-            <SchoolPicker
-              value={formData.school_id}
-              onChange={(schoolId) => {
-                setFormData({ ...formData, school_id: schoolId });
-                setSchoolError('');
-              }}
-              error={schoolError}
-            />
+            <div>
+              <SchoolPicker
+                value={formData.school_id}
+                onChange={(schoolId) => {
+                  setFormData({ ...formData, school_id: schoolId });
+                  setSchoolError('');
+                }}
+                error={schoolError}
+                required={!isLogin} // Only required for registration
+              />
+              {isLogin && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Super admin can login without selecting a school
+                </p>
+              )}
+            </div>
 
             <div>
               <label htmlFor="username" className="label">
