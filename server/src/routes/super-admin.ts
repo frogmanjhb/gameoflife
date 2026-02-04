@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
+import bcrypt from 'bcryptjs';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { requireSchoolId } from '../middleware/tenant';
@@ -233,7 +234,8 @@ router.post('/schools',
 
       res.status(201).json({ 
         message: 'School created successfully',
-        school 
+        school,
+        note: 'Use POST /api/admin/schools/:id/teachers to create the first teacher for this school'
       });
     } catch (error: any) {
       console.error('Failed to create school:', error);
@@ -440,6 +442,84 @@ router.get('/schools/:id/stats',
     } catch (error) {
       console.error('Failed to fetch school stats:', error);
       res.status(500).json({ error: 'Failed to fetch school stats' });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/schools/:id/teachers
+ * Create teacher for a school
+ * Super admin only - used to create the first teacher for a new school
+ */
+router.post('/schools/:id/teachers',
+  authenticateToken,
+  requireRole(['super_admin']),
+  [
+    body('username').notEmpty().withMessage('Username is required')
+      .isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
+    body('password').notEmpty().withMessage('Password is required')
+      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('first_name').optional().isString(),
+    body('last_name').optional().isString(),
+    body('email').optional().isEmail().withMessage('Valid email required')
+  ],
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const schoolId = parseInt(req.params.id);
+      const { username, password, first_name, last_name, email } = req.body;
+
+      // Verify school exists
+      const school = await database.get('SELECT * FROM schools WHERE id = $1', [schoolId]);
+      if (!school) {
+        return res.status(404).json({ error: 'School not found' });
+      }
+
+      if (school.archived) {
+        return res.status(400).json({ error: 'Cannot create teachers for archived schools' });
+      }
+
+      // Check if username already exists (globally, since usernames are unique)
+      const existingUser = await database.get('SELECT id FROM users WHERE username = $1', [username]);
+      if (existingUser) {
+        return res.status(400).json({ error: 'Username already exists' });
+      }
+
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      // Create teacher user for the specified school
+      const result = await database.run(
+        'INSERT INTO users (username, password_hash, role, first_name, last_name, email, school_id, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
+        [username, passwordHash, 'teacher', first_name || null, last_name || null, email || null, schoolId, 'approved']
+      );
+
+      const userId = result.lastID;
+      const user = await database.get(
+        'SELECT id, username, role, first_name, last_name, email, school_id, created_at, updated_at FROM users WHERE id = $1',
+        [userId]
+      );
+
+      console.log(`✅ Teacher account created by super admin ${req.user?.username}: ${username} for school ${school.name}`);
+      res.status(201).json({
+        message: 'Teacher account created successfully',
+        user,
+        school: {
+          id: school.id,
+          name: school.name,
+          code: school.code
+        }
+      });
+    } catch (error: any) {
+      console.error('Failed to create teacher:', error);
+      if (error.code === '23505') { // Unique violation
+        return res.status(400).json({ error: 'Username already exists' });
+      }
+      res.status(500).json({ error: 'Failed to create teacher' });
     }
   }
 );

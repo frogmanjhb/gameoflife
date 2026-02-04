@@ -18,6 +18,14 @@ const CreateSchoolForm: React.FC<CreateSchoolFormProps> = ({ onClose, onSuccess 
     }
   });
   const [emailDomain, setEmailDomain] = useState('');
+  const [createFirstTeacher, setCreateFirstTeacher] = useState(false);
+  const [teacherData, setTeacherData] = useState({
+    username: '',
+    password: '',
+    first_name: '',
+    last_name: '',
+    email: ''
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,7 +35,22 @@ const CreateSchoolForm: React.FC<CreateSchoolFormProps> = ({ onClose, onSuccess 
     setLoading(true);
 
     try {
-      await api.post('/admin/schools', formData);
+      // Create school first
+      const schoolResponse = await api.post('/admin/schools', formData);
+      const schoolId = schoolResponse.data.school.id;
+
+      // If user wants to create first teacher, do that now
+      if (createFirstTeacher && teacherData.username && teacherData.password) {
+        try {
+          await api.post(`/admin/schools/${schoolId}/teachers`, teacherData);
+        } catch (teacherErr: any) {
+          // School was created, but teacher creation failed
+          setError(`School created, but failed to create teacher: ${teacherErr.response?.data?.error || 'Unknown error'}`);
+          setLoading(false);
+          return;
+        }
+      }
+
       onSuccess();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create school');
@@ -113,6 +136,96 @@ const CreateSchoolForm: React.FC<CreateSchoolFormProps> = ({ onClose, onSuccess 
               placeholder="e.g., stpeters"
             />
             <p className="mt-1 text-sm text-gray-500">Lowercase letters, numbers, and hyphens only</p>
+          </div>
+
+          <div className="border-t border-gray-200 pt-6">
+            <div className="flex items-center mb-4">
+              <input
+                type="checkbox"
+                id="createFirstTeacher"
+                checked={createFirstTeacher}
+                onChange={(e) => setCreateFirstTeacher(e.target.checked)}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <label htmlFor="createFirstTeacher" className="ml-2 block text-sm font-medium text-gray-700">
+                Create first teacher for this school
+              </label>
+            </div>
+
+            {createFirstTeacher && (
+              <div className="ml-6 space-y-4 bg-gray-50 p-4 rounded-lg">
+                <div>
+                  <label htmlFor="teacher_username" className="block text-sm font-medium text-gray-700 mb-2">
+                    Teacher Username *
+                  </label>
+                  <input
+                    id="teacher_username"
+                    type="text"
+                    required={createFirstTeacher}
+                    value={teacherData.username}
+                    onChange={(e) => setTeacherData({ ...teacherData, username: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="teacher1"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="teacher_password" className="block text-sm font-medium text-gray-700 mb-2">
+                    Teacher Password *
+                  </label>
+                  <input
+                    id="teacher_password"
+                    type="password"
+                    required={createFirstTeacher}
+                    value={teacherData.password}
+                    onChange={(e) => setTeacherData({ ...teacherData, password: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="Minimum 6 characters"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="teacher_first_name" className="block text-sm font-medium text-gray-700 mb-2">
+                      First Name
+                    </label>
+                    <input
+                      id="teacher_first_name"
+                      type="text"
+                      value={teacherData.first_name}
+                      onChange={(e) => setTeacherData({ ...teacherData, first_name: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="teacher_last_name" className="block text-sm font-medium text-gray-700 mb-2">
+                      Last Name
+                    </label>
+                    <input
+                      id="teacher_last_name"
+                      type="text"
+                      value={teacherData.last_name}
+                      onChange={(e) => setTeacherData({ ...teacherData, last_name: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="teacher_email" className="block text-sm font-medium text-gray-700 mb-2">
+                    Email
+                  </label>
+                  <input
+                    id="teacher_email"
+                    type="email"
+                    value={teacherData.email}
+                    onChange={(e) => setTeacherData({ ...teacherData, email: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="teacher@school.co.za"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div>

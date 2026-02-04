@@ -72,10 +72,49 @@ railway run --service backend node create-super-admin.js admin mypassword123
 
 - View all schools with aggregated statistics
 - Create new schools
+- Create teachers for any school (including first teacher for new schools)
 - View detailed school information (financial, users, activity)
 - Archive/reactivate schools
 - View system-wide analytics
 - **Cannot** see individual student data (only aggregated statistics)
+
+## Creating Teachers for Schools
+
+### First Teacher for a New School
+
+When creating a new school, you have two options:
+
+**Option 1: Create teacher during school creation**
+- Check "Create first teacher for this school" in the Create School form
+- Fill in teacher details (username, password, name, email)
+- Teacher will be created automatically after school is created
+
+**Option 2: Create teacher after school creation**
+- Create the school first
+- Open the school detail view
+- Go to "Users" tab
+- Click "Add Teacher" button
+- Fill in teacher details and create
+
+### Additional Teachers
+
+After the first teacher is created:
+- **Super Admin** can create additional teachers via the school detail view
+- **Existing Teachers** can create additional teachers via `/api/auth/register-teacher` endpoint (requires teacher authentication)
+
+### API Endpoint
+
+Super admin can also create teachers via API:
+```
+POST /api/admin/schools/:id/teachers
+Body: {
+  username: string,
+  password: string,
+  first_name?: string,
+  last_name?: string,
+  email?: string
+}
+```
 
 ## Security Notes
 

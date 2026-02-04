@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Users, Activity, Settings, Archive, RefreshCw } from 'lucide-react';
+import { X, DollarSign, Users, Activity, Settings, Archive, RefreshCw, Plus } from 'lucide-react';
 import api from '../../services/api';
 
 interface School {
@@ -27,6 +27,15 @@ const SchoolDetailModal: React.FC<SchoolDetailModalProps> = ({ school, onClose, 
   const [details, setDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showCreateTeacher, setShowCreateTeacher] = useState(false);
+  const [teacherForm, setTeacherForm] = useState({
+    username: '',
+    password: '',
+    first_name: '',
+    last_name: '',
+    email: ''
+  });
+  const [creatingTeacher, setCreatingTeacher] = useState(false);
 
   useEffect(() => {
     fetchSchoolDetails();
@@ -54,6 +63,23 @@ const SchoolDetailModal: React.FC<SchoolDetailModalProps> = ({ school, onClose, 
       onUpdate();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update school');
+    }
+  };
+
+  const handleCreateTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreatingTeacher(true);
+    setError('');
+
+    try {
+      await api.post(`/admin/schools/${school.id}/teachers`, teacherForm);
+      setShowCreateTeacher(false);
+      setTeacherForm({ username: '', password: '', first_name: '', last_name: '', email: '' });
+      fetchSchoolDetails(); // Refresh to show new teacher
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to create teacher');
+    } finally {
+      setCreatingTeacher(false);
     }
   };
 
@@ -190,9 +216,85 @@ const SchoolDetailModal: React.FC<SchoolDetailModalProps> = ({ school, onClose, 
                   </p>
                 </div>
               )}
-              {details.users.teachers && details.users.teachers.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-3">Teachers</p>
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-medium text-gray-700">Teachers</p>
+                  {!school.archived && (
+                    <button
+                      onClick={() => setShowCreateTeacher(!showCreateTeacher)}
+                      className="btn-secondary text-sm flex items-center"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add Teacher
+                    </button>
+                  )}
+                </div>
+
+                {showCreateTeacher && (
+                  <form onSubmit={handleCreateTeacher} className="bg-blue-50 p-4 rounded-lg mb-4 space-y-3 border border-blue-200">
+                    <h4 className="font-medium text-gray-900 mb-2">Create New Teacher</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        placeholder="Username *"
+                        required
+                        value={teacherForm.username}
+                        onChange={(e) => setTeacherForm({ ...teacherForm, username: e.target.value })}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <input
+                        type="password"
+                        placeholder="Password *"
+                        required
+                        value={teacherForm.password}
+                        onChange={(e) => setTeacherForm({ ...teacherForm, password: e.target.value })}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="First Name"
+                        value={teacherForm.first_name}
+                        onChange={(e) => setTeacherForm({ ...teacherForm, first_name: e.target.value })}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Last Name"
+                        value={teacherForm.last_name}
+                        onChange={(e) => setTeacherForm({ ...teacherForm, last_name: e.target.value })}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        value={teacherForm.email}
+                        onChange={(e) => setTeacherForm({ ...teacherForm, email: e.target.value })}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm col-span-2"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        disabled={creatingTeacher}
+                        className="btn-primary text-sm disabled:opacity-50"
+                      >
+                        {creatingTeacher ? 'Creating...' : 'Create'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCreateTeacher(false);
+                          setTeacherForm({ username: '', password: '', first_name: '', last_name: '', email: '' });
+                        }}
+                        className="btn-secondary text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {details.users.teachers && details.users.teachers.length > 0 ? (
                   <div className="space-y-2">
                     {details.users.teachers.map((teacher: any) => (
                       <div key={teacher.id} className="bg-gray-50 p-3 rounded-lg">
@@ -202,11 +304,16 @@ const SchoolDetailModal: React.FC<SchoolDetailModalProps> = ({ school, onClose, 
                             {teacher.first_name} {teacher.last_name}
                           </p>
                         )}
+                        {teacher.email && (
+                          <p className="text-xs text-gray-500">{teacher.email}</p>
+                        )}
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-sm text-gray-500 italic">No teachers yet. Create the first teacher above.</p>
+                )}
+              </div>
             </div>
           )}
 
