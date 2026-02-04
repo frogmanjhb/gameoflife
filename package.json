@@ -21,7 +21,8 @@
     "db:migrate": "railway run --service \"bank front_backends\" psql $DATABASE_URL < server/migrations/002_town_hub_tables.sql",
     "db:migrate:ps": "Get-Content server/migrations/002_town_hub_tables.sql | railway run --service \"bank front_backends\" psql $env:DATABASE_URL",
     "db:seed": "cd server && railway run --service \"bank front_backends\" node seed-town-hub.js",
-    "db:init": "npm run db:migrate && npm run db:seed"
+    "db:init": "npm run db:migrate && npm run db:seed",
+    "create-super-admin": "cd server && node create-super-admin.js"
   },
   "keywords": [
     "education",
