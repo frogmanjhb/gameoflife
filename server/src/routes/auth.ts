@@ -4,10 +4,23 @@ import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import database from '../database/database-prod';
 import { CreateUserRequest, LoginRequest, AuthResponse } from '../types';
-import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { authenticateToken, AuthenticatedRequest, requireRole, JWTPayload } from '../middleware/auth';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+// Get list of active schools (public endpoint for school picker)
+router.get('/schools', async (req: Request, res: Response) => {
+  try {
+    const schools = await database.query(
+      'SELECT id, name, code FROM schools WHERE archived = false ORDER BY name'
+    );
+    res.json(schools);
+  } catch (error) {
+    console.error('Failed to fetch schools:', error);
+    res.status(500).json({ error: 'Failed to fetch schools' });
+  }
+});
 
 // Register new user
 // SECURITY: Only students can self-register. Teachers must be created by other teachers.
@@ -48,8 +61,9 @@ router.post('/register', [
     }
     return true;
   }),
+  body('school_id').notEmpty().withMessage('School selection is required').isInt().withMessage('Invalid school ID'),
   body('class').optional().custom((value) => {
-    if (value && !['6A', '6B', '6C'].includes(value)) {
+    if (value && value.length > 0 && !['6A', '6B', '6C'].includes(value)) {
       throw new Error('Class must be 6A, 6B, or 6C');
     }
     return true;
@@ -57,12 +71,6 @@ router.post('/register', [
   body('email').optional().custom((value) => {
     if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
       throw new Error('Valid email is required');
-    }
-    return true;
-  }),
-  body('email').optional().custom((value) => {
-    if (value && !value.endsWith('@stpeters.co.za')) {
-      throw new Error('Email must end with @stpeters.co.za');
     }
     return true;
   })
@@ -75,7 +83,29 @@ router.post('/register', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { username, password, role, first_name, last_name, class: studentClass, email }: CreateUserRequest = req.body;
+    const { username, password, role, first_name, last_name, class: studentClass, email, school_id }: CreateUserRequest = req.body;
+
+    // Validate school exists and is active
+    const school = await database.get('SELECT * FROM schools WHERE id = $1 AND archived = false', [school_id]);
+    if (!school) {
+      return res.status(400).json({ error: 'Invalid or inactive school' });
+    }
+
+    // Validate class against school settings
+    const schoolSettings = school.settings || {};
+    const allowedClasses = schoolSettings.classes || ['6A', '6B', '6C'];
+    if (studentClass && !allowedClasses.includes(studentClass)) {
+      return res.status(400).json({ error: `Class must be one of: ${allowedClasses.join(', ')}` });
+    }
+
+    // Validate email domain against school settings
+    const allowedEmailDomains = schoolSettings.allowed_email_domains || [];
+    if (email && allowedEmailDomains.length > 0) {
+      const emailDomain = '@' + email.split('@')[1];
+      if (!allowedEmailDomains.includes(emailDomain)) {
+        return res.status(400).json({ error: `Email must end with one of: ${allowedEmailDomains.join(', ')}` });
+      }
+    }
 
     // Handle empty strings as null for optional fields
     const firstName = first_name && first_name.trim() ? first_name.trim() : null;
@@ -83,17 +113,17 @@ router.post('/register', [
     const studentClassName = studentClass && studentClass.trim() ? studentClass.trim() : null;
     const emailAddress = email && email.trim() ? email.trim() : null;
 
-    // Check if user already exists
-    const existingUser = await database.get('SELECT id FROM users WHERE username = $1', [username]);
+    // Check if user already exists (within the same school)
+    const existingUser = await database.get('SELECT id FROM users WHERE username = $1 AND school_id = $2', [username, school_id]);
     if (existingUser) {
-      return res.status(400).json({ error: 'Username already exists' });
+      return res.status(400).json({ error: 'Username already exists in this school' });
     }
 
     // Check if email already exists (if provided)
     if (emailAddress) {
-      const existingEmail = await database.get('SELECT id FROM users WHERE email = $1', [emailAddress]);
+      const existingEmail = await database.get('SELECT id FROM users WHERE email = $1 AND school_id = $2', [emailAddress, school_id]);
       if (existingEmail) {
-        return res.status(400).json({ error: 'Email address is already registered. Please use a different email.' });
+        return res.status(400).json({ error: 'Email address is already registered in this school. Please use a different email.' });
       }
     }
 
@@ -103,10 +133,10 @@ router.post('/register', [
     // Set status: students need approval, teachers are auto-approved
     const userStatus = role === 'student' ? 'pending' : 'approved';
 
-    // Create user
+    // Create user with school_id
     const result = await database.run(
-      'INSERT INTO users (username, password_hash, role, first_name, last_name, class, email, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
-      [username, passwordHash, role, firstName, lastName, studentClassName, emailAddress, userStatus]
+      'INSERT INTO users (username, password_hash, role, first_name, last_name, class, email, status, school_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
+      [username, passwordHash, role, firstName, lastName, studentClassName, emailAddress, userStatus, school_id]
     );
 
     const userId = result.lastID;
@@ -116,8 +146,8 @@ router.post('/register', [
       const accountNumber = `ACC${Date.now()}${Math.floor(Math.random() * 1000)}`;
       console.log('🏦 Creating account for student:', userId, accountNumber);
       await database.run(
-        'INSERT INTO accounts (user_id, account_number, balance) VALUES ($1, $2, $3)',
-        [userId, accountNumber, 0.00]
+        'INSERT INTO accounts (user_id, account_number, balance, school_id) VALUES ($1, $2, $3, $4)',
+        [userId, accountNumber, 0.00, school_id]
       );
       console.log('✅ Account created successfully');
     }
@@ -131,11 +161,16 @@ router.post('/register', [
       return;
     }
 
-    // Generate JWT token for approved users
-    const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '24h' });
+    // Generate JWT token for approved users (include schoolId and role)
+    const tokenPayload: JWTPayload = {
+      userId,
+      schoolId: school_id,
+      role: role as 'student' | 'teacher'
+    };
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
 
     // Get user data
-    const user = await database.get('SELECT id, username, role, first_name, last_name, class, email, status, created_at, updated_at FROM users WHERE id = $1', [userId]);
+    const user = await database.get('SELECT id, username, role, first_name, last_name, class, email, status, school_id, created_at, updated_at FROM users WHERE id = $1', [userId]);
     
     // Get account data for students
     let account = null;
@@ -202,10 +237,15 @@ router.post('/register-teacher', [
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create teacher user
+    // Create teacher user (use same school_id as creating teacher)
+    const creatingTeacherSchoolId = req.user?.school_id;
+    if (!creatingTeacherSchoolId) {
+      return res.status(400).json({ error: 'Teacher must belong to a school' });
+    }
+
     const result = await database.run(
-      'INSERT INTO users (username, password_hash, role, first_name, last_name, email) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-      [username, passwordHash, 'teacher', first_name || null, last_name || null, email || null]
+      'INSERT INTO users (username, password_hash, role, first_name, last_name, email, school_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+      [username, passwordHash, 'teacher', first_name || null, last_name || null, email || null, creatingTeacherSchoolId]
     );
 
     const userId = result.lastID;
@@ -222,7 +262,8 @@ router.post('/register-teacher', [
 // Login
 router.post('/login', [
   body('username').notEmpty().withMessage('Username is required'),
-  body('password').notEmpty().withMessage('Password is required')
+  body('password').notEmpty().withMessage('Password is required'),
+  body('school_id').notEmpty().withMessage('School selection is required').isInt().withMessage('Invalid school ID')
 ], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
@@ -230,10 +271,16 @@ router.post('/login', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { username, password }: LoginRequest = req.body;
+    const { username, password, school_id }: LoginRequest = req.body;
 
-    // Find user
-    const user = await database.get('SELECT * FROM users WHERE username = $1', [username]);
+    // Validate school exists and is active
+    const school = await database.get('SELECT * FROM schools WHERE id = $1 AND archived = false', [school_id]);
+    if (!school) {
+      return res.status(400).json({ error: 'Invalid or inactive school' });
+    }
+
+    // Find user (check username and school_id match)
+    const user = await database.get('SELECT * FROM users WHERE username = $1 AND school_id = $2', [username, school_id]);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -254,8 +301,13 @@ router.post('/login', [
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Generate JWT token
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '24h' });
+    // Generate JWT token (include schoolId and role)
+    const tokenPayload: JWTPayload = {
+      userId: user.id,
+      schoolId: user.school_id,
+      role: user.role as 'student' | 'teacher' | 'super_admin'
+    };
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
 
     // Get account data for students
     let account = null;
@@ -269,6 +321,7 @@ router.post('/login', [
         id: user.id,
         username: user.username,
         role: user.role,
+        school_id: user.school_id,
         created_at: user.created_at,
         updated_at: user.updated_at
       },

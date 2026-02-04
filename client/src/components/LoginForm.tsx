@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, EyeOff, User, Lock } from 'lucide-react';
+import SchoolPicker from './SchoolPicker';
 
 const LoginForm: React.FC = () => {
   const { login, register } = useAuth();
@@ -12,11 +13,13 @@ const LoginForm: React.FC = () => {
     password: '',
     confirmPassword: '',
     role: 'student' as 'student' | 'teacher',
+    school_id: null as number | null,
     first_name: '',
     last_name: '',
     class: '',
     email: ''
   });
+  const [schoolError, setSchoolError] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,6 +27,13 @@ const LoginForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSchoolError('');
+    
+    // Validate school selection
+    if (!formData.school_id) {
+      setSchoolError('Please select your school');
+      return;
+    }
     
     // Validate password confirmation for signup
     if (!isLogin && formData.password !== formData.confirmPassword) {
@@ -35,12 +45,13 @@ const LoginForm: React.FC = () => {
 
     try {
       if (isLogin) {
-        await login(formData.username, formData.password);
+        await login(formData.username, formData.password, formData.school_id!);
       } else {
         const response = await register(
           formData.username, 
           formData.password, 
           formData.role,
+          formData.school_id!,
           formData.first_name,
           formData.last_name,
           formData.class,
@@ -57,6 +68,7 @@ const LoginForm: React.FC = () => {
             password: '',
             confirmPassword: '',
             role: 'student',
+            school_id: null,
             first_name: '',
             last_name: '',
             class: '',
@@ -114,6 +126,15 @@ const LoginForm: React.FC = () => {
                 {success}
               </div>
             )}
+
+            <SchoolPicker
+              value={formData.school_id}
+              onChange={(schoolId) => {
+                setFormData({ ...formData, school_id: schoolId });
+                setSchoolError('');
+              }}
+              error={schoolError}
+            />
 
             <div>
               <label htmlFor="username" className="label">
@@ -307,6 +328,7 @@ const LoginForm: React.FC = () => {
                     password: '',
                     confirmPassword: '',
                     role: 'student',
+                    school_id: null,
                     first_name: '',
                     last_name: '',
                     class: '',

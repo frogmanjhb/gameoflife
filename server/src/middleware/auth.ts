@@ -7,6 +7,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 
 export interface AuthenticatedRequest extends Request {
   user?: User;
+  schoolId?: number | null;
+}
+
+export interface JWTPayload {
+  userId: number;
+  schoolId: number | null;
+  role: 'student' | 'teacher' | 'super_admin';
 }
 
 export const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -21,8 +28,8 @@ export const authenticateToken = async (req: AuthenticatedRequest, res: Response
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
-    console.log('🔍 Token decoded, userId:', decoded.userId);
+    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    console.log('🔍 Token decoded, userId:', decoded.userId, 'schoolId:', decoded.schoolId);
     
     const user = await database.get('SELECT * FROM users WHERE id = $1', [decoded.userId]);
     
@@ -31,8 +38,15 @@ export const authenticateToken = async (req: AuthenticatedRequest, res: Response
       return res.status(401).json({ error: 'Invalid token' });
     }
 
-    console.log('✅ User authenticated:', user.username, 'Role:', user.role);
+    // Verify school_id matches (unless super_admin)
+    if (user.role !== 'super_admin' && user.school_id !== decoded.schoolId) {
+      console.log('❌ School ID mismatch');
+      return res.status(403).json({ error: 'Invalid token - school context mismatch' });
+    }
+
+    console.log('✅ User authenticated:', user.username, 'Role:', user.role, 'School:', user.school_id);
     req.user = user;
+    req.schoolId = user.school_id || null;
     next();
   } catch (error) {
     console.log('❌ Token verification failed:', error);

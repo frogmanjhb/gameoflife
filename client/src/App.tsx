@@ -19,6 +19,7 @@ import WinkelPlugin from './components/plugins/WinkelPlugin';
 import PizzaTimePlugin from './components/plugins/PizzaTimePlugin';
 import LeaderboardPlugin from './components/plugins/LeaderboardPlugin';
 import SuggestionsBugsPlugin from './components/plugins/SuggestionsBugsPlugin';
+import SuperAdminDashboard from './components/SuperAdminDashboard';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -50,12 +51,26 @@ const AppContent: React.FC = () => {
     <Routes>
       <Route path="/login" element={<LoginForm />} />
       <Route
+        path="/admin"
+        element={
+          <ProtectedRoute>
+            <SuperAdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/"
         element={
           <ProtectedRoute>
             <PluginProvider>
               <TownProvider>
-                {user?.role === 'teacher' ? <TeacherDashboard /> : <StudentDashboard />}
+                {user?.role === 'super_admin' ? (
+                  <SuperAdminDashboard />
+                ) : user?.role === 'teacher' ? (
+                  <TeacherDashboard />
+                ) : (
+                  <StudentDashboard />
+                )}
               </TownProvider>
             </PluginProvider>
           </ProtectedRoute>

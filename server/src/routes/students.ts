@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { requireTenant } from '../middleware/tenant';
 
 const router = Router();
 
@@ -90,8 +91,9 @@ router.get('/classmates', authenticateToken, async (req: AuthenticatedRequest, r
       WHERE u.role = 'student' 
         AND u.class = $1 
         AND u.id != $2
+        AND u.school_id = $3
       ORDER BY u.first_name, u.last_name
-    `, [req.user.class, req.user.id]);
+    `, [req.user.class, req.user.id, req.user.school_id]);
 
     console.log('📊 Found classmates:', classmates.length);
     res.json(classmates);
@@ -102,9 +104,9 @@ router.get('/classmates', authenticateToken, async (req: AuthenticatedRequest, r
 });
 
 // Get all students with their account balances (teachers only)
-router.get('/', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log('🔍 Getting students for teacher:', req.user?.username);
+    console.log('🔍 Getting students for teacher:', req.user?.username, 'school:', req.schoolId);
     
     const students = await database.query(`
       SELECT 
@@ -125,9 +127,9 @@ router.get('/', authenticateToken, requireRole(['teacher']), async (req: Authent
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
       LEFT JOIN jobs j ON u.job_id = j.id
-      WHERE u.role = 'student'
+      WHERE u.role = 'student' AND u.school_id = $1
       ORDER BY u.class, u.last_name, u.first_name
-    `);
+    `, [req.schoolId]);
 
     console.log('📊 Found students:', students.length);
     console.log('📊 Student data:', JSON.stringify(students, null, 2));
@@ -139,9 +141,9 @@ router.get('/', authenticateToken, requireRole(['teacher']), async (req: Authent
 });
 
 // Get pending students (teachers only)
-router.get('/pending', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+router.get('/pending', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log('🔍 Getting pending students for teacher:', req.user?.username);
+    console.log('🔍 Getting pending students for teacher:', req.user?.username, 'school:', req.schoolId);
     
     const pendingStudents = await database.query(`
       SELECT 
@@ -157,9 +159,9 @@ router.get('/pending', authenticateToken, requireRole(['teacher']), async (req: 
         a.balance
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
-      WHERE u.role = 'student' AND u.status = 'pending'
+      WHERE u.role = 'student' AND u.status = 'pending' AND u.school_id = $1
       ORDER BY u.created_at ASC
-    `);
+    `, [req.schoolId]);
 
     console.log('📊 Found pending students:', pendingStudents.length);
     res.json(pendingStudents);
@@ -170,7 +172,7 @@ router.get('/pending', authenticateToken, requireRole(['teacher']), async (req: 
 });
 
 // Approve a pending student (teachers only)
-router.post('/:username/approve', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:username/approve', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { username } = req.params;
 
@@ -178,8 +180,8 @@ router.post('/:username/approve', authenticateToken, requireRole(['teacher']), a
     const student = await database.get(`
       SELECT u.id, u.username, u.role, u.status
       FROM users u
-      WHERE u.username = $1 AND u.role = 'student'
-    `, [username]);
+      WHERE u.username = $1 AND u.role = 'student' AND u.school_id = $2
+    `, [username, req.schoolId]);
 
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
@@ -204,7 +206,7 @@ router.post('/:username/approve', authenticateToken, requireRole(['teacher']), a
 });
 
 // Deny a pending student (teachers only)
-router.post('/:username/deny', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:username/deny', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { username } = req.params;
     const { reason } = req.body;
@@ -213,8 +215,8 @@ router.post('/:username/deny', authenticateToken, requireRole(['teacher']), asyn
     const student = await database.get(`
       SELECT u.id, u.username, u.role, u.status
       FROM users u
-      WHERE u.username = $1 AND u.role = 'student'
-    `, [username]);
+      WHERE u.username = $1 AND u.role = 'student' AND u.school_id = $2
+    `, [username, req.schoolId]);
 
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
@@ -239,7 +241,7 @@ router.post('/:username/deny', authenticateToken, requireRole(['teacher']), asyn
 });
 
 // Delete a student (teachers only)
-router.delete('/:username', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:username', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { username } = req.params;
 
@@ -247,8 +249,8 @@ router.delete('/:username', authenticateToken, requireRole(['teacher']), async (
     const student = await database.get(`
       SELECT u.id, u.username, u.role
       FROM users u
-      WHERE u.username = $1 AND u.role = 'student'
-    `, [username]);
+      WHERE u.username = $1 AND u.role = 'student' AND u.school_id = $2
+    `, [username, req.schoolId]);
 
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
@@ -305,7 +307,7 @@ router.delete('/:username', authenticateToken, requireRole(['teacher']), async (
 });
 
 // Reset student password (teachers only)
-router.post('/:username/reset-password', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:username/reset-password', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { username } = req.params;
     const reveal = req.body?.reveal === true;
@@ -314,8 +316,8 @@ router.post('/:username/reset-password', authenticateToken, requireRole(['teache
     const student = await database.get(`
       SELECT u.id, u.username, u.role
       FROM users u
-      WHERE u.username = $1 AND u.role = 'student'
-    `, [username]);
+      WHERE u.username = $1 AND u.role = 'student' AND u.school_id = $2
+    `, [username, req.schoolId]);
 
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });

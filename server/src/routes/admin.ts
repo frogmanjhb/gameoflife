@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { requireTenant } from '../middleware/tenant';
 
 const router = Router();
 
@@ -19,6 +20,7 @@ const router = Router();
 router.post(
   '/factory-reset',
   authenticateToken,
+  requireTenant,
   requireRole(['teacher']),
   [body('confirm').isString().withMessage('Confirm is required')],
   async (req: AuthenticatedRequest, res: Response) => {
@@ -41,42 +43,51 @@ router.post(
     try {
       await client.query('BEGIN');
 
+      const schoolId = req.schoolId;
+      if (!schoolId) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'School context required' });
+      }
+
       // Count students before deletion (for response)
-      const studentsCountRes = await client.query(`SELECT COUNT(*)::int AS count FROM users WHERE role = 'student'`);
+      const studentsCountRes = await client.query(
+        `SELECT COUNT(*)::int AS count FROM users WHERE role = 'student' AND school_id = $1`,
+        [schoolId]
+      );
       const studentsCount = studentsCountRes.rows?.[0]?.count ?? 0;
 
-      // IMPORTANT: delete dependent rows first (FK constraints)
-      await client.query(`DELETE FROM tender_applications`);
-      await client.query(`DELETE FROM tenders`);
+      // IMPORTANT: delete dependent rows first (FK constraints) - scoped to school
+      await client.query(`DELETE FROM tender_applications WHERE school_id = $1`, [schoolId]);
+      await client.query(`DELETE FROM tenders WHERE school_id = $1`, [schoolId]);
 
-      await client.query(`DELETE FROM job_applications`);
+      await client.query(`DELETE FROM job_applications WHERE school_id = $1`, [schoolId]);
 
-      await client.query(`DELETE FROM land_purchase_requests`);
-      await client.query(`UPDATE land_parcels SET owner_id = NULL, purchased_at = NULL, updated_at = CURRENT_TIMESTAMP`);
+      await client.query(`DELETE FROM land_purchase_requests WHERE school_id = $1`, [schoolId]);
+      await client.query(`UPDATE land_parcels SET owner_id = NULL, purchased_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE school_id = $1`, [schoolId]);
 
       // Loans
-      await client.query(`DELETE FROM loan_payments`);
-      await client.query(`DELETE FROM loans`);
+      await client.query(`DELETE FROM loan_payments WHERE loan_id IN (SELECT id FROM loans WHERE borrower_id IN (SELECT id FROM users WHERE role = 'student' AND school_id = $1))`, [schoolId]);
+      await client.query(`DELETE FROM loans WHERE borrower_id IN (SELECT id FROM users WHERE role = 'student' AND school_id = $1)`, [schoolId]);
 
       // Math game history (optional, but part of factory reset)
-      await client.query(`DELETE FROM math_game_sessions`);
-      await client.query(`DELETE FROM math_game_high_scores`);
+      await client.query(`DELETE FROM math_game_sessions WHERE user_id IN (SELECT id FROM users WHERE role = 'student' AND school_id = $1)`, [schoolId]);
+      await client.query(`DELETE FROM math_game_high_scores WHERE user_id IN (SELECT id FROM users WHERE role = 'student' AND school_id = $1)`, [schoolId]);
 
       // Tax/Treasury history
-      await client.query(`DELETE FROM tax_transactions`);
-      await client.query(`DELETE FROM treasury_transactions`);
+      await client.query(`DELETE FROM tax_transactions WHERE school_id = $1`, [schoolId]);
+      await client.query(`DELETE FROM treasury_transactions WHERE school_id = $1`, [schoolId]);
 
       // Announcements
-      await client.query(`DELETE FROM announcements`);
+      await client.query(`DELETE FROM announcements WHERE school_id = $1`, [schoolId]);
 
       // Economy
-      await client.query(`DELETE FROM transactions`);
-      await client.query(`DELETE FROM accounts WHERE user_id IN (SELECT id FROM users WHERE role = 'student')`);
+      await client.query(`DELETE FROM transactions WHERE school_id = $1`, [schoolId]);
+      await client.query(`DELETE FROM accounts WHERE school_id = $1`, [schoolId]);
 
       // Delete students last
-      await client.query(`DELETE FROM users WHERE role = 'student'`);
+      await client.query(`DELETE FROM users WHERE role = 'student' AND school_id = $1`, [schoolId]);
 
-      // Reset towns to defaults
+      // Reset towns to defaults (for this school)
       await client.query(`
         UPDATE town_settings
         SET
@@ -86,14 +97,16 @@ router.post(
           tax_enabled = true,
           treasury_balance = 10000000.00,
           updated_at = CURRENT_TIMESTAMP
-      `);
+        WHERE school_id = $1
+      `, [schoolId]);
 
       // Record initial treasury balance after reset
       await client.query(`
-        INSERT INTO treasury_transactions (town_class, amount, transaction_type, description)
-        SELECT class, 10000000.00, 'initial_balance', 'Initial town treasury allocation (factory reset)'
+        INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description)
+        SELECT $1, class, 10000000.00, 'initial_balance', 'Initial town treasury allocation (factory reset)'
         FROM town_settings
-      `);
+        WHERE school_id = $1
+      `, [schoolId]);
 
       // Reset bank settings to defaults
       await client.query(`

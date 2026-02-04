@@ -25,6 +25,7 @@ import pizzaTimeRoutes from './routes/pizza-time';
 import leaderboardRoutes from './routes/leaderboard';
 import suggestionsBugsRoutes from './routes/suggestions-bugs';
 import adminRoutes from './routes/admin';
+import superAdminRoutes from './routes/super-admin';
 import database from './database/database-prod';
 
 const app = express();
@@ -164,6 +165,7 @@ app.use('/api/pizza-time', pizzaTimeRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/suggestions-bugs', suggestionsBugsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin', superAdminRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

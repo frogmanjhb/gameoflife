@@ -3,11 +3,12 @@ import { Request } from 'express';
 export interface User {
   id: number;
   username: string;
-  role: 'student' | 'teacher';
+  role: 'student' | 'teacher' | 'super_admin';
   first_name?: string;
   last_name?: string;
   class?: string;
   email?: string;
+  school_id?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -66,11 +67,13 @@ export interface CreateUserRequest {
   last_name?: string;
   class?: string;
   email?: string;
+  school_id: number;
 }
 
 export interface LoginRequest {
   username: string;
   password: string;
+  school_id: number;
 }
 
 export interface TransferRequest {
@@ -121,6 +124,7 @@ export interface LoanWithDetails extends Loan {
 export interface AuthenticatedRequest extends Request {
   user: User;
   account?: Account;
+  schoolId?: number | null;
 }
 
 export interface MathGameSession {

@@ -45,10 +45,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, password: string, schoolId: number) => {
     try {
-      console.log('Attempting login for:', username);
-      const response = await api.post('/auth/login', { username, password });
+      console.log('Attempting login for:', username, 'school:', schoolId);
+      const response = await api.post('/auth/login', { username, password, school_id: schoolId });
       console.log('Login response:', response.data);
       const { token, user, account } = response.data;
       
@@ -67,14 +67,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const register = async (username: string, password: string, role: 'student' | 'teacher', first_name?: string, last_name?: string, studentClass?: string, email?: string) => {
+  const register = async (username: string, password: string, role: 'student' | 'teacher', schoolId: number, first_name?: string, last_name?: string, studentClass?: string, email?: string) => {
     try {
-      console.log('Attempting registration for:', username, role);
+      console.log('Attempting registration for:', username, role, 'school:', schoolId);
       const response = await api.post('/auth/register', { 
         username, 
         password,
         confirmPassword: password, // Backend requires this for validation
         role, 
+        school_id: schoolId,
         first_name, 
         last_name, 
         class: studentClass, 
