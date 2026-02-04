@@ -1,5 +1,6 @@
 // Script to create super admin user
 // Usage: node create-super-admin.js [username] [password]
+require('dotenv').config();
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const readline = require('readline');
