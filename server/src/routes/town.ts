@@ -27,15 +27,24 @@ router.get('/settings', authenticateToken, async (req: AuthenticatedRequest, res
   try {
     const { class: townClass, all } = req.query;
     
-    // Teachers can get all towns with ?all=true
+    // Teachers can get all towns for their school with ?all=true
     if (all === 'true' && req.user?.role === 'teacher') {
-      const towns = await database.query('SELECT * FROM town_settings ORDER BY class');
+      const schoolId = req.user.school_id ?? req.schoolId ?? null;
+      const towns = schoolId != null
+        ? await database.query('SELECT * FROM town_settings WHERE school_id = $1 ORDER BY class', [schoolId])
+        : await database.query('SELECT * FROM town_settings WHERE school_id IS NULL ORDER BY class');
       return res.json(towns);
     }
     
-    // Get specific town by class
+    const schoolId = req.user?.school_id ?? (req as AuthenticatedRequest).schoolId ?? null;
+    const townByClass = (cls: string) =>
+      schoolId != null
+        ? database.get('SELECT * FROM town_settings WHERE class = $1 AND school_id = $2', [cls, schoolId])
+        : database.get('SELECT * FROM town_settings WHERE class = $1 AND school_id IS NULL', [cls]);
+
+    // Get specific town by class (scoped to user's school)
     if (townClass && ['6A', '6B', '6C'].includes(townClass as string)) {
-      const town = await database.get('SELECT * FROM town_settings WHERE class = $1', [townClass]);
+      const town = await townByClass(townClass as string);
       if (!town) {
         return res.status(404).json({ error: 'Town not found' });
       }
@@ -44,14 +53,16 @@ router.get('/settings', authenticateToken, async (req: AuthenticatedRequest, res
     
     // If user has a class, return their town
     if (req.user?.class && ['6A', '6B', '6C'].includes(req.user.class)) {
-      const town = await database.get('SELECT * FROM town_settings WHERE class = $1', [req.user.class]);
+      const town = await townByClass(req.user.class);
       if (town) {
         return res.json(town);
       }
     }
     
-    // Default: return first town or empty
-    const firstTown = await database.get('SELECT * FROM town_settings ORDER BY class LIMIT 1');
+    // Default: return first town for this school or empty
+    const firstTown = schoolId != null
+      ? await database.get('SELECT * FROM town_settings WHERE school_id = $1 ORDER BY class LIMIT 1', [schoolId])
+      : await database.get('SELECT * FROM town_settings WHERE school_id IS NULL ORDER BY class LIMIT 1');
     res.json(firstTown || null);
   } catch (error) {
     console.error('Failed to fetch town settings:', error);
@@ -84,6 +95,10 @@ router.put('/settings/:id',
       const town = await database.get('SELECT * FROM town_settings WHERE id = $1', [townId]);
       if (!town) {
         return res.status(404).json({ error: 'Town not found' });
+      }
+      const teacherSchoolId = req.user?.school_id ?? req.schoolId ?? null;
+      if (town.school_id !== teacherSchoolId) {
+        return res.status(403).json({ error: 'You can only update towns in your school' });
       }
 
       const { town_name, mayor_name, tax_rate, tax_enabled } = req.body;
