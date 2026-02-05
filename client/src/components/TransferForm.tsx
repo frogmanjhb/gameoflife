@@ -28,26 +28,26 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [classmates, setClassmates] = useState<Classmate[]>([]);
-  const [loadingClassmates, setLoadingClassmates] = useState(true);
+  const [recipients, setRecipients] = useState<Classmate[]>([]);
+  const [loadingRecipients, setLoadingRecipients] = useState(true);
   const [canTransact, setCanTransact] = useState<CanTransactResult | null>(null);
   const [checkingTransact, setCheckingTransact] = useState(true);
 
-  // Load classmates and check if student can transact
+  // Load transfer recipients (all students across classes) and check if student can transact
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [classmatesRes, canTransactRes] = await Promise.all([
-          api.get('/students/classmates'),
+        const [recipientsRes, canTransactRes] = await Promise.all([
+          api.get('/students/transfer-recipients'),
           api.get('/transactions/can-transact')
         ]);
-        setClassmates(classmatesRes.data);
+        setRecipients(recipientsRes.data);
         setCanTransact(canTransactRes.data);
       } catch (err: any) {
         console.error('Failed to load data:', err);
         setError('Failed to load data. Please refresh the page.');
       } finally {
-        setLoadingClassmates(false);
+        setLoadingRecipients(false);
         setCheckingTransact(false);
       }
     };
@@ -129,7 +129,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
           <Send className="h-8 w-8 text-primary-600" />
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Transfer Money</h2>
-        <p className="text-gray-600">Send money to another student in your class</p>
+        <p className="text-gray-600">Send money to another student in any class</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -148,11 +148,11 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
         <div>
           <label htmlFor="to_username" className="label">
             <User className="h-4 w-4 inline mr-1" />
-            Send to (Classmate)
+            Send to (Student)
           </label>
-          {loadingClassmates ? (
+          {loadingRecipients ? (
             <div className="input-field text-gray-500">
-              Loading classmates...
+              Loading students...
             </div>
           ) : (
             <select
@@ -163,20 +163,20 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
               value={formData.to_username}
               onChange={handleInputChange}
             >
-              <option value="">Select a classmate</option>
-              {classmates.map((classmate) => (
-                <option key={classmate.id} value={classmate.username}>
-                  {classmate.first_name && classmate.last_name 
-                    ? `${classmate.first_name} ${classmate.last_name} (${classmate.username})`
-                    : classmate.username
+              <option value="">Select a student</option>
+              {recipients.map((recipient) => (
+                <option key={recipient.id} value={recipient.username}>
+                  {recipient.first_name && recipient.last_name 
+                    ? `${recipient.first_name} ${recipient.last_name} (${recipient.class || '?'}) – ${recipient.username}`
+                    : `${recipient.username} (${recipient.class || '?'})`
                   }
                 </option>
               ))}
             </select>
           )}
-          {!loadingClassmates && classmates.length === 0 && (
+          {!loadingRecipients && recipients.length === 0 && (
             <p className="text-sm text-gray-500 mt-1">
-              No classmates found in your class.
+              No other students found.
             </p>
           )}
         </div>
@@ -229,7 +229,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
         <h3 className="font-semibold text-blue-900 mb-2">💡 Transfer Tips:</h3>
         <ul className="text-sm text-blue-800 space-y-1">
           <li>• Make sure you have enough money in your account</li>
-          <li>• Select a classmate from your class to send money to</li>
+          <li>• Select a student from any class to send money to</li>
           <li>• Add a description to remember what the money is for</li>
           <li>• Pay off any outstanding loans before making transfers</li>
         </ul>
