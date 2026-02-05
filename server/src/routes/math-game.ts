@@ -369,9 +369,10 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
         );
 
         // Record treasury transaction
+        const mathSchoolId = req.user.school_id ?? null;
         await database.query(
-          'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
-          [userClass, totalEarnings, 'withdrawal', `Math Game Payout to ${req.user.username}`, userId]
+          'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
+          [mathSchoolId, userClass, totalEarnings, 'withdrawal', `Math Game Payout to ${req.user.username}`, userId]
         );
       }
 

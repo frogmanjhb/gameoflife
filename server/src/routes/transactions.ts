@@ -385,9 +385,10 @@ router.post('/bulk-payment', [
         );
 
         // Record treasury transaction
+        const bulkSchoolId = req.user?.school_id ?? req.schoolId ?? null;
         await client.query(
-          'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
-          [class_name, totalPaid, 'withdrawal', description || `Bulk payment to ${updatedCount} students`, req.user?.id]
+          'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
+          [bulkSchoolId, class_name, totalPaid, 'withdrawal', description || `Bulk payment to ${updatedCount} students`, req.user?.id]
         );
       }
 
@@ -634,9 +635,10 @@ router.post('/pay-basic-salary', [
         );
 
         // Record treasury transaction
+        const basicSchoolId = req.user?.school_id ?? req.schoolId ?? null;
         await client.query(
-          'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
-          [townClass, totals.total, 'withdrawal', `Basic salary payments to ${totals.count} unemployed students`, req.user?.id]
+          'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
+          [basicSchoolId, townClass, totals.total, 'withdrawal', `Basic salary payments to ${totals.count} unemployed students`, req.user?.id]
         );
       }
 

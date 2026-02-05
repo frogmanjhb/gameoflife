@@ -74,9 +74,10 @@ router.post('/:id/pay', authenticateToken, requireRole(['teacher']), async (req:
       );
 
       // Record treasury transaction
+      const tenderSchoolId = req.user.school_id ?? req.schoolId ?? null;
       await client.query(
-        'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
-        [townClass, -amount, 'withdrawal', `Tender payout: ${tender.name}`, req.user.id]
+        'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
+        [tenderSchoolId, townClass, -amount, 'withdrawal', `Tender payout: ${tender.name}`, req.user.id]
       );
 
       // Credit student account

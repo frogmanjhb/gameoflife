@@ -560,9 +560,10 @@ router.post(
           );
 
           // Record treasury transaction
+          const shopSchoolId = req.user.school_id ?? null;
           await client.query(
-            'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
-            [userClass, price, 'deposit', `Shop Purchase: ${item.name} by ${req.user.username}`, req.user.id]
+            'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
+            [shopSchoolId, userClass, price, 'deposit', `Shop Purchase: ${item.name} by ${req.user.username}`, req.user.id]
           );
         }
 

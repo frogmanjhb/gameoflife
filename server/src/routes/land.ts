@@ -411,10 +411,12 @@ router.put('/purchase-requests/:id',
             [offeredPrice, buyerClass]
           );
 
-          // Record treasury transaction
+          // Record treasury transaction - get school_id from the buyer
+          const buyerUser = await database.get('SELECT school_id FROM users WHERE id = $1', [purchaseRequest.user_id]);
+          const landSchoolId = buyerUser?.school_id ?? null;
           await database.run(
-            'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
-            [buyerClass, offeredPrice, 'deposit', `Land Purchase: Plot ${purchaseRequest.parcel_id}`, purchaseRequest.user_id]
+            'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
+            [landSchoolId, buyerClass, offeredPrice, 'deposit', `Land Purchase: Plot ${purchaseRequest.parcel_id}`, purchaseRequest.user_id]
           );
         }
 

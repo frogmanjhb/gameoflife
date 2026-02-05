@@ -277,10 +277,12 @@ router.put(
               [REWARD_AMOUNT, userClass]
             );
 
-            // Record treasury transaction
+            // Record treasury transaction - get school_id from the user
+            const suggestionUserRes = await client.query('SELECT school_id FROM users WHERE id = $1', [suggestion.user_id]);
+            const suggestionSchoolId = suggestionUserRes.rows?.[0]?.school_id ?? null;
             await client.query(
-              'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
-              [userClass, REWARD_AMOUNT, 'withdrawal', `Suggestion reward payout`, suggestion.user_id]
+              'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
+              [suggestionSchoolId, userClass, REWARD_AMOUNT, 'withdrawal', `Suggestion reward payout`, suggestion.user_id]
             );
           }
 
@@ -398,10 +400,12 @@ router.put(
               [REWARD_AMOUNT, userClass]
             );
 
-            // Record treasury transaction
+            // Record treasury transaction - get school_id from the user
+            const bugUserRes = await client.query('SELECT school_id FROM users WHERE id = $1', [bug.user_id]);
+            const bugSchoolId = bugUserRes.rows?.[0]?.school_id ?? null;
             await client.query(
-              'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
-              [userClass, REWARD_AMOUNT, 'withdrawal', `Bug report reward payout`, bug.user_id]
+              'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
+              [bugSchoolId, userClass, REWARD_AMOUNT, 'withdrawal', `Bug report reward payout`, bug.user_id]
             );
           }
 
