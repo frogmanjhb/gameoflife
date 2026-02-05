@@ -251,25 +251,59 @@ router.get('/purchases', authenticateToken, async (req: AuthenticatedRequest, re
         [req.user.id]
       );
     } else {
-      // Teachers see all purchases (with paid status)
-      purchases = await database.query(
-        `SELECT 
-          sp.*,
-          si.name as item_name,
-          si.category as item_category,
-          si.description as item_description,
-          u.username,
-          u.first_name,
-          u.last_name,
-          u.class,
-          payer.first_name as paid_by_first_name,
-          payer.last_name as paid_by_last_name
-         FROM shop_purchases sp
-         JOIN shop_items si ON sp.item_id = si.id
-         JOIN users u ON sp.user_id = u.id
-         LEFT JOIN users payer ON sp.paid_by = payer.id
-         ORDER BY sp.paid ASC, sp.purchase_date DESC, sp.created_at DESC`
-      );
+      // Teachers see all purchases (with paid status if column exists)
+      try {
+        purchases = await database.query(
+          `SELECT 
+            sp.id,
+            sp.user_id,
+            sp.item_id,
+            sp.price_paid,
+            sp.purchase_date,
+            sp.week_start_date,
+            sp.created_at,
+            COALESCE(sp.paid, true) as paid,
+            sp.paid_at,
+            sp.paid_by,
+            si.name as item_name,
+            si.category as item_category,
+            si.description as item_description,
+            u.username,
+            u.first_name,
+            u.last_name,
+            u.class,
+            payer.first_name as paid_by_first_name,
+            payer.last_name as paid_by_last_name
+           FROM shop_purchases sp
+           JOIN shop_items si ON sp.item_id = si.id
+           JOIN users u ON sp.user_id = u.id
+           LEFT JOIN users payer ON sp.paid_by = payer.id
+           ORDER BY COALESCE(sp.paid, true) ASC, sp.purchase_date DESC, sp.created_at DESC`
+        );
+      } catch (queryError) {
+        // Fallback query if paid column doesn't exist yet
+        console.log('Paid column may not exist, using fallback query');
+        purchases = await database.query(
+          `SELECT 
+            sp.*,
+            true as paid,
+            NULL as paid_at,
+            NULL as paid_by,
+            si.name as item_name,
+            si.category as item_category,
+            si.description as item_description,
+            u.username,
+            u.first_name,
+            u.last_name,
+            u.class,
+            NULL as paid_by_first_name,
+            NULL as paid_by_last_name
+           FROM shop_purchases sp
+           JOIN shop_items si ON sp.item_id = si.id
+           JOIN users u ON sp.user_id = u.id
+           ORDER BY sp.purchase_date DESC, sp.created_at DESC`
+        );
+      }
     }
 
     res.json(purchases);
