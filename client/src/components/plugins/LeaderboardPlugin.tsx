@@ -167,7 +167,7 @@ const LeaderboardPlugin: React.FC = () => {
         <div className="flex items-center space-x-3">
           <div className="text-4xl">🏆</div>
           <div>
-            <h1 className="text-2xl font-bold">Math Game Leaderboard</h1>
+            <h1 className="text-2xl font-bold">Chores Game Leaderboard</h1>
             <p className="text-yellow-100">Top performers across all classes</p>
           </div>
         </div>

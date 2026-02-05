@@ -20,6 +20,7 @@ import PizzaTimePlugin from './components/plugins/PizzaTimePlugin';
 import LeaderboardPlugin from './components/plugins/LeaderboardPlugin';
 import SuggestionsBugsPlugin from './components/plugins/SuggestionsBugsPlugin';
 import DisastersPlugin from './components/plugins/DisastersPlugin';
+import ChoresPlugin from './components/plugins/ChoresPlugin';
 import SuperAdminDashboard from './components/admin/SuperAdminDashboard';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -261,6 +262,18 @@ const AppContent: React.FC = () => {
                 <PluginProvider>
                   <TownProvider>
                     <DisastersPlugin />
+                  </TownProvider>
+                </PluginProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chores"
+            element={
+              <ProtectedRoute>
+                <PluginProvider>
+                  <TownProvider>
+                    <ChoresPlugin />
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>

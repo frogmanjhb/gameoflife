@@ -506,11 +506,11 @@ const StudentDetailView: React.FC = () => {
                         <span className="font-semibold text-gray-900">{stats.total_transactions}</span>
                       </div>
                       <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-600">Math Games Played</span>
+                        <span className="text-sm text-gray-600">Chores Games Played</span>
                         <span className="font-semibold text-gray-900">{stats.math_games_played}</span>
                       </div>
                       <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-600">Math Game Earnings</span>
+                        <span className="text-sm text-gray-600">Chores Game Earnings</span>
                         <span className="font-semibold text-green-600">{formatCurrency(stats.total_math_earnings)}</span>
                       </div>
                       <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -754,10 +754,10 @@ const StudentDetailView: React.FC = () => {
             {/* Activities Tab */}
             {activeTab === 'activities' && (
               <div className="space-y-6">
-                {/* Math Game Sessions */}
+                {/* Chores Game Sessions */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Math Game Sessions ({mathGameSessions.length})</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Chores Game Sessions ({mathGameSessions.length})</h3>
                     <div className="text-right">
                       <p className="text-sm text-gray-500">Total Earnings</p>
                       <p className="text-xl font-bold text-green-600">{formatCurrency(stats.total_math_earnings)}</p>
@@ -766,7 +766,7 @@ const StudentDetailView: React.FC = () => {
                   {mathGameSessions.length === 0 ? (
                     <div className="text-center py-8 bg-gray-50 rounded-lg">
                       <Gamepad2 className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-                      <p className="text-gray-500">No math games played yet</p>
+                      <p className="text-gray-500">No chores games played yet</p>
                     </div>
                   ) : (
                     <div className="grid md:grid-cols-2 gap-3">
