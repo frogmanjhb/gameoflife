@@ -503,6 +503,18 @@ async function initializeDatabase() {
       console.log('⚠️ Chores plugin may have already been added:', migrationError);
     }
 
+    // Add extreme difficulty to math game
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '024_add_extreme_difficulty.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Extreme difficulty added');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Extreme difficulty migration may have already been applied:', migrationError);
+    }
+
     // Sync default plugins (ensures all known plugins exist - no manual script needed)
     try {
       const defaultPlugins = [

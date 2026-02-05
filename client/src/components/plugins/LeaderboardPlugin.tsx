@@ -15,6 +15,7 @@ interface LeaderboardEntry {
   high_score_easy: number;
   high_score_medium: number;
   high_score_hard: number;
+  high_score_extreme?: number;
   rank: number;
 }
 
@@ -139,6 +140,10 @@ const LeaderboardPlugin: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="w-16 opacity-75">Hard:</span>
                 <span className="font-semibold">{entry.high_score_hard}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-16 opacity-75">Extreme:</span>
+                <span className="font-semibold">{entry.high_score_extreme ?? 0}</span>
               </div>
             </div>
           </div>

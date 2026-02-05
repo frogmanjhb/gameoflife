@@ -130,7 +130,7 @@ export interface AuthenticatedRequest extends Request {
 export interface MathGameSession {
   id: number;
   user_id: number;
-  difficulty: 'easy' | 'medium' | 'hard';
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
   score: number;
   correct_answers: number;
   total_problems: number;
@@ -141,7 +141,7 @@ export interface MathGameSession {
 export interface MathGameHighScore {
   id: number;
   user_id: number;
-  difficulty: 'easy' | 'medium' | 'hard';
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
   high_score: number;
   achieved_at: string;
 }
@@ -152,12 +152,13 @@ export interface MathGameStatus {
     easy: number;
     medium: number;
     hard: number;
+    extreme: number;
   };
   recent_sessions: MathGameSession[];
 }
 
 export interface MathGameStartRequest {
-  difficulty: 'easy' | 'medium' | 'hard';
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
 }
 
 export interface MathGameSubmitRequest {

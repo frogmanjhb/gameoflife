@@ -11,7 +11,7 @@ interface ChoresGameModalProps {
 }
 
 type GameState = 'difficulty' | 'playing' | 'results';
-type Difficulty = 'easy' | 'medium' | 'hard';
+type Difficulty = 'easy' | 'medium' | 'hard' | 'extreme';
 
 // Chore metaphor: each correct answer = 1 unit of chore (tied to difficulty)
 const CHORE_MAP: Record<Difficulty, { label: string; unit: string; formatScore: (n: number) => string }> = {
@@ -29,6 +29,11 @@ const CHORE_MAP: Record<Difficulty, { label: string; unit: string; formatScore: 
     label: 'Lawn mower',
     unit: 'meters mowed',
     formatScore: (n) => `${n}m mowed`
+  },
+  extreme: {
+    label: 'Car wash',
+    unit: 'cars washed',
+    formatScore: (n) => `${n} car${n !== 1 ? 's' : ''} washed`
   }
 };
 
@@ -84,6 +89,12 @@ const ChoresGameModal: React.FC<ChoresGameModalProps> = ({
         subtraction: { max: 100, min: 1 },
         multiplication: { max: 20, min: 1 },
         division: { max: 20, min: 2 }
+      },
+      extreme: {
+        addition: { max: 1000, min: 1 },
+        subtraction: { max: 1000, min: 1 },
+        multiplication: { max: 99, min: 1 },
+        division: { max: 99, min: 2 }
       }
     };
 
@@ -319,6 +330,14 @@ const ChoresGameModal: React.FC<ChoresGameModalProps> = ({
                     multiplier: '1.5x',
                     range: '1-100, ×÷ up to 20',
                     color: 'bg-red-600'
+                  },
+                  {
+                    level: 'extreme' as Difficulty,
+                    label: 'Extreme',
+                    chore: CHORE_MAP.extreme.label,
+                    multiplier: '2x',
+                    range: '1-1000, ×÷ up to 99',
+                    color: 'bg-purple-600'
                   }
                 ].map(({ level, label, chore, multiplier, range, color }) => (
                   <button

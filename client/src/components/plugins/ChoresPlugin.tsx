@@ -93,7 +93,7 @@ const ChoresPlugin: React.FC = () => {
       <div className="bg-gradient-to-r from-green-600 to-teal-600 rounded-2xl p-6 text-white">
         <h2 className="text-2xl font-bold mb-2">Chore Challenges</h2>
         <p className="text-green-100">
-          Each correct sum = 1 chore done. Easy = dishwasher (items unpacked), Medium = dog poo (poos picked up), Hard = lawn mower (meters mowed). Earn R1 per correct answer!
+          Each correct sum = 1 chore done. Easy = dishwasher, Medium = dog poo, Hard = lawn mower, Extreme = car wash. Earn R1 per correct answer (higher multipliers for harder difficulties)!
         </p>
       </div>
 
@@ -126,6 +126,10 @@ const ChoresPlugin: React.FC = () => {
             <div className="flex justify-between">
               <span className="text-sm text-gray-600">Hard (Lawn mower):</span>
               <span className="font-semibold">{mathGameStatus?.high_scores?.hard ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Extreme (Car wash):</span>
+              <span className="font-semibold">{mathGameStatus?.high_scores?.extreme ?? 0}</span>
             </div>
           </div>
         </div>
@@ -166,7 +170,8 @@ const ChoresPlugin: React.FC = () => {
                 <div className="flex items-center space-x-3">
                   <div className={`w-3 h-3 rounded-full ${
                     session.difficulty === 'easy' ? 'bg-green-500' :
-                    session.difficulty === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
+                    session.difficulty === 'medium' ? 'bg-yellow-500' :
+                    session.difficulty === 'hard' ? 'bg-red-500' : 'bg-purple-500'
                   }`} />
                   <div>
                     <p className="font-medium text-gray-900 capitalize">

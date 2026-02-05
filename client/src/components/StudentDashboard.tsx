@@ -146,12 +146,12 @@ const StudentDashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Town Info, Announcements, My Job, and Properties */}
+      {/* Town Info, Announcements, My Job (when Jobs enabled), and Properties (when Land enabled) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
         <TownInfo town={currentTown} readOnly={true} />
         <AnnouncementsPanel announcements={announcements} />
-        {user && <MyJobCard user={user} />}
-        <MyPropertyCard />
+        {enabledPlugins.some(p => p.route_path === '/jobs') && user && <MyJobCard user={user} />}
+        {enabledPlugins.some(p => p.route_path === '/land') && <MyPropertyCard />}
       </div>
 
       {/* My Tenders */}

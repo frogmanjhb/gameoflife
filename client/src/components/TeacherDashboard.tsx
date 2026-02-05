@@ -217,6 +217,27 @@ const TeacherDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Plugin Cards - Available Systems */}
+      <div>
+        <div className="flex items-center space-x-2 mb-4">
+          <Grid className="h-5 w-5 text-primary-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Available Systems</h2>
+        </div>
+        
+        {enabledPlugins.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+            <Grid className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+            <p className="text-gray-500">No systems available at this time</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {enabledPlugins.map((plugin) => (
+              <PluginCard key={plugin.id} plugin={plugin} />
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Current Town Details */}
       {currentTown && currentStats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -364,27 +385,6 @@ const TeacherDashboard: React.FC = () => {
                   </div>
                 </div>
               )}
-
-              {/* Plugin Cards Grid */}
-              <div>
-                <div className="flex items-center space-x-2 mb-4">
-                  <Grid className="h-5 w-5 text-primary-600" />
-                  <h2 className="text-lg font-semibold text-gray-900">Available Systems</h2>
-                </div>
-                
-                {enabledPlugins.length === 0 ? (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-                    <Grid className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p className="text-gray-500">No systems available at this time</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {enabledPlugins.map((plugin) => (
-                      <PluginCard key={plugin.id} plugin={plugin} />
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           )}
 

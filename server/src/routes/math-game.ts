@@ -36,7 +36,7 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
       return res.json({
         remaining_plays: dailyLimit,
         daily_limit: dailyLimit,
-        high_scores: { easy: 0, medium: 0, hard: 0 },
+        high_scores: { easy: 0, medium: 0, hard: 0, extreme: 0 },
         recent_sessions: []
       });
     }
@@ -66,7 +66,8 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
     const highScoreMap = {
       easy: 0,
       medium: 0,
-      hard: 0
+      hard: 0,
+      extreme: 0
     };
 
     highScores.forEach((row: any) => {
@@ -107,7 +108,7 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
 
     const { difficulty }: MathGameStartRequest = req.body;
     
-    if (!difficulty || !['easy', 'medium', 'hard'].includes(difficulty)) {
+    if (!difficulty || !['easy', 'medium', 'hard', 'extreme'].includes(difficulty)) {
       return res.status(400).json({ error: 'Invalid difficulty level' });
     }
 
@@ -304,7 +305,7 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     };
 
     // Calculate earnings with server-side validation
-    const difficultyMultipliers: Record<string, number> = { easy: 1.0, medium: 1.2, hard: 1.5 };
+    const difficultyMultipliers: Record<string, number> = { easy: 1.0, medium: 1.2, hard: 1.5, extreme: 2.0 };
     const basePoints = correct_answers * 1; // 1 point per correct answer
     const difficultyMultiplier = difficultyMultipliers[session.difficulty] || 1.0;
     const streakBonus = calculateStreakBonus(safeAnswerSequence);
