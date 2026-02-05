@@ -1,4 +1,5 @@
-// Quick script to add missing plugins (Town Rules and The Winkel)
+// Quick script to add missing plugins (Town Rules, The Winkel, Chores)
+require('dotenv').config();
 const { Pool } = require('pg');
 
 async function addMissingPlugins() {
@@ -19,7 +20,8 @@ async function addMissingPlugins() {
     
     const plugins = [
       { name: 'Town Rules', route_path: '/town-rules', icon: '📜', description: 'Town-specific rules and regulations' },
-      { name: 'The Winkel', route_path: '/winkel', icon: '🛒', description: 'Weekly shop for consumables and privileges' }
+      { name: 'The Winkel', route_path: '/winkel', icon: '🛒', description: 'Weekly shop for consumables and privileges' },
+      { name: 'Chores', route_path: '/chores', icon: '🧹', description: 'Earn money by completing chore challenges at home' }
     ];
 
     for (const plugin of plugins) {
