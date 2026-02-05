@@ -251,7 +251,7 @@ router.get('/purchases', authenticateToken, async (req: AuthenticatedRequest, re
         [req.user.id]
       );
     } else {
-      // Teachers see all purchases
+      // Teachers see all purchases (with paid status)
       purchases = await database.query(
         `SELECT 
           sp.*,
@@ -261,11 +261,14 @@ router.get('/purchases', authenticateToken, async (req: AuthenticatedRequest, re
           u.username,
           u.first_name,
           u.last_name,
-          u.class
+          u.class,
+          payer.first_name as paid_by_first_name,
+          payer.last_name as paid_by_last_name
          FROM shop_purchases sp
          JOIN shop_items si ON sp.item_id = si.id
          JOIN users u ON sp.user_id = u.id
-         ORDER BY sp.purchase_date DESC, sp.created_at DESC`
+         LEFT JOIN users payer ON sp.paid_by = payer.id
+         ORDER BY sp.paid ASC, sp.purchase_date DESC, sp.created_at DESC`
       );
     }
 
@@ -753,6 +756,63 @@ router.post(
       });
     } catch (error) {
       console.error('Change emoji error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// PUT /api/winkel/purchases/:id/paid - Mark a purchase as paid (teacher only)
+router.put(
+  '/purchases/:id/paid',
+  authenticateToken,
+  requireRole(['teacher']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      // Check if purchase exists
+      const purchase = await database.get(
+        'SELECT * FROM shop_purchases WHERE id = $1',
+        [id]
+      );
+
+      if (!purchase) {
+        return res.status(404).json({ error: 'Purchase not found' });
+      }
+
+      if (purchase.paid) {
+        return res.status(400).json({ error: 'Purchase is already marked as paid' });
+      }
+
+      // Mark as paid
+      await database.run(
+        'UPDATE shop_purchases SET paid = true, paid_at = CURRENT_TIMESTAMP, paid_by = $1 WHERE id = $2',
+        [req.user?.id, id]
+      );
+
+      // Get updated purchase with details
+      const updatedPurchase = await database.get(
+        `SELECT 
+          sp.*,
+          si.name as item_name,
+          si.category as item_category,
+          u.username,
+          u.first_name,
+          u.last_name,
+          u.class
+         FROM shop_purchases sp
+         JOIN shop_items si ON sp.item_id = si.id
+         JOIN users u ON sp.user_id = u.id
+         WHERE sp.id = $1`,
+        [id]
+      );
+
+      res.json({
+        message: 'Purchase marked as paid',
+        purchase: updatedPurchase
+      });
+    } catch (error) {
+      console.error('Failed to mark purchase as paid:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

@@ -165,12 +165,13 @@ router.get('/treasury/:class', authenticateToken, requireRole(['teacher']), asyn
     }
 
     // Get recent treasury transactions filtered by school_id
+    // Also include transactions with NULL school_id for backwards compatibility (pre-multi-tenant)
     const transactions = schoolId != null
       ? await database.query(
           `SELECT tt.*, u.username as created_by_username
            FROM treasury_transactions tt
            LEFT JOIN users u ON tt.created_by = u.id
-           WHERE tt.town_class = $1 AND tt.school_id = $2
+           WHERE tt.town_class = $1 AND (tt.school_id = $2 OR tt.school_id IS NULL)
            ORDER BY tt.created_at DESC
            LIMIT 50`,
           [townClass, schoolId]
@@ -186,6 +187,7 @@ router.get('/treasury/:class', authenticateToken, requireRole(['teacher']), asyn
         );
 
     // Get treasury stats filtered by school_id
+    // Also include transactions with NULL school_id for backwards compatibility (pre-multi-tenant)
     const stats = schoolId != null
       ? await database.get(
           `SELECT 
@@ -194,7 +196,7 @@ router.get('/treasury/:class', authenticateToken, requireRole(['teacher']), asyn
             COALESCE(SUM(CASE WHEN transaction_type = 'deposit' THEN amount ELSE 0 END), 0) as total_deposits,
             COALESCE(SUM(CASE WHEN transaction_type = 'withdrawal' THEN amount ELSE 0 END), 0) as total_withdrawals
            FROM treasury_transactions
-           WHERE town_class = $1 AND school_id = $2`,
+           WHERE town_class = $1 AND (school_id = $2 OR school_id IS NULL)`,
           [townClass, schoolId]
         )
       : await database.get(

@@ -329,6 +329,11 @@ export const winkelApi = {
     remainingPurchases: number 
   } }> => {
     return api.get('/winkel/can-purchase');
+  },
+
+  // Mark a purchase as paid (teachers only)
+  markPurchasePaid: (purchaseId: number): Promise<{ data: { message: string; purchase: any } }> => {
+    return api.put(`/winkel/purchases/${purchaseId}/paid`);
   }
 };
 

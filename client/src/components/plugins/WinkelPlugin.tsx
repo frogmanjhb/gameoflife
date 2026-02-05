@@ -7,7 +7,70 @@ import {
   Clock, Gift, Sparkles, ShoppingCart, History, TrendingUp,
   DollarSign, Package, Star
 } from 'lucide-react';
-import api from '../../services/api';
+import api, { winkelApi } from '../../services/api';
+
+// Play a "cha-ching" success sound effect (for teacher marking paid)
+const playPaidSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    const playTone = (frequency: number, startTime: number, duration: number, gain: number) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = frequency;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(gain, audioContext.currentTime + startTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + startTime + duration);
+      
+      oscillator.start(audioContext.currentTime + startTime);
+      oscillator.stop(audioContext.currentTime + startTime + duration);
+    };
+    
+    // Play a happy "cha-ching" sequence
+    playTone(880, 0, 0.1, 0.3);      // A5
+    playTone(1108, 0.08, 0.1, 0.3);  // C#6
+    playTone(1318, 0.16, 0.2, 0.4);  // E6
+  } catch (error) {
+    console.log('Audio not supported');
+  }
+};
+
+// Play a "purchase" sound effect (for student buying)
+const playPurchaseSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    const playTone = (frequency: number, startTime: number, duration: number, gain: number) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = frequency;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(gain, audioContext.currentTime + startTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + startTime + duration);
+      
+      oscillator.start(audioContext.currentTime + startTime);
+      oscillator.stop(audioContext.currentTime + startTime + duration);
+    };
+    
+    // Play a fun "coin drop" / shopping bag sound
+    playTone(523, 0, 0.08, 0.25);     // C5
+    playTone(659, 0.06, 0.08, 0.25);  // E5
+    playTone(784, 0.12, 0.08, 0.3);   // G5
+    playTone(1047, 0.18, 0.15, 0.35); // C6
+  } catch (error) {
+    console.log('Audio not supported');
+  }
+};
 
 interface ShopItem {
   id: number;
@@ -33,6 +96,11 @@ interface Purchase {
   first_name?: string;
   last_name?: string;
   class?: string;
+  paid?: boolean;
+  paid_at?: string;
+  paid_by?: number;
+  paid_by_first_name?: string;
+  paid_by_last_name?: string;
 }
 
 const WinkelPlugin: React.FC = () => {
@@ -122,6 +190,9 @@ const WinkelPlugin: React.FC = () => {
 
       const response = await api.post('/winkel/purchase', { item_id: itemId });
       
+      // Play purchase success sound
+      playPurchaseSound();
+      
       setSuccess(response.data.message || 'Purchase successful!');
       
       // Refresh data to update remaining purchases count
@@ -155,7 +226,7 @@ const WinkelPlugin: React.FC = () => {
   }
 
   if (user?.role === 'teacher') {
-    return <TeacherWinkelView purchases={purchases} items={items} loading={loading} />;
+    return <TeacherWinkelView purchases={purchases} items={items} loading={loading} onRefresh={fetchData} />;
   }
 
   return (
@@ -559,11 +630,14 @@ interface TeacherWinkelViewProps {
   purchases: Purchase[];
   items: ShopItem[];
   loading: boolean;
+  onRefresh?: () => void;
 }
 
-const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items, loading }) => {
+const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items, loading, onRefresh }) => {
   const [stats, setStats] = useState<any>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'pending' | 'all'>('pending');
+  const [markingPaid, setMarkingPaid] = useState<number | null>(null);
 
   useEffect(() => {
     fetchStats();
@@ -581,18 +655,47 @@ const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items,
     }
   };
 
+  const handleMarkPaid = async (purchaseId: number) => {
+    try {
+      setMarkingPaid(purchaseId);
+      await winkelApi.markPurchasePaid(purchaseId);
+      // Play success sound
+      playPaidSound();
+      // Refresh the purchases list
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error('Failed to mark purchase as paid:', error);
+    } finally {
+      setMarkingPaid(null);
+    }
+  };
+
+  const pendingPurchases = purchases.filter(p => !p.paid);
+  const allPurchases = purchases;
+  const displayPurchases = activeTab === 'pending' ? pendingPurchases : allPurchases;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex items-center space-x-4">
-          <div className="bg-white/20 rounded-full p-4">
-            <ShoppingBag className="h-8 w-8" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="bg-white/20 rounded-full p-4">
+              <ShoppingBag className="h-8 w-8" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold">The Winkel</h1>
+              <p className="text-orange-100">Shop Management & Analytics</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold">The Winkel</h1>
-            <p className="text-orange-100">Shop Management & Analytics</p>
-          </div>
+          {pendingPurchases.length > 0 && (
+            <div className="bg-white/20 rounded-lg px-4 py-2">
+              <p className="font-semibold">{pendingPurchases.length} pending</p>
+              <p className="text-xs text-orange-100">purchases to fulfill</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -639,20 +742,58 @@ const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items,
         </div>
       )}
 
-      {/* Purchases Table */}
+      {/* Purchases Section with Tabs */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">All Purchases</h2>
+        <div className="border-b border-gray-200">
+          <div className="flex">
+            <button
+              onClick={() => setActiveTab('pending')}
+              className={`flex-1 px-6 py-4 font-semibold transition-colors ${
+                activeTab === 'pending'
+                  ? 'text-primary-600 border-b-2 border-primary-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <div className="flex items-center justify-center space-x-2">
+                <Clock className="h-5 w-5" />
+                <span>Pending Purchases</span>
+                {pendingPurchases.length > 0 && (
+                  <span className="bg-amber-500 text-white px-2 py-0.5 rounded-full text-xs font-bold">
+                    {pendingPurchases.length}
+                  </span>
+                )}
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`flex-1 px-6 py-4 font-semibold transition-colors ${
+                activeTab === 'all'
+                  ? 'text-primary-600 border-b-2 border-primary-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <div className="flex items-center justify-center space-x-2">
+                <History className="h-5 w-5" />
+                <span>All Purchases</span>
+                <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs font-bold">
+                  {allPurchases.length}
+                </span>
+              </div>
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           {loading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
             </div>
-          ) : purchases.length === 0 ? (
+          ) : displayPurchases.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <ShoppingBag className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-              <p>No purchases yet.</p>
+              <p>{activeTab === 'pending' ? 'No pending purchases!' : 'No purchases yet.'}</p>
+              {activeTab === 'pending' && pendingPurchases.length === 0 && (
+                <p className="text-sm text-gray-400 mt-2">All purchases have been fulfilled.</p>
+              )}
             </div>
           ) : (
             <table className="w-full">
@@ -663,11 +804,15 @@ const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items,
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  {activeTab === 'pending' && (
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {purchases.map((purchase) => (
-                  <tr key={purchase.id}>
+                {displayPurchases.map((purchase) => (
+                  <tr key={purchase.id} className={!purchase.paid ? 'bg-amber-50' : ''}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <p className="text-sm font-medium text-gray-900">
@@ -683,17 +828,58 @@ const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items,
                       <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                         purchase.item_category === 'consumable'
                           ? 'bg-purple-100 text-purple-800'
+                          : purchase.item_category === 'profile'
+                          ? 'bg-blue-100 text-blue-800'
                           : 'bg-yellow-100 text-yellow-800'
                       }`}>
-                        {purchase.item_category === 'consumable' ? '🍬 Consumable' : '⏱️ Privilege'}
+                        {purchase.item_category === 'consumable' ? '🍬 Consumable' : 
+                         purchase.item_category === 'profile' ? '😎 Profile' : '⏱️ Privilege'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-primary-600">
-                      R{(parseFloat(purchase.price_paid) || 0).toFixed(2)}
+                      R{(parseFloat(String(purchase.price_paid)) || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(purchase.purchase_date).toLocaleDateString()}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {purchase.paid ? (
+                        <div>
+                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                            <CheckCircle className="h-3 w-3 inline mr-1" />
+                            Paid
+                          </span>
+                          {purchase.paid_by_first_name && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              by {purchase.paid_by_first_name} {purchase.paid_by_last_name}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+                          <Clock className="h-3 w-3 inline mr-1" />
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    {activeTab === 'pending' && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {!purchase.paid && (
+                          <button
+                            onClick={() => handleMarkPaid(purchase.id)}
+                            disabled={markingPaid === purchase.id}
+                            className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {markingPaid === purchase.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            ) : (
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                            )}
+                            Paid
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
