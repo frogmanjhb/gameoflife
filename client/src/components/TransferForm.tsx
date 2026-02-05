@@ -203,14 +203,15 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
         <div>
           <label htmlFor="description" className="label">
             <MessageSquare className="h-4 w-4 inline mr-1" />
-            Description (Optional)
+            Description
           </label>
           <input
             id="description"
             name="description"
             type="text"
+            required
             className="input-field"
-            placeholder="What's this for?"
+            placeholder="What's this for? (e.g. lunch money, payment for services)"
             value={formData.description}
             onChange={handleInputChange}
           />
@@ -230,7 +231,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
         <ul className="text-sm text-blue-800 space-y-1">
           <li>• Make sure you have enough money in your account</li>
           <li>• Select a student from any class to send money to</li>
-          <li>• Add a description to remember what the money is for</li>
+          <li>• Add a description (required) so both parties know what the transfer is for</li>
           <li>• Pay off any outstanding loans before making transfers</li>
         </ul>
       </div>

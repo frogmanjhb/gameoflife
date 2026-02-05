@@ -87,8 +87,8 @@ const StudentDashboard: React.FC = () => {
         </p>
       </div>
 
-      {/* New Tender Alert (very noticeable) */}
-      {showTenderBanner && latestTenderAnnouncement && (
+      {/* New Tender Alert (only when Tenders plugin enabled) */}
+      {enabledPlugins.some(p => p.route_path === '/tenders') && showTenderBanner && latestTenderAnnouncement && (
         <div className="relative overflow-hidden rounded-2xl border-2 border-amber-400 bg-gradient-to-r from-amber-300 via-orange-300 to-red-300 p-5 animate-pulse">
           <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_30%_20%,white,transparent_55%)]" />
           <div className="relative flex items-start justify-between gap-4">
@@ -154,10 +154,12 @@ const StudentDashboard: React.FC = () => {
         {enabledPlugins.some(p => p.route_path === '/land') && <MyPropertyCard />}
       </div>
 
-      {/* My Tenders */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <MyTendersCard />
-      </div>
+      {/* My Tenders (only when Tenders plugin enabled) */}
+      {enabledPlugins.some(p => p.route_path === '/tenders') && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <MyTendersCard />
+        </div>
+      )}
     </div>
   );
 };
