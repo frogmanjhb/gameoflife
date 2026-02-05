@@ -93,12 +93,6 @@ const TeacherDashboard: React.FC = () => {
   // Get stats for current town
   const currentStats = currentTownClass ? townStats[currentTownClass] : null;
 
-  // Get students for current town
-  const currentTownStudents = useMemo(() => {
-    if (!currentTownClass) return [];
-    return students.filter(s => s.class === currentTownClass);
-  }, [students, currentTownClass]);
-
   // Get announcements count per town
   const getAnnouncementsForTown = (townClass: string) => {
     // This is a simplified version - in reality you'd need to fetch announcements per town
@@ -331,60 +325,6 @@ const TeacherDashboard: React.FC = () => {
                 <TownInfo town={currentTown} readOnly={true} showTreasury={true} />
                 <AnnouncementsPanel announcements={announcements} />
               </div>
-
-              {/* Students in Current Town */}
-              {currentTownStudents.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <Users className="h-5 w-5 text-primary-600" />
-                      <h2 className="text-lg font-semibold text-gray-900">
-                        Students in {currentTown?.town_name || `Class ${currentTownClass}`}
-                      </h2>
-                    </div>
-                    <span className="text-sm text-gray-500">{currentTownStudents.length} students</span>
-                  </div>
-                  
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {currentTownStudents.slice(0, 9).map((student) => (
-                        <div 
-                          key={student.id} 
-                          className={`bg-white rounded-lg p-3 border ${
-                            Number(student.balance) < 0 ? 'border-red-200 bg-red-50' : 'border-gray-200'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium text-gray-900">
-                                {student.first_name && student.last_name 
-                                  ? `${student.first_name} ${student.last_name}` 
-                                  : student.username}
-                              </p>
-                              <p className="text-xs text-gray-500">@{student.username}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className={`font-semibold ${Number(student.balance) < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {formatCurrency(student.balance)}
-                              </p>
-                              {student.job_name ? (
-                                <p className="text-xs text-blue-600">{student.job_name}</p>
-                              ) : (
-                                <p className="text-xs text-gray-400">No job</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {currentTownStudents.length > 9 && (
-                      <p className="text-center text-sm text-gray-500 mt-3">
-                        +{currentTownStudents.length - 9} more students
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
