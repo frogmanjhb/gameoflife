@@ -490,6 +490,37 @@ async function initializeDatabase() {
     } catch (migrationError) {
       console.log('⚠️ Multi-tenant schools migration may have already been applied:', migrationError);
     }
+
+    // Add Chores plugin
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '023_add_chores_plugin.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Chores plugin added');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Chores plugin may have already been added:', migrationError);
+    }
+
+    // Sync default plugins (ensures all known plugins exist - no manual script needed)
+    try {
+      const defaultPlugins = [
+        { name: 'Chores', route_path: '/chores', icon: '🧹', description: 'Earn money by completing chore challenges at home' },
+      ];
+      for (const p of defaultPlugins) {
+        const existing = await database.query('SELECT id FROM plugins WHERE route_path = $1', [p.route_path]);
+        if (existing.length === 0) {
+          await database.query(
+            `INSERT INTO plugins (name, enabled, route_path, icon, description) VALUES ($1, true, $2, $3, $4)`,
+            [p.name, p.route_path, p.icon, p.description]
+          );
+          console.log(`✅ Auto-added plugin: ${p.name}`);
+        }
+      }
+    } catch (syncError) {
+      console.log('⚠️ Plugin sync skipped:', syncError instanceof Error ? syncError.message : syncError);
+    }
     
     const schema = readFileSync(schemaPath, 'utf8');
     await database.query(schema);
