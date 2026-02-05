@@ -400,20 +400,26 @@ router.put('/purchase-requests/:id',
           WHERE user_id = $2
         `, [offeredPrice, purchaseRequest.user_id]);
 
-        // Get buyer's class for treasury deposit
-        const buyer = await database.get('SELECT class FROM users WHERE id = $1', [purchaseRequest.user_id]);
+        // Get buyer's class and school_id for treasury deposit
+        const buyer = await database.get('SELECT class, school_id FROM users WHERE id = $1', [purchaseRequest.user_id]);
         const buyerClass = buyer?.class;
+        const landSchoolId = buyer?.school_id ?? null;
 
-        // Deposit to treasury for the buyer's class
+        // Deposit to treasury for the buyer's class (filtered by school_id)
         if (buyerClass && ['6A', '6B', '6C'].includes(buyerClass)) {
-          await database.run(
-            'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
-            [offeredPrice, buyerClass]
-          );
+          if (landSchoolId != null) {
+            await database.run(
+              'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
+              [offeredPrice, buyerClass, landSchoolId]
+            );
+          } else {
+            await database.run(
+              'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
+              [offeredPrice, buyerClass]
+            );
+          }
 
-          // Record treasury transaction - get school_id from the buyer
-          const buyerUser = await database.get('SELECT school_id FROM users WHERE id = $1', [purchaseRequest.user_id]);
-          const landSchoolId = buyerUser?.school_id ?? null;
+          // Record treasury transaction
           await database.run(
             'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
             [landSchoolId, buyerClass, offeredPrice, 'deposit', `Land Purchase: Plot ${purchaseRequest.parcel_id}`, purchaseRequest.user_id]

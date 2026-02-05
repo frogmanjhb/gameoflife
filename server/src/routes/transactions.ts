@@ -378,14 +378,22 @@ router.post('/bulk-payment', [
       // Deduct from treasury (if class is valid)
       if (['6A', '6B', '6C'].includes(class_name) && updatedCount > 0) {
         const totalPaid = updatedCount * amount;
+        const bulkSchoolId = req.user?.school_id ?? req.schoolId ?? null;
         
-        await client.query(
-          'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
-          [totalPaid, class_name]
-        );
+        // Update treasury (filtered by school_id)
+        if (bulkSchoolId != null) {
+          await client.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
+            [totalPaid, class_name, bulkSchoolId]
+          );
+        } else {
+          await client.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
+            [totalPaid, class_name]
+          );
+        }
 
         // Record treasury transaction
-        const bulkSchoolId = req.user?.school_id ?? req.schoolId ?? null;
         await client.query(
           'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
           [bulkSchoolId, class_name, totalPaid, 'withdrawal', description || `Bulk payment to ${updatedCount} students`, req.user?.id]
@@ -627,15 +635,22 @@ router.post('/pay-basic-salary', [
         }
       }
 
-      // Deduct from each class treasury
+      // Deduct from each class treasury (filtered by school_id)
+      const basicSchoolId = req.user?.school_id ?? req.schoolId ?? null;
       for (const [townClass, totals] of Object.entries(classTotals)) {
-        await client.query(
-          'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
-          [totals.total, townClass]
-        );
+        if (basicSchoolId != null) {
+          await client.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
+            [totals.total, townClass, basicSchoolId]
+          );
+        } else {
+          await client.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
+            [totals.total, townClass]
+          );
+        }
 
         // Record treasury transaction
-        const basicSchoolId = req.user?.school_id ?? req.schoolId ?? null;
         await client.query(
           'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
           [basicSchoolId, townClass, totals.total, 'withdrawal', `Basic salary payments to ${totals.count} unemployed students`, req.user?.id]

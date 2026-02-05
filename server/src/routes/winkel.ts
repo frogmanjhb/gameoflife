@@ -551,16 +551,23 @@ router.post(
           [price]
         );
 
-        // Also deposit to treasury for the student's class
+        // Also deposit to treasury for the student's class (filtered by school_id)
         const userClass = req.user.class;
+        const shopSchoolId = req.user.school_id ?? null;
         if (userClass && ['6A', '6B', '6C'].includes(userClass)) {
-          await client.query(
-            'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
-            [price, userClass]
-          );
+          if (shopSchoolId != null) {
+            await client.query(
+              'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
+              [price, userClass, shopSchoolId]
+            );
+          } else {
+            await client.query(
+              'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
+              [price, userClass]
+            );
+          }
 
           // Record treasury transaction
-          const shopSchoolId = req.user.school_id ?? null;
           await client.query(
             'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
             [shopSchoolId, userClass, price, 'deposit', `Shop Purchase: ${item.name} by ${req.user.username}`, req.user.id]

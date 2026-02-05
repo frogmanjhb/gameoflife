@@ -248,14 +248,21 @@ router.post('/treasury/:class/deposit',
         return res.status(400).json({ error: 'Invalid town class' });
       }
 
-      // Update treasury balance
-      await database.run(
-        'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
-        [amount, townClass]
-      );
+      // Update treasury balance (filtered by school_id)
+      const depositSchoolId = req.user?.school_id ?? req.schoolId ?? null;
+      if (depositSchoolId != null) {
+        await database.run(
+          'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
+          [amount, townClass, depositSchoolId]
+        );
+      } else {
+        await database.run(
+          'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
+          [amount, townClass]
+        );
+      }
 
       // Record treasury transaction
-      const depositSchoolId = req.user?.school_id ?? req.schoolId ?? null;
       await database.run(
         'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
         [depositSchoolId, townClass, amount, 'deposit', description || 'Manual deposit by teacher', req.user?.id]
@@ -301,14 +308,21 @@ router.post('/treasury/:class/withdraw',
         return res.status(400).json({ error: 'Insufficient treasury funds' });
       }
 
-      // Update treasury balance
-      await database.run(
-        'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
-        [amount, townClass]
-      );
+      // Update treasury balance (filtered by school_id)
+      const withdrawSchoolId = req.user?.school_id ?? req.schoolId ?? null;
+      if (withdrawSchoolId != null) {
+        await database.run(
+          'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
+          [amount, townClass, withdrawSchoolId]
+        );
+      } else {
+        await database.run(
+          'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
+          [amount, townClass]
+        );
+      }
 
       // Record treasury transaction
-      const withdrawSchoolId = req.user?.school_id ?? req.schoolId ?? null;
       await database.run(
         'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
         [withdrawSchoolId, townClass, -amount, 'withdrawal', description || 'Manual withdrawal by teacher', req.user?.id]
@@ -525,13 +539,20 @@ router.post('/pay-salaries/:class',
         }
 
         // Deduct net salaries from treasury (tax stays in treasury)
-        await client.query(
-          'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
-          [totalNet, townClass]
-        );
+        const salarySchoolId = req.user?.school_id ?? req.schoolId ?? null;
+        if (salarySchoolId != null) {
+          await client.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
+            [totalNet, townClass, salarySchoolId]
+          );
+        } else {
+          await client.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
+            [totalNet, townClass]
+          );
+        }
 
         // Record treasury transactions
-        const salarySchoolId = req.user?.school_id ?? req.schoolId ?? null;
         await client.query(
           'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
           [salarySchoolId, townClass, -totalNet, 'salary_payment', `Salary payments to ${paidCount} employees`, req.user?.id]
@@ -644,14 +665,21 @@ router.post('/pay-basic-salary/:class',
           }
         }
 
-        // Deduct from treasury
-        await client.query(
-          'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
-          [totalNeeded, townClass]
-        );
+        // Deduct from treasury (filtered by school_id)
+        const basicSalarySchoolId = req.user?.school_id ?? req.schoolId ?? null;
+        if (basicSalarySchoolId != null) {
+          await client.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
+            [totalNeeded, townClass, basicSalarySchoolId]
+          );
+        } else {
+          await client.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
+            [totalNeeded, townClass]
+          );
+        }
 
         // Record treasury transaction
-        const basicSalarySchoolId = req.user?.school_id ?? req.schoolId ?? null;
         await client.query(
           'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
           [basicSalarySchoolId, townClass, -totalNeeded, 'salary_payment', `Basic salary payments to ${paidCount} unemployed students`, req.user?.id]

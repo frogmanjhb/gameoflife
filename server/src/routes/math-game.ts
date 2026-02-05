@@ -350,11 +350,14 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     if (account && totalEarnings > 0) {
       // Get user's class for treasury
       const userClass = req.user.class;
+      const mathSchoolId = req.user.school_id ?? null;
       if (!userClass || !['6A', '6B', '6C'].includes(userClass)) {
         console.warn(`⚠️ User ${req.user.username} has no valid class (${userClass}), skipping treasury deduction`);
       } else {
-        // Check treasury has sufficient funds
-        const townSettings = await database.get('SELECT treasury_balance FROM town_settings WHERE class = $1', [userClass]);
+        // Check treasury has sufficient funds (filtered by school_id)
+        const townSettings = mathSchoolId != null
+          ? await database.get('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id = $2', [userClass, mathSchoolId])
+          : await database.get('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id IS NULL', [userClass]);
         const treasuryBalance = parseFloat(townSettings?.treasury_balance || '0');
         
         if (treasuryBalance < totalEarnings) {
@@ -362,14 +365,20 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
           return res.status(400).json({ error: 'Town treasury has insufficient funds to pay out your earnings. Please contact your teacher.' });
         }
 
-        // Deduct from treasury
-        await database.query(
-          'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
-          [totalEarnings, userClass]
-        );
+        // Deduct from treasury (filtered by school_id)
+        if (mathSchoolId != null) {
+          await database.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
+            [totalEarnings, userClass, mathSchoolId]
+          );
+        } else {
+          await database.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
+            [totalEarnings, userClass]
+          );
+        }
 
         // Record treasury transaction
-        const mathSchoolId = req.user.school_id ?? null;
         await database.query(
           'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
           [mathSchoolId, userClass, totalEarnings, 'withdrawal', `Math Game Payout to ${req.user.username}`, userId]
