@@ -551,6 +551,21 @@ router.post(
           [price]
         );
 
+        // Also deposit to treasury for the student's class
+        const userClass = req.user.class;
+        if (userClass && ['6A', '6B', '6C'].includes(userClass)) {
+          await client.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
+            [price, userClass]
+          );
+
+          // Record treasury transaction
+          await client.query(
+            'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
+            [userClass, price, 'deposit', `Shop Purchase: ${item.name} by ${req.user.username}`, req.user.id]
+          );
+        }
+
         // Record transaction (from student to shop)
         await client.query(
           `INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description) 

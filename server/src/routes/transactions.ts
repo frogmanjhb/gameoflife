@@ -333,6 +333,22 @@ router.post('/bulk-payment', [
 
     console.log('📊 Found students in class:', students.length);
 
+    // Count students with accounts for treasury check
+    const studentsWithAccounts = students.filter((s: any) => s.account_id).length;
+    const totalNeeded = studentsWithAccounts * amount;
+
+    // Check treasury has sufficient funds (if class is valid)
+    if (['6A', '6B', '6C'].includes(class_name)) {
+      const town = await database.get('SELECT treasury_balance FROM town_settings WHERE class = $1', [class_name]);
+      const treasuryBalance = parseFloat(town?.treasury_balance || '0');
+      
+      if (treasuryBalance < totalNeeded) {
+        return res.status(400).json({ 
+          error: `Insufficient treasury funds. Need R${totalNeeded.toFixed(2)} but only have R${treasuryBalance.toFixed(2)}` 
+        });
+      }
+    }
+
     let updatedCount = 0;
 
     // Use a single client connection for proper transaction handling
@@ -357,6 +373,22 @@ router.post('/bulk-payment', [
 
           updatedCount++;
         }
+      }
+
+      // Deduct from treasury (if class is valid)
+      if (['6A', '6B', '6C'].includes(class_name) && updatedCount > 0) {
+        const totalPaid = updatedCount * amount;
+        
+        await client.query(
+          'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
+          [totalPaid, class_name]
+        );
+
+        // Record treasury transaction
+        await client.query(
+          'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
+          [class_name, totalPaid, 'withdrawal', description || `Bulk payment to ${updatedCount} students`, req.user?.id]
+        );
       }
 
       await client.query('COMMIT');
@@ -517,9 +549,9 @@ router.post('/pay-basic-salary', [
 
     console.log('💰 Paying basic salary to unemployed students:', amount);
 
-    // Get all students without jobs
+    // Get all students without jobs, including their class
     const students = await database.query(
-      `SELECT u.id, u.username, a.id as account_id 
+      `SELECT u.id, u.username, u.class, a.id as account_id 
        FROM users u 
        LEFT JOIN accounts a ON u.id = a.user_id 
        WHERE u.role = 'student' AND (u.job_id IS NULL OR u.job_id = 0)`,
@@ -532,11 +564,39 @@ router.post('/pay-basic-salary', [
 
     console.log('📊 Found unemployed students:', students.length);
 
+    // Group students by class to calculate treasury deductions
+    const studentsByClass: Record<string, typeof students> = {};
+    for (const student of students) {
+      const studentClass = student.class;
+      if (studentClass && ['6A', '6B', '6C'].includes(studentClass)) {
+        if (!studentsByClass[studentClass]) {
+          studentsByClass[studentClass] = [];
+        }
+        studentsByClass[studentClass].push(student);
+      }
+    }
+
+    // Check each class treasury has sufficient funds
+    for (const [townClass, classStudents] of Object.entries(studentsByClass)) {
+      const totalNeeded = classStudents.filter(s => s.account_id).length * amount;
+      const town = await database.get('SELECT treasury_balance FROM town_settings WHERE class = $1', [townClass]);
+      const treasuryBalance = parseFloat(town?.treasury_balance || '0');
+      
+      if (treasuryBalance < totalNeeded) {
+        return res.status(400).json({ 
+          error: `Insufficient treasury funds for class ${townClass}. Need R${totalNeeded.toFixed(2)} but only have R${treasuryBalance.toFixed(2)}` 
+        });
+      }
+    }
+
     let updatedCount = 0;
     const client = await database.pool.connect();
 
     try {
       await client.query('BEGIN');
+
+      // Track totals per class for treasury deductions
+      const classTotals: Record<string, { count: number; total: number }> = {};
 
       for (const student of students) {
         if (student.account_id) {
@@ -552,8 +612,32 @@ router.post('/pay-basic-salary', [
             [student.account_id, amount, 'salary', 'Basic salary (unemployed)']
           );
 
+          // Track class totals
+          const studentClass = student.class;
+          if (studentClass && ['6A', '6B', '6C'].includes(studentClass)) {
+            if (!classTotals[studentClass]) {
+              classTotals[studentClass] = { count: 0, total: 0 };
+            }
+            classTotals[studentClass].count++;
+            classTotals[studentClass].total += amount;
+          }
+
           updatedCount++;
         }
+      }
+
+      // Deduct from each class treasury
+      for (const [townClass, totals] of Object.entries(classTotals)) {
+        await client.query(
+          'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
+          [totals.total, townClass]
+        );
+
+        // Record treasury transaction
+        await client.query(
+          'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
+          [townClass, totals.total, 'withdrawal', `Basic salary payments to ${totals.count} unemployed students`, req.user?.id]
+        );
       }
 
       // Update last run timestamp

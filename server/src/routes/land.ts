@@ -400,6 +400,24 @@ router.put('/purchase-requests/:id',
           WHERE user_id = $2
         `, [offeredPrice, purchaseRequest.user_id]);
 
+        // Get buyer's class for treasury deposit
+        const buyer = await database.get('SELECT class FROM users WHERE id = $1', [purchaseRequest.user_id]);
+        const buyerClass = buyer?.class;
+
+        // Deposit to treasury for the buyer's class
+        if (buyerClass && ['6A', '6B', '6C'].includes(buyerClass)) {
+          await database.run(
+            'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
+            [offeredPrice, buyerClass]
+          );
+
+          // Record treasury transaction
+          await database.run(
+            'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
+            [buyerClass, offeredPrice, 'deposit', `Land Purchase: Plot ${purchaseRequest.parcel_id}`, purchaseRequest.user_id]
+          );
+        }
+
         // Record the transaction
         const userAccount = await database.get('SELECT id FROM accounts WHERE user_id = $1', [purchaseRequest.user_id]);
         await database.run(`

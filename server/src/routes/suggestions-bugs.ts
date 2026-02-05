@@ -256,10 +256,34 @@ router.put(
 
       let rewardPaid = false;
       if (status === 'approved' && !suggestion.reward_paid) {
-        const accountRes = await client.query('SELECT id FROM accounts WHERE user_id = $1', [suggestion.user_id]);
+        const accountRes = await client.query('SELECT a.id, u.class FROM accounts a JOIN users u ON a.user_id = u.id WHERE a.user_id = $1', [suggestion.user_id]);
         const accountId = accountRes.rows?.[0]?.id;
+        const userClass = accountRes.rows?.[0]?.class;
 
         if (accountId) {
+          // Check treasury has sufficient funds
+          if (userClass && ['6A', '6B', '6C'].includes(userClass)) {
+            const townRes = await client.query('SELECT treasury_balance FROM town_settings WHERE class = $1', [userClass]);
+            const treasuryBalance = parseFloat(townRes.rows?.[0]?.treasury_balance || '0');
+            
+            if (treasuryBalance < REWARD_AMOUNT) {
+              await client.query('ROLLBACK');
+              return res.status(400).json({ error: `Insufficient treasury funds for class ${userClass} to pay reward` });
+            }
+
+            // Deduct from treasury
+            await client.query(
+              'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
+              [REWARD_AMOUNT, userClass]
+            );
+
+            // Record treasury transaction
+            await client.query(
+              'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
+              [userClass, REWARD_AMOUNT, 'withdrawal', `Suggestion reward payout`, suggestion.user_id]
+            );
+          }
+
           await client.query(
             'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
             [REWARD_AMOUNT, accountId]
@@ -353,10 +377,34 @@ router.put(
 
       let rewardPaid = false;
       if (status === 'verified' && !bug.reward_paid) {
-        const accountRes = await client.query('SELECT id FROM accounts WHERE user_id = $1', [bug.user_id]);
+        const accountRes = await client.query('SELECT a.id, u.class FROM accounts a JOIN users u ON a.user_id = u.id WHERE a.user_id = $1', [bug.user_id]);
         const accountId = accountRes.rows?.[0]?.id;
+        const userClass = accountRes.rows?.[0]?.class;
 
         if (accountId) {
+          // Check treasury has sufficient funds
+          if (userClass && ['6A', '6B', '6C'].includes(userClass)) {
+            const townRes = await client.query('SELECT treasury_balance FROM town_settings WHERE class = $1', [userClass]);
+            const treasuryBalance = parseFloat(townRes.rows?.[0]?.treasury_balance || '0');
+            
+            if (treasuryBalance < REWARD_AMOUNT) {
+              await client.query('ROLLBACK');
+              return res.status(400).json({ error: `Insufficient treasury funds for class ${userClass} to pay reward` });
+            }
+
+            // Deduct from treasury
+            await client.query(
+              'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
+              [REWARD_AMOUNT, userClass]
+            );
+
+            // Record treasury transaction
+            await client.query(
+              'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
+              [userClass, REWARD_AMOUNT, 'withdrawal', `Bug report reward payout`, bug.user_id]
+            );
+          }
+
           await client.query(
             'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
             [REWARD_AMOUNT, accountId]

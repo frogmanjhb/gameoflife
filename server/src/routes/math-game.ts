@@ -345,9 +345,36 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       `, [userId, session.difficulty, score]);
     }
 
-    // Add earnings to account balance
+    // Add earnings to account balance and deduct from treasury
     const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [userId]);
-    if (account) {
+    if (account && totalEarnings > 0) {
+      // Get user's class for treasury
+      const userClass = req.user.class;
+      if (!userClass || !['6A', '6B', '6C'].includes(userClass)) {
+        console.warn(`⚠️ User ${req.user.username} has no valid class (${userClass}), skipping treasury deduction`);
+      } else {
+        // Check treasury has sufficient funds
+        const townSettings = await database.get('SELECT treasury_balance FROM town_settings WHERE class = $1', [userClass]);
+        const treasuryBalance = parseFloat(townSettings?.treasury_balance || '0');
+        
+        if (treasuryBalance < totalEarnings) {
+          console.warn(`⚠️ Treasury for ${userClass} has insufficient funds (R${treasuryBalance}) for math game payout (R${totalEarnings})`);
+          return res.status(400).json({ error: 'Town treasury has insufficient funds to pay out your earnings. Please contact your teacher.' });
+        }
+
+        // Deduct from treasury
+        await database.query(
+          'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
+          [totalEarnings, userClass]
+        );
+
+        // Record treasury transaction
+        await database.query(
+          'INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)',
+          [userClass, totalEarnings, 'withdrawal', `Math Game Payout to ${req.user.username}`, userId]
+        );
+      }
+
       // Update account balance
       await database.query(`
         UPDATE accounts 
