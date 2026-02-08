@@ -623,5 +623,84 @@ router.get('/biome-config', authenticateToken, async (req: AuthenticatedRequest,
   res.json(BIOME_CONFIG);
 });
 
+// POST /api/land/swap - Swap positions of two parcels (teachers only)
+router.post('/swap',
+  authenticateToken,
+  requireRole(['teacher']),
+  body('parcel_id_a').isInt().toInt(),
+  body('parcel_id_b').isInt().toInt(),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+      const { parcel_id_a, parcel_id_b } = req.body;
+      if (parcel_id_a === parcel_id_b) {
+        return res.status(400).json({ error: 'Cannot swap a parcel with itself' });
+      }
+
+      const parcelA = await database.get('SELECT id, row_index, col_index, grid_code FROM land_parcels WHERE id = $1', [parcel_id_a]);
+      const parcelB = await database.get('SELECT id, row_index, col_index, grid_code FROM land_parcels WHERE id = $1', [parcel_id_b]);
+      if (!parcelA || !parcelB) {
+        return res.status(404).json({ error: 'One or both parcels not found' });
+      }
+
+      const aRow = Number(parcelA.row_index);
+      const aCol = Number(parcelA.col_index);
+      const bRow = Number(parcelB.row_index);
+      const bCol = Number(parcelB.col_index);
+      const aCode = generateGridCode(aRow, aCol);
+      const bCode = generateGridCode(bRow, bCol);
+
+      // Swap positions using temp to avoid unique constraint issues
+      await database.run(
+        'UPDATE land_parcels SET row_index = $1, col_index = $2, grid_code = $3 WHERE id = $4',
+        [-1, -1, '_temp_' + parcel_id_a, parcel_id_a]
+      );
+      await database.run(
+        'UPDATE land_parcels SET row_index = $1, col_index = $2, grid_code = $3 WHERE id = $4',
+        [aRow, aCol, aCode, parcel_id_b]
+      );
+      await database.run(
+        'UPDATE land_parcels SET row_index = $1, col_index = $2, grid_code = $3 WHERE id = $4',
+        [bRow, bCol, bCode, parcel_id_a]
+      );
+
+      res.json({ message: 'Parcels swapped successfully' });
+    } catch (error) {
+      console.error('Failed to swap parcels:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// POST /api/land/recalculate-values - Recalculate all parcel values to match current biome config (teachers only)
+router.post('/recalculate-values',
+  authenticateToken,
+  requireRole(['teacher']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const parcels = await database.query('SELECT id, row_index, col_index, biome_type FROM land_parcels');
+      let updated = 0;
+      for (const p of parcels) {
+        const biome = p.biome_type as BiomeType;
+        const config = BIOME_CONFIG[biome];
+        if (!config) continue;
+        const row = Number(p.row_index);
+        const col = Number(p.col_index);
+        const valueVariation = 0.8 + (((row * col) % 100) / 250);
+        const value = Math.round(config.baseValue * valueVariation);
+        await database.run('UPDATE land_parcels SET value = $1 WHERE id = $2', [value, p.id]);
+        updated++;
+      }
+      res.json({ message: 'Land values recalculated', updated });
+    } catch (error) {
+      console.error('Failed to recalculate land values:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
 export default router;
 

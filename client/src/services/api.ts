@@ -197,6 +197,16 @@ export const landApi = {
   // Get biome configuration
   getBiomeConfig: (): Promise<{ data: Record<BiomeType, BiomeConfig> }> => {
     return api.get('/land/biome-config');
+  },
+
+  // Swap two parcel positions (teachers only)
+  swapParcels: (parcelIdA: number, parcelIdB: number): Promise<{ data: { message: string } }> => {
+    return api.post('/land/swap', { parcel_id_a: parcelIdA, parcel_id_b: parcelIdB });
+  },
+
+  // Recalculate all parcel values to match legend ranges (teachers only)
+  recalculateValues: (): Promise<{ data: { message: string; updated: number } }> => {
+    return api.post('/land/recalculate-values');
   }
 };
 

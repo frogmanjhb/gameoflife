@@ -4,11 +4,13 @@ import { landApi } from '../../services/api';
 import { BIOME_CONFIG, formatCurrency, BIOME_ICONS } from './BiomeConfig';
 import LandPopup from './LandPopup';
 import PurchaseModal from './PurchaseModal';
-import { ZoomIn, ZoomOut, Maximize2, Filter, Loader2 } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Filter, Loader2, RefreshCw } from 'lucide-react';
 
 interface LandGridProps {
   onParcelSelect?: (parcel: LandParcel) => void;
   readOnly?: boolean;
+  /** When true (teacher), tiles can be dragged to swap positions to match classroom board */
+  canRearrange?: boolean;
 }
 
 const GRID_SIZE = 10;
@@ -16,7 +18,7 @@ const MIN_CELL_SIZE = 20;
 const MAX_CELL_SIZE = 80;
 const DEFAULT_CELL_SIZE = 50;
 
-const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false }) => {
+const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, canRearrange = false }) => {
   const [parcels, setParcels] = useState<LandParcel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -30,6 +32,12 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false })
   const [filterBiome, setFilterBiome] = useState<BiomeType | ''>('');
   const [filterOwned, setFilterOwned] = useState<'all' | 'available' | 'owned'>('all');
   const [showFilters, setShowFilters] = useState(false);
+  
+  const [draggedParcel, setDraggedParcel] = useState<LandParcel | null>(null);
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
+  const [swapLoading, setSwapLoading] = useState(false);
+  const [recalcLoading, setRecalcLoading] = useState(false);
+  const [recalcSuccess, setRecalcSuccess] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -104,6 +112,75 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false })
     }
   }, [getParcel, readOnly, onParcelSelect]);
 
+  // Drag-and-drop for teacher: swap two parcels
+  const handleCellDragStart = useCallback((e: React.DragEvent, parcel: LandParcel) => {
+    if (!canRearrange) return;
+    setDraggedParcel(parcel);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/x-parcel-id', String(parcel.id));
+    e.dataTransfer.setData('text/plain', parcel.grid_code);
+  }, [canRearrange]);
+
+  const handleCellDragEnd = useCallback(() => {
+    setDraggedParcel(null);
+    setDropTargetKey(null);
+  }, []);
+
+  const handleCellDragOver = useCallback((e: React.DragEvent, row: number, col: number) => {
+    if (!canRearrange || !draggedParcel) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const target = getParcel(row, col);
+    if (target && target.id !== draggedParcel.id) setDropTargetKey(`${row}-${col}`);
+  }, [canRearrange, draggedParcel, getParcel]);
+
+  const handleCellDragLeave = useCallback(() => {
+    setDropTargetKey(null);
+  }, []);
+
+  const handleCellDrop = useCallback(async (e: React.DragEvent, toRow: number, toCol: number) => {
+    e.preventDefault();
+    setDropTargetKey(null);
+    const parcelIdA = e.dataTransfer.getData('application/x-parcel-id');
+    if (!parcelIdA || !draggedParcel) {
+      setDraggedParcel(null);
+      return;
+    }
+    const targetParcel = getParcel(toRow, toCol);
+    if (!targetParcel || targetParcel.id === draggedParcel.id) {
+      setDraggedParcel(null);
+      return;
+    }
+    setSwapLoading(true);
+    try {
+      await landApi.swapParcels(draggedParcel.id, targetParcel.id);
+      await fetchParcels();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to swap tiles');
+    } finally {
+      setSwapLoading(false);
+      setDraggedParcel(null);
+    }
+  }, [canRearrange, draggedParcel, getParcel]);
+
+  const handleRecalculateValues = useCallback(async () => {
+    setRecalcLoading(true);
+    setError('');
+    setRecalcSuccess(false);
+    try {
+      const res = await landApi.recalculateValues();
+      await fetchParcels();
+      setError('');
+      setHoveredParcel(null);
+      setRecalcSuccess(true);
+      setTimeout(() => setRecalcSuccess(false), 4000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to recalculate prices');
+    } finally {
+      setRecalcLoading(false);
+    }
+  }, []);
+
   // Zoom controls
   const zoomIn = () => setCellSize(prev => Math.min(prev + 2, MAX_CELL_SIZE));
   const zoomOut = () => setCellSize(prev => Math.max(prev - 2, MIN_CELL_SIZE));
@@ -134,11 +211,17 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false })
       for (let col = 0; col < GRID_SIZE; col++) {
         const parcel = getParcel(row, col);
         const isHovered = hoveredParcel?.row_index === row && hoveredParcel?.col_index === col;
+        const isDragging = canRearrange && draggedParcel?.row_index === row && draggedParcel?.col_index === col;
+        const isDropTarget = canRearrange && dropTargetKey === `${row}-${col}`;
         
         cells.push(
           <div
             key={`${row}-${col}`}
-            className={`transition-all cursor-pointer rounded-sm ${isHovered ? 'ring-2 ring-white z-10 scale-110 shadow-lg' : 'hover:brightness-110'}`}
+            className={`transition-all rounded-sm ${
+              canRearrange ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+            } ${isHovered ? 'ring-2 ring-white z-10 scale-110 shadow-lg' : 'hover:brightness-110'} ${
+              isDragging ? 'opacity-50 scale-95' : ''
+            } ${isDropTarget ? 'ring-2 ring-primary-500 ring-offset-1 z-20' : ''}`}
             style={{
               ...getCellStyle(row, col),
               width: `${cellSize}px`,
@@ -146,16 +229,22 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false })
               minWidth: `${cellSize}px`,
               minHeight: `${cellSize}px`,
             }}
+            draggable={canRearrange && !!parcel}
+            onDragStart={canRearrange && parcel ? (e) => handleCellDragStart(e, parcel) : undefined}
+            onDragEnd={canRearrange ? handleCellDragEnd : undefined}
+            onDragOver={canRearrange ? (e) => handleCellDragOver(e, row, col) : undefined}
+            onDragLeave={canRearrange ? handleCellDragLeave : undefined}
+            onDrop={canRearrange ? (e) => handleCellDrop(e, row, col) : undefined}
             onMouseEnter={() => handleCellHover(row, col)}
             onMouseLeave={() => setHoveredParcel(null)}
             onClick={() => handleCellClick(row, col)}
-            title={parcel?.grid_code || `Empty ${row}-${col}`}
+            title={parcel ? (canRearrange ? `Drag to swap • ${parcel.grid_code}` : parcel.grid_code) : `Empty ${row}-${col}`}
           />
         );
       }
     }
     return cells;
-  }, [cellSize, hoveredParcel, getParcel, getCellStyle, handleCellHover, handleCellClick]);
+  }, [cellSize, hoveredParcel, draggedParcel, dropTargetKey, canRearrange, getParcel, getCellStyle, handleCellHover, handleCellClick, handleCellDragStart, handleCellDragEnd, handleCellDragOver, handleCellDragLeave, handleCellDrop]);
 
   // Biome legend
   const biomeTypes = Object.keys(BIOME_CONFIG) as BiomeType[];
@@ -196,6 +285,29 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false })
 
   return (
     <div className="space-y-4" ref={containerRef}>
+      {/* Teacher: Recalculate prices so hover prices match legend */}
+      {canRearrange && (
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-amber-50 border border-amber-200 p-4 rounded-xl">
+          <div>
+            <p className="text-sm text-amber-800">
+              Drag any tile onto another to swap positions and match your classroom board. Use &quot;Recalculate prices&quot; so hover prices match the legend ranges.
+            </p>
+            {recalcSuccess && (
+              <p className="text-sm text-green-700 font-medium mt-2">Prices updated. Hover over tiles to see values within the legend range.</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleRecalculateValues}
+            disabled={recalcLoading || parcels.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {recalcLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Recalculate prices
+          </button>
+        </div>
+      )}
+
       {/* Controls Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         {/* Zoom Controls */}
