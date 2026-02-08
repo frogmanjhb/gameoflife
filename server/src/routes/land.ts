@@ -6,7 +6,7 @@ import { BiomeType, RiskLevel, LandParcel, LandPurchaseRequest } from '../types'
 
 const router = Router();
 
-// Biome configuration with pros/cons and base values
+// Biome configuration with pros/cons and base values (prices set so land is meaningful vs salaries)
 const BIOME_CONFIG: Record<BiomeType, { 
   baseValue: number; 
   risk: RiskLevel; 
@@ -14,55 +14,55 @@ const BIOME_CONFIG: Record<BiomeType, {
   cons: string[];
 }> = {
   'Savanna': {
-    baseValue: 20000,
+    baseValue: 40000,
     risk: 'medium',
     pros: ['Good grazing land', 'Wildlife tourism potential', 'Moderate rainfall'],
     cons: ['Seasonal droughts', 'Fire risk', 'Limited water sources']
   },
   'Grassland': {
-    baseValue: 15000,
+    baseValue: 30000,
     risk: 'low',
     pros: ['Excellent farming potential', 'Easy to develop', 'Stable ecosystem'],
     cons: ['Soil erosion risk', 'Limited shade', 'Overgrazing concerns']
   },
   'Forest': {
-    baseValue: 35000,
+    baseValue: 70000,
     risk: 'medium',
     pros: ['Rich biodiversity', 'Timber resources', 'Carbon credits potential'],
     cons: ['Fire risk', 'Clearing restrictions', 'Difficult access']
   },
   'Fynbos': {
-    baseValue: 45000,
+    baseValue: 90000,
     risk: 'high',
     pros: ['Unique biodiversity', 'Eco-tourism value', 'Protected species habitat'],
     cons: ['Fire-dependent ecosystem', 'Strict conservation laws', 'Limited development']
   },
   'Nama Karoo': {
-    baseValue: 10000,
+    baseValue: 20000,
     risk: 'medium',
     pros: ['Sheep farming suited', 'Low land cost', 'Unique landscape'],
     cons: ['Very dry climate', 'Limited water', 'Remote location']
   },
   'Succulent Karoo': {
-    baseValue: 4500,
+    baseValue: 9000,
     risk: 'high',
     pros: ['Rare plant species', 'Research value', 'Mining potential'],
     cons: ['Extreme temperatures', 'Water scarcity', 'Conservation restrictions']
   },
   'Desert': {
-    baseValue: 8000,
+    baseValue: 16000,
     risk: 'high',
     pros: ['Solar energy potential', 'Low land price', 'Mineral deposits'],
     cons: ['Extreme conditions', 'No water', 'Uninhabitable without infrastructure']
   },
   'Thicket': {
-    baseValue: 25000,
+    baseValue: 50000,
     risk: 'low',
     pros: ['Carbon storage', 'Game farming potential', 'Drought resistant'],
     cons: ['Dense vegetation', 'Clearing needed', 'Elephant damage risk']
   },
   'Indian Ocean Coastal Belt': {
-    baseValue: 60000,
+    baseValue: 120000,
     risk: 'medium',
     pros: ['High property value', 'Tourism potential', 'Port access'],
     cons: ['Coastal erosion', 'Cyclone risk', 'High development costs']

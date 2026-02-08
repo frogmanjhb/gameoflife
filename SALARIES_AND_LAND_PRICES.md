@@ -73,28 +73,28 @@ This document provides a comprehensive reference for all job salaries and land p
 
 ## 🗺️ Land Parcel Prices by Biome Type
 
-Land parcels are priced based on their biome type. Each biome has a base value, risk level, and unique characteristics.
+Land parcels are priced based on their biome type. Each biome has a base value, risk level, and unique characteristics. Prices are set so land is a meaningful investment relative to salaries.
 
 ### Land Price Reference
 
 | Biome Type | Base Price (ZAR) | Risk Level | Price Range* |
 |------------|------------------|------------|--------------|
-| **Indian Ocean Coastal Belt** | R 60,000.00 | Medium | R 48,000 - R 72,000 |
-| **Fynbos** | R 45,000.00 | High | R 36,000 - R 54,000 |
-| **Forest** | R 35,000.00 | Medium | R 28,000 - R 42,000 |
-| **Thicket** | R 25,000.00 | Low | R 20,000 - R 30,000 |
-| **Savanna** | R 20,000.00 | Medium | R 16,000 - R 24,000 |
-| **Grassland** | R 15,000.00 | Low | R 12,000 - R 18,000 |
-| **Nama Karoo** | R 10,000.00 | Medium | R 8,000 - R 12,000 |
-| **Desert** | R 8,000.00 | High | R 6,400 - R 9,600 |
-| **Succulent Karoo** | R 4,500.00 | High | R 3,600 - R 5,400 |
+| **Indian Ocean Coastal Belt** | R 120,000.00 | Medium | R 96,000 - R 144,000 |
+| **Fynbos** | R 90,000.00 | High | R 72,000 - R 108,000 |
+| **Forest** | R 70,000.00 | Medium | R 56,000 - R 84,000 |
+| **Thicket** | R 50,000.00 | Low | R 40,000 - R 60,000 |
+| **Savanna** | R 40,000.00 | Medium | R 32,000 - R 48,000 |
+| **Grassland** | R 30,000.00 | Low | R 24,000 - R 36,000 |
+| **Nama Karoo** | R 20,000.00 | Medium | R 16,000 - R 24,000 |
+| **Desert** | R 16,000.00 | High | R 12,800 - R 19,200 |
+| **Succulent Karoo** | R 9,000.00 | High | R 7,200 - R 10,800 |
 
 *Price range accounts for ±20% variation in actual parcel values.
 
 ### Detailed Biome Information
 
 #### 🌊 Indian Ocean Coastal Belt
-- **Base Price:** R 60,000.00
+- **Base Price:** R 120,000.00
 - **Risk Level:** Medium
 - **Pros:**
   - High property value
@@ -106,7 +106,7 @@ Land parcels are priced based on their biome type. Each biome has a base value, 
   - High development costs
 
 #### 🌸 Fynbos
-- **Base Price:** R 45,000.00
+- **Base Price:** R 90,000.00
 - **Risk Level:** High
 - **Pros:**
   - Unique biodiversity
@@ -118,7 +118,7 @@ Land parcels are priced based on their biome type. Each biome has a base value, 
   - Limited development
 
 #### 🌲 Forest
-- **Base Price:** R 35,000.00
+- **Base Price:** R 70,000.00
 - **Risk Level:** Medium
 - **Pros:**
   - Rich biodiversity
@@ -130,7 +130,7 @@ Land parcels are priced based on their biome type. Each biome has a base value, 
   - Difficult access
 
 #### 🌿 Thicket
-- **Base Price:** R 25,000.00
+- **Base Price:** R 50,000.00
 - **Risk Level:** Low
 - **Pros:**
   - Carbon storage
@@ -142,7 +142,7 @@ Land parcels are priced based on their biome type. Each biome has a base value, 
   - Elephant damage risk
 
 #### 🌾 Savanna
-- **Base Price:** R 20,000.00
+- **Base Price:** R 40,000.00
 - **Risk Level:** Medium
 - **Pros:**
   - Good grazing land
@@ -154,7 +154,7 @@ Land parcels are priced based on their biome type. Each biome has a base value, 
   - Limited water sources
 
 #### 🌱 Grassland
-- **Base Price:** R 15,000.00
+- **Base Price:** R 30,000.00
 - **Risk Level:** Low
 - **Pros:**
   - Excellent farming potential
@@ -166,7 +166,7 @@ Land parcels are priced based on their biome type. Each biome has a base value, 
   - Overgrazing concerns
 
 #### 🏜️ Nama Karoo
-- **Base Price:** R 10,000.00
+- **Base Price:** R 20,000.00
 - **Risk Level:** Medium
 - **Pros:**
   - Sheep farming suited
@@ -178,7 +178,7 @@ Land parcels are priced based on their biome type. Each biome has a base value, 
   - Remote location
 
 #### 🏜️ Desert
-- **Base Price:** R 8,000.00
+- **Base Price:** R 16,000.00
 - **Risk Level:** High
 - **Pros:**
   - Solar energy potential
@@ -190,7 +190,7 @@ Land parcels are priced based on their biome type. Each biome has a base value, 
   - Uninhabitable without infrastructure
 
 #### 🌵 Succulent Karoo
-- **Base Price:** R 4,500.00
+- **Base Price:** R 9,000.00
 - **Risk Level:** High
 - **Pros:**
   - Rare plant species
@@ -203,9 +203,9 @@ Land parcels are priced based on their biome type. Each biome has a base value, 
 
 ### Land Price Summary
 
-- **Most Expensive:** R 60,000.00 (Indian Ocean Coastal Belt)
-- **Least Expensive:** R 4,500.00 (Succulent Karoo)
-- **Average Price:** ~R 24,500.00
+- **Most Expensive:** R 120,000.00 (Indian Ocean Coastal Belt)
+- **Least Expensive:** R 9,000.00 (Succulent Karoo)
+- **Average Price:** ~R 49,000.00
 - **Total Biome Types:** 9
 
 ---
@@ -218,15 +218,15 @@ Land parcels are priced based on their biome type. Each biome has a base value, 
 3. **Play the Math Game** - earn additional income through daily gameplay (3 plays per day)
 
 ### Buying Land
-1. **Start with affordable biomes** - Succulent Karoo (R 4,500) or Desert (R 8,000) are good entry points
-2. **Consider risk vs. reward** - Low-risk biomes like Grassland (R 15,000) and Thicket (R 25,000) are safer investments
-3. **Save for premium locations** - Indian Ocean Coastal Belt (R 60,000) offers high value but requires significant savings (6+ months of salary)
+1. **Start with affordable biomes** - Succulent Karoo (R 9,000) or Desert (R 16,000) are good entry points
+2. **Consider risk vs. reward** - Low-risk biomes like Grassland (R 30,000) and Thicket (R 50,000) are safer investments
+3. **Save for premium locations** - Indian Ocean Coastal Belt (R 120,000) offers high value but requires significant savings (12+ months of salary)
 4. **Factor in pros and cons** - Each biome has unique characteristics that may affect your town's development
 
 ### Financial Planning
 - **Monthly salary range:** R 5,500 - R 10,000
-- **Land investment range:** R 4,500 - R 60,000
-- **Recommended savings goal:** Save 2-3 months' salary for entry-level land, 6+ months for premium locations
+- **Land investment range:** R 9,000 - R 120,000
+- **Recommended savings goal:** Save 2-3 months' salary for entry-level land, 12+ months for premium locations
 
 ---
 

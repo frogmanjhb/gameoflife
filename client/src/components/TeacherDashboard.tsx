@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePlugins } from '../contexts/PluginContext';
 import { useTown } from '../contexts/TownContext';
@@ -15,7 +15,7 @@ import StudentManagement from './StudentManagement';
 import PendingStudents from './PendingStudents';
 import { 
   Grid, Settings, Briefcase, Building2, Users, Wallet, 
-  TrendingUp, CreditCard, Megaphone, MapPin, Landmark, Clock, ShoppingBag
+  TrendingUp, CreditCard, Megaphone, MapPin, Landmark, Clock, ShoppingBag, GripVertical
 } from 'lucide-react';
 import api from '../services/api';
 import { Student, Loan, Transaction } from '../types';
@@ -29,17 +29,102 @@ interface TownStats {
   pendingLoans: number;
 }
 
+const TILE_ORDER_STORAGE_KEY = 'teacherDashboardTileOrder';
+
 const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
   const { enabledPlugins, plugins, loading: pluginsLoading, refreshPlugins } = usePlugins();
   const { currentTown, currentTownClass, allTowns, announcements, loading: townLoading, setCurrentTownClass, refreshAnnouncements } = useTown();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs' | 'students' | 'pending' | 'shop'>('dashboard');
   const [pendingCount, setPendingCount] = useState(0);
+  const [tileOrder, setTileOrder] = useState<number[]>([]);
+  const [draggedTileId, setDraggedTileId] = useState<number | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<number | null>(null);
   
   // Data for town stats
   const [students, setStudents] = useState<Student[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+
+  // Load saved tile order when user and plugins are available
+  useEffect(() => {
+    if (enabledPlugins.length === 0) return;
+    const key = `${TILE_ORDER_STORAGE_KEY}_${user?.id ?? 'default'}`;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw) as number[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const ids = enabledPlugins.map(p => p.id);
+          const next = parsed.filter(id => ids.includes(id));
+          ids.forEach(id => { if (!next.includes(id)) next.push(id); });
+          setTileOrder(next.length ? next : ids);
+          return;
+        }
+      }
+    } catch (_) {}
+    setTileOrder(enabledPlugins.map(p => p.id));
+  }, [user?.id, enabledPlugins.length === 0 ? '' : enabledPlugins.map(p => p.id).join(',')]);
+
+  // Persist tile order when it changes
+  useEffect(() => {
+    if (tileOrder.length === 0) return;
+    try {
+      const key = `${TILE_ORDER_STORAGE_KEY}_${user?.id ?? 'default'}`;
+      localStorage.setItem(key, JSON.stringify(tileOrder));
+    } catch (_) {}
+  }, [tileOrder, user?.id]);
+
+  // Ordered plugins for display (matches classroom board layout)
+  const orderedPlugins = useMemo(() => {
+    const orderMap = new Map(tileOrder.map((id, i) => [id, i]));
+    return [...enabledPlugins].sort((a, b) => {
+      const ai = orderMap.get(a.id) ?? 999;
+      const bi = orderMap.get(b.id) ?? 999;
+      return ai - bi;
+    });
+  }, [enabledPlugins, tileOrder]);
+
+  const handleTileDragStart = useCallback((e: React.DragEvent, pluginId: number) => {
+    setDraggedTileId(pluginId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(pluginId));
+    e.dataTransfer.setData('application/x-plugin-id', String(pluginId));
+  }, []);
+
+  const handleTileDragEnd = useCallback(() => {
+    setDraggedTileId(null);
+    setDropTargetId(null);
+  }, []);
+
+  const handleTileDragOver = useCallback((e: React.DragEvent, pluginId: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedTileId != null && draggedTileId !== pluginId) setDropTargetId(pluginId);
+  }, [draggedTileId]);
+
+  const handleTileDragLeave = useCallback(() => {
+    setDropTargetId(null);
+  }, []);
+
+  const handleTileDrop = useCallback((e: React.DragEvent, dropPluginId: number) => {
+    e.preventDefault();
+    setDropTargetId(null);
+    const raw = e.dataTransfer.getData('application/x-plugin-id') || e.dataTransfer.getData('text/plain');
+    const dragPluginId = raw ? parseInt(raw, 10) : null;
+    if (dragPluginId == null || dragPluginId === dropPluginId || !tileOrder.includes(dragPluginId) || !tileOrder.includes(dropPluginId)) {
+      setDraggedTileId(null);
+      return;
+    }
+    const fromIndex = tileOrder.indexOf(dragPluginId);
+    const toIndex = tileOrder.indexOf(dropPluginId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    const next = [...tileOrder];
+    next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, dragPluginId);
+    setTileOrder(next);
+    setDraggedTileId(null);
+  }, [tileOrder]);
 
   const displayName = user?.first_name && user?.last_name
     ? `${user.first_name} ${user.last_name}`
@@ -211,11 +296,23 @@ const TeacherDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Plugin Cards - Available Systems */}
+      {/* Plugin Cards - Available Systems (reorderable to match classroom board) */}
       <div>
-        <div className="flex items-center space-x-2 mb-4">
-          <Grid className="h-5 w-5 text-primary-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Available Systems</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+          <div className="flex items-center space-x-2">
+            <Grid className="h-5 w-5 text-primary-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Available Systems</h2>
+            <span className="text-xs text-gray-500 ml-2 hidden sm:inline">Drag the handle to reorder tiles to match your classroom board</span>
+          </div>
+          {tileOrder.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setTileOrder(enabledPlugins.map(p => p.id))}
+              className="text-xs text-primary-600 hover:text-primary-700 hover:underline"
+            >
+              Reset to default order
+            </button>
+          )}
         </div>
         
         {enabledPlugins.length === 0 ? (
@@ -225,9 +322,35 @@ const TeacherDashboard: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {enabledPlugins.map((plugin) => (
-              <PluginCard key={plugin.id} plugin={plugin} />
-            ))}
+            {orderedPlugins.map((plugin) => {
+              const isDragging = draggedTileId === plugin.id;
+              const isDropTarget = dropTargetId === plugin.id;
+              return (
+                <div
+                  key={plugin.id}
+                  className={`relative group rounded-xl transition-all ${
+                    isDragging ? 'opacity-50 scale-95' : ''
+                  } ${isDropTarget ? 'ring-2 ring-primary-500 ring-offset-2 bg-primary-50/50' : ''}`}
+                  onDragOver={(e) => handleTileDragOver(e, plugin.id)}
+                  onDragLeave={handleTileDragLeave}
+                  onDrop={(e) => handleTileDrop(e, plugin.id)}
+                >
+                  <div
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 touch-none"
+                    draggable
+                    onDragStart={(e) => handleTileDragStart(e, plugin.id)}
+                    onDragEnd={handleTileDragEnd}
+                    title="Drag to reorder"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  >
+                    <GripVertical className="h-5 w-5" />
+                  </div>
+                  <div className="pl-10">
+                    <PluginCard plugin={plugin} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
