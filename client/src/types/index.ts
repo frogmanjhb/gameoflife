@@ -92,7 +92,7 @@ export interface AuthContextType {
 export interface MathGameSession {
   id: number;
   user_id: number;
-  difficulty: 'easy' | 'medium' | 'hard';
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
   score: number;
   correct_answers: number;
   total_problems: number;
@@ -107,6 +107,7 @@ export interface MathGameStatus {
     easy: number;
     medium: number;
     hard: number;
+    extreme: number;
   };
   recent_sessions: MathGameSession[];
 }
@@ -120,7 +121,7 @@ export interface MathProblem {
 }
 
 export interface MathGameStartRequest {
-  difficulty: 'easy' | 'medium' | 'hard';
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
 }
 
 export interface MathGameSubmitRequest {

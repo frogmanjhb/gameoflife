@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TownSettings as TownSettingsType } from '../../types';
 import { useTown } from '../../contexts/TownContext';
 import api, { treasuryApi } from '../../services/api';
-import { Save, ToggleLeft, ToggleRight, Wallet, AlertTriangle, Brain } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Wallet, AlertTriangle, Home } from 'lucide-react';
 
 const TownSettings: React.FC = () => {
   const { allTowns, refreshTown } = useTown();
@@ -243,16 +243,16 @@ const TownSettings: React.FC = () => {
         )}
       </div>
 
-      {/* Math Game Settings */}
+      {/* Chores Game Settings */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-start space-x-3 mb-4">
           <div className="p-2 rounded-lg bg-purple-100">
-            <Brain className="h-5 w-5 text-purple-700" />
+            <Home className="h-5 w-5 text-purple-700" />
           </div>
           <div>
-            <h4 className="text-lg font-semibold text-gray-900">Math Game Settings</h4>
+            <h4 className="text-lg font-semibold text-gray-900">Chores Game Settings</h4>
             <p className="text-sm text-gray-500 mt-1">
-              Configure the math game settings for all students
+              Configure the chores game settings for all students
             </p>
           </div>
         </div>
@@ -268,7 +268,7 @@ const TownSettings: React.FC = () => {
                 Daily Game Limit
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                Number of math games each student can play per day (resets at 6 AM)
+                Number of chores games each student can play per day (resets at 6 AM)
               </p>
               <div className="flex items-center space-x-3">
                 <input
@@ -290,7 +290,7 @@ const TownSettings: React.FC = () => {
                 </button>
               </div>
               <p className="text-xs text-gray-400 mt-2">
-                Set to 0 to disable math games entirely
+                Set to 0 to disable chores games entirely
               </p>
             </div>
           </div>

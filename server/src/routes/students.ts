@@ -103,6 +103,36 @@ router.get('/classmates', authenticateToken, async (req: AuthenticatedRequest, r
   }
 });
 
+// Get all students who can receive transfers (any class in same school - for cross-class transfers)
+router.get('/transfer-recipients', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'student') {
+      return res.status(403).json({ error: 'Only students can access transfer recipients' });
+    }
+
+    const schoolId = req.user.school_id ?? null;
+
+    const recipients = await database.query(`
+      SELECT 
+        u.id,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class
+      FROM users u
+      WHERE u.role = 'student' 
+        AND u.id != $1
+        AND (u.school_id = $2 OR ($2 IS NULL AND u.school_id IS NULL))
+      ORDER BY u.class, u.first_name, u.last_name
+    `, [req.user.id, schoolId]);
+
+    res.json(recipients);
+  } catch (error) {
+    console.error('Get transfer recipients error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get all students with their account balances (teachers only)
 router.get('/', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {

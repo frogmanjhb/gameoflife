@@ -99,7 +99,7 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
 router.post('/transfer', [
   body('to_username').notEmpty().withMessage('Recipient username is required'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0'),
-  body('description').optional().isString()
+  body('description').notEmpty().trim().withMessage('Description is required')
 ], authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const errors = validationResult(req);
