@@ -329,9 +329,12 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false })
       {/* Legend */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <h4 className="text-sm font-medium text-gray-700 mb-3">Biome Legend</h4>
+        <p className="text-xs text-gray-500 mb-2">Plot prices vary ±20% within each biome range. Hover a square to see its exact price.</p>
         <div className="flex flex-wrap gap-3">
           {biomeTypes.map(biome => {
             const config = BIOME_CONFIG[biome];
+            const minPrice = Math.round(config.baseValue * 0.8);
+            const maxPrice = Math.round(config.baseValue * 1.2);
             return (
               <div 
                 key={biome}
@@ -343,7 +346,7 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false })
                   style={{ backgroundColor: config.color }}
                 />
                 <span className="text-xs text-gray-600">{BIOME_ICONS[biome]} {biome}</span>
-                <span className="text-xs text-gray-400">({formatCurrency(config.baseValue)})</span>
+                <span className="text-xs text-gray-400">({formatCurrency(minPrice)} – {formatCurrency(maxPrice)})</span>
               </div>
             );
           })}
