@@ -1,4 +1,5 @@
 // Seed script for Town Hub
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
@@ -364,18 +365,41 @@ async function seedDatabase() {
       }
     ];
 
+    // Multi-tenant: use school_id NULL for global jobs. ON CONFLICT must match the unique
+    // constraint: (school_id, name) after migration 022, or (name) on older DBs.
+    let jobsHaveSchoolId = false;
+    try {
+      await pool.query('SELECT school_id FROM jobs LIMIT 1');
+      jobsHaveSchoolId = true;
+    } catch (_) {
+      // Column doesn't exist (pre-022); use old INSERT with ON CONFLICT (name)
+    }
     for (const job of jobs) {
-      await pool.query(
-        `INSERT INTO jobs (name, description, salary, company_name, location, requirements)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (name) DO UPDATE SET
-           description = EXCLUDED.description,
-           salary = EXCLUDED.salary,
-           company_name = EXCLUDED.company_name,
-           location = EXCLUDED.location,
-           requirements = EXCLUDED.requirements`,
-        [job.name, job.description, job.salary, job.company_name || null, job.location || null, job.requirements || null]
-      );
+      if (jobsHaveSchoolId) {
+        await pool.query(
+          `INSERT INTO jobs (name, description, salary, company_name, location, requirements, school_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (school_id, name) DO UPDATE SET
+             description = EXCLUDED.description,
+             salary = EXCLUDED.salary,
+             company_name = EXCLUDED.company_name,
+             location = EXCLUDED.location,
+             requirements = EXCLUDED.requirements`,
+          [job.name, job.description, job.salary, job.company_name || null, job.location || null, job.requirements || null, null]
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO jobs (name, description, salary, company_name, location, requirements)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (name) DO UPDATE SET
+             description = EXCLUDED.description,
+             salary = EXCLUDED.salary,
+             company_name = EXCLUDED.company_name,
+             location = EXCLUDED.location,
+             requirements = EXCLUDED.requirements`,
+          [job.name, job.description, job.salary, job.company_name || null, job.location || null, job.requirements || null]
+        );
+      }
     }
     console.log('✅ Jobs seeded');
 
