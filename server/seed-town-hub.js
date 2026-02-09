@@ -81,15 +81,19 @@ async function seedDatabase() {
     } catch (_) {
       // Column doesn't exist (pre-022)
     }
+    // route_path is UNIQUE (migration 002); after 022 (school_id, name) is also unique.
+    // Use ON CONFLICT (route_path) so we never duplicate route_path (e.g. existing row from another school_id).
     for (const plugin of plugins) {
       if (pluginsHaveSchoolId) {
         await pool.query(
           `INSERT INTO plugins (name, enabled, route_path, icon, description, school_id)
            VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (school_id, name) DO UPDATE SET
-             route_path = EXCLUDED.route_path,
+           ON CONFLICT (route_path) DO UPDATE SET
+             name = EXCLUDED.name,
+             enabled = EXCLUDED.enabled,
              icon = EXCLUDED.icon,
-             description = EXCLUDED.description`,
+             description = EXCLUDED.description,
+             school_id = EXCLUDED.school_id`,
           [plugin.name, true, plugin.route_path, plugin.icon, plugin.description, null]
         );
       } else {
@@ -420,7 +424,41 @@ async function seedDatabase() {
         );
       }
     }
-    console.log('✅ Jobs seeded');
+    // Explicitly ensure Software Engineer exists (visible to all schools as global job)
+    const softwareEngineerJob = {
+      name: 'Software Engineer',
+      description: 'Daily: Check the Software Requests board (a list of problems learners want solved). Choose 1 task to work on or continue. Test the app with 1–2 users and capture feedback.\n\nWeekly: Bug hunt in the Game of Life. Deliver one working micro-app or feature improvement. Publish it in the Town Hub as a "plugin" or tool link. Run a 2–3 minute demo to the class. Log: what problem it solves, how to use it, what changed after feedback.',
+      salary: 6000.00,
+      company_name: 'Town Government / Tech Department',
+      location: 'Development Lab',
+      requirements: null
+    };
+    if (jobsHaveSchoolId) {
+      await pool.query(
+        `INSERT INTO jobs (name, description, salary, company_name, location, requirements, school_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (school_id, name) DO UPDATE SET
+           description = EXCLUDED.description,
+           salary = EXCLUDED.salary,
+           company_name = EXCLUDED.company_name,
+           location = EXCLUDED.location,
+           requirements = EXCLUDED.requirements`,
+        [softwareEngineerJob.name, softwareEngineerJob.description, softwareEngineerJob.salary, softwareEngineerJob.company_name, softwareEngineerJob.location, softwareEngineerJob.requirements, null]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO jobs (name, description, salary, company_name, location, requirements)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (name) DO UPDATE SET
+           description = EXCLUDED.description,
+           salary = EXCLUDED.salary,
+           company_name = EXCLUDED.company_name,
+           location = EXCLUDED.location,
+           requirements = EXCLUDED.requirements`,
+        [softwareEngineerJob.name, softwareEngineerJob.description, softwareEngineerJob.salary, softwareEngineerJob.company_name, softwareEngineerJob.location, softwareEngineerJob.requirements]
+      );
+    }
+    console.log('✅ Jobs seeded (including Software Engineer)');
 
     // Seed Town Settings
     console.log('🏘️ Seeding town settings...');
