@@ -460,7 +460,7 @@ async function seedDatabase() {
     }
     console.log('✅ Jobs seeded (including Software Engineer)');
 
-    // Seed Town Settings
+    // Seed Town Settings. After migration 022, unique is (school_id, class).
     console.log('🏘️ Seeding town settings...');
     const towns = [
       { class: '6A', town_name: '6A Town', mayor_name: 'TBD', tax_rate: 5.0 },
@@ -468,16 +468,35 @@ async function seedDatabase() {
       { class: '6C', town_name: '6C Town', mayor_name: 'TBD', tax_rate: 5.0 }
     ];
 
+    let townSettingsHaveSchoolId = false;
+    try {
+      await pool.query('SELECT school_id FROM town_settings LIMIT 1');
+      townSettingsHaveSchoolId = true;
+    } catch (_) {
+      // Column doesn't exist (pre-022)
+    }
     for (const town of towns) {
-      await pool.query(
-        `INSERT INTO town_settings (class, town_name, mayor_name, tax_rate)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (class) DO UPDATE SET
-           town_name = EXCLUDED.town_name,
-           mayor_name = EXCLUDED.mayor_name,
-           tax_rate = EXCLUDED.tax_rate`,
-        [town.class, town.town_name, town.mayor_name, town.tax_rate]
-      );
+      if (townSettingsHaveSchoolId) {
+        await pool.query(
+          `INSERT INTO town_settings (class, town_name, mayor_name, tax_rate, school_id)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (school_id, class) DO UPDATE SET
+             town_name = EXCLUDED.town_name,
+             mayor_name = EXCLUDED.mayor_name,
+             tax_rate = EXCLUDED.tax_rate`,
+          [town.class, town.town_name, town.mayor_name, town.tax_rate, null]
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO town_settings (class, town_name, mayor_name, tax_rate)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (class) DO UPDATE SET
+             town_name = EXCLUDED.town_name,
+             mayor_name = EXCLUDED.mayor_name,
+             tax_rate = EXCLUDED.tax_rate`,
+          [town.class, town.town_name, town.mayor_name, town.tax_rate]
+        );
+      }
     }
     console.log('✅ Town settings seeded');
 

@@ -6,38 +6,47 @@ import { authenticateToken, AuthenticatedRequest, requireRole } from '../middlew
 const router = Router();
 
 // Get all jobs (with fulfillment status and assigned student name)
-// Multi-tenant: return only global jobs (school_id IS NULL) or jobs for the user's school
+// Multi-tenant: return only global jobs (school_id IS NULL) or jobs for the user's school.
+// Deduplicate by name: when both global and per-school row exist, prefer per-school.
 router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const schoolId = req.user?.school_id ?? null;
-    // Super_admin or users without school see all jobs; others see global + their school's jobs
-    const jobs = schoolId !== null
-      ? await database.query(
-          `SELECT j.*, 
-                 COUNT(u.id) as assigned_count,
-                 CASE WHEN COUNT(u.id) > 0 THEN true ELSE false END as is_fulfilled,
-                 MIN(CASE WHEN u.id IS NOT NULL THEN 
-                   COALESCE(u.first_name || ' ' || u.last_name, u.username)
-                 END) as assigned_to_name
-          FROM jobs j
-          LEFT JOIN users u ON j.id = u.job_id AND u.role = 'student'
-          WHERE j.school_id IS NULL OR j.school_id = $1
-          GROUP BY j.id
-          ORDER BY j.created_at DESC`,
-          [schoolId]
-        )
-      : await database.query(`
-          SELECT j.*, 
-                 COUNT(u.id) as assigned_count,
-                 CASE WHEN COUNT(u.id) > 0 THEN true ELSE false END as is_fulfilled,
-                 MIN(CASE WHEN u.id IS NOT NULL THEN 
-                   COALESCE(u.first_name || ' ' || u.last_name, u.username)
-                 END) as assigned_to_name
-          FROM jobs j
-          LEFT JOIN users u ON j.id = u.job_id AND u.role = 'student'
-          GROUP BY j.id
-          ORDER BY j.created_at DESC
-        `);
+    if (schoolId !== null) {
+      // One row per job name: prefer per-school over global when both exist
+      const jobs = await database.query(
+        `WITH preferred AS (
+           SELECT DISTINCT ON (name) id
+           FROM jobs
+           WHERE school_id IS NULL OR school_id = $1
+           ORDER BY name, (school_id = $1) DESC NULLS LAST, id
+         )
+         SELECT j.*,
+                COUNT(u.id)::int as assigned_count,
+                (COUNT(u.id) > 0) as is_fulfilled,
+                MIN(CASE WHEN u.id IS NOT NULL THEN
+                  COALESCE(u.first_name || ' ' || u.last_name, u.username)
+                END) as assigned_to_name
+         FROM jobs j
+         JOIN preferred p ON j.id = p.id
+         LEFT JOIN users u ON j.id = u.job_id AND u.role = 'student'
+         GROUP BY j.id
+         ORDER BY j.created_at DESC`,
+        [schoolId]
+      );
+      return res.json(jobs);
+    }
+    const jobs = await database.query(`
+      SELECT j.*,
+             COUNT(u.id)::int as assigned_count,
+             (COUNT(u.id) > 0) as is_fulfilled,
+             MIN(CASE WHEN u.id IS NOT NULL THEN
+               COALESCE(u.first_name || ' ' || u.last_name, u.username)
+             END) as assigned_to_name
+      FROM jobs j
+      LEFT JOIN users u ON j.id = u.job_id AND u.role = 'student'
+      GROUP BY j.id
+      ORDER BY j.created_at DESC
+    `);
     res.json(jobs);
   } catch (error) {
     console.error('Failed to fetch jobs:', error);
