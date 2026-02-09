@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Briefcase, DollarSign, MapPin, Building, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Briefcase, DollarSign, MapPin, Building, FileText, AlertCircle, CheckCircle, Edit2, Save } from 'lucide-react';
 import { Job } from '../types';
 
 interface JobDetailsModalProps {
@@ -11,9 +11,31 @@ interface JobDetailsModalProps {
   userJobName?: string;
   applicationsEnabled?: boolean;
   applicationCount?: { count: number; maxApplications: number; canApply: boolean } | null;
+  isTeacher?: boolean;
+  onSaveJob?: (jobId: number, data: Partial<Job>) => Promise<Job | void>;
 }
 
-const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job, onApply, userHasJob = false, userJobName, applicationsEnabled = true, applicationCount = null }) => {
+const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job, onApply, userHasJob = false, userJobName, applicationsEnabled = true, applicationCount = null, isTeacher = false, onSaveJob }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState<Partial<Job>>({});
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (job && isEditing) {
+      setEditFormData({
+        name: job.name,
+        description: job.description ?? '',
+        salary: job.salary,
+        company_name: job.company_name ?? '',
+        location: job.location ?? '',
+        requirements: job.requirements ?? '',
+      });
+      setEditError(null);
+    }
+    if (!isEditing) setEditError(null);
+  }, [job, isEditing]);
+
   if (!isOpen || !job) return null;
   
   // Check if position is already fulfilled
@@ -24,6 +46,22 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
   
   // Determine if user can apply
   const canApply = !userHasJob && !isPositionFulfilled && applicationsEnabled && !hasReachedLimit;
+
+  const handleStartEdit = () => setIsEditing(true);
+  const handleCancelEdit = () => setIsEditing(false);
+  const handleSaveEdit = async () => {
+    if (!onSaveJob || !editFormData.name || editFormData.salary == null) return;
+    setSaving(true);
+    setEditError(null);
+    try {
+      await onSaveJob(job.id, editFormData);
+      setIsEditing(false);
+    } catch (err: any) {
+      setEditError(err.response?.data?.error || 'Failed to update job');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const formatSalary = (salary: number) => {
     return new Intl.NumberFormat('en-ZA', {
@@ -49,18 +87,118 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-t-2xl">
           <div className="flex items-center space-x-3">
             <Briefcase className="h-6 w-6" />
-            <h2 className="text-2xl font-bold">Job Details</h2>
+            <h2 className="text-2xl font-bold">{isEditing ? 'Edit Job' : 'Job Details'}</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:text-gray-200 transition-colors p-1 hover:bg-white hover:bg-opacity-20 rounded-lg"
-          >
-            <X className="h-6 w-6" />
-          </button>
+          <div className="flex items-center space-x-2">
+            {isTeacher && !isEditing && (
+              <button
+                onClick={handleStartEdit}
+                className="text-white hover:text-gray-200 transition-colors p-2 hover:bg-white hover:bg-opacity-20 rounded-lg flex items-center space-x-1"
+                title="Edit job"
+              >
+                <Edit2 className="h-5 w-5" />
+                <span className="text-sm font-medium">Edit</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-white hover:text-gray-200 transition-colors p-1 hover:bg-white hover:bg-opacity-20 rounded-lg"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
         </div>
 
-        {/* Content */}
+        {/* Content: Edit form or view */}
         <div className="p-6 space-y-6">
+          {isEditing ? (
+            /* Edit form */
+            <>
+              {editError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {editError}
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Job Name *</label>
+                <input
+                  type="text"
+                  value={editFormData.name || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Company / Department</label>
+                <input
+                  type="text"
+                  value={editFormData.company_name || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, company_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <input
+                  type="text"
+                  value={editFormData.location || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, location: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Salary (ZAR) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editFormData.salary ?? ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, salary: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={editFormData.description || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="Daily and weekly responsibilities..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Requirements</label>
+                <textarea
+                  value={editFormData.requirements || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, requirements: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="e.g. Two positions available."
+                />
+              </div>
+              <div className="flex space-x-3 pt-2">
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={saving || !editFormData.name || editFormData.salary == null}
+                  className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            /* View mode */
+            <>
           {/* Job Title and Salary */}
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">{job.name}</h1>
@@ -202,6 +340,8 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
               Close
             </button>
           </div>
+            </>
+          )}
         </div>
       </div>
     </div>

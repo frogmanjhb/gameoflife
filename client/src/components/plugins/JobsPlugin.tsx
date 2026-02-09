@@ -161,6 +161,17 @@ const JobsPlugin: React.FC = () => {
         userJobName={user?.job_name}
         applicationsEnabled={applicationsEnabled}
         applicationCount={applicationCount}
+        isTeacher={user?.role === 'teacher'}
+        onSaveJob={
+          user?.role === 'teacher'
+            ? async (jobId, data) => {
+                const res = await jobsApi.updateJob(jobId, data);
+                await fetchJobs();
+                if (res?.data) setSelectedJob((prev) => (prev?.id === res.data.id ? { ...prev, ...res.data } : prev));
+                return res?.data;
+              }
+            : undefined
+        }
       />
 
       {/* Application Form Modal */}
