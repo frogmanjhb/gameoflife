@@ -28,6 +28,28 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
   }
 });
 
+// Get student's application count (students only)
+router.get('/my-applications/count', authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const result = await database.get(
+      `SELECT COUNT(*) as count 
+       FROM job_applications 
+       WHERE user_id = $1 AND status IN ('pending', 'approved')`,
+      [req.user.id]
+    );
+
+    const count = parseInt(result?.count || '0');
+    res.json({ count, maxApplications: 2, canApply: count < 2 });
+  } catch (error) {
+    console.error('Failed to fetch application count:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // IMPORTANT: Static routes must come BEFORE parameterized routes
 // Get applications (teachers only)
 router.get('/applications', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
@@ -305,7 +327,7 @@ router.post('/:id/apply',
         }
       }
 
-      // Check if user has already applied
+      // Check if user has already applied to this specific job
       const existingApplication = await database.get(
         'SELECT * FROM job_applications WHERE user_id = $1 AND job_id = $2',
         [req.user.id, jobId]
@@ -313,6 +335,21 @@ router.post('/:id/apply',
 
       if (existingApplication) {
         return res.status(400).json({ error: 'You have already applied to this job' });
+      }
+
+      // Check if user has reached the maximum of 2 applications (pending or approved only)
+      const applicationCount = await database.get(
+        `SELECT COUNT(*) as count 
+         FROM job_applications 
+         WHERE user_id = $1 AND status IN ('pending', 'approved')`,
+        [req.user.id]
+      );
+
+      const count = parseInt(applicationCount?.count || '0');
+      if (count >= 2) {
+        return res.status(400).json({ 
+          error: 'You have reached the maximum of 2 job applications. Please wait for a response on your existing applications before applying to more jobs.' 
+        });
       }
 
       // Create application
@@ -407,6 +444,85 @@ router.delete('/assign/:user_id',
       res.json({ message: 'Job assignment removed successfully' });
     } catch (error) {
       console.error('Failed to remove job assignment:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// Update job (teachers only)
+router.put('/:id',
+  authenticateToken,
+  requireRole(['teacher']),
+  [
+    body('name').optional().trim().notEmpty().withMessage('Job name cannot be empty'),
+    body('description').optional().isString(),
+    body('salary').optional().isFloat({ min: 0 }).withMessage('Salary must be 0 or greater'),
+    body('company_name').optional().isString(),
+    body('location').optional().isString(),
+    body('requirements').optional().isString()
+  ],
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const jobId = parseInt(req.params.id);
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: 'Invalid job ID' });
+      }
+
+      // Check if job exists
+      const existingJob = await database.get('SELECT * FROM jobs WHERE id = $1', [jobId]);
+      if (!existingJob) {
+        return res.status(404).json({ error: 'Job not found' });
+      }
+
+      const { name, description, salary, company_name, location, requirements } = req.body;
+      const updates: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      if (name !== undefined) {
+        updates.push(`name = $${paramIndex++}`);
+        params.push(name);
+      }
+      if (description !== undefined) {
+        updates.push(`description = $${paramIndex++}`);
+        params.push(description || null);
+      }
+      if (salary !== undefined) {
+        updates.push(`salary = $${paramIndex++}`);
+        params.push(salary);
+      }
+      if (company_name !== undefined) {
+        updates.push(`company_name = $${paramIndex++}`);
+        params.push(company_name || null);
+      }
+      if (location !== undefined) {
+        updates.push(`location = $${paramIndex++}`);
+        params.push(location || null);
+      }
+      if (requirements !== undefined) {
+        updates.push(`requirements = $${paramIndex++}`);
+        params.push(requirements || null);
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: 'No fields to update' });
+      }
+
+      params.push(jobId);
+      await database.run(
+        `UPDATE jobs SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+        params
+      );
+
+      const updated = await database.get('SELECT * FROM jobs WHERE id = $1', [jobId]);
+      res.json(updated);
+    } catch (error) {
+      console.error('Failed to update job:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

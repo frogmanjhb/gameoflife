@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, CheckCircle, XCircle, UserPlus, UserMinus, Clock, Users, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Briefcase, CheckCircle, XCircle, UserPlus, UserMinus, Clock, Users, ToggleLeft, ToggleRight, Edit2, X, Save } from 'lucide-react';
 import { jobsApi } from '../../services/api';
 import api from '../../services/api';
 import { Job, JobApplication } from '../../types';
@@ -31,6 +31,9 @@ const JobManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [togglingApplications, setTogglingApplications] = useState(false);
+  const [editingJob, setEditingJob] = useState<JobWithAssignments | null>(null);
+  const [editFormData, setEditFormData] = useState<Partial<Job>>({});
+  const [savingJob, setSavingJob] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -139,6 +142,41 @@ const JobManagement: React.FC = () => {
       setError(err.response?.data?.error || 'Failed to toggle job applications');
     } finally {
       setTogglingApplications(false);
+    }
+  };
+
+  const handleEditJob = (job: JobWithAssignments) => {
+    setEditingJob(job);
+    setEditFormData({
+      name: job.name,
+      description: job.description || '',
+      salary: job.salary,
+      company_name: job.company_name || '',
+      location: job.location || '',
+      requirements: job.requirements || ''
+    });
+  };
+
+  const handleCloseEditModal = () => {
+    setEditingJob(null);
+    setEditFormData({});
+  };
+
+  const handleSaveJob = async () => {
+    if (!editingJob) return;
+
+    setSavingJob(true);
+    setError(null);
+    try {
+      await jobsApi.updateJob(editingJob.id, editFormData);
+      setSuccess('Job updated successfully');
+      fetchData();
+      handleCloseEditModal();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update job');
+    } finally {
+      setSavingJob(false);
     }
   };
 
@@ -295,6 +333,13 @@ const JobManagement: React.FC = () => {
                       {job.company_name && (
                         <span className="text-sm text-gray-600">({job.company_name})</span>
                       )}
+                      <button
+                        onClick={() => handleEditJob(job)}
+                        className="text-gray-400 hover:text-primary-600 transition-colors"
+                        title="Edit job"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
                     </div>
                     {job.location && (
                       <p className="text-sm text-gray-600 mb-2">📍 {job.location}</p>
@@ -482,6 +527,120 @@ const JobManagement: React.FC = () => {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Edit Job Modal */}
+      {editingJob && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Edit Job</h2>
+              <button
+                onClick={handleCloseEditModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Job Name *
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.name || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Company Name
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.company_name || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, company_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Location
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.location || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, location: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Salary (ZAR) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editFormData.salary || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, salary: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={editFormData.description || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="Job description and responsibilities..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Requirements
+                </label>
+                <textarea
+                  value={editFormData.requirements || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, requirements: e.target.value })}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="Job requirements, qualifications, number of positions..."
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={handleSaveJob}
+                  disabled={savingJob || !editFormData.name || !editFormData.salary}
+                  className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>{savingJob ? 'Saving...' : 'Save Changes'}</span>
+                </button>
+                <button
+                  onClick={handleCloseEditModal}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

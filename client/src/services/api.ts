@@ -133,6 +133,23 @@ export const jobsApi = {
   // Remove job from student (teachers only)
   removeJobFromStudent: (userId: number): Promise<{ data: { message: string } }> => {
     return api.delete(`/jobs/assign/${userId}`);
+  },
+
+  // Update job (teachers only)
+  updateJob: (jobId: number, data: Partial<{
+    name: string;
+    description: string;
+    salary: number;
+    company_name: string;
+    location: string;
+    requirements: string;
+  }>): Promise<{ data: Job }> => {
+    return api.put(`/jobs/${jobId}`, data);
+  },
+
+  // Get student's application count (students only)
+  getMyApplicationCount: (): Promise<{ data: { count: number; maxApplications: number; canApply: boolean } }> => {
+    return api.get('/jobs/my-applications/count');
   }
 };
 

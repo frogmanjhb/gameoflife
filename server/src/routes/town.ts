@@ -142,8 +142,14 @@ router.put('/settings/:id',
 
       const updated = await database.get('SELECT * FROM town_settings WHERE id = $1', [townId]);
       res.json(updated);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update town settings:', error);
+      // Check if it's a column doesn't exist error
+      if (error.code === '42703' || error.message?.includes('column') || error.message?.includes('does not exist')) {
+        return res.status(500).json({ 
+          error: 'Database migration required. Please restart the server to run migrations, or manually run migration 025_add_job_applications_enabled.sql' 
+        });
+      }
       res.status(500).json({ error: 'Internal server error' });
     }
   }

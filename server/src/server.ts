@@ -515,6 +515,18 @@ async function initializeDatabase() {
       console.log('⚠️ Extreme difficulty migration may have already been applied:', migrationError);
     }
 
+    // Add job applications enabled setting
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '025_add_job_applications_enabled.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Job applications enabled setting added');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Job applications enabled migration may have already been applied:', migrationError);
+    }
+
     // Sync default plugins (ensures all known plugins exist - no manual script needed)
     try {
       const defaultPlugins = [

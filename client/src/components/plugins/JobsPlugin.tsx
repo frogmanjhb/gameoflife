@@ -22,6 +22,7 @@ const JobsPlugin: React.FC = () => {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isApplicationFormOpen, setIsApplicationFormOpen] = useState(false);
+  const [applicationCount, setApplicationCount] = useState<{ count: number; maxApplications: number; canApply: boolean } | null>(null);
   
   // Check if current user already has a job
   const userHasJob = user?.job_id !== null && user?.job_id !== undefined;
@@ -32,8 +33,11 @@ const JobsPlugin: React.FC = () => {
   useEffect(() => {
     if (jobsPlugin && jobsPlugin.enabled) {
       fetchJobs();
+      if (user?.role === 'student' && !userHasJob) {
+        fetchApplicationCount();
+      }
     }
-  }, [jobsPlugin]);
+  }, [jobsPlugin, user]);
 
   const fetchJobs = async () => {
     try {
@@ -44,6 +48,15 @@ const JobsPlugin: React.FC = () => {
       console.error('Failed to fetch jobs:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchApplicationCount = async () => {
+    try {
+      const response = await jobsApi.getMyApplicationCount();
+      setApplicationCount(response.data);
+    } catch (error) {
+      console.error('Failed to fetch application count:', error);
     }
   };
 
@@ -59,6 +72,7 @@ const JobsPlugin: React.FC = () => {
 
   const handleApplicationSuccess = () => {
     fetchJobs(); // Refresh jobs in case any status changed
+    fetchApplicationCount(); // Refresh application count
   };
 
   const handleCloseDetails = () => {
@@ -146,6 +160,7 @@ const JobsPlugin: React.FC = () => {
         userHasJob={userHasJob}
         userJobName={user?.job_name}
         applicationsEnabled={applicationsEnabled}
+        applicationCount={applicationCount}
       />
 
       {/* Application Form Modal */}
