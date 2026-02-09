@@ -78,7 +78,8 @@ router.put('/settings/:id',
     body('town_name').optional().notEmpty().withMessage('Town name cannot be empty'),
     body('mayor_name').optional(),
     body('tax_rate').optional().isFloat({ min: 0, max: 100 }).withMessage('Tax rate must be between 0 and 100'),
-    body('tax_enabled').optional().isBoolean().withMessage('Tax enabled must be a boolean')
+    body('tax_enabled').optional().isBoolean().withMessage('Tax enabled must be a boolean'),
+    body('job_applications_enabled').optional().isBoolean().withMessage('Job applications enabled must be a boolean')
   ],
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -101,7 +102,7 @@ router.put('/settings/:id',
         return res.status(403).json({ error: 'You can only update towns in your school' });
       }
 
-      const { town_name, mayor_name, tax_rate, tax_enabled } = req.body;
+      const { town_name, mayor_name, tax_rate, tax_enabled, job_applications_enabled } = req.body;
       const updates: string[] = [];
       const params: any[] = [];
       let paramIndex = 1;
@@ -121,6 +122,10 @@ router.put('/settings/:id',
       if (tax_enabled !== undefined) {
         updates.push(`tax_enabled = $${paramIndex++}`);
         params.push(tax_enabled);
+      }
+      if (job_applications_enabled !== undefined) {
+        updates.push(`job_applications_enabled = $${paramIndex++}`);
+        params.push(job_applications_enabled);
       }
 
       if (updates.length === 0) {

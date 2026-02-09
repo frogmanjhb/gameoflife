@@ -353,6 +353,14 @@ async function seedDatabase() {
         salary: 7000.00,
         company_name: 'Town Media',
         location: 'Marketing Office'
+      },
+      // 💻 TECHNOLOGY & INNOVATION
+      {
+        name: 'Software Engineer',
+        description: 'Daily: Check the Software Requests board (a list of problems learners want solved). Choose 1 task to work on or continue. Test the app with 1–2 users and capture feedback.\n\nWeekly: Bug hunt in the Game of Life. Deliver one working micro-app or feature improvement. Publish it in the Town Hub as a "plugin" or tool link. Run a 2–3 minute demo to the class. Log: what problem it solves, how to use it, what changed after feedback.',
+        salary: 6000.00,
+        company_name: 'Town Government / Tech Department',
+        location: 'Development Lab'
       }
     ];
 

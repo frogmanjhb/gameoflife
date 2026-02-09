@@ -9,16 +9,17 @@ interface JobDetailsModalProps {
   onApply: () => void;
   userHasJob?: boolean;
   userJobName?: string;
+  applicationsEnabled?: boolean;
 }
 
-const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job, onApply, userHasJob = false, userJobName }) => {
+const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job, onApply, userHasJob = false, userJobName, applicationsEnabled = true }) => {
   if (!isOpen || !job) return null;
   
   // Check if position is already fulfilled
   const isPositionFulfilled = job.is_fulfilled;
   
   // Determine if user can apply
-  const canApply = !userHasJob && !isPositionFulfilled;
+  const canApply = !userHasJob && !isPositionFulfilled && applicationsEnabled;
 
   const formatSalary = (salary: number) => {
     return new Intl.NumberFormat('en-ZA', {
@@ -131,6 +132,16 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
             </div>
           )}
 
+          {!applicationsEnabled && (
+            <div className="flex items-center space-x-3 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <AlertCircle className="h-6 w-6 text-gray-600 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-gray-800">Applications Currently Disabled</p>
+                <p className="text-sm text-gray-600">Job applications are temporarily disabled. Please check back later.</p>
+              </div>
+            </div>
+          )}
+
           {/* Apply Button */}
           <div className="flex space-x-4 pt-4">
             {canApply ? (
@@ -145,7 +156,7 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
                 disabled
                 className="flex-1 bg-gray-300 text-gray-500 font-semibold py-3 px-6 rounded-lg cursor-not-allowed"
               >
-                {isPositionFulfilled ? 'Position Filled' : 'Cannot Apply'}
+                {!applicationsEnabled ? 'Applications Disabled' : isPositionFulfilled ? 'Position Filled' : 'Cannot Apply'}
               </button>
             )}
             <button

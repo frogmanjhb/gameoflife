@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, CheckCircle, XCircle, UserPlus, UserMinus, Clock, Users } from 'lucide-react';
+import { Briefcase, CheckCircle, XCircle, UserPlus, UserMinus, Clock, Users, ToggleLeft, ToggleRight } from 'lucide-react';
 import { jobsApi } from '../../services/api';
+import api from '../../services/api';
 import { Job, JobApplication } from '../../types';
 import { useTown } from '../../contexts/TownContext';
 
@@ -20,7 +21,7 @@ interface JobWithAssignments extends Job {
 }
 
 const JobManagement: React.FC = () => {
-  const { currentTownClass, allTowns } = useTown();
+  const { currentTownClass, allTowns, currentTown, refreshTown } = useTown();
   const [activeTab, setActiveTab] = useState<'jobs' | 'applications'>('jobs');
   const [selectedClass, setSelectedClass] = useState<string>(currentTownClass || 'all');
   const [jobs, setJobs] = useState<JobWithAssignments[]>([]);
@@ -29,6 +30,7 @@ const JobManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [togglingApplications, setTogglingApplications] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -121,6 +123,25 @@ const JobManagement: React.FC = () => {
     }
   };
 
+  const handleToggleApplications = async () => {
+    if (!currentTown) return;
+    
+    setTogglingApplications(true);
+    setError(null);
+    try {
+      await api.put(`/town/settings/${currentTown.id}`, {
+        job_applications_enabled: !currentTown.job_applications_enabled
+      });
+      await refreshTown();
+      setSuccess(`Job applications ${currentTown.job_applications_enabled ? 'disabled' : 'enabled'}`);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to toggle job applications');
+    } finally {
+      setTogglingApplications(false);
+    }
+  };
+
   const getStudentsForJob = (jobId: number) => {
     return students.filter(s => s.job_id === jobId);
   };
@@ -150,6 +171,37 @@ const JobManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Job Applications Toggle */}
+      {currentTown && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Job Applications</h3>
+              <p className="text-sm text-gray-600">
+                {currentTown.job_applications_enabled !== false 
+                  ? 'Students can currently apply for jobs' 
+                  : 'Job applications are currently disabled'}
+              </p>
+            </div>
+            <button
+              onClick={handleToggleApplications}
+              disabled={togglingApplications}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                currentTown.job_applications_enabled !== false
+                  ? 'bg-primary-600'
+                  : 'bg-gray-300'
+              } ${togglingApplications ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  currentTown.job_applications_enabled !== false ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Class Selector */}
       <div className="flex items-center space-x-4">
         <label className="text-sm font-medium text-gray-700">Filter by Class:</label>

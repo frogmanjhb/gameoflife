@@ -162,6 +162,7 @@ export interface TownSettings {
   mayor_name?: string;
   tax_rate: number;
   tax_enabled: boolean;
+  job_applications_enabled?: boolean;
   treasury_balance: number;
   created_at: string;
   updated_at: string;

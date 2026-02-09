@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePlugins } from '../../contexts/PluginContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTown } from '../../contexts/TownContext';
 import { Navigate } from 'react-router-dom';
 import { Briefcase, Loader2, AlertCircle } from 'lucide-react';
 import { Job } from '../../types';
@@ -12,6 +13,7 @@ import JobApplicationForm from '../JobApplicationForm';
 const JobsPlugin: React.FC = () => {
   const { plugins, loading: pluginsLoading } = usePlugins();
   const { user } = useAuth();
+  const { currentTown } = useTown();
   const jobsPlugin = plugins.find(p => p.route_path === '/jobs');
   
   // All hooks must be called before any early returns
@@ -23,6 +25,9 @@ const JobsPlugin: React.FC = () => {
   
   // Check if current user already has a job
   const userHasJob = user?.job_id !== null && user?.job_id !== undefined;
+  
+  // Check if job applications are enabled
+  const applicationsEnabled = currentTown?.job_applications_enabled !== false;
 
   useEffect(() => {
     if (jobsPlugin && jobsPlugin.enabled) {
@@ -140,6 +145,7 @@ const JobsPlugin: React.FC = () => {
         onApply={handleApplyClick}
         userHasJob={userHasJob}
         userJobName={user?.job_name}
+        applicationsEnabled={applicationsEnabled}
       />
 
       {/* Application Form Modal */}

@@ -293,6 +293,18 @@ router.post('/:id/apply',
         return res.status(404).json({ error: 'Job not found' });
       }
 
+      // Check if job applications are enabled for this student's town/class
+      if (req.user?.class && ['6A', '6B', '6C'].includes(req.user.class)) {
+        const schoolId = req.user.school_id ?? null;
+        const town = schoolId != null
+          ? await database.get('SELECT job_applications_enabled FROM town_settings WHERE class = $1 AND school_id = $2', [req.user.class, schoolId])
+          : await database.get('SELECT job_applications_enabled FROM town_settings WHERE class = $1 AND school_id IS NULL', [req.user.class]);
+        
+        if (town && town.job_applications_enabled === false) {
+          return res.status(403).json({ error: 'Job applications are currently disabled. Please check back later.' });
+        }
+      }
+
       // Check if user has already applied
       const existingApplication = await database.get(
         'SELECT * FROM job_applications WHERE user_id = $1 AND job_id = $2',
