@@ -61,7 +61,7 @@ async function seedDatabase() {
       }
     }
 
-    // Seed Plugins
+    // Seed Plugins (global: school_id NULL). After migration 022, unique is (school_id, name).
     console.log('🔌 Seeding plugins...');
     const plugins = [
       { name: 'Bank', route_path: '/bank', icon: '🏦', description: 'Financial services and banking' },
@@ -74,16 +74,35 @@ async function seedDatabase() {
       { name: 'The Winkel', route_path: '/winkel', icon: '🛒', description: 'Weekly shop for consumables and privileges' }
     ];
 
+    let pluginsHaveSchoolId = false;
+    try {
+      await pool.query('SELECT school_id FROM plugins LIMIT 1');
+      pluginsHaveSchoolId = true;
+    } catch (_) {
+      // Column doesn't exist (pre-022)
+    }
     for (const plugin of plugins) {
-      await pool.query(
-        `INSERT INTO plugins (name, enabled, route_path, icon, description)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (name) DO UPDATE SET
-           route_path = EXCLUDED.route_path,
-           icon = EXCLUDED.icon,
-           description = EXCLUDED.description`,
-        [plugin.name, true, plugin.route_path, plugin.icon, plugin.description]
-      );
+      if (pluginsHaveSchoolId) {
+        await pool.query(
+          `INSERT INTO plugins (name, enabled, route_path, icon, description, school_id)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (school_id, name) DO UPDATE SET
+             route_path = EXCLUDED.route_path,
+             icon = EXCLUDED.icon,
+             description = EXCLUDED.description`,
+          [plugin.name, true, plugin.route_path, plugin.icon, plugin.description, null]
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO plugins (name, enabled, route_path, icon, description)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (name) DO UPDATE SET
+             route_path = EXCLUDED.route_path,
+             icon = EXCLUDED.icon,
+             description = EXCLUDED.description`,
+          [plugin.name, true, plugin.route_path, plugin.icon, plugin.description]
+        );
+      }
     }
     console.log('✅ Plugins seeded');
 
