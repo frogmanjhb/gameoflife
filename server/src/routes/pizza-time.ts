@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { isDoublesDayEnabled } from '../helpers/doubles-day';
 
 const router = Router();
 
@@ -239,6 +240,10 @@ router.post(
         return res.status(400).json({ error: 'Insufficient funds' });
       }
 
+      // Doubles Day: amount added to fund is doubled when plugin is enabled (student still pays donationAmount)
+      const doublesDay = await isDoublesDayEnabled();
+      const amountToFund = doublesDay ? donationAmount * 2 : donationAmount;
+
       // Start transaction
       const client = await database.pool.connect();
       try {
@@ -256,16 +261,16 @@ router.post(
           [account.id, donationAmount, 'withdrawal', `Pizza Time donation - R${donationAmount.toFixed(2)}`]
         );
 
-        // Add to pizza time fund
+        // Add to pizza time fund (doubled on Doubles Day)
         await client.query(
           'UPDATE pizza_time SET current_fund = current_fund + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-          [donationAmount, pizzaTime.id]
+          [amountToFund, pizzaTime.id]
         );
 
-        // Record donation
+        // Record donation (store amount credited to fund so history reflects actual fund growth)
         await client.query(
           'INSERT INTO pizza_time_donations (pizza_time_id, user_id, amount) VALUES ($1, $2, $3)',
-          [pizzaTime.id, req.user.id, donationAmount]
+          [pizzaTime.id, req.user.id, amountToFund]
         );
 
         await client.query('COMMIT');

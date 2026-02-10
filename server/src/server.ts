@@ -527,17 +527,30 @@ async function initializeDatabase() {
       console.log('⚠️ Job applications enabled migration may have already been applied:', migrationError);
     }
 
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '026_add_doubles_day_plugin.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Doubles Day plugin added');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Doubles Day plugin migration may have already been applied:', migrationError);
+    }
+
     // Sync default plugins (ensures all known plugins exist - no manual script needed)
     try {
-      const defaultPlugins = [
+      const defaultPlugins: { name: string; route_path: string; icon: string; description: string; enabled?: boolean }[] = [
         { name: 'Chores', route_path: '/chores', icon: '🧹', description: 'Earn money by completing chore challenges at home' },
+        { name: 'Doubles Day', route_path: '/doubles-day', icon: '2️⃣', description: 'Double points from chores and double pizza time donations when enabled', enabled: false },
       ];
       for (const p of defaultPlugins) {
         const existing = await database.query('SELECT id FROM plugins WHERE route_path = $1', [p.route_path]);
         if (existing.length === 0) {
+          const enabled = p.enabled !== false;
           await database.query(
-            `INSERT INTO plugins (name, enabled, route_path, icon, description) VALUES ($1, true, $2, $3, $4)`,
-            [p.name, p.route_path, p.icon, p.description]
+            `INSERT INTO plugins (name, enabled, route_path, icon, description) VALUES ($1, $2, $3, $4, $5)`,
+            [p.name, enabled, p.route_path, p.icon, p.description]
           );
           console.log(`✅ Auto-added plugin: ${p.name}`);
         }

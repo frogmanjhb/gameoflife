@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { MathGameStartRequest, MathGameSubmitRequest, MathGameStatus, MathGameSession } from '../types';
+import { isDoublesDayEnabled } from '../helpers/doubles-day';
 
 const router = Router();
 
@@ -322,6 +323,11 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     if (totalEarnings > MAX_EARNINGS_PER_GAME) {
       console.warn(`🚨 SECURITY: User ${req.user.username} earnings ${totalEarnings} capped at ${MAX_EARNINGS_PER_GAME}`);
       totalEarnings = MAX_EARNINGS_PER_GAME;
+    }
+
+    // Doubles Day: double chore/math game earnings when plugin is enabled
+    if (await isDoublesDayEnabled()) {
+      totalEarnings = totalEarnings * 2;
     }
 
     // Update session with results
