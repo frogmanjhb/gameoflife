@@ -1,0 +1,42 @@
+---
+description: Game of Life (Town Hub) client — React/JS standards, minimal diffs, agent operating mode
+alwaysApply: true
+---
+
+# Cursor Rules: Game of Life (Town Hub) — Client
+
+**Rule precedence:** If any ambiguity or conflict exists, prioritise: Correctness → Tenant isolation → Domain rules → Existing patterns → Performance → Code elegance.
+
+**Stack and scope**
+
+- React 18 + TypeScript, Vite, React Router, Tailwind, Axios. Functional components only. No class components, no Redux.
+- Multi-tenant, role-based: school, class (town), student, teacher, super_admin. All data and UI must respect role and tenant (school/town) scoping.
+
+**Structure**
+
+- Use existing layout: `client/src/components/` (with `admin/`, `land/`, `plugins/` where present), `contexts/`, `hooks/`, `services/`, `types/`. Do not add a new top-level feature structure.
+- New API calls and helpers go in `services/api.ts`. Use the existing axios instance and, where they exist, namespaced helpers (e.g. `jobsApi`, `landApi`). Styling: Tailwind + `index.css` component classes (`btn-primary`, `card`, `input-field`, etc.). No new styling or HTTP libraries.
+
+**Components and hooks**
+
+- Prefer small, single-responsibility components. If a component exceeds ~300 lines or contains multiple roles or screens, it must be split unless explicitly instructed otherwise.
+- Hooks: `useState`, `useEffect`, `useMemo`, `useCallback` only. Use `useMemo` for derived data (filtered/sorted lists, computed stats). Use `useCallback` for handlers passed to children or used in effect deps when re-renders matter.
+- No business logic in UI: no eligibility, interest, tax, or rule logic in components. That belongs on the server or a shared, testable module. UI displays API data and submits user input.
+
+**State and data**
+
+- State: AuthContext, TownContext, PluginContext only. No new global state library. Routing: keep current App.tsx route list and ProtectedRoute / SuperAdminRoute pattern.
+- Data fetching: `api.get/post` (or existing helpers) inside components or small domain hooks, consistent with existing patterns in the same feature. No generic "useFetch"/"useCrud" unless the same logic is reused in multiple places.
+
+**Correctness and scope**
+
+- Minimal diffs: only change files and code paths required for the request; do not refactor, rename, or restructure unrelated code unless asked. Do not reformat, rename, reorder imports, or "clean up" unrelated code as part of a feature.
+- If requirements, scope, affected roles, or tenant boundaries are unclear, ask for clarification before writing code; do not guess.
+- **Finance safety rule:** UI must never calculate balances, interest, eligibility, limits, or outcomes. All financial state displayed must originate from the API or a shared, testable domain module.
+- Every feature must be role- and tenant-aware (use `useAuth()`, `useTown()`, existing APIs). Handle errors explicitly: set user-visible error state from `err.response?.data?.error` (or equivalent) with a fallback message; no silent failures.
+- Do not add features or refactors that were not requested. Do not duplicate server-side rules (e.g. loan interest, tax, eligibility) in the client. Optimise for correctness and restraint in an existing production codebase.
+
+**Agent operating mode**
+
+- **Before coding:** Restate the requested change in one paragraph; identify existing files that will be touched and justify each one; confirm affected roles (student / teacher / admin); confirm tenant scope (school, town/class); confirm whether this is additive or a modification of existing behaviour.
+- **After coding:** List changed files; state what behaviour changed and what did not; provide manual test steps.
