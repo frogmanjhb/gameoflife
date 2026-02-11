@@ -148,6 +148,7 @@ router.get('/', authenticateToken, requireTenant, requireRole(['teacher']), asyn
         u.email,
         u.job_id,
         u.status,
+        u.account_frozen,
         u.created_at,
         a.account_number,
         a.balance,
@@ -332,6 +333,33 @@ router.delete('/:username', authenticateToken, requireTenant, requireRole(['teac
     res.json({ message: `Student ${username} has been deleted successfully` });
   } catch (error) {
     console.error('Delete student error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Freeze/unfreeze a student's account (teachers only)
+router.post('/:username/freeze', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { username } = req.params;
+    const frozen = req.body?.frozen === true;
+
+    const student = await database.get(
+      'SELECT u.id, u.username FROM users u WHERE u.username = $1 AND u.role = $2 AND u.school_id = $3',
+      [username, 'student', req.schoolId]
+    );
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    await database.run(
+      'UPDATE users SET account_frozen = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [frozen, student.id]
+    );
+
+    res.json({ message: frozen ? 'Account frozen' : 'Account unfrozen', frozen });
+  } catch (error) {
+    console.error('Freeze student error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

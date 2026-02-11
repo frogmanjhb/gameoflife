@@ -30,6 +30,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const [expandedStudents, setExpandedStudents] = useState<Set<number>>(new Set());
   const [studentPasswords, setStudentPasswords] = useState<Record<number, string>>({});
   const [resettingPassword, setResettingPassword] = useState<number | null>(null);
+  const [freezingStudentId, setFreezingStudentId] = useState<number | null>(null);
 
   // Group students by class
   const studentsByClass = useMemo(() => {
@@ -230,6 +231,22 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
     }
   };
 
+  const handleToggleFreeze = async (student: Student) => {
+    setFreezingStudentId(student.id);
+    setError('');
+    setSuccess('');
+    const newFrozen = !student.account_frozen;
+    try {
+      await api.post(`/students/${student.username}/freeze`, { frozen: newFrozen });
+      setSuccess(newFrozen ? `Account frozen for ${student.username}` : `Account unfrozen for ${student.username}`);
+      onUpdate();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update freeze status');
+    } finally {
+      setFreezingStudentId(null);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setSuccess('Copied to clipboard!');
@@ -397,10 +414,29 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                     </div>
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0 ml-2">
+                <div className="text-right flex-shrink-0 ml-2 flex flex-col items-end gap-1">
                   <p className="text-lg font-bold text-success-600">
                     {formatCurrency(student.balance)}
                   </p>
+                  <label className="flex items-center gap-2 cursor-pointer" title={student.account_frozen ? 'Unfreeze account' : 'Freeze account'}>
+                    <span className="text-xs text-gray-500">Freeze</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!!student.account_frozen}
+                      disabled={freezingStudentId === student.id}
+                      onClick={(e) => { e.preventDefault(); handleToggleFreeze(student); }}
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+                        student.account_frozen ? 'bg-amber-500' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform mt-0.5 ${
+                          student.account_frozen ? 'translate-x-4 ml-0.5' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </label>
                 </div>
               </div>
 

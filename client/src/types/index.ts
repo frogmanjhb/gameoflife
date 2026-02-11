@@ -16,6 +16,7 @@ export interface User {
   job_location?: string;
   profile_emoji?: string;
   rules_agreed_at?: string | null;
+  account_frozen?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -72,6 +73,7 @@ export interface Student {
   class?: string;
   email?: string;
   status?: 'pending' | 'approved' | 'denied';
+  account_frozen?: boolean;
   created_at: string;
   account_number: string;
   balance: number;

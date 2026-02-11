@@ -560,6 +560,17 @@ async function initializeDatabase() {
       console.log('⚠️ Rules agreed migration may have already been applied:', migrationError);
     }
 
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '029_account_frozen.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Account frozen migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Account frozen migration may have already been applied:', migrationError);
+    }
+
     // Sync default plugins (ensures all known plugins exist - no manual script needed)
     try {
       const defaultPlugins: { name: string; route_path: string; icon: string; description: string; enabled?: boolean }[] = [

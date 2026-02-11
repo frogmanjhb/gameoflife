@@ -148,8 +148,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
         {children}
+
+        {/* Frozen account overlay - blocks entire system for students with frozen accounts */}
+        {user?.role === 'student' && user?.account_frozen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80">
+            <div className="bg-white rounded-2xl p-8 max-w-md mx-4 text-center shadow-2xl">
+              <div className="text-6xl mb-4">❄️</div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Account Temporarily Frozen</h2>
+              <p className="text-gray-600 mb-6">
+                Due to suspicious activity, your account is temporarily frozen. Please see a teacher.
+              </p>
+              <button
+                onClick={handleLogout}
+                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
