@@ -395,4 +395,24 @@ router.get('/profile', authenticateToken, async (req: AuthenticatedRequest, res:
   }
 });
 
+// Student agrees to app rules (required before accessing enabled plugins)
+router.post('/rules-agree', authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    await database.run(
+      'UPDATE users SET rules_agreed_at = COALESCE(rules_agreed_at, CURRENT_TIMESTAMP) WHERE id = $1',
+      [req.user.id]
+    );
+
+    const updated = await database.get('SELECT rules_agreed_at FROM users WHERE id = $1', [req.user.id]);
+    res.json({ rules_agreed_at: updated.rules_agreed_at });
+  } catch (error) {
+    console.error('Rules agree error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

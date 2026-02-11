@@ -37,6 +37,11 @@ const getRandomHeaderColor = () => {
 const StudentDashboard: React.FC = () => {
   const { user } = useAuth();
   const { enabledPlugins, loading: pluginsLoading } = usePlugins();
+
+  // Students must agree to app rules before accessing plugins. Until then, only show Town Rules.
+  const hasAgreedToRules = !!user?.rules_agreed_at;
+  const canAccessPlugins = user?.role !== 'student' || hasAgreedToRules;
+  const pluginsToShow = canAccessPlugins ? enabledPlugins : enabledPlugins.filter((p) => p.route_path === '/town-rules');
   const { currentTown, announcements, loading: townLoading } = useTown();
   
   // Get header color theme (set once per login session)
@@ -87,8 +92,8 @@ const StudentDashboard: React.FC = () => {
         </p>
       </div>
 
-      {/* New Tender Alert (only when Tenders plugin enabled) */}
-      {enabledPlugins.some(p => p.route_path === '/tenders') && showTenderBanner && latestTenderAnnouncement && (
+      {/* New Tender Alert (only when Tenders plugin enabled and student can access plugins) */}
+      {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/tenders') && showTenderBanner && latestTenderAnnouncement && (
         <div className="relative overflow-hidden rounded-2xl border-2 border-amber-400 bg-gradient-to-r from-amber-300 via-orange-300 to-red-300 p-5 animate-pulse">
           <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_30%_20%,white,transparent_55%)]" />
           <div className="relative flex items-start justify-between gap-4">
@@ -131,15 +136,24 @@ const StudentDashboard: React.FC = () => {
           <h2 className="text-xl font-bold text-gray-900">Available Systems</h2>
         </div>
         
-        {enabledPlugins.length === 0 ? (
+        {pluginsToShow.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
             <Grid className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p className="text-gray-500">No systems available at this time</p>
-            <p className="text-sm text-gray-400 mt-1">Check back later for updates</p>
+            {user?.role === 'student' && !user?.rules_agreed_at && enabledPlugins.length > 0 ? (
+              <>
+                <p className="text-gray-700 font-medium">You must agree to the app rules before using the town systems.</p>
+                <p className="text-sm text-gray-500 mt-1">Ask your teacher to enable the Rules system so you can agree and get started.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-500">No systems available at this time</p>
+                <p className="text-sm text-gray-400 mt-1">Check back later for updates</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {enabledPlugins.map((plugin) => (
+            {pluginsToShow.map((plugin) => (
               <PluginCard key={plugin.id} plugin={plugin} />
             ))}
           </div>
@@ -150,12 +164,12 @@ const StudentDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
         <TownInfo town={currentTown} readOnly={true} />
         <AnnouncementsPanel announcements={announcements} />
-        {enabledPlugins.some(p => p.route_path === '/jobs') && user && <MyJobCard user={user} />}
-        {enabledPlugins.some(p => p.route_path === '/land') && <MyPropertyCard />}
+        {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/jobs') && user && <MyJobCard user={user} />}
+        {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/land') && <MyPropertyCard />}
       </div>
 
-      {/* My Tenders (only when Tenders plugin enabled) */}
-      {enabledPlugins.some(p => p.route_path === '/tenders') && (
+      {/* My Tenders (only when Tenders plugin enabled and student can access plugins) */}
+      {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/tenders') && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <MyTendersCard />
         </div>

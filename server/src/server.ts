@@ -549,6 +549,17 @@ async function initializeDatabase() {
       console.log('⚠️ Pending transfers migration may have already been applied:', migrationError);
     }
 
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '028_rules_agreed.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Rules agreed migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Rules agreed migration may have already been applied:', migrationError);
+    }
+
     // Sync default plugins (ensures all known plugins exist - no manual script needed)
     try {
       const defaultPlugins: { name: string; route_path: string; icon: string; description: string; enabled?: boolean }[] = [

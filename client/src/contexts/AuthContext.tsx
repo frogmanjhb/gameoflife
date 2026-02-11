@@ -45,6 +45,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const refreshProfile = async () => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      await fetchProfile();
+    }
+  };
+
   const login = async (username: string, password: string, schoolId?: number | null) => {
     try {
       console.log('Attempting login for:', username, 'school:', schoolId);
@@ -130,6 +137,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     register,
     logout,
+    refreshProfile,
     loading
   };
 

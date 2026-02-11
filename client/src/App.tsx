@@ -23,6 +23,7 @@ import DisastersPlugin from './components/plugins/DisastersPlugin';
 import ChoresPlugin from './components/plugins/ChoresPlugin';
 import DoublesDayPlugin from './components/plugins/DoublesDayPlugin';
 import SuperAdminDashboard from './components/admin/SuperAdminDashboard';
+import RequireRulesAgreed from './components/RequireRulesAgreed';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -130,7 +131,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <BankPlugin />
+                    <RequireRulesAgreed>
+                      <BankPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -142,7 +145,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <LandPlugin />
+                    <RequireRulesAgreed>
+                      <LandPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -154,7 +159,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <JobsPlugin />
+                    <RequireRulesAgreed>
+                      <JobsPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -166,7 +173,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <NewsPlugin />
+                    <RequireRulesAgreed>
+                      <NewsPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -178,7 +187,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <GovernmentPlugin />
+                    <RequireRulesAgreed>
+                      <GovernmentPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -190,7 +201,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <TendersPlugin />
+                    <RequireRulesAgreed>
+                      <TendersPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -202,7 +215,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <TownRulesPlugin />
+                    <RequireRulesAgreed>
+                      <TownRulesPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -214,7 +229,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <WinkelPlugin />
+                    <RequireRulesAgreed>
+                      <WinkelPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -226,7 +243,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <PizzaTimePlugin />
+                    <RequireRulesAgreed>
+                      <PizzaTimePlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -238,7 +257,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <LeaderboardPlugin />
+                    <RequireRulesAgreed>
+                      <LeaderboardPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -250,7 +271,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <SuggestionsBugsPlugin />
+                    <RequireRulesAgreed>
+                      <SuggestionsBugsPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -262,7 +285,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <DisastersPlugin />
+                    <RequireRulesAgreed>
+                      <DisastersPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -274,7 +299,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <ChoresPlugin />
+                    <RequireRulesAgreed>
+                      <ChoresPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>
@@ -286,7 +313,9 @@ const AppContent: React.FC = () => {
               <ProtectedRoute>
                 <PluginProvider>
                   <TownProvider>
-                    <DoublesDayPlugin />
+                    <RequireRulesAgreed>
+                      <DoublesDayPlugin />
+                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>

@@ -15,6 +15,7 @@ export interface User {
   job_company_name?: string;
   job_location?: string;
   profile_emoji?: string;
+  rules_agreed_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -86,6 +87,7 @@ export interface AuthContextType {
   login: (username: string, password: string, schoolId?: number | null) => Promise<void>;
   register: (username: string, password: string, role: 'student' | 'teacher', schoolId: number, first_name?: string, last_name?: string, studentClass?: string, email?: string) => Promise<any>;
   logout: () => void;
+  refreshProfile: () => Promise<void>;
   loading: boolean;
 }
 
