@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { requireTenant } from '../middleware/tenant';
 import { TransferRequest, DepositRequest, WithdrawRequest, TransactionWithDetails } from '../types';
 
 // Helper function to check if student can make transactions
@@ -95,7 +96,7 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
   }
 });
 
-// Transfer money between students
+// Transfer request between students (requires teacher approval)
 router.post('/transfer', [
   body('to_username').notEmpty().withMessage('Recipient username is required'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0'),
@@ -125,81 +126,178 @@ router.post('/transfer', [
       return res.status(400).json({ error: 'Invalid transfer amount' });
     }
 
-    // Get recipient info before starting transaction (doesn't need locking)
+    // Get recipient info
     const toUser = await database.get('SELECT * FROM users WHERE username = $1 AND role = $2', [to_username, 'student']);
     if (!toUser) {
       return res.status(404).json({ error: 'Recipient not found' });
     }
 
-    // SECURITY FIX: Use a single database client for the entire transaction
-    // This prevents race conditions where multiple concurrent transfers could
-    // all pass balance checks before any of them deduct money
+    // Prevent self-transfer
+    if (req.user.id === toUser.id) {
+      return res.status(400).json({ error: 'Cannot transfer to yourself' });
+    }
+
+    // Ensure both students are in same school
+    const schoolId = req.user.school_id ?? null;
+    if ((toUser.school_id ?? null) !== schoolId) {
+      return res.status(400).json({ error: 'Recipient must be in the same school' });
+    }
+
+    // Check sender has sufficient balance (at request time)
+    const fromAccount = await database.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
+    if (!fromAccount) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+    const senderBalance = parseFloat(fromAccount.balance);
+    if (isNaN(senderBalance) || senderBalance < transferAmount) {
+      return res.status(400).json({ error: 'Insufficient funds' });
+    }
+
+    // Create pending transfer request (teacher approval required)
+    await database.run(
+      `INSERT INTO pending_transfers (from_user_id, to_user_id, amount, description, status) VALUES ($1, $2, $3, $4, 'pending')`,
+      [req.user.id, toUser.id, transferAmount, description || `Transfer to ${to_username}`]
+    );
+
+    res.json({ message: 'Transfer request submitted. Awaiting teacher approval.' });
+  } catch (error) {
+    console.error('Transfer request error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get pending transfers (teachers only, scoped by school)
+router.get('/pending-transfers', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user || !req.schoolId) {
+      return res.status(403).json({ error: 'School context required' });
+    }
+
+    const pending = await database.query(`
+      SELECT pt.*,
+        fu.username as from_username, fu.first_name as from_first_name, fu.last_name as from_last_name, fu.class as from_class,
+        tu.username as to_username, tu.first_name as to_first_name, tu.last_name as to_last_name, tu.class as to_class,
+        rb.username as reviewed_by_username
+      FROM pending_transfers pt
+      JOIN users fu ON pt.from_user_id = fu.id
+      JOIN users tu ON pt.to_user_id = tu.id
+      LEFT JOIN users rb ON pt.reviewed_by = rb.id
+      WHERE fu.school_id = $1 AND tu.school_id = $1
+      ORDER BY pt.created_at DESC
+    `, [req.schoolId]);
+
+    res.json(pending);
+  } catch (error) {
+    console.error('Get pending transfers error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get my pending transfer requests (students only)
+router.get('/my-pending-transfers', authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const pending = await database.query(`
+      SELECT pt.*,
+        tu.username as to_username, tu.first_name as to_first_name, tu.last_name as to_last_name
+      FROM pending_transfers pt
+      JOIN users tu ON pt.to_user_id = tu.id
+      WHERE pt.from_user_id = $1
+      ORDER BY pt.created_at DESC
+    `, [req.user.id]);
+
+    res.json(pending);
+  } catch (error) {
+    console.error('Get my pending transfers error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Teacher: Approve pending transfer
+router.post('/pending-transfers/:id/approve', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid transfer ID' });
+    }
+
+    const schoolId = req.user?.school_id ?? req.schoolId ?? null;
+    if (schoolId == null) {
+      return res.status(403).json({ error: 'School context required' });
+    }
+
+    const pending = await database.get(`
+      SELECT pt.*, fu.school_id as from_school_id, tu.school_id as to_school_id
+      FROM pending_transfers pt
+      JOIN users fu ON pt.from_user_id = fu.id
+      JOIN users tu ON pt.to_user_id = tu.id
+      WHERE pt.id = $1
+    `, [id]);
+
+    if (!pending) {
+      return res.status(404).json({ error: 'Transfer request not found' });
+    }
+    if (pending.status !== 'pending') {
+      return res.status(400).json({ error: `Transfer request is already ${pending.status}` });
+    }
+    if (pending.from_school_id !== schoolId || pending.to_school_id !== schoolId) {
+      return res.status(403).json({ error: 'You can only approve transfers within your school' });
+    }
+
+    const transferAmount = parseFloat(pending.amount);
+    const description = pending.description || `Transfer to ${pending.to_username}`;
+
     const client = await database.pool.connect();
-    
     try {
       await client.query('BEGIN');
 
-      // SECURITY: Lock the sender's row with FOR UPDATE to prevent concurrent modifications
-      // This ensures no other transaction can read or modify this row until we commit/rollback
       const fromAccountResult = await client.query(
         'SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE',
-        [req.user.id]
+        [pending.from_user_id]
       );
       const fromAccount = fromAccountResult.rows[0];
-      
       if (!fromAccount) {
         await client.query('ROLLBACK');
-        return res.status(404).json({ error: 'Account not found' });
+        return res.status(404).json({ error: 'Sender account not found' });
       }
-
-      // SECURITY: Validate balance INSIDE the transaction with the locked row
-      // This is the authoritative balance check - client-side values are ignored
       const senderBalance = parseFloat(fromAccount.balance);
-      
       if (isNaN(senderBalance) || senderBalance < transferAmount) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Insufficient funds' });
+        return res.status(400).json({ error: 'Sender has insufficient funds. Transfer cannot be approved.' });
       }
 
-      // Get recipient's account (also lock it to ensure atomic update)
       const toAccountResult = await client.query(
         'SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE',
-        [toUser.id]
+        [pending.to_user_id]
       );
       const toAccount = toAccountResult.rows[0];
-      
       if (!toAccount) {
         await client.query('ROLLBACK');
         return res.status(404).json({ error: 'Recipient account not found' });
       }
 
-      // Prevent self-transfer
-      if (fromAccount.id === toAccount.id) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Cannot transfer to yourself' });
-      }
-
-      // Update sender's balance
       await client.query(
         'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
         [transferAmount, fromAccount.id]
       );
-
-      // Update recipient's balance
       await client.query(
         'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
         [transferAmount, toAccount.id]
       );
-
-      // Record transaction
       await client.query(
         'INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4, $5)',
-        [fromAccount.id, toAccount.id, transferAmount, 'transfer', description || `Transfer to ${to_username}`]
+        [fromAccount.id, toAccount.id, transferAmount, 'transfer', description]
+      );
+      await client.query(
+        `UPDATE pending_transfers SET status = 'approved', reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+        [req.user?.id, id]
       );
 
       await client.query('COMMIT');
-
-      res.json({ message: 'Transfer successful' });
+      res.json({ message: 'Transfer approved successfully' });
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -207,7 +305,58 @@ router.post('/transfer', [
       client.release();
     }
   } catch (error) {
-    console.error('Transfer error:', error);
+    console.error('Approve transfer error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Teacher: Deny pending transfer
+router.post('/pending-transfers/:id/deny', [
+  body('denial_reason').optional().trim()
+], authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid transfer ID' });
+    }
+
+    const schoolId = req.user?.school_id ?? req.schoolId ?? null;
+    if (schoolId == null) {
+      return res.status(403).json({ error: 'School context required' });
+    }
+
+    const pending = await database.get(`
+      SELECT pt.*, fu.school_id as from_school_id, tu.school_id as to_school_id
+      FROM pending_transfers pt
+      JOIN users fu ON pt.from_user_id = fu.id
+      JOIN users tu ON pt.to_user_id = tu.id
+      WHERE pt.id = $1
+    `, [id]);
+
+    if (!pending) {
+      return res.status(404).json({ error: 'Transfer request not found' });
+    }
+    if (pending.status !== 'pending') {
+      return res.status(400).json({ error: `Transfer request is already ${pending.status}` });
+    }
+    if (pending.from_school_id !== schoolId || pending.to_school_id !== schoolId) {
+      return res.status(403).json({ error: 'You can only deny transfers within your school' });
+    }
+
+    const denialReason = req.body.denial_reason || undefined;
+    await database.run(
+      `UPDATE pending_transfers SET status = 'denied', reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP, denial_reason = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
+      [req.user?.id, denialReason, id]
+    );
+
+    res.json({ message: 'Transfer denied' });
+  } catch (error) {
+    console.error('Deny transfer error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

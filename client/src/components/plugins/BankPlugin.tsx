@@ -5,7 +5,7 @@ import { Navigate } from 'react-router-dom';
 import { 
   Wallet, Send, DollarSign, History, TrendingUp, AlertCircle,
   Users, User, Search, Plus, Minus, CheckCircle, XCircle, Filter, CreditCard, FileText,
-  ArrowUpRight, ArrowDownLeft, Banknote, ToggleLeft, ToggleRight, Briefcase, Settings
+  ArrowUpRight, ArrowDownLeft, Banknote, ToggleLeft, ToggleRight, Briefcase, Settings, Clock
 } from 'lucide-react';
 import api from '../../services/api';
 import { Transaction, Loan, Student } from '../../types';
@@ -19,11 +19,28 @@ interface TeacherBankViewProps {
   bankPlugin: any;
 }
 
+interface PendingTransfer {
+  id: number;
+  from_username: string;
+  from_first_name?: string;
+  from_last_name?: string;
+  from_class?: string;
+  to_username: string;
+  to_first_name?: string;
+  to_last_name?: string;
+  to_class?: string;
+  amount: number;
+  description: string;
+  status: string;
+  created_at: string;
+}
+
 const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
-  const [activeTab, setActiveTab] = useState<'payments' | 'loans' | 'activity'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'loans' | 'transfers' | 'activity'>('payments');
   const [students, setStudents] = useState<Student[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [pendingTransfers, setPendingTransfers] = useState<PendingTransfer[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Filters
@@ -59,14 +76,16 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
 
   const fetchData = async () => {
     try {
-      const [studentsRes, loansRes, transactionsRes] = await Promise.all([
+      const [studentsRes, loansRes, transactionsRes, pendingTransfersRes] = await Promise.all([
         api.get('/students'),
         api.get('/loans'),
-        api.get('/transactions/history')
+        api.get('/transactions/history'),
+        api.get('/transactions/pending-transfers')
       ]);
       setStudents(studentsRes.data);
       setLoans(loansRes.data);
       setTransactions(transactionsRes.data);
+      setPendingTransfers(pendingTransfersRes.data);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -184,13 +203,14 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
     const totalBalance = relevantStudents.reduce((sum, s) => sum + (Number(s.balance) || 0), 0);
     const pendingLoans = filteredLoans.filter(l => l.status === 'pending').length;
     const activeLoans = filteredLoans.filter(l => l.status === 'active').length;
+    const pendingTransfersCount = pendingTransfers.filter(pt => pt.status === 'pending').length;
     const recentTransactions = filteredTransactions.filter(t => {
       const date = new Date(t.created_at);
       const now = new Date();
       return (now.getTime() - date.getTime()) < 7 * 24 * 60 * 60 * 1000; // Last 7 days
     }).length;
-    return { totalBalance, pendingLoans, activeLoans, recentTransactions, studentCount: relevantStudents.length };
-  }, [students, filteredLoans, filteredTransactions, selectedClass, studentsByClass]);
+    return { totalBalance, pendingLoans, activeLoans, pendingTransfersCount, recentTransactions, studentCount: relevantStudents.length };
+  }, [students, filteredLoans, filteredTransactions, selectedClass, studentsByClass, pendingTransfers]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount);
@@ -361,6 +381,16 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
           </div>
           <p className="text-2xl font-bold text-blue-600">{stats.activeLoans}</p>
         </div>
+        <div
+          className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm cursor-pointer hover:border-emerald-300 transition-colors"
+          onClick={() => setActiveTab('transfers')}
+        >
+          <div className="flex items-center space-x-2 text-gray-500 mb-1">
+            <Send className="h-4 w-4" />
+            <span className="text-xs font-medium">Pending Transfers</span>
+          </div>
+          <p className="text-2xl font-bold text-amber-600">{stats.pendingTransfersCount}</p>
+        </div>
         <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
           <div className="flex items-center space-x-2 text-gray-500 mb-1">
             <History className="h-4 w-4" />
@@ -461,6 +491,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
             {[
               { id: 'payments', label: 'Payments', icon: Banknote },
               { id: 'loans', label: 'Loans', icon: CreditCard },
+              { id: 'transfers', label: 'Pending Transfers', icon: Send },
               { id: 'activity', label: 'Activity', icon: History }
             ].map(({ id, label, icon: Icon }) => (
               <button
@@ -626,6 +657,90 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                 <div className="text-center py-12">
                   <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                   <p className="text-gray-500">No students found</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pending Transfers Tab */}
+          {activeTab === 'transfers' && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Student Transfer Requests
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Students request transfers to classmates. Approve or deny each request.
+              </p>
+              {pendingTransfers.filter(pt => pt.status === 'pending').length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
+                  <Send className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No pending transfer requests</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pendingTransfers.filter(pt => pt.status === 'pending').map((pt) => (
+                    <div key={pt.id} className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {(pt.from_first_name && pt.from_last_name)
+                              ? `${pt.from_first_name} ${pt.from_last_name}`
+                              : pt.from_username}
+                            {' → '}
+                            {(pt.to_first_name && pt.to_last_name)
+                              ? `${pt.to_first_name} ${pt.to_last_name}`
+                              : pt.to_username}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {formatCurrency(pt.amount)} • {pt.description} • {formatDate(pt.created_at)}
+                          </p>
+                        </div>
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-200 text-amber-800">
+                          PENDING
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            setError(''); setSuccess(''); setActionLoading(true);
+                            try {
+                              await api.post(`/transactions/pending-transfers/${pt.id}/approve`);
+                              setSuccess('Transfer approved');
+                              fetchData();
+                            } catch (err: any) {
+                              setError(err.response?.data?.error || 'Failed to approve');
+                            } finally {
+                              setActionLoading(false);
+                            }
+                          }}
+                          disabled={actionLoading}
+                          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          <span>Approve</span>
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setError(''); setSuccess(''); setActionLoading(true);
+                            try {
+                              await api.post(`/transactions/pending-transfers/${pt.id}/deny`);
+                              setSuccess('Transfer denied');
+                              fetchData();
+                            } catch (err: any) {
+                              setError(err.response?.data?.error || 'Failed to deny');
+                            } finally {
+                              setActionLoading(false);
+                            }
+                          }}
+                          disabled={actionLoading}
+                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                        >
+                          <XCircle className="h-4 w-4" />
+                          <span>Deny</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Send, User, DollarSign, MessageSquare, AlertCircle, XCircle } from 'lucide-react';
 import api from '../services/api';
 
@@ -19,6 +19,17 @@ interface CanTransactResult {
   reason?: string;
 }
 
+interface PendingTransfer {
+  id: number;
+  to_username: string;
+  to_first_name?: string;
+  to_last_name?: string;
+  amount: string | number;
+  description: string;
+  status: string;
+  created_at: string;
+}
+
 const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
   const [formData, setFormData] = useState({
     to_username: '',
@@ -32,8 +43,18 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
   const [loadingRecipients, setLoadingRecipients] = useState(true);
   const [canTransact, setCanTransact] = useState<CanTransactResult | null>(null);
   const [checkingTransact, setCheckingTransact] = useState(true);
+  const [pendingTransfers, setPendingTransfers] = useState<PendingTransfer[]>([]);
 
-  // Load transfer recipients (all students across classes) and check if student can transact
+  const fetchPendingTransfers = useCallback(async () => {
+    try {
+      const res = await api.get('/transactions/my-pending-transfers');
+      setPendingTransfers(res.data);
+    } catch {
+      setPendingTransfers([]);
+    }
+  }, []);
+
+  // Load transfer recipients, can-transact, and pending transfers
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -43,6 +64,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
         ]);
         setRecipients(recipientsRes.data);
         setCanTransact(canTransactRes.data);
+        await fetchPendingTransfers();
       } catch (err: any) {
         console.error('Failed to load data:', err);
         setError('Failed to load data. Please refresh the page.');
@@ -53,7 +75,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
     };
 
     fetchData();
-  }, []);
+  }, [fetchPendingTransfers]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,8 +90,9 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
         description: formData.description || undefined
       });
 
-      setSuccess('Transfer completed successfully!');
+      setSuccess('Transfer request submitted. Awaiting teacher approval.');
       setFormData({ to_username: '', amount: '', description: '' });
+      fetchPendingTransfers();
       onSuccess();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Transfer failed');
@@ -129,7 +152,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
           <Send className="h-8 w-8 text-primary-600" />
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Transfer Money</h2>
-        <p className="text-gray-600">Send money to another student in any class</p>
+        <p className="text-gray-600">Request a transfer to another student. Your teacher must approve it.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -222,9 +245,25 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
           disabled={loading}
           className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? 'Sending...' : 'Send Money'}
+          {loading ? 'Submitting...' : 'Request Transfer'}
         </button>
       </form>
+
+      {pendingTransfers.length > 0 && (
+        <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <h3 className="font-semibold text-amber-900 mb-2">⏳ Your Pending Transfer Requests</h3>
+          <ul className="text-sm text-amber-800 space-y-2">
+            {pendingTransfers.filter((p) => p.status === 'pending').map((p) => (
+              <li key={p.id} className="flex justify-between items-center">
+                <span>
+                  R{Number(p.amount).toFixed(2)} to {(p.to_first_name && p.to_last_name) ? `${p.to_first_name} ${p.to_last_name}` : p.to_username} – {p.description}
+                </span>
+                <span className="text-amber-600 text-xs font-medium">Awaiting approval</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="mt-6 p-4 bg-blue-50 rounded-lg">
         <h3 className="font-semibold text-blue-900 mb-2">💡 Transfer Tips:</h3>
@@ -232,6 +271,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
           <li>• Make sure you have enough money in your account</li>
           <li>• Select a student from any class to send money to</li>
           <li>• Add a description (required) so both parties know what the transfer is for</li>
+          <li>• Transfer requests require teacher approval before the money moves</li>
           <li>• Pay off any outstanding loans before making transfers</li>
         </ul>
       </div>

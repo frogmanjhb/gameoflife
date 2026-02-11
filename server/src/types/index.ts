@@ -82,6 +82,29 @@ export interface TransferRequest {
   description?: string;
 }
 
+export interface PendingTransfer {
+  id: number;
+  from_user_id: number;
+  to_user_id: number;
+  amount: number;
+  description: string;
+  status: 'pending' | 'approved' | 'denied';
+  reviewed_by?: number;
+  reviewed_at?: string;
+  denial_reason?: string;
+  created_at: string;
+  updated_at: string;
+  from_username?: string;
+  from_first_name?: string;
+  from_last_name?: string;
+  from_class?: string;
+  to_username?: string;
+  to_first_name?: string;
+  to_last_name?: string;
+  to_class?: string;
+  reviewed_by_username?: string;
+}
+
 export interface LoanRequest {
   amount: number;
   term_weeks: number;
