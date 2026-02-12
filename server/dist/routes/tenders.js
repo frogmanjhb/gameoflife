@@ -57,10 +57,16 @@ router.post('/:id/pay', auth_1.authenticateToken, (0, auth_1.requireRole)(['teac
         const client = await database_prod_1.default.pool.connect();
         try {
             await client.query('BEGIN');
-            // Deduct from treasury
-            await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2', [amount, townClass]);
+            // Deduct from treasury (filtered by school_id)
+            const tenderSchoolId = req.user.school_id ?? req.schoolId ?? null;
+            if (tenderSchoolId != null) {
+                await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [amount, townClass, tenderSchoolId]);
+            }
+            else {
+                await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [amount, townClass]);
+            }
             // Record treasury transaction
-            await client.query('INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)', [townClass, -amount, 'withdrawal', `Tender payout: ${tender.name}`, req.user.id]);
+            await client.query('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [tenderSchoolId, townClass, -amount, 'withdrawal', `Tender payout: ${tender.name}`, req.user.id]);
             // Credit student account
             await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [amount, account.id]);
             // Record transaction

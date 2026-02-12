@@ -2,11 +2,12 @@ import { Request } from 'express';
 export interface User {
     id: number;
     username: string;
-    role: 'student' | 'teacher';
+    role: 'student' | 'teacher' | 'super_admin';
     first_name?: string;
     last_name?: string;
     class?: string;
     email?: string;
+    school_id?: number | null;
     created_at: string;
     updated_at: string;
 }
@@ -60,15 +61,39 @@ export interface CreateUserRequest {
     last_name?: string;
     class?: string;
     email?: string;
+    school_id: number;
 }
 export interface LoginRequest {
     username: string;
     password: string;
+    school_id?: number;
 }
 export interface TransferRequest {
     to_username: string;
     amount: number;
     description?: string;
+}
+export interface PendingTransfer {
+    id: number;
+    from_user_id: number;
+    to_user_id: number;
+    amount: number;
+    description: string;
+    status: 'pending' | 'approved' | 'denied';
+    reviewed_by?: number;
+    reviewed_at?: string;
+    denial_reason?: string;
+    created_at: string;
+    updated_at: string;
+    from_username?: string;
+    from_first_name?: string;
+    from_last_name?: string;
+    from_class?: string;
+    to_username?: string;
+    to_first_name?: string;
+    to_last_name?: string;
+    to_class?: string;
+    reviewed_by_username?: string;
 }
 export interface LoanRequest {
     amount: number;
@@ -105,11 +130,12 @@ export interface LoanWithDetails extends Loan {
 export interface AuthenticatedRequest extends Request {
     user: User;
     account?: Account;
+    schoolId?: number | null;
 }
 export interface MathGameSession {
     id: number;
     user_id: number;
-    difficulty: 'easy' | 'medium' | 'hard';
+    difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
     score: number;
     correct_answers: number;
     total_problems: number;
@@ -119,7 +145,7 @@ export interface MathGameSession {
 export interface MathGameHighScore {
     id: number;
     user_id: number;
-    difficulty: 'easy' | 'medium' | 'hard';
+    difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
     high_score: number;
     achieved_at: string;
 }
@@ -129,11 +155,12 @@ export interface MathGameStatus {
         easy: number;
         medium: number;
         hard: number;
+        extreme: number;
     };
     recent_sessions: MathGameSession[];
 }
 export interface MathGameStartRequest {
-    difficulty: 'easy' | 'medium' | 'hard';
+    difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
 }
 export interface MathGameSubmitRequest {
     session_id: number;
@@ -194,6 +221,7 @@ export interface TownSettings {
     mayor_name?: string;
     tax_rate: number;
     tax_enabled: boolean;
+    job_applications_enabled?: boolean;
     treasury_balance: number;
     created_at: string;
     updated_at: string;

@@ -23,14 +23,21 @@ async function calculateProgressiveTax(salary) {
 router.get('/settings', auth_1.authenticateToken, async (req, res) => {
     try {
         const { class: townClass, all } = req.query;
-        // Teachers can get all towns with ?all=true
+        // Teachers can get all towns for their school with ?all=true
         if (all === 'true' && req.user?.role === 'teacher') {
-            const towns = await database_prod_1.default.query('SELECT * FROM town_settings ORDER BY class');
+            const schoolId = req.user.school_id ?? req.schoolId ?? null;
+            const towns = schoolId != null
+                ? await database_prod_1.default.query('SELECT * FROM town_settings WHERE school_id = $1 ORDER BY class', [schoolId])
+                : await database_prod_1.default.query('SELECT * FROM town_settings WHERE school_id IS NULL ORDER BY class');
             return res.json(towns);
         }
-        // Get specific town by class
+        const schoolId = req.user?.school_id ?? req.schoolId ?? null;
+        const townByClass = (cls) => schoolId != null
+            ? database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1 AND school_id = $2', [cls, schoolId])
+            : database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1 AND school_id IS NULL', [cls]);
+        // Get specific town by class (scoped to user's school)
         if (townClass && ['6A', '6B', '6C'].includes(townClass)) {
-            const town = await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1', [townClass]);
+            const town = await townByClass(townClass);
             if (!town) {
                 return res.status(404).json({ error: 'Town not found' });
             }
@@ -38,13 +45,15 @@ router.get('/settings', auth_1.authenticateToken, async (req, res) => {
         }
         // If user has a class, return their town
         if (req.user?.class && ['6A', '6B', '6C'].includes(req.user.class)) {
-            const town = await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1', [req.user.class]);
+            const town = await townByClass(req.user.class);
             if (town) {
                 return res.json(town);
             }
         }
-        // Default: return first town or empty
-        const firstTown = await database_prod_1.default.get('SELECT * FROM town_settings ORDER BY class LIMIT 1');
+        // Default: return first town for this school or empty
+        const firstTown = schoolId != null
+            ? await database_prod_1.default.get('SELECT * FROM town_settings WHERE school_id = $1 ORDER BY class LIMIT 1', [schoolId])
+            : await database_prod_1.default.get('SELECT * FROM town_settings WHERE school_id IS NULL ORDER BY class LIMIT 1');
         res.json(firstTown || null);
     }
     catch (error) {
@@ -57,7 +66,8 @@ router.put('/settings/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['
     (0, express_validator_1.body)('town_name').optional().notEmpty().withMessage('Town name cannot be empty'),
     (0, express_validator_1.body)('mayor_name').optional(),
     (0, express_validator_1.body)('tax_rate').optional().isFloat({ min: 0, max: 100 }).withMessage('Tax rate must be between 0 and 100'),
-    (0, express_validator_1.body)('tax_enabled').optional().isBoolean().withMessage('Tax enabled must be a boolean')
+    (0, express_validator_1.body)('tax_enabled').optional().isBoolean().withMessage('Tax enabled must be a boolean'),
+    (0, express_validator_1.body)('job_applications_enabled').optional().isBoolean().withMessage('Job applications enabled must be a boolean')
 ], async (req, res) => {
     try {
         const errors = (0, express_validator_1.validationResult)(req);
@@ -72,7 +82,11 @@ router.put('/settings/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['
         if (!town) {
             return res.status(404).json({ error: 'Town not found' });
         }
-        const { town_name, mayor_name, tax_rate, tax_enabled } = req.body;
+        const teacherSchoolId = req.user?.school_id ?? req.schoolId ?? null;
+        if (town.school_id !== teacherSchoolId) {
+            return res.status(403).json({ error: 'You can only update towns in your school' });
+        }
+        const { town_name, mayor_name, tax_rate, tax_enabled, job_applications_enabled } = req.body;
         const updates = [];
         const params = [];
         let paramIndex = 1;
@@ -92,6 +106,10 @@ router.put('/settings/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['
             updates.push(`tax_enabled = $${paramIndex++}`);
             params.push(tax_enabled);
         }
+        if (job_applications_enabled !== undefined) {
+            updates.push(`job_applications_enabled = $${paramIndex++}`);
+            params.push(job_applications_enabled);
+        }
         if (updates.length === 0) {
             return res.status(400).json({ error: 'No fields to update' });
         }
@@ -103,6 +121,12 @@ router.put('/settings/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['
     }
     catch (error) {
         console.error('Failed to update town settings:', error);
+        // Check if it's a column doesn't exist error
+        if (error.code === '42703' || error.message?.includes('column') || error.message?.includes('does not exist')) {
+            return res.status(500).json({
+                error: 'Database migration required. Please restart the server to run migrations, or manually run migration 025_add_job_applications_enabled.sql'
+            });
+        }
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -113,35 +137,56 @@ router.get('/treasury/:class', auth_1.authenticateToken, (0, auth_1.requireRole)
         if (!['6A', '6B', '6C'].includes(townClass)) {
             return res.status(400).json({ error: 'Invalid town class' });
         }
-        const town = await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1', [townClass]);
+        const schoolId = req.user?.school_id ?? req.schoolId ?? null;
+        // Get town filtered by school_id
+        const town = schoolId != null
+            ? await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1 AND school_id = $2', [townClass, schoolId])
+            : await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1 AND school_id IS NULL', [townClass]);
         if (!town) {
             return res.status(404).json({ error: 'Town not found' });
         }
-        // Get recent treasury transactions
-        const transactions = await database_prod_1.default.query(`SELECT tt.*, u.username as created_by_username
-       FROM treasury_transactions tt
-       LEFT JOIN users u ON tt.created_by = u.id
-       WHERE tt.town_class = $1
-       ORDER BY tt.created_at DESC
-       LIMIT 50`, [townClass]);
-        // Get treasury stats
-        const stats = await database_prod_1.default.get(`SELECT 
-        COALESCE(SUM(CASE WHEN transaction_type = 'tax_collection' THEN amount ELSE 0 END), 0) as total_tax_collected,
-        COALESCE(SUM(CASE WHEN transaction_type = 'salary_payment' THEN amount ELSE 0 END), 0) as total_salaries_paid,
-        COALESCE(SUM(CASE WHEN transaction_type = 'deposit' THEN amount ELSE 0 END), 0) as total_deposits,
-        COALESCE(SUM(CASE WHEN transaction_type = 'withdrawal' THEN amount ELSE 0 END), 0) as total_withdrawals
-       FROM treasury_transactions
-       WHERE town_class = $1`, [townClass]);
+        // Get recent treasury transactions filtered by school_id
+        // Also include transactions with NULL school_id for backwards compatibility (pre-multi-tenant)
+        const transactions = schoolId != null
+            ? await database_prod_1.default.query(`SELECT tt.*, u.username as created_by_username
+           FROM treasury_transactions tt
+           LEFT JOIN users u ON tt.created_by = u.id
+           WHERE tt.town_class = $1 AND (tt.school_id = $2 OR tt.school_id IS NULL)
+           ORDER BY tt.created_at DESC
+           LIMIT 50`, [townClass, schoolId])
+            : await database_prod_1.default.query(`SELECT tt.*, u.username as created_by_username
+           FROM treasury_transactions tt
+           LEFT JOIN users u ON tt.created_by = u.id
+           WHERE tt.town_class = $1 AND tt.school_id IS NULL
+           ORDER BY tt.created_at DESC
+           LIMIT 50`, [townClass]);
+        // Get treasury stats filtered by school_id
+        // Also include transactions with NULL school_id for backwards compatibility (pre-multi-tenant)
+        const stats = schoolId != null
+            ? await database_prod_1.default.get(`SELECT 
+            COALESCE(SUM(CASE WHEN transaction_type = 'tax_collection' THEN amount ELSE 0 END), 0) as total_tax_collected,
+            COALESCE(SUM(CASE WHEN transaction_type = 'salary_payment' THEN amount ELSE 0 END), 0) as total_salaries_paid,
+            COALESCE(SUM(CASE WHEN transaction_type = 'deposit' THEN amount ELSE 0 END), 0) as total_deposits,
+            COALESCE(SUM(CASE WHEN transaction_type = 'withdrawal' THEN amount ELSE 0 END), 0) as total_withdrawals
+           FROM treasury_transactions
+           WHERE town_class = $1 AND (school_id = $2 OR school_id IS NULL)`, [townClass, schoolId])
+            : await database_prod_1.default.get(`SELECT 
+            COALESCE(SUM(CASE WHEN transaction_type = 'tax_collection' THEN amount ELSE 0 END), 0) as total_tax_collected,
+            COALESCE(SUM(CASE WHEN transaction_type = 'salary_payment' THEN amount ELSE 0 END), 0) as total_salaries_paid,
+            COALESCE(SUM(CASE WHEN transaction_type = 'deposit' THEN amount ELSE 0 END), 0) as total_deposits,
+            COALESCE(SUM(CASE WHEN transaction_type = 'withdrawal' THEN amount ELSE 0 END), 0) as total_withdrawals
+           FROM treasury_transactions
+           WHERE town_class = $1 AND school_id IS NULL`, [townClass]);
         res.json({
             treasury_balance: town.treasury_balance,
             tax_enabled: town.tax_enabled,
             tax_rate: town.tax_rate,
             transactions,
             stats: {
-                total_tax_collected: parseFloat(stats.total_tax_collected) || 0,
-                total_salaries_paid: parseFloat(stats.total_salaries_paid) || 0,
-                total_deposits: parseFloat(stats.total_deposits) || 0,
-                total_withdrawals: parseFloat(stats.total_withdrawals) || 0
+                total_tax_collected: parseFloat(stats?.total_tax_collected) || 0,
+                total_salaries_paid: parseFloat(stats?.total_salaries_paid) || 0,
+                total_deposits: parseFloat(stats?.total_deposits) || 0,
+                total_withdrawals: parseFloat(stats?.total_withdrawals) || 0
             }
         });
     }
@@ -165,10 +210,16 @@ router.post('/treasury/:class/deposit', auth_1.authenticateToken, (0, auth_1.req
         if (!['6A', '6B', '6C'].includes(townClass)) {
             return res.status(400).json({ error: 'Invalid town class' });
         }
-        // Update treasury balance
-        await database_prod_1.default.run('UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2', [amount, townClass]);
+        // Update treasury balance (filtered by school_id)
+        const depositSchoolId = req.user?.school_id ?? req.schoolId ?? null;
+        if (depositSchoolId != null) {
+            await database_prod_1.default.run('UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [amount, townClass, depositSchoolId]);
+        }
+        else {
+            await database_prod_1.default.run('UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [amount, townClass]);
+        }
         // Record treasury transaction
-        await database_prod_1.default.run('INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)', [townClass, amount, 'deposit', description || 'Manual deposit by teacher', req.user?.id]);
+        await database_prod_1.default.run('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [depositSchoolId, townClass, amount, 'deposit', description || 'Manual deposit by teacher', req.user?.id]);
         const town = await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1', [townClass]);
         res.json({ message: 'Deposit successful', treasury_balance: town.treasury_balance });
     }
@@ -199,10 +250,16 @@ router.post('/treasury/:class/withdraw', auth_1.authenticateToken, (0, auth_1.re
         if (parseFloat(town.treasury_balance) < amount) {
             return res.status(400).json({ error: 'Insufficient treasury funds' });
         }
-        // Update treasury balance
-        await database_prod_1.default.run('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2', [amount, townClass]);
+        // Update treasury balance (filtered by school_id)
+        const withdrawSchoolId = req.user?.school_id ?? req.schoolId ?? null;
+        if (withdrawSchoolId != null) {
+            await database_prod_1.default.run('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [amount, townClass, withdrawSchoolId]);
+        }
+        else {
+            await database_prod_1.default.run('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [amount, townClass]);
+        }
         // Record treasury transaction
-        await database_prod_1.default.run('INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)', [townClass, -amount, 'withdrawal', description || 'Manual withdrawal by teacher', req.user?.id]);
+        await database_prod_1.default.run('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [withdrawSchoolId, townClass, -amount, 'withdrawal', description || 'Manual withdrawal by teacher', req.user?.id]);
         const updatedTown = await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1', [townClass]);
         res.json({ message: 'Withdrawal successful', treasury_balance: updatedTown.treasury_balance });
     }
@@ -366,11 +423,17 @@ router.post('/pay-salaries/:class', auth_1.authenticateToken, (0, auth_1.require
                 }
             }
             // Deduct net salaries from treasury (tax stays in treasury)
-            await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2', [totalNet, townClass]);
+            const salarySchoolId = req.user?.school_id ?? req.schoolId ?? null;
+            if (salarySchoolId != null) {
+                await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [totalNet, townClass, salarySchoolId]);
+            }
+            else {
+                await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [totalNet, townClass]);
+            }
             // Record treasury transactions
-            await client.query('INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)', [townClass, -totalNet, 'salary_payment', `Salary payments to ${paidCount} employees`, req.user?.id]);
+            await client.query('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [salarySchoolId, townClass, -totalNet, 'salary_payment', `Salary payments to ${paidCount} employees`, req.user?.id]);
             if (town.tax_enabled && totalTax > 0) {
-                await client.query('INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)', [townClass, totalTax, 'tax_collection', `Income tax collected from ${paidCount} employees`, req.user?.id]);
+                await client.query('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [salarySchoolId, townClass, totalTax, 'tax_collection', `Income tax collected from ${paidCount} employees`, req.user?.id]);
             }
             await client.query('COMMIT');
             const updatedTown = await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1', [townClass]);
@@ -446,10 +509,16 @@ router.post('/pay-basic-salary/:class', auth_1.authenticateToken, (0, auth_1.req
                     paidCount++;
                 }
             }
-            // Deduct from treasury
-            await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2', [totalNeeded, townClass]);
+            // Deduct from treasury (filtered by school_id)
+            const basicSalarySchoolId = req.user?.school_id ?? req.schoolId ?? null;
+            if (basicSalarySchoolId != null) {
+                await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [totalNeeded, townClass, basicSalarySchoolId]);
+            }
+            else {
+                await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [totalNeeded, townClass]);
+            }
             // Record treasury transaction
-            await client.query('INSERT INTO treasury_transactions (town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5)', [townClass, -totalNeeded, 'salary_payment', `Basic salary payments to ${paidCount} unemployed students`, req.user?.id]);
+            await client.query('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [basicSalarySchoolId, townClass, -totalNeeded, 'salary_payment', `Basic salary payments to ${paidCount} unemployed students`, req.user?.id]);
             await client.query('COMMIT');
             const updatedTown = await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1', [townClass]);
             res.json({

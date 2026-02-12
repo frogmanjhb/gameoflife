@@ -8,58 +8,58 @@ const express_validator_1 = require("express-validator");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
-// Biome configuration with pros/cons and base values
+// Biome configuration with pros/cons and base values (prices set so land is meaningful vs salaries)
 const BIOME_CONFIG = {
     'Savanna': {
-        baseValue: 20000,
+        baseValue: 40000,
         risk: 'medium',
         pros: ['Good grazing land', 'Wildlife tourism potential', 'Moderate rainfall'],
         cons: ['Seasonal droughts', 'Fire risk', 'Limited water sources']
     },
     'Grassland': {
-        baseValue: 15000,
+        baseValue: 30000,
         risk: 'low',
         pros: ['Excellent farming potential', 'Easy to develop', 'Stable ecosystem'],
         cons: ['Soil erosion risk', 'Limited shade', 'Overgrazing concerns']
     },
     'Forest': {
-        baseValue: 35000,
+        baseValue: 70000,
         risk: 'medium',
         pros: ['Rich biodiversity', 'Timber resources', 'Carbon credits potential'],
         cons: ['Fire risk', 'Clearing restrictions', 'Difficult access']
     },
     'Fynbos': {
-        baseValue: 45000,
+        baseValue: 90000,
         risk: 'high',
         pros: ['Unique biodiversity', 'Eco-tourism value', 'Protected species habitat'],
         cons: ['Fire-dependent ecosystem', 'Strict conservation laws', 'Limited development']
     },
     'Nama Karoo': {
-        baseValue: 10000,
+        baseValue: 20000,
         risk: 'medium',
         pros: ['Sheep farming suited', 'Low land cost', 'Unique landscape'],
         cons: ['Very dry climate', 'Limited water', 'Remote location']
     },
     'Succulent Karoo': {
-        baseValue: 4500,
+        baseValue: 9000,
         risk: 'high',
         pros: ['Rare plant species', 'Research value', 'Mining potential'],
         cons: ['Extreme temperatures', 'Water scarcity', 'Conservation restrictions']
     },
     'Desert': {
-        baseValue: 8000,
+        baseValue: 16000,
         risk: 'high',
         pros: ['Solar energy potential', 'Low land price', 'Mineral deposits'],
         cons: ['Extreme conditions', 'No water', 'Uninhabitable without infrastructure']
     },
     'Thicket': {
-        baseValue: 25000,
+        baseValue: 50000,
         risk: 'low',
         pros: ['Carbon storage', 'Game farming potential', 'Drought resistant'],
         cons: ['Dense vegetation', 'Clearing needed', 'Elephant damage risk']
     },
     'Indian Ocean Coastal Belt': {
-        baseValue: 60000,
+        baseValue: 120000,
         risk: 'medium',
         pros: ['High property value', 'Tourism potential', 'Port access'],
         cons: ['Coastal erosion', 'Cyclone risk', 'High development costs']
@@ -353,6 +353,21 @@ router.put('/purchase-requests/:id', auth_1.authenticateToken, (0, auth_1.requir
           SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP 
           WHERE user_id = $2
         `, [offeredPrice, purchaseRequest.user_id]);
+            // Get buyer's class and school_id for treasury deposit
+            const buyer = await database_prod_1.default.get('SELECT class, school_id FROM users WHERE id = $1', [purchaseRequest.user_id]);
+            const buyerClass = buyer?.class;
+            const landSchoolId = buyer?.school_id ?? null;
+            // Deposit to treasury for the buyer's class (filtered by school_id)
+            if (buyerClass && ['6A', '6B', '6C'].includes(buyerClass)) {
+                if (landSchoolId != null) {
+                    await database_prod_1.default.run('UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [offeredPrice, buyerClass, landSchoolId]);
+                }
+                else {
+                    await database_prod_1.default.run('UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [offeredPrice, buyerClass]);
+                }
+                // Record treasury transaction
+                await database_prod_1.default.run('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [landSchoolId, buyerClass, offeredPrice, 'deposit', `Land Purchase: Plot ${purchaseRequest.parcel_id}`, purchaseRequest.user_id]);
+            }
             // Record the transaction
             const userAccount = await database_prod_1.default.get('SELECT id FROM accounts WHERE user_id = $1', [purchaseRequest.user_id]);
             await database_prod_1.default.run(`
@@ -525,6 +540,63 @@ router.get('/stats', auth_1.authenticateToken, async (req, res) => {
 // GET /api/land/biome-config - Get biome configuration
 router.get('/biome-config', auth_1.authenticateToken, async (req, res) => {
     res.json(BIOME_CONFIG);
+});
+// POST /api/land/swap - Swap positions of two parcels (teachers only)
+router.post('/swap', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), (0, express_validator_1.body)('parcel_id_a').isInt().toInt(), (0, express_validator_1.body)('parcel_id_b').isInt().toInt(), async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { parcel_id_a, parcel_id_b } = req.body;
+        if (parcel_id_a === parcel_id_b) {
+            return res.status(400).json({ error: 'Cannot swap a parcel with itself' });
+        }
+        const parcelA = await database_prod_1.default.get('SELECT id, row_index, col_index, grid_code FROM land_parcels WHERE id = $1', [parcel_id_a]);
+        const parcelB = await database_prod_1.default.get('SELECT id, row_index, col_index, grid_code FROM land_parcels WHERE id = $1', [parcel_id_b]);
+        if (!parcelA || !parcelB) {
+            return res.status(404).json({ error: 'One or both parcels not found' });
+        }
+        const aRow = Number(parcelA.row_index);
+        const aCol = Number(parcelA.col_index);
+        const bRow = Number(parcelB.row_index);
+        const bCol = Number(parcelB.col_index);
+        const aCode = generateGridCode(aRow, aCol);
+        const bCode = generateGridCode(bRow, bCol);
+        // Swap positions using temp to avoid unique constraint issues
+        await database_prod_1.default.run('UPDATE land_parcels SET row_index = $1, col_index = $2, grid_code = $3 WHERE id = $4', [-1, -1, '_temp_' + parcel_id_a, parcel_id_a]);
+        await database_prod_1.default.run('UPDATE land_parcels SET row_index = $1, col_index = $2, grid_code = $3 WHERE id = $4', [aRow, aCol, aCode, parcel_id_b]);
+        await database_prod_1.default.run('UPDATE land_parcels SET row_index = $1, col_index = $2, grid_code = $3 WHERE id = $4', [bRow, bCol, bCode, parcel_id_a]);
+        res.json({ message: 'Parcels swapped successfully' });
+    }
+    catch (error) {
+        console.error('Failed to swap parcels:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// POST /api/land/recalculate-values - Recalculate all parcel values to match current biome config (teachers only)
+router.post('/recalculate-values', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const parcels = await database_prod_1.default.query('SELECT id, row_index, col_index, biome_type FROM land_parcels');
+        let updated = 0;
+        for (const p of parcels) {
+            const biome = p.biome_type;
+            const config = BIOME_CONFIG[biome];
+            if (!config)
+                continue;
+            const row = Number(p.row_index);
+            const col = Number(p.col_index);
+            const valueVariation = 0.8 + (((row * col) % 100) / 250);
+            const value = Math.round(config.baseValue * valueVariation);
+            await database_prod_1.default.run('UPDATE land_parcels SET value = $1 WHERE id = $2', [value, p.id]);
+            updated++;
+        }
+        res.json({ message: 'Land values recalculated', updated });
+    }
+    catch (error) {
+        console.error('Failed to recalculate land values:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 exports.default = router;
 //# sourceMappingURL=land.js.map

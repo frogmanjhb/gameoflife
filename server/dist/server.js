@@ -28,7 +28,10 @@ const winkel_1 = __importDefault(require("./routes/winkel"));
 const pizza_time_1 = __importDefault(require("./routes/pizza-time"));
 const leaderboard_1 = __importDefault(require("./routes/leaderboard"));
 const suggestions_bugs_1 = __importDefault(require("./routes/suggestions-bugs"));
+const disasters_1 = __importDefault(require("./routes/disasters"));
 const admin_1 = __importDefault(require("./routes/admin"));
+const super_admin_1 = __importDefault(require("./routes/super-admin"));
+const teacher_analytics_1 = __importDefault(require("./routes/teacher-analytics"));
 const database_prod_1 = __importDefault(require("./database/database-prod"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
@@ -146,7 +149,10 @@ app.use('/api/winkel', winkel_1.default);
 app.use('/api/pizza-time', pizza_time_1.default);
 app.use('/api/leaderboard', leaderboard_1.default);
 app.use('/api/suggestions-bugs', suggestions_bugs_1.default);
+app.use('/api/disasters', disasters_1.default);
+app.use('/api/teacher-analytics', teacher_analytics_1.default);
 app.use('/api/admin', admin_1.default);
+app.use('/api/admin', super_admin_1.default);
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Error:', err);
@@ -440,6 +446,162 @@ async function initializeDatabase() {
         }
         catch (migrationError) {
             console.log('⚠️ Suggestions & Bugs plugin may have already been added:', migrationError);
+        }
+        // Add Disasters plugin
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '022_add_disasters_plugin.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Disasters plugin added');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Disasters plugin may have already been added:', migrationError);
+        }
+        // Run Multi-Tenant Schools migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '022_multi_tenant_schools.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Multi-tenant schools migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Multi-tenant schools migration may have already been applied:', migrationError);
+        }
+        // Add paid status to shop purchases (Winkel pending/paid tracking)
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '023_shop_purchases_paid_status.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Shop purchases paid status migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Shop purchases paid status migration may have already been applied:', migrationError);
+        }
+        // Add Chores plugin
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '023_add_chores_plugin.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Chores plugin added');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Chores plugin may have already been added:', migrationError);
+        }
+        // Add extreme difficulty to math game
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '024_add_extreme_difficulty.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Extreme difficulty added');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Extreme difficulty migration may have already been applied:', migrationError);
+        }
+        // Add job applications enabled setting
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '025_add_job_applications_enabled.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Job applications enabled setting added');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Job applications enabled migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '026_add_doubles_day_plugin.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Doubles Day plugin added');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Doubles Day plugin migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '027_pending_transfers.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Pending transfers table added');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Pending transfers migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '028_rules_agreed.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Rules agreed migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Rules agreed migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '029_account_frozen.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Account frozen migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Account frozen migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '030_login_events.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Login events migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Login events migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '031_add_analytics_plugin.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Analytics plugin migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Analytics plugin migration may have already been applied:', migrationError);
+        }
+        // Sync default plugins (ensures all known plugins exist - no manual script needed)
+        try {
+            const defaultPlugins = [
+                { name: 'Chores', route_path: '/chores', icon: '🧹', description: 'Earn money by completing chore challenges at home' },
+                { name: 'Doubles Day', route_path: '/doubles-day', icon: '2️⃣', description: 'Double points from chores and double pizza time donations when enabled', enabled: false },
+            ];
+            for (const p of defaultPlugins) {
+                const existing = await database_prod_1.default.query('SELECT id FROM plugins WHERE route_path = $1', [p.route_path]);
+                if (existing.length === 0) {
+                    const enabled = p.enabled !== false;
+                    await database_prod_1.default.query(`INSERT INTO plugins (name, enabled, route_path, icon, description) VALUES ($1, $2, $3, $4, $5)`, [p.name, enabled, p.route_path, p.icon, p.description]);
+                    console.log(`✅ Auto-added plugin: ${p.name}`);
+                }
+            }
+        }
+        catch (syncError) {
+            console.log('⚠️ Plugin sync skipped:', syncError instanceof Error ? syncError.message : syncError);
         }
         const schema = (0, fs_1.readFileSync)(schemaPath, 'utf8');
         await database_prod_1.default.query(schema);

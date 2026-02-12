@@ -17,14 +17,20 @@ const authenticateToken = async (req, res, next) => {
     }
     try {
         const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        console.log('🔍 Token decoded, userId:', decoded.userId);
+        console.log('🔍 Token decoded, userId:', decoded.userId, 'schoolId:', decoded.schoolId);
         const user = await database_prod_1.default.get('SELECT * FROM users WHERE id = $1', [decoded.userId]);
         if (!user) {
             console.log('❌ User not found for userId:', decoded.userId);
             return res.status(401).json({ error: 'Invalid token' });
         }
-        console.log('✅ User authenticated:', user.username, 'Role:', user.role);
+        // Verify school_id matches (unless super_admin)
+        if (user.role !== 'super_admin' && user.school_id !== decoded.schoolId) {
+            console.log('❌ School ID mismatch');
+            return res.status(403).json({ error: 'Invalid token - school context mismatch' });
+        }
+        console.log('✅ User authenticated:', user.username, 'Role:', user.role, 'School:', user.school_id);
         req.user = user;
+        req.schoolId = user.school_id || null;
         next();
     }
     catch (error) {

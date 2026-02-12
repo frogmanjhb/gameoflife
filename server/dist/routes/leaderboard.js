@@ -29,7 +29,8 @@ router.get('/overall', auth_1.authenticateToken, async (req, res) => {
           COUNT(mgs.id) as games_played,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'easy' THEN mgh.high_score ELSE 0 END), 0) as high_score_easy,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'medium' THEN mgh.high_score ELSE 0 END), 0) as high_score_medium,
-          COALESCE(MAX(CASE WHEN mgh.difficulty = 'hard' THEN mgh.high_score ELSE 0 END), 0) as high_score_hard
+          COALESCE(MAX(CASE WHEN mgh.difficulty = 'hard' THEN mgh.high_score ELSE 0 END), 0) as high_score_hard,
+          COALESCE(MAX(CASE WHEN mgh.difficulty = 'extreme' THEN mgh.high_score ELSE 0 END), 0) as high_score_extreme
         FROM users u
         LEFT JOIN math_game_sessions mgs ON u.id = mgs.user_id
         LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id
@@ -78,7 +79,8 @@ router.get('/class/:className', auth_1.authenticateToken, async (req, res) => {
           COUNT(mgs.id) as games_played,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'easy' THEN mgh.high_score ELSE 0 END), 0) as high_score_easy,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'medium' THEN mgh.high_score ELSE 0 END), 0) as high_score_medium,
-          COALESCE(MAX(CASE WHEN mgh.difficulty = 'hard' THEN mgh.high_score ELSE 0 END), 0) as high_score_hard
+          COALESCE(MAX(CASE WHEN mgh.difficulty = 'hard' THEN mgh.high_score ELSE 0 END), 0) as high_score_hard,
+          COALESCE(MAX(CASE WHEN mgh.difficulty = 'extreme' THEN mgh.high_score ELSE 0 END), 0) as high_score_extreme
         FROM users u
         LEFT JOIN math_game_sessions mgs ON u.id = mgs.user_id
         LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id
@@ -130,7 +132,8 @@ router.get('/all-classes', auth_1.authenticateToken, async (req, res) => {
             COUNT(mgs.id) as games_played,
             COALESCE(MAX(CASE WHEN mgh.difficulty = 'easy' THEN mgh.high_score ELSE 0 END), 0) as high_score_easy,
             COALESCE(MAX(CASE WHEN mgh.difficulty = 'medium' THEN mgh.high_score ELSE 0 END), 0) as high_score_medium,
-            COALESCE(MAX(CASE WHEN mgh.difficulty = 'hard' THEN mgh.high_score ELSE 0 END), 0) as high_score_hard
+            COALESCE(MAX(CASE WHEN mgh.difficulty = 'hard' THEN mgh.high_score ELSE 0 END), 0) as high_score_hard,
+            COALESCE(MAX(CASE WHEN mgh.difficulty = 'extreme' THEN mgh.high_score ELSE 0 END), 0) as high_score_extreme
           FROM users u
           LEFT JOIN math_game_sessions mgs ON u.id = mgs.user_id
           LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id

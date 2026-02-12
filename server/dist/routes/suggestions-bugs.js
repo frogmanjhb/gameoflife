@@ -192,9 +192,31 @@ router.put('/admin/suggestions/:id/review', [(0, express_validator_1.body)('stat
         `, [status, req.user.id, id]);
         let rewardPaid = false;
         if (status === 'approved' && !suggestion.reward_paid) {
-            const accountRes = await client.query('SELECT id FROM accounts WHERE user_id = $1', [suggestion.user_id]);
+            const accountRes = await client.query('SELECT a.id, u.class, u.school_id FROM accounts a JOIN users u ON a.user_id = u.id WHERE a.user_id = $1', [suggestion.user_id]);
             const accountId = accountRes.rows?.[0]?.id;
+            const userClass = accountRes.rows?.[0]?.class;
+            const suggestionSchoolId = accountRes.rows?.[0]?.school_id ?? null;
             if (accountId) {
+                // Check treasury has sufficient funds (filtered by school_id)
+                if (userClass && ['6A', '6B', '6C'].includes(userClass)) {
+                    const townRes = suggestionSchoolId != null
+                        ? await client.query('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id = $2', [userClass, suggestionSchoolId])
+                        : await client.query('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id IS NULL', [userClass]);
+                    const treasuryBalance = parseFloat(townRes.rows?.[0]?.treasury_balance || '0');
+                    if (treasuryBalance < REWARD_AMOUNT) {
+                        await client.query('ROLLBACK');
+                        return res.status(400).json({ error: `Insufficient treasury funds for class ${userClass} to pay reward` });
+                    }
+                    // Deduct from treasury (filtered by school_id)
+                    if (suggestionSchoolId != null) {
+                        await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [REWARD_AMOUNT, userClass, suggestionSchoolId]);
+                    }
+                    else {
+                        await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [REWARD_AMOUNT, userClass]);
+                    }
+                    // Record treasury transaction
+                    await client.query('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [suggestionSchoolId, userClass, REWARD_AMOUNT, 'withdrawal', `Suggestion reward payout`, suggestion.user_id]);
+                }
                 await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [REWARD_AMOUNT, accountId]);
                 await client.query('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [accountId, REWARD_AMOUNT, 'deposit', 'Reward for approved suggestion']);
                 await client.query(`
@@ -256,9 +278,31 @@ router.put('/admin/bugs/:id/review', [(0, express_validator_1.body)('status').is
         `, [status, req.user.id, id]);
         let rewardPaid = false;
         if (status === 'verified' && !bug.reward_paid) {
-            const accountRes = await client.query('SELECT id FROM accounts WHERE user_id = $1', [bug.user_id]);
+            const accountRes = await client.query('SELECT a.id, u.class, u.school_id FROM accounts a JOIN users u ON a.user_id = u.id WHERE a.user_id = $1', [bug.user_id]);
             const accountId = accountRes.rows?.[0]?.id;
+            const userClass = accountRes.rows?.[0]?.class;
+            const bugSchoolId = accountRes.rows?.[0]?.school_id ?? null;
             if (accountId) {
+                // Check treasury has sufficient funds (filtered by school_id)
+                if (userClass && ['6A', '6B', '6C'].includes(userClass)) {
+                    const townRes = bugSchoolId != null
+                        ? await client.query('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id = $2', [userClass, bugSchoolId])
+                        : await client.query('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id IS NULL', [userClass]);
+                    const treasuryBalance = parseFloat(townRes.rows?.[0]?.treasury_balance || '0');
+                    if (treasuryBalance < REWARD_AMOUNT) {
+                        await client.query('ROLLBACK');
+                        return res.status(400).json({ error: `Insufficient treasury funds for class ${userClass} to pay reward` });
+                    }
+                    // Deduct from treasury (filtered by school_id)
+                    if (bugSchoolId != null) {
+                        await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [REWARD_AMOUNT, userClass, bugSchoolId]);
+                    }
+                    else {
+                        await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [REWARD_AMOUNT, userClass]);
+                    }
+                    // Record treasury transaction
+                    await client.query('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [bugSchoolId, userClass, REWARD_AMOUNT, 'withdrawal', `Bug report reward payout`, bug.user_id]);
+                }
                 await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [REWARD_AMOUNT, accountId]);
                 await client.query('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [accountId, REWARD_AMOUNT, 'deposit', 'Reward for verified bug report']);
                 await client.query(`

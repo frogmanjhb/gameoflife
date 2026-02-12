@@ -9,14 +9,37 @@ const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 // Get all jobs (with fulfillment status and assigned student name)
+// Multi-tenant: return only global jobs (school_id IS NULL) or jobs for the user's school.
+// Deduplicate by name: when both global and per-school row exist, prefer per-school.
 router.get('/', auth_1.authenticateToken, async (req, res) => {
     try {
-        // Get all jobs with assigned student info
+        const schoolId = req.user?.school_id ?? null;
+        if (schoolId !== null) {
+            // One row per job name: prefer per-school over global when both exist
+            const jobs = await database_prod_1.default.query(`WITH preferred AS (
+           SELECT DISTINCT ON (name) id
+           FROM jobs
+           WHERE school_id IS NULL OR school_id = $1
+           ORDER BY name, (school_id = $1) DESC NULLS LAST, id
+         )
+         SELECT j.*,
+                COUNT(u.id)::int as assigned_count,
+                (COUNT(u.id) > 0) as is_fulfilled,
+                MIN(CASE WHEN u.id IS NOT NULL THEN
+                  COALESCE(u.first_name || ' ' || u.last_name, u.username)
+                END) as assigned_to_name
+         FROM jobs j
+         JOIN preferred p ON j.id = p.id
+         LEFT JOIN users u ON j.id = u.job_id AND u.role = 'student'
+         GROUP BY j.id
+         ORDER BY j.created_at DESC`, [schoolId]);
+            return res.json(jobs);
+        }
         const jobs = await database_prod_1.default.query(`
-      SELECT j.*, 
-             COUNT(u.id) as assigned_count,
-             CASE WHEN COUNT(u.id) > 0 THEN true ELSE false END as is_fulfilled,
-             MIN(CASE WHEN u.id IS NOT NULL THEN 
+      SELECT j.*,
+             COUNT(u.id)::int as assigned_count,
+             (COUNT(u.id) > 0) as is_fulfilled,
+             MIN(CASE WHEN u.id IS NOT NULL THEN
                COALESCE(u.first_name || ' ' || u.last_name, u.username)
              END) as assigned_to_name
       FROM jobs j
@@ -28,6 +51,23 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
     }
     catch (error) {
         console.error('Failed to fetch jobs:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Get student's application count (students only)
+router.get('/my-applications/count', auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        const result = await database_prod_1.default.get(`SELECT COUNT(*) as count 
+       FROM job_applications 
+       WHERE user_id = $1 AND status IN ('pending', 'approved')`, [req.user.id]);
+        const count = parseInt(result?.count || '0');
+        res.json({ count, maxApplications: 2, canApply: count < 2 });
+    }
+    catch (error) {
+        console.error('Failed to fetch application count:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -246,10 +286,30 @@ router.post('/:id/apply', auth_1.authenticateToken, (0, auth_1.requireRole)(['st
         if (!job) {
             return res.status(404).json({ error: 'Job not found' });
         }
-        // Check if user has already applied
+        // Check if job applications are enabled for this student's town/class
+        if (req.user?.class && ['6A', '6B', '6C'].includes(req.user.class)) {
+            const schoolId = req.user.school_id ?? null;
+            const town = schoolId != null
+                ? await database_prod_1.default.get('SELECT job_applications_enabled FROM town_settings WHERE class = $1 AND school_id = $2', [req.user.class, schoolId])
+                : await database_prod_1.default.get('SELECT job_applications_enabled FROM town_settings WHERE class = $1 AND school_id IS NULL', [req.user.class]);
+            if (town && town.job_applications_enabled === false) {
+                return res.status(403).json({ error: 'Job applications are currently disabled. Please check back later.' });
+            }
+        }
+        // Check if user has already applied to this specific job
         const existingApplication = await database_prod_1.default.get('SELECT * FROM job_applications WHERE user_id = $1 AND job_id = $2', [req.user.id, jobId]);
         if (existingApplication) {
             return res.status(400).json({ error: 'You have already applied to this job' });
+        }
+        // Check if user has reached the maximum of 2 applications (pending or approved only)
+        const applicationCount = await database_prod_1.default.get(`SELECT COUNT(*) as count 
+         FROM job_applications 
+         WHERE user_id = $1 AND status IN ('pending', 'approved')`, [req.user.id]);
+        const count = parseInt(applicationCount?.count || '0');
+        if (count >= 2) {
+            return res.status(400).json({
+                error: 'You have reached the maximum of 2 job applications. Please wait for a response on your existing applications before applying to more jobs.'
+            });
         }
         // Create application
         const { answers } = req.body;
@@ -314,6 +374,102 @@ router.delete('/assign/:user_id', auth_1.authenticateToken, (0, auth_1.requireRo
     }
     catch (error) {
         console.error('Failed to remove job assignment:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Add Software Engineer job (one-time setup endpoint - teachers only)
+// Can be accessed via GET request from browser
+router.get('/setup/software-engineer', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const result = await database_prod_1.default.run(`INSERT INTO jobs (name, description, salary, company_name, location, requirements)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (name) DO UPDATE SET
+           description = EXCLUDED.description,
+           salary = EXCLUDED.salary,
+           company_name = EXCLUDED.company_name,
+           location = EXCLUDED.location,
+           requirements = EXCLUDED.requirements
+         RETURNING id, name`, [
+            'Software Engineer',
+            'Daily: Check the Software Requests board (a list of problems learners want solved). Choose 1 task to work on or continue. Test the app with 1–2 users and capture feedback.\n\nWeekly: Bug hunt in the Game of Life. Deliver one working micro-app or feature improvement. Publish it in the Town Hub as a "plugin" or tool link. Run a 2–3 minute demo to the class. Log: what problem it solves, how to use it, what changed after feedback.',
+            6000.00,
+            'Town Government / Tech Department',
+            'Development Lab',
+            null
+        ]);
+        const job = await database_prod_1.default.get('SELECT * FROM jobs WHERE id = $1', [result.lastID]);
+        res.json({
+            success: true,
+            message: 'Software Engineer job added successfully!',
+            job
+        });
+    }
+    catch (error) {
+        console.error('Failed to add Software Engineer job:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Update job (teachers only)
+router.put('/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), [
+    (0, express_validator_1.body)('name').optional().trim().notEmpty().withMessage('Job name cannot be empty'),
+    (0, express_validator_1.body)('description').optional().isString(),
+    (0, express_validator_1.body)('salary').optional().isFloat({ min: 0 }).withMessage('Salary must be 0 or greater'),
+    (0, express_validator_1.body)('company_name').optional().isString(),
+    (0, express_validator_1.body)('location').optional().isString(),
+    (0, express_validator_1.body)('requirements').optional().isString()
+], async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const jobId = parseInt(req.params.id);
+        if (isNaN(jobId)) {
+            return res.status(400).json({ error: 'Invalid job ID' });
+        }
+        // Check if job exists
+        const existingJob = await database_prod_1.default.get('SELECT * FROM jobs WHERE id = $1', [jobId]);
+        if (!existingJob) {
+            return res.status(404).json({ error: 'Job not found' });
+        }
+        const { name, description, salary, company_name, location, requirements } = req.body;
+        const updates = [];
+        const params = [];
+        let paramIndex = 1;
+        if (name !== undefined) {
+            updates.push(`name = $${paramIndex++}`);
+            params.push(name);
+        }
+        if (description !== undefined) {
+            updates.push(`description = $${paramIndex++}`);
+            params.push(description || null);
+        }
+        if (salary !== undefined) {
+            updates.push(`salary = $${paramIndex++}`);
+            params.push(salary);
+        }
+        if (company_name !== undefined) {
+            updates.push(`company_name = $${paramIndex++}`);
+            params.push(company_name || null);
+        }
+        if (location !== undefined) {
+            updates.push(`location = $${paramIndex++}`);
+            params.push(location || null);
+        }
+        if (requirements !== undefined) {
+            updates.push(`requirements = $${paramIndex++}`);
+            params.push(requirements || null);
+        }
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+        params.push(jobId);
+        await database_prod_1.default.run(`UPDATE jobs SET ${updates.join(', ')} WHERE id = $${paramIndex}`, params);
+        const updated = await database_prod_1.default.get('SELECT * FROM jobs WHERE id = $1', [jobId]);
+        res.json(updated);
+    }
+    catch (error) {
+        console.error('Failed to update job:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

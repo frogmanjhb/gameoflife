@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
+const doubles_day_1 = require("../helpers/doubles-day");
 const router = (0, express_1.Router)();
 // Helper function to get math game daily limit from settings
 async function getMathGameDailyLimit() {
@@ -36,7 +37,7 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
             return res.json({
                 remaining_plays: dailyLimit,
                 daily_limit: dailyLimit,
-                high_scores: { easy: 0, medium: 0, hard: 0 },
+                high_scores: { easy: 0, medium: 0, hard: 0, extreme: 0 },
                 recent_sessions: []
             });
         }
@@ -62,7 +63,8 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
         const highScoreMap = {
             easy: 0,
             medium: 0,
-            hard: 0
+            hard: 0,
+            extreme: 0
         };
         highScores.forEach((row) => {
             const difficulty = row.difficulty;
@@ -97,7 +99,7 @@ router.post('/start', auth_1.authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'Only students can start math games' });
         }
         const { difficulty } = req.body;
-        if (!difficulty || !['easy', 'medium', 'hard'].includes(difficulty)) {
+        if (!difficulty || !['easy', 'medium', 'hard', 'extreme'].includes(difficulty)) {
             return res.status(400).json({ error: 'Invalid difficulty level' });
         }
         const userId = req.user.id;
@@ -226,6 +228,26 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
             console.warn(`🚨 SECURITY: User ${req.user.username} attempted to resubmit session ${session_id} (score: ${sessionScore}, earnings: ${sessionEarnings})`);
             return res.status(400).json({ error: 'Game session has already been submitted' });
         }
+        // SECURITY: Minimum game duration - each game runs 60 seconds client-side
+        // Reject if submitted too quickly (detects devtools/API abuse)
+        const sessionPlayedAt = new Date(session.played_at).getTime();
+        const minGameDurationMs = 45000; // 45 seconds (game is 60 sec, allow network lag)
+        if (Date.now() - sessionPlayedAt < minGameDurationMs) {
+            const elapsedSec = Math.floor((Date.now() - sessionPlayedAt) / 1000);
+            console.warn(`🚨 SECURITY: User ${req.user.username} submitted session ${session_id} after only ${elapsedSec}s (min 45s required)`);
+            return res.status(400).json({ error: 'Game submitted too quickly. Each game must run for at least 60 seconds.' });
+        }
+        // SECURITY: Rate limit - max 2 games per 3 minutes (each game = 60 sec minimum)
+        // Detects rapid-fire submissions (e.g. 9 games in 2 minutes)
+        const recentCompletions = await database_prod_1.default.query(`
+      SELECT COUNT(*) as count FROM math_game_sessions 
+      WHERE user_id = $1 AND earnings > 0 
+      AND played_at > NOW() - INTERVAL '3 minutes'
+    `, [userId]);
+        if (parseInt(recentCompletions[0].count) >= 2) {
+            console.warn(`🚨 SECURITY: User ${req.user.username} exceeded rate limit - ${recentCompletions[0].count} games in last 3 minutes`);
+            return res.status(429).json({ error: 'Too many games completed recently. Please wait a few minutes before playing again.' });
+        }
         // Calculate streak bonus
         const calculateStreakBonus = (sequence) => {
             let maxStreak = 0;
@@ -249,7 +271,7 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
             return 1.0;
         };
         // Calculate earnings with server-side validation
-        const difficultyMultipliers = { easy: 1.0, medium: 1.2, hard: 1.5 };
+        const difficultyMultipliers = { easy: 1.0, medium: 1.2, hard: 1.5, extreme: 2.0 };
         const basePoints = correct_answers * 1; // 1 point per correct answer
         const difficultyMultiplier = difficultyMultipliers[session.difficulty] || 1.0;
         const streakBonus = calculateStreakBonus(safeAnswerSequence);
@@ -264,6 +286,10 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
         if (totalEarnings > MAX_EARNINGS_PER_GAME) {
             console.warn(`🚨 SECURITY: User ${req.user.username} earnings ${totalEarnings} capped at ${MAX_EARNINGS_PER_GAME}`);
             totalEarnings = MAX_EARNINGS_PER_GAME;
+        }
+        // Doubles Day: double chore/math game earnings when plugin is enabled
+        if (await (0, doubles_day_1.isDoublesDayEnabled)()) {
+            totalEarnings = totalEarnings * 2;
         }
         // Update session with results
         await database_prod_1.default.query(`
@@ -284,9 +310,35 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
         DO UPDATE SET high_score = $3, achieved_at = CURRENT_TIMESTAMP
       `, [userId, session.difficulty, score]);
         }
-        // Add earnings to account balance
+        // Add earnings to account balance and deduct from treasury
         const account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = $1', [userId]);
-        if (account) {
+        if (account && totalEarnings > 0) {
+            // Get user's class for treasury
+            const userClass = req.user.class;
+            const mathSchoolId = req.user.school_id ?? null;
+            if (!userClass || !['6A', '6B', '6C'].includes(userClass)) {
+                console.warn(`⚠️ User ${req.user.username} has no valid class (${userClass}), skipping treasury deduction`);
+            }
+            else {
+                // Check treasury has sufficient funds (filtered by school_id)
+                const townSettings = mathSchoolId != null
+                    ? await database_prod_1.default.get('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id = $2', [userClass, mathSchoolId])
+                    : await database_prod_1.default.get('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id IS NULL', [userClass]);
+                const treasuryBalance = parseFloat(townSettings?.treasury_balance || '0');
+                if (treasuryBalance < totalEarnings) {
+                    console.warn(`⚠️ Treasury for ${userClass} has insufficient funds (R${treasuryBalance}) for math game payout (R${totalEarnings})`);
+                    return res.status(400).json({ error: 'Town treasury has insufficient funds to pay out your earnings. Please contact your teacher.' });
+                }
+                // Deduct from treasury (filtered by school_id)
+                if (mathSchoolId != null) {
+                    await database_prod_1.default.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [totalEarnings, userClass, mathSchoolId]);
+                }
+                else {
+                    await database_prod_1.default.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [totalEarnings, userClass]);
+                }
+                // Record treasury transaction
+                await database_prod_1.default.query('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [mathSchoolId, userClass, totalEarnings, 'withdrawal', `Math Game Payout to ${req.user.username}`, userId]);
+            }
             // Update account balance
             await database_prod_1.default.query(`
         UPDATE accounts 
