@@ -443,3 +443,59 @@ export interface TenderApplication {
   applicant_class?: string;
   reviewer_username?: string;
 }
+
+// Teacher Analytics Types
+export interface EngagementTimeSeries {
+  time_bucket: string;
+  logins: number;
+  chores_users: number;
+  chores_sessions: number;
+  transfers_users: number;
+  transfers_count: number;
+  purchases_users: number;
+  purchases_count: number;
+}
+
+export interface EngagementByClass {
+  class: string;
+  logins: number;
+  chores_users: number;
+  chores_sessions: number;
+  transfers_users: number;
+  transfers_count: number;
+  purchases_users: number;
+  purchases_count: number;
+}
+
+export interface EngagementByStudent {
+  id: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  class?: string;
+  logins: number;
+  chores_sessions: number;
+  transfers_count: number;
+  purchases_count: number;
+}
+
+export interface EngagementSummary {
+  total_logins_users: number;
+  total_logins: number;
+  total_chores_users: number;
+  total_chores_sessions: number;
+  total_transfers_users: number;
+  total_transfers: number;
+  total_purchases_users: number;
+  total_purchases: number;
+}
+
+export interface EngagementAnalytics {
+  time_range: 'day' | 'week' | 'month' | 'year';
+  scope: 'school' | 'classes' | 'students';
+  start_date: string;
+  time_series: EngagementTimeSeries[];
+  by_class: EngagementByClass[];
+  top_students: EngagementByStudent[];
+  summary: EngagementSummary;
+}

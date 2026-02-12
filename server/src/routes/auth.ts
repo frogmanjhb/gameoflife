@@ -331,6 +331,21 @@ router.post('/login', [
     };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
 
+    // Log login event for analytics (only for students and teachers, not super_admin)
+    if (user.role !== 'super_admin') {
+      try {
+        const ipAddress = req.ip || req.socket.remoteAddress || null;
+        const userAgent = req.get('user-agent') || null;
+        await database.run(
+          'INSERT INTO login_events (user_id, school_id, ip_address, user_agent) VALUES ($1, $2, $3, $4)',
+          [user.id, user.school_id, ipAddress, userAgent]
+        );
+      } catch (loginEventError) {
+        // Don't fail login if event logging fails (table might not exist yet)
+        console.log('Failed to log login event (non-critical):', loginEventError);
+      }
+    }
+
     // Get account data for students
     let account = null;
     if (user.role === 'student') {

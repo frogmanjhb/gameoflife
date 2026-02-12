@@ -398,4 +398,21 @@ export const tendersApi = {
   }
 };
 
+// Teacher Analytics API methods
+export const teacherAnalyticsApi = {
+  // Get engagement analytics
+  getEngagement: (params?: {
+    time_range?: 'day' | 'week' | 'month' | 'year';
+    scope?: 'school' | 'classes' | 'students';
+    class?: string;
+  }): Promise<{ data: import('../types').EngagementAnalytics }> => {
+    const queryParams = new URLSearchParams();
+    if (params?.time_range) queryParams.append('time_range', params.time_range);
+    if (params?.scope) queryParams.append('scope', params.scope);
+    if (params?.class) queryParams.append('class', params.class);
+    const queryString = queryParams.toString();
+    return api.get(`/teacher-analytics/engagement${queryString ? `?${queryString}` : ''}`);
+  }
+};
+
 export default api;

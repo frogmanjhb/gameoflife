@@ -27,6 +27,7 @@ import suggestionsBugsRoutes from './routes/suggestions-bugs';
 import disastersRoutes from './routes/disasters';
 import adminRoutes from './routes/admin';
 import superAdminRoutes from './routes/super-admin';
+import teacherAnalyticsRoutes from './routes/teacher-analytics';
 import database from './database/database-prod';
 
 const app = express();
@@ -166,6 +167,7 @@ app.use('/api/pizza-time', pizzaTimeRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/suggestions-bugs', suggestionsBugsRoutes);
 app.use('/api/disasters', disastersRoutes);
+app.use('/api/teacher-analytics', teacherAnalyticsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin', superAdminRoutes);
 
@@ -581,6 +583,28 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Account frozen migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '030_login_events.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Login events migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Login events migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '031_add_analytics_plugin.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Analytics plugin migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Analytics plugin migration may have already been applied:', migrationError);
     }
 
     // Sync default plugins (ensures all known plugins exist - no manual script needed)
