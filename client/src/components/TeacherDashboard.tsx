@@ -37,6 +37,7 @@ const TeacherDashboard: React.FC = () => {
   const { currentTown, currentTownClass, allTowns, announcements, loading: townLoading, setCurrentTownClass, refreshAnnouncements } = useTown();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs' | 'students' | 'pending' | 'shop'>('dashboard');
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingTransfersCount, setPendingTransfersCount] = useState(0);
   const [tileOrder, setTileOrder] = useState<number[]>([]);
   const [draggedTileId, setDraggedTileId] = useState<number | null>(null);
   const [dropTargetId, setDropTargetId] = useState<number | null>(null);
@@ -136,14 +137,17 @@ const TeacherDashboard: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [studentsRes, loansRes, pendingRes] = await Promise.all([
+      const [studentsRes, loansRes, pendingRes, pendingTransfersRes] = await Promise.all([
         api.get('/students'),
         api.get('/loans'),
-        api.get('/students/pending').catch(() => ({ data: [] })) // Don't fail if endpoint doesn't exist yet
+        api.get('/students/pending').catch(() => ({ data: [] })),
+        api.get('/transactions/pending-transfers').catch(() => ({ data: [] }))
       ]);
       setStudents(studentsRes.data);
       setLoans(loansRes.data);
       setPendingCount(pendingRes.data?.length || 0);
+      const transfers = pendingTransfersRes.data || [];
+      setPendingTransfersCount(transfers.filter((t: { status: string }) => t.status === 'pending').length);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -346,7 +350,10 @@ const TeacherDashboard: React.FC = () => {
                     <GripVertical className="h-5 w-5" />
                   </div>
                   <div className="pl-10">
-                    <PluginCard plugin={plugin} />
+                    <PluginCard
+                      plugin={plugin}
+                      needsAttention={plugin.route_path === '/bank' && pendingTransfersCount > 0}
+                    />
                   </div>
                 </div>
               );

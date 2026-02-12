@@ -337,17 +337,6 @@ router.post('/login', [
       account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [user.id]);
     }
 
-    // Record login event for engagement tracking (students only)
-    try {
-      await database.run(
-        'INSERT INTO login_events (user_id, school_id) VALUES ($1, $2)',
-        [user.id, user.school_id]
-      );
-    } catch (loginEventError) {
-      // Non-fatal: table may not exist yet if migration not run
-      console.log('Login event not recorded (table may not exist):', loginEventError);
-    }
-
     const response: AuthResponse = {
       token,
       user: {

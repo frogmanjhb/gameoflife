@@ -107,6 +107,34 @@
     animation-play-state: paused;
   }
 
+  /* Bank plugin attention - wiggle + pulse when pending transfers need approval */
+  @keyframes bank-attention {
+    0%, 100% {
+      transform: scale(1) rotate(0deg);
+      box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    }
+    25% {
+      transform: scale(1.02) rotate(-0.6deg);
+      box-shadow: 0 4px 12px -2px rgb(245 158 11 / 0.4);
+    }
+    50% {
+      transform: scale(1.02) rotate(0.6deg);
+      box-shadow: 0 4px 12px -2px rgb(245 158 11 / 0.5);
+    }
+    75% {
+      transform: scale(1.01) rotate(-0.3deg);
+      box-shadow: 0 2px 8px -2px rgb(245 158 11 / 0.35);
+    }
+  }
+
+  .bank-attention {
+    animation: bank-attention 2s ease-in-out infinite;
+  }
+
+  .bank-attention:hover {
+    animation-play-state: paused;
+  }
+
   /* Pushpin Styles */
   .pushpin {
     position: absolute;

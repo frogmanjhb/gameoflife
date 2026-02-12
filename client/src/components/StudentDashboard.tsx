@@ -41,9 +41,7 @@ const StudentDashboard: React.FC = () => {
   // Students must agree to app rules before accessing plugins. Until then, only show Town Rules.
   const hasAgreedToRules = !!user?.rules_agreed_at;
   const canAccessPlugins = user?.role !== 'student' || hasAgreedToRules;
-  const pluginsToShow = canAccessPlugins
-    ? enabledPlugins.filter((p) => p.route_path !== '/engagement')
-    : enabledPlugins.filter((p) => p.route_path === '/town-rules');
+  const pluginsToShow = canAccessPlugins ? enabledPlugins : enabledPlugins.filter((p) => p.route_path === '/town-rules');
   const { currentTown, announcements, loading: townLoading } = useTown();
   
   // Get header color theme (set once per login session)
