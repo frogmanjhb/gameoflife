@@ -162,7 +162,7 @@ router.get('/engagement', auth_1.authenticateToken, tenant_1.requireTenant, (0, 
           SELECT 
             DATE_TRUNC($1, t.created_at) AS time_bucket,
             COUNT(DISTINCT t.from_account_id)::int as transfer_count,
-            COUNT(*)::int as transfer_transactions
+            COUNT(DISTINCT t.id)::int as transfer_transactions
           FROM transactions t
           JOIN accounts a ON t.from_account_id = a.id
           JOIN users u ON a.user_id = u.id
@@ -214,14 +214,14 @@ router.get('/engagement', auth_1.authenticateToken, tenant_1.requireTenant, (0, 
           COUNT(DISTINCT mgs.user_id)::int as chores_users,
           COUNT(mgs.id)::int as chores_sessions,
           COUNT(DISTINCT CASE WHEN t.transaction_type = 'transfer' THEN t.from_account_id END)::int as transfers_users,
-          COUNT(CASE WHEN t.transaction_type = 'transfer' THEN t.id END)::int as transfers_count,
+          COUNT(DISTINCT CASE WHEN t.transaction_type = 'transfer' THEN t.id END)::int as transfers_count,
           COUNT(DISTINCT sp.user_id)::int as purchases_users,
           COUNT(sp.id)::int as purchases_count
         FROM users u
         ${classLoginJoin}
         LEFT JOIN math_game_sessions mgs ON mgs.user_id = u.id AND mgs.played_at >= $1
         LEFT JOIN accounts a ON a.user_id = u.id
-        LEFT JOIN transactions t ON (t.from_account_id = a.id OR t.to_account_id = a.id) 
+        LEFT JOIN transactions t ON t.from_account_id = a.id 
           AND t.transaction_type = 'transfer' AND t.created_at >= $1
         LEFT JOIN shop_purchases sp ON sp.user_id = u.id AND sp.purchase_date >= $1
         WHERE u.school_id = $2 
@@ -257,7 +257,7 @@ router.get('/engagement', auth_1.authenticateToken, tenant_1.requireTenant, (0, 
               ${studentLoginJoin}
               LEFT JOIN math_game_sessions mgs ON mgs.user_id = u.id AND mgs.played_at >= $1
               LEFT JOIN accounts a ON a.user_id = u.id
-              LEFT JOIN transactions t ON (t.from_account_id = a.id OR t.to_account_id = a.id) 
+              LEFT JOIN transactions t ON t.from_account_id = a.id 
                 AND t.transaction_type = 'transfer' AND t.created_at >= $1
               LEFT JOIN shop_purchases sp ON sp.user_id = u.id AND sp.purchase_date >= $1
               WHERE u.school_id = $2 
@@ -282,7 +282,7 @@ router.get('/engagement', auth_1.authenticateToken, tenant_1.requireTenant, (0, 
               ${studentLoginJoin}
               LEFT JOIN math_game_sessions mgs ON mgs.user_id = u.id AND mgs.played_at >= $1
               LEFT JOIN accounts a ON a.user_id = u.id
-              LEFT JOIN transactions t ON (t.from_account_id = a.id OR t.to_account_id = a.id) 
+              LEFT JOIN transactions t ON t.from_account_id = a.id 
                 AND t.transaction_type = 'transfer' AND t.created_at >= $1
               LEFT JOIN shop_purchases sp ON sp.user_id = u.id AND sp.purchase_date >= $1
               WHERE u.school_id = $2 
@@ -298,30 +298,66 @@ router.get('/engagement', auth_1.authenticateToken, tenant_1.requireTenant, (0, 
                 topStudents = [];
             }
         }
-        // Summary totals
-        const summaryLoginJoin = loginEventsExists
-            ? 'LEFT JOIN login_events le ON le.user_id = u.id AND le.login_at >= $1 AND le.school_id = $2'
-            : '';
-        const summaryLoginUsers = loginEventsExists ? 'COUNT(DISTINCT le.user_id)::int' : '0::int';
-        const summaryLoginCount = loginEventsExists ? 'COUNT(le.id)::int' : '0::int';
+        // Summary totals - use subqueries to avoid Cartesian product from JOINs
+        let summaryLoginSubquery = '';
+        if (loginEventsExists) {
+            summaryLoginSubquery = `
+          SELECT 
+            COUNT(DISTINCT le.user_id)::int as total_logins_users,
+            COUNT(le.id)::int as total_logins
+          FROM login_events le
+          JOIN users u ON le.user_id = u.id
+          WHERE le.school_id = $2 
+            AND le.login_at >= $1
+            AND u.role = 'student'
+        `;
+        }
+        else {
+            summaryLoginSubquery = `SELECT 0::int as total_logins_users, 0::int as total_logins`;
+        }
         const summary = await database_prod_1.default.get(`
         SELECT 
-          ${summaryLoginUsers} as total_logins_users,
-          ${summaryLoginCount} as total_logins,
-          COUNT(DISTINCT mgs.user_id)::int as total_chores_users,
-          COUNT(mgs.id)::int as total_chores_sessions,
-          COUNT(DISTINCT CASE WHEN t.transaction_type = 'transfer' THEN t.from_account_id END)::int as total_transfers_users,
-          COUNT(CASE WHEN t.transaction_type = 'transfer' THEN t.id END)::int as total_transfers,
-          COUNT(DISTINCT sp.user_id)::int as total_purchases_users,
-          COUNT(sp.id)::int as total_purchases
-        FROM users u
-        ${summaryLoginJoin}
-        LEFT JOIN math_game_sessions mgs ON mgs.user_id = u.id AND mgs.played_at >= $1
-        LEFT JOIN accounts a ON a.user_id = u.id
-        LEFT JOIN transactions t ON (t.from_account_id = a.id OR t.to_account_id = a.id) 
-          AND t.transaction_type = 'transfer' AND t.created_at >= $1
-        LEFT JOIN shop_purchases sp ON sp.user_id = u.id AND sp.purchase_date >= $1
-        WHERE u.school_id = $2 AND u.role = 'student'
+          COALESCE(login_stats.total_logins_users, 0)::int as total_logins_users,
+          COALESCE(login_stats.total_logins, 0)::int as total_logins,
+          COALESCE(chore_stats.total_chores_users, 0)::int as total_chores_users,
+          COALESCE(chore_stats.total_chores_sessions, 0)::int as total_chores_sessions,
+          COALESCE(transfer_stats.total_transfers_users, 0)::int as total_transfers_users,
+          COALESCE(transfer_stats.total_transfers, 0)::int as total_transfers,
+          COALESCE(purchase_stats.total_purchases_users, 0)::int as total_purchases_users,
+          COALESCE(purchase_stats.total_purchases, 0)::int as total_purchases
+        FROM (${summaryLoginSubquery}) login_stats
+        CROSS JOIN (
+          SELECT 
+            COUNT(DISTINCT mgs.user_id)::int as total_chores_users,
+            COUNT(mgs.id)::int as total_chores_sessions
+          FROM math_game_sessions mgs
+          JOIN users u ON mgs.user_id = u.id
+          WHERE u.school_id = $2 
+            AND mgs.played_at >= $1
+            AND u.role = 'student'
+        ) chore_stats
+        CROSS JOIN (
+          SELECT 
+            COUNT(DISTINCT t.from_account_id)::int as total_transfers_users,
+            COUNT(DISTINCT t.id)::int as total_transfers
+          FROM transactions t
+          JOIN accounts a ON t.from_account_id = a.id
+          JOIN users u ON a.user_id = u.id
+          WHERE u.school_id = $2 
+            AND t.transaction_type = 'transfer'
+            AND t.created_at >= $1
+            AND u.role = 'student'
+        ) transfer_stats
+        CROSS JOIN (
+          SELECT 
+            COUNT(DISTINCT sp.user_id)::int as total_purchases_users,
+            COUNT(sp.id)::int as total_purchases
+          FROM shop_purchases sp
+          JOIN users u ON sp.user_id = u.id
+          WHERE u.school_id = $2 
+            AND sp.purchase_date >= $1
+            AND u.role = 'student'
+        ) purchase_stats
       `, [startDate, req.schoolId]);
         res.json({
             time_range: timeRange,
