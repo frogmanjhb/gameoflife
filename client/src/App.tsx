@@ -22,6 +22,7 @@ import SuggestionsBugsPlugin from './components/plugins/SuggestionsBugsPlugin';
 import DisastersPlugin from './components/plugins/DisastersPlugin';
 import ChoresPlugin from './components/plugins/ChoresPlugin';
 import DoublesDayPlugin from './components/plugins/DoublesDayPlugin';
+import EngagementPlugin from './components/plugins/EngagementPlugin';
 import SuperAdminDashboard from './components/admin/SuperAdminDashboard';
 import RequireRulesAgreed from './components/RequireRulesAgreed';
 
@@ -316,6 +317,18 @@ const AppContent: React.FC = () => {
                     <RequireRulesAgreed>
                       <DoublesDayPlugin />
                     </RequireRulesAgreed>
+                  </TownProvider>
+                </PluginProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/engagement"
+            element={
+              <ProtectedRoute>
+                <PluginProvider>
+                  <TownProvider>
+                    <EngagementPlugin />
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>

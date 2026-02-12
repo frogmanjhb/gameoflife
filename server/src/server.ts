@@ -25,6 +25,7 @@ import pizzaTimeRoutes from './routes/pizza-time';
 import leaderboardRoutes from './routes/leaderboard';
 import suggestionsBugsRoutes from './routes/suggestions-bugs';
 import disastersRoutes from './routes/disasters';
+import engagementRoutes from './routes/engagement';
 import adminRoutes from './routes/admin';
 import superAdminRoutes from './routes/super-admin';
 import database from './database/database-prod';
@@ -166,6 +167,7 @@ app.use('/api/pizza-time', pizzaTimeRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/suggestions-bugs', suggestionsBugsRoutes);
 app.use('/api/disasters', disastersRoutes);
+app.use('/api/engagement', engagementRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin', superAdminRoutes);
 
@@ -583,11 +585,23 @@ async function initializeDatabase() {
       console.log('⚠️ Account frozen migration may have already been applied:', migrationError);
     }
 
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '030_engagement_plugin.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Engagement plugin migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Engagement plugin migration may have already been applied:', migrationError);
+    }
+
     // Sync default plugins (ensures all known plugins exist - no manual script needed)
     try {
       const defaultPlugins: { name: string; route_path: string; icon: string; description: string; enabled?: boolean }[] = [
         { name: 'Chores', route_path: '/chores', icon: '🧹', description: 'Earn money by completing chore challenges at home' },
         { name: 'Doubles Day', route_path: '/doubles-day', icon: '2️⃣', description: 'Double points from chores and double pizza time donations when enabled', enabled: false },
+        { name: 'Engagement', route_path: '/engagement', icon: '📊', description: 'Track student engagement: logins, chores, transfers, purchases', enabled: true },
       ];
       for (const p of defaultPlugins) {
         const existing = await database.query('SELECT id FROM plugins WHERE route_path = $1', [p.route_path]);
