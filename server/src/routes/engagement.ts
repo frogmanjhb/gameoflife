@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import database from '../database/database-prod';
-import { authenticateToken, AuthenticatedRequest, requireTenant, requireRole } from '../middleware/auth';
+import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { requireTenant } from '../middleware/tenant';
 
 const router = Router();
 
