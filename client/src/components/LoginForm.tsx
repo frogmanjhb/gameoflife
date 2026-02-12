@@ -365,6 +365,21 @@ const LoginForm: React.FC = () => {
             Learn more about features
           </Link>
         </div>
+
+        {/* Footer */}
+        <div className="text-center mt-8 pt-6 border-t border-gray-300">
+          <p className="text-xs text-gray-500">
+            Created by{' '}
+            <a
+              href="https://www.katalystlabs.co.za"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-600 hover:text-primary-700 underline transition-colors"
+            >
+              Katalyst Labs
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );

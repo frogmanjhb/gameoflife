@@ -309,9 +309,20 @@ const ShowcasePage: React.FC = () => {
 
       {/* Footer */}
       <footer className="bg-gray-900 text-gray-400 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-2">
           <p className="text-sm">
             Game of Life Classroom Simulation — Teaching Financial Literacy Through Interactive Play
+          </p>
+          <p className="text-sm">
+            Created by{' '}
+            <a
+              href="https://www.katalystlabs.co.za"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-400 hover:text-primary-300 underline transition-colors"
+            >
+              Katalyst Labs
+            </a>
           </p>
         </div>
       </footer>
