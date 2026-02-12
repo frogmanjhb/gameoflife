@@ -491,6 +491,18 @@ async function initializeDatabase() {
       console.log('⚠️ Multi-tenant schools migration may have already been applied:', migrationError);
     }
 
+    // Add paid status to shop purchases (Winkel pending/paid tracking)
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '023_shop_purchases_paid_status.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Shop purchases paid status migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Shop purchases paid status migration may have already been applied:', migrationError);
+    }
+
     // Add Chores plugin
     try {
       const migrationPath = join(__dirname, '..', 'migrations', '023_add_chores_plugin.sql');

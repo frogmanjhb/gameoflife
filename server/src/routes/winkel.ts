@@ -618,12 +618,12 @@ router.post(
           [account.id, shopAccount.id, price, 'transfer', `Shop Purchase: ${item.name}`]
         );
 
-        // Record purchase (paid=false so it appears in teacher's pending purchases)
+        // Record purchase (omit paid to work before migration 023; after migration, DEFAULT false = pending)
         const purchaseDate = formatDate(new Date());
         try {
           await client.query(
-            `INSERT INTO shop_purchases (user_id, item_id, price_paid, purchase_date, week_start_date, paid) 
-             VALUES ($1, $2, $3, $4, $5, false)`,
+            `INSERT INTO shop_purchases (user_id, item_id, price_paid, purchase_date, week_start_date) 
+             VALUES ($1, $2, $3, $4, $5)`,
             [req.user.id, item_id, price, purchaseDate, weekStart]
           );
         } catch (insertError: any) {
