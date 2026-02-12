@@ -25,6 +25,7 @@ import DoublesDayPlugin from './components/plugins/DoublesDayPlugin';
 import AnalyticsPlugin from './components/plugins/AnalyticsPlugin';
 import SuperAdminDashboard from './components/admin/SuperAdminDashboard';
 import RequireRulesAgreed from './components/RequireRulesAgreed';
+import ShowcasePage from './components/ShowcasePage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -75,6 +76,7 @@ const AppContent: React.FC = () => {
 
   return (
     <Routes>
+      <Route path="/showcase" element={<ShowcasePage />} />
       <Route path="/login" element={<LoginForm />} />
       <Route
         path="/admin"

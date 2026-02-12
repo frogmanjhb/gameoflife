@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Eye, EyeOff, User, Lock } from 'lucide-react';
+import { Eye, EyeOff, User, Lock, Info } from 'lucide-react';
 import SchoolPicker from './SchoolPicker';
 
 const LoginForm: React.FC = () => {
@@ -354,8 +355,15 @@ const LoginForm: React.FC = () => {
           </form>
         </div>
 
-        <div className="text-center text-sm text-gray-500">
-          <p>🏘️ Welcome to your Town Hub - Manage your virtual life!</p>
+        <div className="text-center space-y-2">
+          <p className="text-sm text-gray-500">🏘️ Welcome to your Town Hub - Manage your virtual life!</p>
+          <Link
+            to="/showcase"
+            className="inline-flex items-center text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors"
+          >
+            <Info className="h-4 w-4 mr-1" />
+            Learn more about features
+          </Link>
         </div>
       </div>
     </div>
