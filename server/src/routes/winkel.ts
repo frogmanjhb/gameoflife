@@ -262,7 +262,7 @@ router.get('/purchases', authenticateToken, async (req: AuthenticatedRequest, re
             sp.purchase_date,
             sp.week_start_date,
             sp.created_at,
-            COALESCE(sp.paid, true) as paid,
+            COALESCE(sp.paid, false) as paid,
             sp.paid_at,
             sp.paid_by,
             si.name as item_name,
@@ -278,7 +278,7 @@ router.get('/purchases', authenticateToken, async (req: AuthenticatedRequest, re
            JOIN shop_items si ON sp.item_id = si.id
            JOIN users u ON sp.user_id = u.id
            LEFT JOIN users payer ON sp.paid_by = payer.id
-           ORDER BY COALESCE(sp.paid, true) ASC, sp.purchase_date DESC, sp.created_at DESC`
+           ORDER BY COALESCE(sp.paid, false) ASC, sp.purchase_date DESC, sp.created_at DESC`
         );
       } catch (queryError) {
         // Fallback query if paid column doesn't exist yet
@@ -618,12 +618,12 @@ router.post(
           [account.id, shopAccount.id, price, 'transfer', `Shop Purchase: ${item.name}`]
         );
 
-        // Record purchase
+        // Record purchase (paid=false so it appears in teacher's pending purchases)
         const purchaseDate = formatDate(new Date());
         try {
           await client.query(
-            `INSERT INTO shop_purchases (user_id, item_id, price_paid, purchase_date, week_start_date) 
-             VALUES ($1, $2, $3, $4, $5)`,
+            `INSERT INTO shop_purchases (user_id, item_id, price_paid, purchase_date, week_start_date, paid) 
+             VALUES ($1, $2, $3, $4, $5, false)`,
             [req.user.id, item_id, price, purchaseDate, weekStart]
           );
         } catch (insertError: any) {
