@@ -63,6 +63,34 @@ router.get('/engagement', auth_1.authenticateToken, tenant_1.requireTenant, (0, 
         const className = req.query.class;
         const startDate = getStartDate(timeRange);
         const dateInterval = getDateInterval(timeRange);
+        // Check if login_events table exists, if not return empty data
+        let loginEventsExists = false;
+        try {
+            await database_prod_1.default.query('SELECT 1 FROM login_events LIMIT 1');
+            loginEventsExists = true;
+        }
+        catch (err) {
+            // Table doesn't exist yet - return empty data structure
+            console.log('⚠️ login_events table not found, returning empty analytics');
+            return res.json({
+                time_range: timeRange,
+                scope,
+                start_date: startDate.toISOString(),
+                time_series: [],
+                by_class: [],
+                top_students: [],
+                summary: {
+                    total_logins_users: 0,
+                    total_logins: 0,
+                    total_chores_users: 0,
+                    total_chores_sessions: 0,
+                    total_transfers_users: 0,
+                    total_transfers: 0,
+                    total_purchases_users: 0,
+                    total_purchases: 0
+                }
+            });
+        }
         // Time series data (aggregated by time period)
         // Use a simpler approach that works with PostgreSQL
         let intervalExpr = '';
@@ -78,14 +106,6 @@ router.get('/engagement', auth_1.authenticateToken, tenant_1.requireTenant, (0, 
                 break;
             default:
                 intervalExpr = '1 day';
-        }
-        // Check if login_events table exists, if not return empty data
-        let loginEventsExists = true;
-        try {
-            await database_prod_1.default.query('SELECT 1 FROM login_events LIMIT 1');
-        }
-        catch {
-            loginEventsExists = false;
         }
         // Build time series query conditionally
         let timeSeriesQuery = '';

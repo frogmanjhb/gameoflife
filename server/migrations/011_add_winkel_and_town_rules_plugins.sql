@@ -5,15 +5,15 @@
 -- Add Town Rules plugin if it doesn't exist
 INSERT INTO plugins (name, enabled, route_path, icon, description)
 VALUES ('Town Rules', true, '/town-rules', '📜', 'Town-specific rules and regulations')
-ON CONFLICT (name) DO UPDATE SET
-  route_path = EXCLUDED.route_path,
+ON CONFLICT (route_path) DO UPDATE SET
+  name = EXCLUDED.name,
   icon = EXCLUDED.icon,
   description = EXCLUDED.description;
 
 -- Add The Winkel plugin if it doesn't exist
 INSERT INTO plugins (name, enabled, route_path, icon, description)
 VALUES ('The Winkel', true, '/winkel', '🛒', 'Weekly shop for consumables and privileges')
-ON CONFLICT (name) DO UPDATE SET
-  route_path = EXCLUDED.route_path,
+ON CONFLICT (route_path) DO UPDATE SET
+  name = EXCLUDED.name,
   icon = EXCLUDED.icon,
   description = EXCLUDED.description;

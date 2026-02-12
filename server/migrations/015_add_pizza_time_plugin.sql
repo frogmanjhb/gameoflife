@@ -5,7 +5,7 @@
 -- Add Pizza Time plugin if it doesn't exist
 INSERT INTO plugins (name, enabled, route_path, icon, description)
 VALUES ('Pizza Time', true, '/pizza-time', '🍕', 'Donate towards a class pizza party!')
-ON CONFLICT (name) DO UPDATE SET
-  route_path = EXCLUDED.route_path,
+ON CONFLICT (route_path) DO UPDATE SET
+  name = EXCLUDED.name,
   icon = EXCLUDED.icon,
   description = EXCLUDED.description;

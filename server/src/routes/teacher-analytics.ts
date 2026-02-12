@@ -71,6 +71,34 @@ router.get('/engagement',
       const startDate = getStartDate(timeRange);
       const dateInterval = getDateInterval(timeRange);
 
+      // Check if login_events table exists, if not return empty data
+      let loginEventsExists = false;
+      try {
+        await database.query('SELECT 1 FROM login_events LIMIT 1');
+        loginEventsExists = true;
+      } catch (err) {
+        // Table doesn't exist yet - return empty data structure
+        console.log('⚠️ login_events table not found, returning empty analytics');
+        return res.json({
+          time_range: timeRange,
+          scope,
+          start_date: startDate.toISOString(),
+          time_series: [],
+          by_class: [],
+          top_students: [],
+          summary: {
+            total_logins_users: 0,
+            total_logins: 0,
+            total_chores_users: 0,
+            total_chores_sessions: 0,
+            total_transfers_users: 0,
+            total_transfers: 0,
+            total_purchases_users: 0,
+            total_purchases: 0
+          }
+        });
+      }
+
       // Time series data (aggregated by time period)
       // Use a simpler approach that works with PostgreSQL
       let intervalExpr = '';
@@ -86,14 +114,6 @@ router.get('/engagement',
           break;
         default:
           intervalExpr = '1 day';
-      }
-
-      // Check if login_events table exists, if not return empty data
-      let loginEventsExists = true;
-      try {
-        await database.query('SELECT 1 FROM login_events LIMIT 1');
-      } catch {
-        loginEventsExists = false;
       }
 
       // Build time series query conditionally
