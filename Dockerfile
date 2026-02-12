@@ -35,8 +35,11 @@ RUN npm run build
 RUN mkdir -p /app/server/dist/database
 RUN cp /app/server/src/database/*.sql /app/server/dist/database/ 2>/dev/null || echo "No SQL files to copy"
 
+# Make startup script executable
+RUN chmod +x start.sh
+
 # Expose port
 EXPOSE 5000
 
-# Start the application
-CMD ["npm", "start"]
+# Start the application - explicitly run server
+CMD ["/bin/bash", "start.sh"]
