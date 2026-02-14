@@ -26,21 +26,40 @@ async function getPizzaTimeStatusForClass(userClass: '6A' | '6B' | '6C', schoolI
   );
 
   if (!pizzaTime) {
-    if (schoolId !== null) {
-      await database.run(
-        'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount, school_id) VALUES ($1, $2, $3, $4, $5)',
-        [userClass, false, 0.00, 100000.00, schoolId]
-      );
-    } else {
-      await database.run(
-        'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)',
-        [userClass, false, 0.00, 100000.00]
-      );
+    try {
+      if (schoolId !== null) {
+        await database.run(
+          'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount, school_id) VALUES ($1, $2, $3, $4, $5)',
+          [userClass, false, 0.00, 100000.00, schoolId]
+        );
+      } else {
+        await database.run(
+          'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)',
+          [userClass, false, 0.00, 100000.00]
+        );
+      }
+    } catch (insertErr: any) {
+      // Duplicate key (23505): migration 032 may not be run yet (UNIQUE on class only). Re-select.
+      if (insertErr?.code !== '23505') throw insertErr;
     }
     pizzaTime = await database.get(
       `SELECT * FROM pizza_time WHERE ${schoolCondition}`,
       params
     );
+  }
+
+  // If still no row (e.g. teacher's school has no pizza_time and migration 032 not run), return empty status
+  if (!pizzaTime) {
+    return {
+      id: null,
+      class: userClass,
+      is_active: false,
+      current_fund: 0,
+      goal_amount: 100000,
+      donations: [],
+      donation_count: 0,
+      donation_history: []
+    };
   }
 
   const donations = await database.query(

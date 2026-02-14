@@ -607,6 +607,28 @@ async function initializeDatabase() {
       console.log('⚠️ Analytics plugin migration may have already been applied:', migrationError);
     }
 
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '032_pizza_time_school_unique.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Pizza time school unique constraint migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Pizza time school unique migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '033_plugins_route_path_per_school.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Plugins route_path per school migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Plugins route_path per school migration may have already been applied:', migrationError);
+    }
+
     // Sync default plugins (ensures all known plugins exist - no manual script needed)
     try {
       const defaultPlugins: { name: string; route_path: string; icon: string; description: string; enabled?: boolean }[] = [
