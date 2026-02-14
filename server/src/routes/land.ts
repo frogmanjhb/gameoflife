@@ -98,6 +98,7 @@ function generateGridCode(row: number, col: number): string {
 router.get('/parcels', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { minRow, maxRow, minCol, maxCol, owned, biome } = req.query;
+    const schoolId = req.user?.school_id ?? null;
     
     let query = `
       SELECT lp.*, u.username as owner_username, u.first_name as owner_first_name, u.last_name as owner_last_name
@@ -107,6 +108,13 @@ router.get('/parcels', authenticateToken, async (req: AuthenticatedRequest, res:
     `;
     const params: any[] = [];
     let paramIndex = 1;
+
+    if (schoolId !== null) {
+      query += ` AND lp.school_id = $${paramIndex++}`;
+      params.push(schoolId);
+    } else {
+      query += ' AND lp.school_id IS NULL';
+    }
 
     // Viewport filtering for performance
     if (minRow !== undefined && maxRow !== undefined) {
@@ -141,17 +149,24 @@ router.get('/parcels', authenticateToken, async (req: AuthenticatedRequest, res:
   }
 });
 
-// GET /api/land/parcels/:code - Get single parcel details
+// GET /api/land/parcels/:code - Get single parcel details (school-scoped)
 router.get('/parcels/:code', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { code } = req.params;
+    const schoolId = req.user?.school_id ?? null;
     
-    const parcel = await database.get(`
-      SELECT lp.*, u.username as owner_username, u.first_name as owner_first_name, u.last_name as owner_last_name
-      FROM land_parcels lp
-      LEFT JOIN users u ON lp.owner_id = u.id
-      WHERE lp.grid_code = $1
-    `, [code.toUpperCase()]);
+    const parcel = await database.get(
+      schoolId !== null
+        ? `SELECT lp.*, u.username as owner_username, u.first_name as owner_first_name, u.last_name as owner_last_name
+           FROM land_parcels lp
+           LEFT JOIN users u ON lp.owner_id = u.id
+           WHERE lp.grid_code = $1 AND lp.school_id = $2`
+        : `SELECT lp.*, u.username as owner_username, u.first_name as owner_first_name, u.last_name as owner_last_name
+           FROM land_parcels lp
+           LEFT JOIN users u ON lp.owner_id = u.id
+           WHERE lp.grid_code = $1 AND lp.school_id IS NULL`,
+      schoolId !== null ? [code.toUpperCase(), schoolId] : [code.toUpperCase()]
+    );
 
     if (!parcel) {
       return res.status(404).json({ error: 'Parcel not found' });
@@ -246,12 +261,19 @@ router.post('/purchase-request',
         return res.status(400).json({ error: 'Insufficient balance for this purchase' });
       }
 
-      // Create purchase request
-      const result = await database.get(`
-        INSERT INTO land_purchase_requests (user_id, parcel_id, offered_price, status)
-        VALUES ($1, $2, $3, 'pending')
-        RETURNING *
-      `, [req.user!.id, parcel_id, offered_price]);
+      // Create purchase request (with school_id for tenant isolation)
+      const schoolId = req.user!.school_id ?? null;
+      const result = schoolId !== null
+        ? await database.get(`
+            INSERT INTO land_purchase_requests (user_id, parcel_id, offered_price, status, school_id)
+            VALUES ($1, $2, $3, 'pending', $4)
+            RETURNING *
+          `, [req.user!.id, parcel_id, offered_price, schoolId])
+        : await database.get(`
+            INSERT INTO land_purchase_requests (user_id, parcel_id, offered_price, status)
+            VALUES ($1, $2, $3, 'pending')
+            RETURNING *
+          `, [req.user!.id, parcel_id, offered_price]);
 
       res.status(201).json({
         message: 'Purchase request submitted successfully',
@@ -271,6 +293,8 @@ router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedReq
     let query: string;
     let params: any[];
 
+    const schoolId = req.user?.school_id ?? null;
+
     if (req.user!.role === 'teacher') {
       query = `
         SELECT lpr.*, 
@@ -289,8 +313,14 @@ router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedReq
       `;
       params = [];
       
+      if (schoolId !== null) {
+        query += ' WHERE u.school_id = $1';
+        params.push(schoolId);
+      } else {
+        query += ' WHERE u.school_id IS NULL';
+      }
       if (status) {
-        query += ' WHERE lpr.status = $1';
+        query += ` AND lpr.status = $${params.length + 1}`;
         params.push(status);
       }
       
@@ -325,7 +355,7 @@ router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedReq
   }
 });
 
-// PUT /api/land/purchase-requests/:id - Approve or deny a purchase request (teachers only)
+// PUT /api/land/purchase-requests/:id - Approve or deny a purchase request (teachers only, same school)
 router.put('/purchase-requests/:id',
   authenticateToken,
   requireRole(['teacher']),
@@ -342,16 +372,21 @@ router.put('/purchase-requests/:id',
 
       const requestId = parseInt(req.params.id);
       const { status, denial_reason } = req.body;
+      const schoolId = req.user?.school_id ?? null;
 
-      // Get the purchase request
+      // Get the purchase request (must be from a student in teacher's school)
       const purchaseRequest = await database.get(`
-        SELECT lpr.*, lp.owner_id, lp.value as parcel_value
+        SELECT lpr.*, lp.owner_id, lp.value as parcel_value, u.school_id as applicant_school_id
         FROM land_purchase_requests lpr
         JOIN land_parcels lp ON lpr.parcel_id = lp.id
+        JOIN users u ON lpr.user_id = u.id
         WHERE lpr.id = $1
       `, [requestId]);
 
       if (!purchaseRequest) {
+        return res.status(404).json({ error: 'Purchase request not found' });
+      }
+      if (schoolId !== null && purchaseRequest.applicant_school_id !== schoolId) {
         return res.status(404).json({ error: 'Purchase request not found' });
       }
 
@@ -497,17 +532,19 @@ router.put('/purchase-requests/:id',
   }
 );
 
-// POST /api/land/seed - Seed initial land data (teachers only)
+// POST /api/land/seed - Seed initial land data for teacher's school (teachers only)
 router.post('/seed',
   authenticateToken,
   requireRole(['teacher']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      // Check if land parcels already exist
-      const existingCount = await database.get('SELECT COUNT(*) as count FROM land_parcels');
+      const schoolId = req.user?.school_id ?? null;
+      const existingCount = schoolId !== null
+        ? await database.get('SELECT COUNT(*) as count FROM land_parcels WHERE school_id = $1', [schoolId])
+        : await database.get('SELECT COUNT(*) as count FROM land_parcels WHERE school_id IS NULL');
       if (existingCount && existingCount.count > 0) {
         return res.status(400).json({ 
-          error: 'Land parcels already seeded',
+          error: 'Land parcels already seeded for this school',
           count: existingCount.count
         });
       }
@@ -557,13 +594,19 @@ router.post('/seed',
         }
       }
 
-      // Insert in batches of 100 for performance
+      // Insert in batches of 100 for performance (with school_id when teacher has school)
       const batchSize = 100;
+      const insertCols = schoolId !== null
+        ? 'grid_code, row_index, col_index, biome_type, value, risk_level, pros, cons, school_id'
+        : 'grid_code, row_index, col_index, biome_type, value, risk_level, pros, cons';
       for (let i = 0; i < parcels.length; i += batchSize) {
         const batch = parcels.slice(i, i + batchSize);
+        const values = schoolId !== null
+          ? batch.map(v => v.replace(/\)$/, `, ${schoolId})`))
+          : batch;
         await database.run(`
-          INSERT INTO land_parcels (grid_code, row_index, col_index, biome_type, value, risk_level, pros, cons)
-          VALUES ${batch.join(', ')}
+          INSERT INTO land_parcels (${insertCols})
+          VALUES ${values.join(', ')}
         `);
       }
 
@@ -578,31 +621,54 @@ router.post('/seed',
   }
 );
 
-// GET /api/land/stats - Get land statistics (for teacher dashboard)
+// GET /api/land/stats - Get land statistics (school-scoped)
 router.get('/stats', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const totalParcels = await database.get('SELECT COUNT(*) as count FROM land_parcels');
-    const ownedParcels = await database.get('SELECT COUNT(*) as count FROM land_parcels WHERE owner_id IS NOT NULL');
-    const pendingRequests = await database.get('SELECT COUNT(*) as count FROM land_purchase_requests WHERE status = \'pending\'');
-    
-    const biomeStats = await database.query(`
-      SELECT biome_type, COUNT(*) as count, 
-             COUNT(owner_id) as owned_count,
-             AVG(value) as avg_value
-      FROM land_parcels 
-      GROUP BY biome_type
-    `);
+    const schoolId = req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null
+      ? 'WHERE lp.school_id = $1'
+      : 'WHERE lp.school_id IS NULL';
+    const schoolFilterLpr = schoolId !== null
+      ? 'lpr.school_id = $1 AND lpr.status = \'pending\''
+      : 'lpr.school_id IS NULL AND lpr.status = \'pending\'';
+    const params = schoolId !== null ? [schoolId] : [];
 
-    const topOwners = await database.query(`
-      SELECT u.username, u.first_name, u.last_name, 
-             COUNT(lp.id) as parcel_count,
-             SUM(lp.value) as total_value
-      FROM land_parcels lp
-      JOIN users u ON lp.owner_id = u.id
-      GROUP BY u.id, u.username, u.first_name, u.last_name
-      ORDER BY parcel_count DESC
-      LIMIT 10
-    `);
+    const totalParcels = await database.get(
+      `SELECT COUNT(*) as count FROM land_parcels lp ${schoolFilter}`,
+      params
+    );
+    const ownedParcels = await database.get(
+      `SELECT COUNT(*) as count FROM land_parcels lp ${schoolFilter} AND lp.owner_id IS NOT NULL`,
+      params
+    );
+    const pendingRequests = await database.get(
+      `SELECT COUNT(*) as count FROM land_purchase_requests lpr WHERE ${schoolFilterLpr}`,
+      params
+    );
+    
+    const biomeStats = await database.query(
+      `SELECT lp.biome_type, COUNT(*) as count, 
+              COUNT(lp.owner_id) as owned_count,
+              AVG(lp.value) as avg_value
+       FROM land_parcels lp
+       ${schoolFilter}
+       GROUP BY lp.biome_type`,
+      params
+    );
+
+    const topOwnersParams = schoolId !== null ? [schoolId] : [];
+    const topOwners = await database.query(
+      `SELECT u.username, u.first_name, u.last_name, 
+              COUNT(lp.id) as parcel_count,
+              SUM(lp.value) as total_value
+       FROM land_parcels lp
+       JOIN users u ON lp.owner_id = u.id
+       ${schoolId !== null ? 'WHERE lp.school_id = $1' : 'WHERE lp.school_id IS NULL'}
+       GROUP BY u.id, u.username, u.first_name, u.last_name
+       ORDER BY parcel_count DESC
+       LIMIT 10`,
+      topOwnersParams
+    );
 
     res.json({
       total_parcels: totalParcels?.count || 0,
@@ -640,9 +706,16 @@ router.post('/swap',
         return res.status(400).json({ error: 'Cannot swap a parcel with itself' });
       }
 
-      const parcelA = await database.get('SELECT id, row_index, col_index, grid_code FROM land_parcels WHERE id = $1', [parcel_id_a]);
-      const parcelB = await database.get('SELECT id, row_index, col_index, grid_code FROM land_parcels WHERE id = $1', [parcel_id_b]);
+      const schoolId = req.user?.school_id ?? null;
+      const parcelA = await database.get('SELECT id, row_index, col_index, grid_code, school_id FROM land_parcels WHERE id = $1', [parcel_id_a]);
+      const parcelB = await database.get('SELECT id, row_index, col_index, grid_code, school_id FROM land_parcels WHERE id = $1', [parcel_id_b]);
       if (!parcelA || !parcelB) {
+        return res.status(404).json({ error: 'One or both parcels not found' });
+      }
+      if (schoolId !== null && (parcelA.school_id !== schoolId || parcelB.school_id !== schoolId)) {
+        return res.status(404).json({ error: 'One or both parcels not found' });
+      }
+      if (schoolId === null && (parcelA.school_id != null || parcelB.school_id != null)) {
         return res.status(404).json({ error: 'One or both parcels not found' });
       }
 
@@ -675,13 +748,16 @@ router.post('/swap',
   }
 );
 
-// POST /api/land/recalculate-values - Recalculate all parcel values to match current biome config (teachers only)
+// POST /api/land/recalculate-values - Recalculate parcel values for teacher's school (teachers only)
 router.post('/recalculate-values',
   authenticateToken,
   requireRole(['teacher']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const parcels = await database.query('SELECT id, row_index, col_index, biome_type FROM land_parcels');
+      const schoolId = req.user?.school_id ?? null;
+      const parcels = schoolId !== null
+        ? await database.query('SELECT id, row_index, col_index, biome_type FROM land_parcels WHERE school_id = $1', [schoolId])
+        : await database.query('SELECT id, row_index, col_index, biome_type FROM land_parcels WHERE school_id IS NULL');
       let updated = 0;
       for (const p of parcels) {
         const biome = p.biome_type as BiomeType;

@@ -707,13 +707,19 @@ router.post('/pay-basic-salary', [
 
     console.log('💰 Paying basic salary to unemployed students:', amount);
 
-    // Get all students without jobs, including their class
+    const schoolId = req.user?.school_id ?? req.schoolId ?? null;
+    const schoolFilter = schoolId !== null
+      ? 'AND u.school_id = $1'
+      : 'AND u.school_id IS NULL';
+    const studentParams = schoolId !== null ? [schoolId] : [];
+
+    // Get unemployed students in teacher's school only
     const students = await database.query(
       `SELECT u.id, u.username, u.class, a.id as account_id 
        FROM users u 
        LEFT JOIN accounts a ON u.id = a.user_id 
-       WHERE u.role = 'student' AND (u.job_id IS NULL OR u.job_id = 0)`,
-      []
+       WHERE u.role = 'student' AND (u.job_id IS NULL OR u.job_id = 0) ${schoolFilter}`,
+      studentParams
     );
 
     if (students.length === 0) {
@@ -734,10 +740,12 @@ router.post('/pay-basic-salary', [
       }
     }
 
-    // Check each class treasury has sufficient funds
+    // Check each class treasury has sufficient funds (teacher's school)
     for (const [townClass, classStudents] of Object.entries(studentsByClass)) {
       const totalNeeded = classStudents.filter(s => s.account_id).length * amount;
-      const town = await database.get('SELECT treasury_balance FROM town_settings WHERE class = $1', [townClass]);
+      const town = schoolId != null
+        ? await database.get('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id = $2', [townClass, schoolId])
+        : await database.get('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id IS NULL', [townClass]);
       const treasuryBalance = parseFloat(town?.treasury_balance || '0');
       
       if (treasuryBalance < totalNeeded) {
@@ -785,12 +793,11 @@ router.post('/pay-basic-salary', [
       }
 
       // Deduct from each class treasury (filtered by school_id)
-      const basicSchoolId = req.user?.school_id ?? req.schoolId ?? null;
       for (const [townClass, totals] of Object.entries(classTotals)) {
-        if (basicSchoolId != null) {
+        if (schoolId != null) {
           await client.query(
             'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
-            [totals.total, townClass, basicSchoolId]
+            [totals.total, townClass, schoolId]
           );
         } else {
           await client.query(
@@ -802,7 +809,7 @@ router.post('/pay-basic-salary', [
         // Record treasury transaction
         await client.query(
           'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
-          [basicSchoolId, townClass, totals.total, 'withdrawal', `Basic salary payments to ${totals.count} unemployed students`, req.user?.id]
+          [schoolId, townClass, totals.total, 'withdrawal', `Basic salary payments to ${totals.count} unemployed students`, req.user?.id]
         );
       }
 
@@ -827,16 +834,22 @@ router.post('/pay-basic-salary', [
   }
 });
 
-// Get unemployed students count (teachers only)
+// Get unemployed students count (teachers only, school-scoped)
 router.get('/unemployed-students', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const schoolId = req.user?.school_id ?? req.schoolId ?? null;
+    const schoolFilter = schoolId !== null
+      ? 'AND u.school_id = $1'
+      : 'AND u.school_id IS NULL';
+    const params = schoolId !== null ? [schoolId] : [];
+
     const students = await database.query(
       `SELECT u.id, u.username, u.first_name, u.last_name, u.class, a.balance, a.account_number
        FROM users u 
        LEFT JOIN accounts a ON u.id = a.user_id 
-       WHERE u.role = 'student' AND (u.job_id IS NULL OR u.job_id = 0)
+       WHERE u.role = 'student' AND (u.job_id IS NULL OR u.job_id = 0) ${schoolFilter}
        ORDER BY u.class, u.last_name, u.first_name`,
-      []
+      params
     );
     res.json({ students, count: students.length });
   } catch (error) {

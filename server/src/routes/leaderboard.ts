@@ -19,7 +19,7 @@ interface LeaderboardEntry {
   rank: number;
 }
 
-// Get overall leaderboard (top 5 across all classes)
+// Get overall leaderboard (top 5 across all classes, school-scoped)
 router.get('/overall', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     // Check if math game tables exist
@@ -28,6 +28,10 @@ router.get('/overall', authenticateToken, async (req: AuthenticatedRequest, res:
     } catch (tableError) {
       return res.json({ leaderboard: [] });
     }
+
+    const schoolId = req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
+    const params = schoolId !== null ? [schoolId] : [];
 
     const leaderboard = await database.query(`
       WITH player_stats AS (
@@ -46,7 +50,7 @@ router.get('/overall', authenticateToken, async (req: AuthenticatedRequest, res:
         FROM users u
         LEFT JOIN math_game_sessions mgs ON u.id = mgs.user_id
         LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id
-        WHERE u.role = 'student'
+        WHERE u.role = 'student' ${schoolFilter}
         GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
         HAVING COUNT(mgs.id) > 0
       )
@@ -56,7 +60,7 @@ router.get('/overall', authenticateToken, async (req: AuthenticatedRequest, res:
       FROM player_stats
       ORDER BY total_points DESC, games_played ASC
       LIMIT 5
-    `);
+    `, params);
 
     res.json({ leaderboard });
   } catch (error) {
@@ -65,10 +69,11 @@ router.get('/overall', authenticateToken, async (req: AuthenticatedRequest, res:
   }
 });
 
-// Get class-specific leaderboard (top 5 per class)
+// Get class-specific leaderboard (top 5 per class, school-scoped)
 router.get('/class/:className', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const className = req.params.className;
+    const schoolId = req.user?.school_id ?? null;
 
     // Validate class name
     if (!['6A', '6B', '6C'].includes(className)) {
@@ -82,6 +87,9 @@ router.get('/class/:className', authenticateToken, async (req: AuthenticatedRequ
       return res.json({ leaderboard: [] });
     }
 
+    const schoolFilter = schoolId !== null ? 'AND u.school_id = $2' : '';
+    const params = schoolId !== null ? [className, schoolId] : [className];
+
     const leaderboard = await database.query(`
       WITH player_stats AS (
         SELECT 
@@ -99,7 +107,7 @@ router.get('/class/:className', authenticateToken, async (req: AuthenticatedRequ
         FROM users u
         LEFT JOIN math_game_sessions mgs ON u.id = mgs.user_id
         LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id
-        WHERE u.role = 'student' AND u.class = $1
+        WHERE u.role = 'student' AND u.class = $1 ${schoolFilter}
         GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
         HAVING COUNT(mgs.id) > 0
       )
@@ -109,7 +117,7 @@ router.get('/class/:className', authenticateToken, async (req: AuthenticatedRequ
       FROM player_stats
       ORDER BY total_points DESC, games_played ASC
       LIMIT 5
-    `, [className]);
+    `, params);
 
     res.json({ leaderboard });
   } catch (error) {
@@ -118,7 +126,7 @@ router.get('/class/:className', authenticateToken, async (req: AuthenticatedRequ
   }
 });
 
-// Get all classes leaderboards at once
+// Get all classes leaderboards at once (school-scoped)
 router.get('/all-classes', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     // Check if math game tables exist
@@ -132,11 +140,13 @@ router.get('/all-classes', authenticateToken, async (req: AuthenticatedRequest, 
       });
     }
 
-    // Fetch leaderboards for all classes
+    const schoolId = req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null ? 'AND u.school_id = $2' : '';
     const classes = ['6A', '6B', '6C'];
     const allLeaderboards: Record<string, LeaderboardEntry[]> = {};
 
     for (const className of classes) {
+      const params = schoolId !== null ? [className, schoolId] : [className];
       const leaderboard = await database.query(`
         WITH player_stats AS (
           SELECT 
@@ -154,7 +164,7 @@ router.get('/all-classes', authenticateToken, async (req: AuthenticatedRequest, 
           FROM users u
           LEFT JOIN math_game_sessions mgs ON u.id = mgs.user_id
           LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id
-          WHERE u.role = 'student' AND u.class = $1
+          WHERE u.role = 'student' AND u.class = $1 ${schoolFilter}
           GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
           HAVING COUNT(mgs.id) > 0
         )
@@ -164,7 +174,7 @@ router.get('/all-classes', authenticateToken, async (req: AuthenticatedRequest, 
         FROM player_stats
         ORDER BY total_points DESC, games_played ASC
         LIMIT 5
-      `, [className]);
+      `, params);
 
       allLeaderboards[className] = leaderboard;
     }

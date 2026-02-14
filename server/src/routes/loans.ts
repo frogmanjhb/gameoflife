@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { requireTenant } from '../middleware/tenant';
 import { LoanRequest, LoanApprovalRequest, LoanWithDetails } from '../types';
 
 const router = Router();
@@ -824,9 +825,13 @@ router.post('/activate/:loan_id', authenticateToken, requireRole(['teacher']), a
   }
 });
 
-// Admin route to view all loans (teachers only)
-router.get('/admin/all', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+// Admin route to view all loans (teachers only, school-scoped)
+router.get('/admin/all', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
+    const params = schoolId !== null ? [schoolId] : [];
+
     const loans = await database.query(`
       SELECT 
         l.*,
@@ -834,8 +839,9 @@ router.get('/admin/all', authenticateToken, requireRole(['teacher']), async (req
         u.role as borrower_role
       FROM loans l
       JOIN users u ON l.borrower_id = u.id
+      WHERE 1=1 ${schoolFilter}
       ORDER BY l.created_at DESC
-    `);
+    `, params);
     
     res.json({ loans });
   } catch (error) {
@@ -844,9 +850,13 @@ router.get('/admin/all', authenticateToken, requireRole(['teacher']), async (req
   }
 });
 
-// Admin route to view all users (teachers only)
-router.get('/admin/users', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+// Admin route to view all users (teachers only, school-scoped)
+router.get('/admin/users', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null ? 'WHERE u.school_id = $1' : '';
+    const params = schoolId !== null ? [schoolId] : [];
+
     const users = await database.query(`
       SELECT 
         u.*,
@@ -854,8 +864,9 @@ router.get('/admin/users', authenticateToken, requireRole(['teacher']), async (r
         a.account_number
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
+      ${schoolFilter}
       ORDER BY u.created_at DESC
-    `);
+    `, params);
     
     res.json({ users });
   } catch (error) {
@@ -864,9 +875,15 @@ router.get('/admin/users', authenticateToken, requireRole(['teacher']), async (r
   }
 });
 
-// Admin route to view all transactions (teachers only)
-router.get('/admin/transactions', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+// Admin route to view all transactions (teachers only, school-scoped)
+router.get('/admin/transactions', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null
+      ? 'AND (from_user.school_id = $1 OR to_user.school_id = $1)'
+      : '';
+    const params = schoolId !== null ? [schoolId] : [];
+
     const transactions = await database.query(`
       SELECT 
         t.*,
@@ -879,9 +896,10 @@ router.get('/admin/transactions', authenticateToken, requireRole(['teacher']), a
       LEFT JOIN accounts to_acc ON t.to_account_id = to_acc.id
       LEFT JOIN users from_user ON from_acc.user_id = from_user.id
       LEFT JOIN users to_user ON to_acc.user_id = to_user.id
+      WHERE 1=1 ${schoolFilter}
       ORDER BY t.created_at DESC
       LIMIT 100
-    `);
+    `, params);
     
     res.json({ transactions });
   } catch (error) {
@@ -890,9 +908,13 @@ router.get('/admin/transactions', authenticateToken, requireRole(['teacher']), a
   }
 });
 
-// Admin route to view loan payments (teachers only)
-router.get('/admin/loan-payments', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+// Admin route to view loan payments (teachers only, school-scoped)
+router.get('/admin/loan-payments', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
+    const params = schoolId !== null ? [schoolId] : [];
+
     const payments = await database.query(`
       SELECT 
         lp.*,
@@ -902,8 +924,9 @@ router.get('/admin/loan-payments', authenticateToken, requireRole(['teacher']), 
       FROM loan_payments lp
       JOIN loans l ON lp.loan_id = l.id
       JOIN users u ON l.borrower_id = u.id
+      WHERE 1=1 ${schoolFilter}
       ORDER BY lp.payment_date DESC
-    `);
+    `, params);
     
     res.json({ payments });
   } catch (error) {

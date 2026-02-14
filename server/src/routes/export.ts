@@ -1,12 +1,19 @@
 import { Router, Response } from 'express';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { requireTenant } from '../middleware/tenant';
 
 const router = Router();
 
-// Export transactions as CSV
-router.get('/transactions/csv', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+// Export transactions as CSV (school-scoped: only transactions involving accounts in teacher's school)
+router.get('/transactions/csv', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null
+      ? 'AND (fu.school_id = $1 OR tu.school_id = $1)'
+      : '';
+    const params = schoolId !== null ? [schoolId] : [];
+
     const transactions = await database.query(`
       SELECT 
         t.id,
@@ -21,8 +28,9 @@ router.get('/transactions/csv', authenticateToken, requireRole(['teacher']), asy
       LEFT JOIN users fu ON fa.user_id = fu.id
       LEFT JOIN accounts ta ON t.to_account_id = ta.id
       LEFT JOIN users tu ON ta.user_id = tu.id
+      WHERE 1=1 ${schoolFilter}
       ORDER BY t.created_at DESC
-    `);
+    `, params);
 
     // Convert to CSV format
     const csvHeader = 'ID,Date,Type,Amount,Description,From,To\n';
@@ -41,9 +49,13 @@ router.get('/transactions/csv', authenticateToken, requireRole(['teacher']), asy
   }
 });
 
-// Export students as CSV
-router.get('/students/csv', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+// Export students as CSV (school-scoped)
+router.get('/students/csv', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
+    const params = schoolId !== null ? [schoolId] : [];
+
     const students = await database.query(`
       SELECT 
         u.id,
@@ -54,9 +66,9 @@ router.get('/students/csv', authenticateToken, requireRole(['teacher']), async (
         a.updated_at as last_activity
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
-      WHERE u.role = 'student'
+      WHERE u.role = 'student' ${schoolFilter}
       ORDER BY u.username
-    `);
+    `, params);
 
     // Convert to CSV format
     const csvHeader = 'ID,Username,Account Number,Balance,Last Activity,Join Date\n';
@@ -75,9 +87,13 @@ router.get('/students/csv', authenticateToken, requireRole(['teacher']), async (
   }
 });
 
-// Export loans as CSV
-router.get('/loans/csv', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+// Export loans as CSV (school-scoped: only borrowers in teacher's school)
+router.get('/loans/csv', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
+    const params = schoolId !== null ? [schoolId] : [];
+
     const loans = await database.query(`
       SELECT 
         l.id,
@@ -95,9 +111,10 @@ router.get('/loans/csv', authenticateToken, requireRole(['teacher']), async (req
       FROM loans l
       JOIN users u ON l.borrower_id = u.id
       LEFT JOIN loan_payments lp ON l.id = lp.loan_id
+      WHERE 1=1 ${schoolFilter}
       GROUP BY l.id
       ORDER BY l.created_at DESC
-    `);
+    `, params);
 
     // Convert to CSV format
     const csvHeader = 'ID,Borrower,Amount,Term (Months),Interest Rate,Status,Outstanding Balance,Monthly Payment,Total Paid,Created,Approved,Due Date\n';

@@ -161,7 +161,8 @@ router.post('/:id/trigger', authenticateToken, requireRole(['teacher']), async (
       return res.status(404).json({ error: 'Disaster not found' });
     }
 
-    // Determine which students to affect
+    // Determine which students to affect (only in teacher's school)
+    const schoolId = req.user?.school_id ?? null;
     let studentsQuery = `
       SELECT u.id, a.id as account_id, a.balance
       FROM users u
@@ -170,10 +171,16 @@ router.post('/:id/trigger', authenticateToken, requireRole(['teacher']), async (
     `;
     const queryParams: any[] = [];
 
-    // Use provided target_class or disaster's target_class
+    if (schoolId !== null) {
+      studentsQuery += ' AND u.school_id = $1';
+      queryParams.push(schoolId);
+    } else {
+      studentsQuery += ' AND u.school_id IS NULL';
+    }
+
     const effectiveTargetClass = target_class || disaster.target_class;
     if (effectiveTargetClass && !disaster.affects_all_classes) {
-      studentsQuery += ' AND u.class = $1';
+      studentsQuery += queryParams.length === 0 ? ' AND u.class = $1' : ' AND u.class = $2';
       queryParams.push(effectiveTargetClass);
     }
 

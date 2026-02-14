@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { requireTenant } from '../middleware/tenant';
 
 const router = Router();
 
@@ -77,11 +78,12 @@ router.get('/my-applications/count', authenticateToken, requireRole(['student'])
 });
 
 // IMPORTANT: Static routes must come BEFORE parameterized routes
-// Get applications (teachers only)
-router.get('/applications', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+// Get applications (teachers only, school-scoped: only applicants from teacher's school)
+router.get('/applications', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { status, job_id, user_id } = req.query;
-    
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+
     let query = `
       SELECT ja.*, 
              u.username as applicant_username,
@@ -99,6 +101,11 @@ router.get('/applications', authenticateToken, requireRole(['teacher']), async (
     `;
     const params: any[] = [];
     let paramIndex = 1;
+
+    if (schoolId !== null) {
+      query += ` AND u.school_id = $${paramIndex++}`;
+      params.push(schoolId);
+    }
 
     if (status && ['pending', 'approved', 'denied'].includes(status as string)) {
       query += ` AND ja.status = $${paramIndex++}`;
@@ -131,13 +138,14 @@ router.get('/applications', authenticateToken, requireRole(['teacher']), async (
   }
 });
 
-// Get specific application (teachers only)
-router.get('/applications/:id', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+// Get specific application (teachers only, same school as applicant)
+router.get('/applications/:id', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const applicationId = parseInt(req.params.id);
     if (isNaN(applicationId)) {
       return res.status(400).json({ error: 'Invalid application ID' });
     }
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
 
     const application = await database.get(
       `SELECT ja.*, 
@@ -154,8 +162,8 @@ router.get('/applications/:id', authenticateToken, requireRole(['teacher']), asy
        JOIN users u ON ja.user_id = u.id
        JOIN jobs j ON ja.job_id = j.id
        LEFT JOIN users reviewer ON ja.reviewed_by = reviewer.id
-       WHERE ja.id = $1`,
-      [applicationId]
+       WHERE ja.id = $1 ${schoolId !== null ? 'AND u.school_id = $2' : ''}`,
+      schoolId !== null ? [applicationId, schoolId] : [applicationId]
     );
 
     if (!application) {
@@ -169,9 +177,10 @@ router.get('/applications/:id', authenticateToken, requireRole(['teacher']), asy
   }
 });
 
-// Update application status (teachers only)
+// Update application status (teachers only, same school as applicant)
 router.put('/applications/:id',
   authenticateToken,
+  requireTenant,
   requireRole(['teacher']),
   [
     body('status').isIn(['approved', 'denied']).withMessage('Status must be approved or denied')
@@ -192,7 +201,13 @@ router.put('/applications/:id',
         return res.status(401).json({ error: 'User not found' });
       }
 
-      const application = await database.get('SELECT * FROM job_applications WHERE id = $1', [applicationId]);
+      const schoolId = req.schoolId ?? req.user.school_id ?? null;
+      const application = await database.get(
+        `SELECT ja.* FROM job_applications ja
+         JOIN users u ON ja.user_id = u.id
+         WHERE ja.id = $1 ${schoolId !== null ? 'AND u.school_id = $2' : ''}`,
+        schoolId !== null ? [applicationId, schoolId] : [applicationId]
+      );
       if (!application) {
         return res.status(404).json({ error: 'Application not found' });
       }
@@ -237,13 +252,32 @@ router.put('/applications/:id',
   }
 );
 
-// Get jobs with assignment counts per class (teachers only)
-router.get('/assignments/overview', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+// Get jobs with assignment counts per class (teachers only, school-scoped)
+router.get('/assignments/overview', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { class: className } = req.query;
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
 
-    // Get all jobs with assignment counts
-    const jobs = await database.query(`
+    // Jobs: only global or for this school; count only students from this school
+    const jobsQuery = schoolId !== null
+      ? `
+      SELECT 
+        j.id,
+        j.name,
+        j.description,
+        j.salary,
+        j.company_name,
+        j.location,
+        j.requirements,
+        COUNT(CASE WHEN u.role = 'student' AND u.school_id = $1 THEN u.id END) as total_assigned,
+        COUNT(CASE WHEN u.role = 'student' AND u.school_id = $1 AND u.class = $2 THEN u.id END) as class_assigned
+      FROM jobs j
+      LEFT JOIN users u ON j.id = u.job_id AND u.role = 'student' AND u.school_id = $1
+      WHERE j.school_id IS NULL OR j.school_id = $1
+      GROUP BY j.id, j.name, j.description, j.salary, j.company_name, j.location, j.requirements
+      ORDER BY j.name
+    `
+      : `
       SELECT 
         j.id,
         j.name,
@@ -258,9 +292,11 @@ router.get('/assignments/overview', authenticateToken, requireRole(['teacher']),
       LEFT JOIN users u ON j.id = u.job_id
       GROUP BY j.id, j.name, j.description, j.salary, j.company_name, j.location, j.requirements
       ORDER BY j.name
-    `, [className || null]);
+    `;
+    const jobsParams = schoolId !== null ? [schoolId, className || null] : [className || null];
+    const jobs = await database.query(jobsQuery, jobsParams);
 
-    // Get students with their jobs
+    // Students: only from this school
     let studentsQuery = `
       SELECT 
         u.id,
@@ -275,12 +311,15 @@ router.get('/assignments/overview', authenticateToken, requireRole(['teacher']),
       WHERE u.role = 'student'
     `;
     const studentsParams: any[] = [];
-
+    let paramIndex = 1;
+    if (schoolId !== null) {
+      studentsQuery += ` AND u.school_id = $${paramIndex++}`;
+      studentsParams.push(schoolId);
+    }
     if (className && ['6A', '6B', '6C'].includes(className as string)) {
-      studentsQuery += ' AND u.class = $1';
+      studentsQuery += ` AND u.class = $${paramIndex++}`;
       studentsParams.push(className);
     }
-
     studentsQuery += ' ORDER BY u.class, u.last_name, u.first_name';
 
     const students = await database.query(studentsQuery, studentsParams);
@@ -292,16 +331,23 @@ router.get('/assignments/overview', authenticateToken, requireRole(['teacher']),
   }
 });
 
-// Get job by ID (must come AFTER static routes like /applications)
+// Get job by ID (must come AFTER static routes like /applications; teacher/student only see global or their school's job)
 router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const jobId = parseInt(req.params.id);
     if (isNaN(jobId)) {
       return res.status(400).json({ error: 'Invalid job ID' });
     }
+    const schoolId = req.user?.school_id ?? null;
 
-    const job = await database.get('SELECT * FROM jobs WHERE id = $1', [jobId]);
+    const job = await database.get(
+      'SELECT * FROM jobs WHERE id = $1',
+      [jobId]
+    );
     if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+    if (schoolId !== null && job.school_id != null && job.school_id !== schoolId) {
       return res.status(404).json({ error: 'Job not found' });
     }
 
@@ -399,9 +445,10 @@ router.post('/:id/apply',
 );
 
 
-// Assign job to student (teachers only)
+// Assign job to student (teachers only, student and job must be in teacher's school)
 router.post('/assign',
   authenticateToken,
+  requireTenant,
   requireRole(['teacher']),
   [
     body('user_id').isInt().withMessage('User ID is required'),
@@ -415,16 +462,26 @@ router.post('/assign',
       }
 
       const { user_id, job_id } = req.body;
+      const schoolId = req.schoolId ?? req.user?.school_id ?? null;
 
-      // Verify user is a student
-      const user = await database.get('SELECT * FROM users WHERE id = $1 AND role = $2', [user_id, 'student']);
+      // Verify user is a student in this school
+      const user = await database.get(
+        'SELECT * FROM users WHERE id = $1 AND role = $2',
+        [user_id, 'student']
+      );
       if (!user) {
         return res.status(404).json({ error: 'Student not found' });
       }
+      if (schoolId !== null && user.school_id !== schoolId) {
+        return res.status(404).json({ error: 'Student not found' });
+      }
 
-      // Verify job exists
+      // Verify job exists and is global or for this school
       const job = await database.get('SELECT * FROM jobs WHERE id = $1', [job_id]);
       if (!job) {
+        return res.status(404).json({ error: 'Job not found' });
+      }
+      if (schoolId !== null && job.school_id != null && job.school_id !== schoolId) {
         return res.status(404).json({ error: 'Job not found' });
       }
 
@@ -447,9 +504,10 @@ router.post('/assign',
   }
 );
 
-// Remove job from student (teachers only)
+// Remove job from student (teachers only, student must be in teacher's school)
 router.delete('/assign/:user_id',
   authenticateToken,
+  requireTenant,
   requireRole(['teacher']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -457,10 +515,14 @@ router.delete('/assign/:user_id',
       if (isNaN(userId)) {
         return res.status(400).json({ error: 'Invalid user ID' });
       }
+      const schoolId = req.schoolId ?? req.user?.school_id ?? null;
 
-      // Verify user is a student
+      // Verify user is a student in this school
       const user = await database.get('SELECT * FROM users WHERE id = $1 AND role = $2', [userId, 'student']);
       if (!user) {
+        return res.status(404).json({ error: 'Student not found' });
+      }
+      if (schoolId !== null && user.school_id !== schoolId) {
         return res.status(404).json({ error: 'Student not found' });
       }
 

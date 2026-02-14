@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { requireTenant } from '../middleware/tenant';
 
 const router = Router();
 
@@ -116,9 +117,13 @@ router.get('/my', authenticateToken, requireRole(['student']), async (req: Authe
   }
 });
 
-// Teacher: review queue (pending only)
-router.get('/admin/queue', authenticateToken, requireRole(['teacher']), async (_req: AuthenticatedRequest, res: Response) => {
+// Teacher: review queue (pending only, same school)
+router.get('/admin/queue', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
+    const params = schoolId !== null ? [schoolId] : [];
+
     const suggestions = await database.query(
       `
       SELECT
@@ -129,9 +134,10 @@ router.get('/admin/queue', authenticateToken, requireRole(['teacher']), async (_
         u.class
       FROM suggestions s
       JOIN users u ON s.user_id = u.id
-      WHERE s.status = 'pending'
+      WHERE s.status = 'pending' ${schoolFilter}
       ORDER BY s.created_at ASC
-      `
+      `,
+      params
     );
 
     const bugReports = await database.query(
@@ -144,9 +150,10 @@ router.get('/admin/queue', authenticateToken, requireRole(['teacher']), async (_
         u.class
       FROM bug_reports b
       JOIN users u ON b.user_id = u.id
-      WHERE b.status = 'pending'
+      WHERE b.status = 'pending' ${schoolFilter}
       ORDER BY b.created_at ASC
-      `
+      `,
+      params
     );
 
     res.json({ suggestions, bugReports });
@@ -156,9 +163,13 @@ router.get('/admin/queue', authenticateToken, requireRole(['teacher']), async (_
   }
 });
 
-// Teacher: all suggestions/bugs (for tabs: approved/denied/pending)
-router.get('/admin/all', authenticateToken, requireRole(['teacher']), async (_req: AuthenticatedRequest, res: Response) => {
+// Teacher: all suggestions/bugs (for tabs: approved/denied/pending, same school)
+router.get('/admin/all', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+    const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
+    const params = schoolId !== null ? [schoolId] : [];
+
     const suggestions = await database.query(
       `
       SELECT
@@ -171,9 +182,11 @@ router.get('/admin/all', authenticateToken, requireRole(['teacher']), async (_re
       FROM suggestions s
       JOIN users u ON s.user_id = u.id
       LEFT JOIN users ru ON s.reviewed_by = ru.id
+      WHERE 1=1 ${schoolFilter}
       ORDER BY s.created_at DESC
       LIMIT 500
-      `
+      `,
+      params
     );
 
     const bugReports = await database.query(
@@ -188,9 +201,11 @@ router.get('/admin/all', authenticateToken, requireRole(['teacher']), async (_re
       FROM bug_reports b
       JOIN users u ON b.user_id = u.id
       LEFT JOIN users ru ON b.reviewed_by = ru.id
+      WHERE 1=1 ${schoolFilter}
       ORDER BY b.created_at DESC
       LIMIT 500
-      `
+      `,
+      params
     );
 
     res.json({ suggestions, bugReports });
@@ -200,11 +215,12 @@ router.get('/admin/all', authenticateToken, requireRole(['teacher']), async (_re
   }
 });
 
-// Teacher: review suggestion (approve/deny). Approve auto-pays reward once.
+// Teacher: review suggestion (approve/deny). Approve auto-pays reward once. Same school only.
 router.put(
   '/admin/suggestions/:id/review',
   [body('status').isIn(['approved', 'denied']).withMessage('Status must be approved or denied')],
   authenticateToken,
+  requireTenant,
   requireRole(['teacher']),
   async (req: AuthenticatedRequest, res: Response) => {
     const errors = validationResult(req);
@@ -222,17 +238,22 @@ router.put(
     }
 
     const { status } = req.body as { status: 'approved' | 'denied' };
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
 
     const client = await database.pool.connect();
     try {
       await client.query('BEGIN');
 
       const suggestionRes = await client.query(
-        'SELECT * FROM suggestions WHERE id = $1 FOR UPDATE',
+        'SELECT s.*, u.school_id as submitter_school_id FROM suggestions s JOIN users u ON s.user_id = u.id WHERE s.id = $1 FOR UPDATE',
         [id]
       );
       const suggestion = suggestionRes.rows?.[0];
       if (!suggestion) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Suggestion not found' });
+      }
+      if (schoolId !== null && suggestion.submitter_school_id !== schoolId) {
         await client.query('ROLLBACK');
         return res.status(404).json({ error: 'Suggestion not found' });
       }
@@ -331,11 +352,12 @@ router.put(
   }
 );
 
-// Teacher: review bug report (verify/deny). Verify auto-pays reward once.
+// Teacher: review bug report (verify/deny). Verify auto-pays reward once. Same school only.
 router.put(
   '/admin/bugs/:id/review',
   [body('status').isIn(['verified', 'denied']).withMessage('Status must be verified or denied')],
   authenticateToken,
+  requireTenant,
   requireRole(['teacher']),
   async (req: AuthenticatedRequest, res: Response) => {
     const errors = validationResult(req);
@@ -353,17 +375,22 @@ router.put(
     }
 
     const { status } = req.body as { status: 'verified' | 'denied' };
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
 
     const client = await database.pool.connect();
     try {
       await client.query('BEGIN');
 
       const bugRes = await client.query(
-        'SELECT * FROM bug_reports WHERE id = $1 FOR UPDATE',
+        'SELECT b.*, u.school_id as submitter_school_id FROM bug_reports b JOIN users u ON b.user_id = u.id WHERE b.id = $1 FOR UPDATE',
         [id]
       );
       const bug = bugRes.rows?.[0];
       if (!bug) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Bug report not found' });
+      }
+      if (schoolId !== null && bug.submitter_school_id !== schoolId) {
         await client.query('ROLLBACK');
         return res.status(404).json({ error: 'Bug report not found' });
       }

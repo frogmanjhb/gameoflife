@@ -13,21 +13,33 @@ function isValidTownClass(townClass: any): townClass is '6A' | '6B' | '6C' {
 
 const TOWN_CLASSES: ('6A' | '6B' | '6C')[] = ['6A', '6B', '6C'];
 
-// Helper: Fetch full status for one class
-async function getPizzaTimeStatusForClass(userClass: '6A' | '6B' | '6C') {
+// Helper: Fetch full status for one class (optionally scoped by school)
+async function getPizzaTimeStatusForClass(userClass: '6A' | '6B' | '6C', schoolId: number | null = null) {
+  const schoolCondition = schoolId !== null
+    ? 'class = $1 AND school_id = $2'
+    : 'class = $1 AND school_id IS NULL';
+  const params = schoolId !== null ? [userClass, schoolId] : [userClass];
+
   let pizzaTime = await database.get(
-    'SELECT * FROM pizza_time WHERE class = $1',
-    [userClass]
+    `SELECT * FROM pizza_time WHERE ${schoolCondition}`,
+    params
   );
 
   if (!pizzaTime) {
-    await database.run(
-      'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)',
-      [userClass, false, 0.00, 100000.00]
-    );
+    if (schoolId !== null) {
+      await database.run(
+        'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount, school_id) VALUES ($1, $2, $3, $4, $5)',
+        [userClass, false, 0.00, 100000.00, schoolId]
+      );
+    } else {
+      await database.run(
+        'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)',
+        [userClass, false, 0.00, 100000.00]
+      );
+    }
     pizzaTime = await database.get(
-      'SELECT * FROM pizza_time WHERE class = $1',
-      [userClass]
+      `SELECT * FROM pizza_time WHERE ${schoolCondition}`,
+      params
     );
   }
 
@@ -79,7 +91,7 @@ async function getPizzaTimeStatusForClass(userClass: '6A' | '6B' | '6C') {
   };
 }
 
-// GET /api/pizza-time/status/all - Get pizza time status for ALL classes (teachers only)
+// GET /api/pizza-time/status/all - Get pizza time status for ALL classes (teachers only, school-scoped)
 router.get('/status/all', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     try {
@@ -91,8 +103,9 @@ router.get('/status/all', authenticateToken, requireRole(['teacher']), async (re
       throw tableError;
     }
 
+    const schoolId = req.user?.school_id ?? null;
     const allStatus = await Promise.all(
-      TOWN_CLASSES.map(async (c) => getPizzaTimeStatusForClass(c))
+      TOWN_CLASSES.map(async (c) => getPizzaTimeStatusForClass(c, schoolId))
     );
 
     res.json({
@@ -153,7 +166,8 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
       throw tableError;
     }
 
-    const status = await getPizzaTimeStatusForClass(userClass);
+    const schoolId = req.user?.school_id ?? null;
+    const status = await getPizzaTimeStatusForClass(userClass, schoolId);
     res.json(status);
   } catch (error) {
     console.error('Failed to fetch pizza time status:', error);
@@ -209,10 +223,15 @@ router.post(
         });
       }
 
-      // Get pizza time for this class
+      // Get pizza time for this class and student's school
+      const schoolId = req.user.school_id ?? null;
+      const schoolCondition = schoolId !== null
+        ? 'class = $1 AND school_id = $2'
+        : 'class = $1 AND school_id IS NULL';
+      const pizzaParams = schoolId !== null ? [userClass, schoolId] : [userClass];
       let pizzaTime = await database.get(
-        'SELECT * FROM pizza_time WHERE class = $1',
-        [userClass]
+        `SELECT * FROM pizza_time WHERE ${schoolCondition}`,
+        pizzaParams
       );
 
       if (!pizzaTime) {
@@ -324,29 +343,42 @@ router.post(
         return res.status(400).json({ error: 'Invalid town class' });
       }
 
-      // Get or create pizza time for this class
+      const schoolId = req.user?.school_id ?? null;
+      const schoolCondition = schoolId !== null
+        ? 'class = $1 AND school_id = $2'
+        : 'class = $1 AND school_id IS NULL';
+      const params = schoolId !== null ? [townClass, schoolId] : [townClass];
+
+      // Get or create pizza time for this class and school
       let pizzaTime = await database.get(
-        'SELECT * FROM pizza_time WHERE class = $1',
-        [townClass]
+        `SELECT * FROM pizza_time WHERE ${schoolCondition}`,
+        params
       );
 
       if (!pizzaTime) {
-        await database.run(
-          'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)',
-          [townClass, is_active, 0.00, 100000.00]
-        );
+        if (schoolId !== null) {
+          await database.run(
+            'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount, school_id) VALUES ($1, $2, $3, $4, $5)',
+            [townClass, is_active, 0.00, 100000.00, schoolId]
+          );
+        } else {
+          await database.run(
+            'INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)',
+            [townClass, is_active, 0.00, 100000.00]
+          );
+        }
         pizzaTime = await database.get(
-          'SELECT * FROM pizza_time WHERE class = $1',
-          [townClass]
+          `SELECT * FROM pizza_time WHERE ${schoolCondition}`,
+          params
         );
       } else {
         await database.run(
-          'UPDATE pizza_time SET is_active = $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2',
-          [is_active, townClass]
+          `UPDATE pizza_time SET is_active = $1, updated_at = CURRENT_TIMESTAMP WHERE ${schoolCondition}`,
+          schoolId !== null ? [is_active, townClass, schoolId] : [is_active, townClass]
         );
         pizzaTime = await database.get(
-          'SELECT * FROM pizza_time WHERE class = $1',
-          [townClass]
+          `SELECT * FROM pizza_time WHERE ${schoolCondition}`,
+          params
         );
       }
 
@@ -386,18 +418,21 @@ router.post(
         return res.status(400).json({ error: 'Invalid town class' });
       }
 
-      // Reset fund to 0
+      const schoolId = req.user?.school_id ?? null;
+      const schoolCondition = schoolId !== null
+        ? 'class = $1 AND school_id = $2'
+        : 'class = $1 AND school_id IS NULL';
+      const params = schoolId !== null ? [townClass, schoolId] : [townClass];
+
+      // Reset fund to 0 (school-scoped)
       await database.run(
-        'UPDATE pizza_time SET current_fund = 0.00, updated_at = CURRENT_TIMESTAMP WHERE class = $1',
-        [townClass]
+        `UPDATE pizza_time SET current_fund = 0.00, updated_at = CURRENT_TIMESTAMP WHERE ${schoolCondition}`,
+        params
       );
 
-      // Optionally delete donation history (commented out - keep history)
-      // await database.run('DELETE FROM pizza_time_donations WHERE pizza_time_id = (SELECT id FROM pizza_time WHERE class = $1)', [townClass]);
-
       const pizzaTime = await database.get(
-        'SELECT * FROM pizza_time WHERE class = $1',
-        [townClass]
+        `SELECT * FROM pizza_time WHERE ${schoolCondition}`,
+        params
       );
 
       res.json({

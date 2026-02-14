@@ -5,20 +5,22 @@ import { authenticateToken, AuthenticatedRequest, requireRole } from '../middlew
 
 const router = Router();
 
-// Get announcements (filtered by town_class if provided)
+// Get announcements (filtered by town_class if provided, school-scoped)
 router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { town_class } = req.query;
+    const schoolId = req.user?.school_id ?? null;
     
     let query = `
       SELECT a.*, u.username as created_by_username
       FROM announcements a
       JOIN users u ON a.created_by = u.id
+      WHERE (a.school_id = $1 OR (a.school_id IS NULL AND $1 IS NULL))
     `;
-    const params: any[] = [];
+    const params: any[] = [schoolId];
     
     if (town_class && ['6A', '6B', '6C'].includes(town_class as string)) {
-      query += ' WHERE a.town_class = $1';
+      query += ' AND a.town_class = $2';
       params.push(town_class);
     }
     
@@ -56,9 +58,10 @@ router.post('/',
         return res.status(401).json({ error: 'User not found' });
       }
 
+      const schoolId = req.user?.school_id ?? null;
       const result = await database.run(
-        'INSERT INTO announcements (title, content, town_class, created_by, background_color, enable_wiggle) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-        [title, content, town_class, req.user.id, background_color, enable_wiggle]
+        'INSERT INTO announcements (title, content, town_class, created_by, background_color, enable_wiggle, school_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+        [title, content, town_class, req.user.id, background_color, enable_wiggle, schoolId]
       );
 
       const announcement = await database.get(
@@ -97,8 +100,12 @@ router.put('/:id',
         return res.status(400).json({ error: 'Invalid announcement ID' });
       }
 
+      const schoolId = req.user?.school_id ?? null;
       const announcement = await database.get('SELECT * FROM announcements WHERE id = $1', [announcementId]);
       if (!announcement) {
+        return res.status(404).json({ error: 'Announcement not found' });
+      }
+      if (schoolId !== null && (announcement.school_id == null || announcement.school_id !== schoolId)) {
         return res.status(404).json({ error: 'Announcement not found' });
       }
 
@@ -153,7 +160,7 @@ router.put('/:id',
   }
 );
 
-// Delete announcement (teachers only)
+// Delete announcement (teachers only, same school)
 router.delete('/:id', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const announcementId = parseInt(req.params.id);
@@ -161,8 +168,12 @@ router.delete('/:id', authenticateToken, requireRole(['teacher']), async (req: A
       return res.status(400).json({ error: 'Invalid announcement ID' });
     }
 
+    const schoolId = req.user?.school_id ?? null;
     const announcement = await database.get('SELECT * FROM announcements WHERE id = $1', [announcementId]);
     if (!announcement) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+    if (schoolId !== null && (announcement.school_id == null || announcement.school_id !== schoolId)) {
       return res.status(404).json({ error: 'Announcement not found' });
     }
 

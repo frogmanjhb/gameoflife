@@ -5,29 +5,41 @@ import { authenticateToken, AuthenticatedRequest, requireRole } from '../middlew
 
 const router = Router();
 
-// Get town rules (filtered by town_class)
+// Get town rules (filtered by town_class, school-scoped)
 router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { town_class } = req.query;
+    const schoolId = req.user?.school_id ?? null;
     
     if (!town_class || !['6A', '6B', '6C'].includes(town_class as string)) {
       return res.status(400).json({ error: 'Valid town_class (6A, 6B, or 6C) is required' });
     }
 
     const rules = await database.get(
-      'SELECT * FROM town_rules WHERE town_class = $1',
-      [town_class]
+      schoolId !== null
+        ? 'SELECT * FROM town_rules WHERE town_class = $1 AND school_id = $2'
+        : 'SELECT * FROM town_rules WHERE town_class = $1 AND school_id IS NULL',
+      schoolId !== null ? [town_class, schoolId] : [town_class]
     );
 
-    // If no rules exist, create an empty entry
+    // If no rules exist, create an empty entry for this school/class
     if (!rules) {
-      const result = await database.run(
-        'INSERT INTO town_rules (town_class, rules) VALUES ($1, NULL) RETURNING id',
-        [town_class]
-      );
+      if (schoolId !== null) {
+        await database.run(
+          'INSERT INTO town_rules (town_class, rules, school_id) VALUES ($1, NULL, $2) RETURNING id',
+          [town_class, schoolId]
+        );
+      } else {
+        await database.run(
+          'INSERT INTO town_rules (town_class, rules) VALUES ($1, NULL) RETURNING id',
+          [town_class]
+        );
+      }
       const newRules = await database.get(
-        'SELECT * FROM town_rules WHERE id = $1',
-        [result.lastID]
+        schoolId !== null
+          ? 'SELECT * FROM town_rules WHERE town_class = $1 AND school_id = $2'
+          : 'SELECT * FROM town_rules WHERE town_class = $1 AND school_id IS NULL',
+        schoolId !== null ? [town_class, schoolId] : [town_class]
       );
       return res.json(newRules);
     }
@@ -55,34 +67,48 @@ router.put('/',
       }
 
       const { town_class, rules } = req.body;
+      const schoolId = req.user?.school_id ?? null;
 
-      // Check if rules exist for this town
+      // Check if rules exist for this town and school
       const existing = await database.get(
-        'SELECT * FROM town_rules WHERE town_class = $1',
-        [town_class]
+        schoolId !== null
+          ? 'SELECT * FROM town_rules WHERE town_class = $1 AND school_id = $2'
+          : 'SELECT * FROM town_rules WHERE town_class = $1 AND school_id IS NULL',
+        schoolId !== null ? [town_class, schoolId] : [town_class]
       );
 
       let updated;
 
       if (existing) {
-        // Update existing rules
         await database.run(
-          'UPDATE town_rules SET rules = $1, updated_at = CURRENT_TIMESTAMP WHERE town_class = $2',
-          [rules || null, town_class]
+          schoolId !== null
+            ? 'UPDATE town_rules SET rules = $1, updated_at = CURRENT_TIMESTAMP WHERE town_class = $2 AND school_id = $3'
+            : 'UPDATE town_rules SET rules = $1, updated_at = CURRENT_TIMESTAMP WHERE town_class = $2 AND school_id IS NULL',
+          schoolId !== null ? [rules || null, town_class, schoolId] : [rules || null, town_class]
         );
         updated = await database.get(
-          'SELECT * FROM town_rules WHERE town_class = $1',
-          [town_class]
+          schoolId !== null
+            ? 'SELECT * FROM town_rules WHERE town_class = $1 AND school_id = $2'
+            : 'SELECT * FROM town_rules WHERE town_class = $1 AND school_id IS NULL',
+          schoolId !== null ? [town_class, schoolId] : [town_class]
         );
       } else {
-        // Create new rules entry
-        const result = await database.run(
-          'INSERT INTO town_rules (town_class, rules) VALUES ($1, $2) RETURNING id',
-          [town_class, rules || null]
-        );
+        if (schoolId !== null) {
+          await database.run(
+            'INSERT INTO town_rules (town_class, rules, school_id) VALUES ($1, $2, $3) RETURNING id',
+            [town_class, rules || null, schoolId]
+          );
+        } else {
+          await database.run(
+            'INSERT INTO town_rules (town_class, rules) VALUES ($1, $2) RETURNING id',
+            [town_class, rules || null]
+          );
+        }
         updated = await database.get(
-          'SELECT * FROM town_rules WHERE id = $1',
-          [result.lastID]
+          schoolId !== null
+            ? 'SELECT * FROM town_rules WHERE town_class = $1 AND school_id = $2'
+            : 'SELECT * FROM town_rules WHERE town_class = $1 AND school_id IS NULL',
+          schoolId !== null ? [town_class, schoolId] : [town_class]
         );
       }
 
