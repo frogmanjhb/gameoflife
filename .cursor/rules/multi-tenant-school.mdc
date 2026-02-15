@@ -1,0 +1,74 @@
+---
+alwaysApply: false
+---
+# Multi-Tenant School Model — Generic Instructions
+
+Use this rule when building or modifying apps with a multi-tenant school structure controlled by a super user.
+
+**Rule precedence:** Tenant isolation and role checks before any data access. Super admin capabilities must not leak to tenant-level users.
+
+---
+
+## Domain Model
+
+### Roles
+
+| Role | Scope | Capabilities |
+|------|--------|--------------|
+| **super_admin** | Global | Create schools, assign directors, manage all tenants, view any data |
+| **director** | School | Manage teachers and students within their school, school-level settings |
+| **teacher** | School (optionally class/group) | Manage students, view classes, teaching-related actions |
+| **student** | School | Own data only, limited to their classes/groups |
+
+### Tenant Hierarchy
+
+```
+super_admin (global)
+  └── school (tenant)
+        ├── director(s)
+        ├── teacher(s)
+        └── student(s)
+```
+
+---
+
+## Principles
+
+1. **Tenant isolation:** All data must be scoped by `school_id`. No cross-school data access unless the actor is `super_admin`.
+2. **Role checks:** Every API endpoint and UI flow must validate the user’s role and tenant scope before performing actions.
+3. **Super admin control:** Only `super_admin` can create schools, assign directors, and switch between tenants. Directors cannot create other schools.
+4. **No privilege escalation:** Teachers cannot promote themselves to directors. Directors cannot promote themselves to super_admin.
+
+---
+
+## Implementation Guidelines
+
+### API / Backend
+
+- Store `school_id` on all tenant-scoped entities (users, classes, enrollments, etc.).
+- On every request, resolve the user’s `school_id` from their role and association. Super admins may pass `school_id` explicitly when acting on behalf of a school.
+- Filter all queries by `school_id` unless the actor is `super_admin`.
+- Super admin–only endpoints (e.g. create school, list all schools, assign director) must explicitly require `role === 'super_admin'`.
+
+### UI / Client
+
+- Route protection: super_admin routes vs school-scoped routes.
+- All lists and forms must be school-scoped for directors, teachers, and students.
+- Super admin views may show a school selector or cross-school dashboards.
+- Never expose super_admin–only actions (e.g. create school, assign director) to non–super_admin users.
+
+### Data Model (Conceptual)
+
+- `schools`: id, name, settings, etc.
+- `users`: id, email, role (super_admin | director | teacher | student), school_id (nullable for super_admin)
+- Associations: directors/teachers/students linked to `school_id`; optionally class/group for teachers and students.
+
+---
+
+## Checklist for New Features
+
+- [ ] Identify which roles can access this feature.
+- [ ] Confirm tenant scope (school or global).
+- [ ] Add role and tenant checks on the server.
+- [ ] Add route/component guards in the UI.
+- [ ] Ensure no cross-tenant data is exposed to non–super_admin users.
