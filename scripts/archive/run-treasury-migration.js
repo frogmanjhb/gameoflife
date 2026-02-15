@@ -144,4 +144,3 @@ async function runMigration() {
 }
 
 runMigration();
-
