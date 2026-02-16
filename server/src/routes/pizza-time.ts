@@ -222,10 +222,10 @@ router.post(
       const donationAmount = parseFloat(amount);
 
       // Validate donation amount is one of the allowed values
-      const allowedAmounts = [500, 1000, 2000, 5000];
+      const allowedAmounts = [100, 500, 1000, 2000, 5000];
       if (!allowedAmounts.includes(donationAmount)) {
         return res.status(400).json({ 
-          error: 'Invalid donation amount. Allowed amounts: 500, 1000, 2000, 5000' 
+          error: 'Invalid donation amount. Allowed amounts: 100, 500, 1000, 2000, 5000' 
         });
       }
 

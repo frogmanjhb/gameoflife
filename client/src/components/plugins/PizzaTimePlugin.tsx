@@ -550,7 +550,7 @@ const PizzaTimePlugin: React.FC = () => {
             </div>
           )}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[500, 1000, 2000, 5000].map((amount) => {
+            {[100, 500, 1000, 2000, 5000].map((amount) => {
               const canAfford = account ? account.balance >= amount : false;
               return (
                 <button

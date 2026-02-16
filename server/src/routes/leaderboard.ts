@@ -34,25 +34,30 @@ router.get('/overall', authenticateToken, async (req: AuthenticatedRequest, res:
     const params = schoolId !== null ? [schoolId] : [];
 
     const leaderboard = await database.query(`
-      WITH player_stats AS (
+      WITH session_totals AS (
+        SELECT user_id, COUNT(*) as games_played, COALESCE(SUM(score), 0) as total_points
+        FROM math_game_sessions
+        GROUP BY user_id
+      ),
+      player_stats AS (
         SELECT 
           u.id as user_id,
           u.username,
           u.first_name,
           u.last_name,
           u.class,
-          COALESCE(SUM(mgs.score), 0) as total_points,
-          COUNT(mgs.id) as games_played,
+          COALESCE(st.total_points, 0) as total_points,
+          COALESCE(st.games_played, 0)::int as games_played,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'easy' THEN mgh.high_score ELSE 0 END), 0) as high_score_easy,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'medium' THEN mgh.high_score ELSE 0 END), 0) as high_score_medium,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'hard' THEN mgh.high_score ELSE 0 END), 0) as high_score_hard,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'extreme' THEN mgh.high_score ELSE 0 END), 0) as high_score_extreme
         FROM users u
-        LEFT JOIN math_game_sessions mgs ON u.id = mgs.user_id
+        LEFT JOIN session_totals st ON u.id = st.user_id
         LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id
         WHERE u.role = 'student' ${schoolFilter}
-        GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
-        HAVING COUNT(mgs.id) > 0
+        GROUP BY u.id, u.username, u.first_name, u.last_name, u.class, st.total_points, st.games_played
+        HAVING COALESCE(st.games_played, 0) > 0
       )
       SELECT 
         *,
@@ -91,25 +96,30 @@ router.get('/class/:className', authenticateToken, async (req: AuthenticatedRequ
     const params = schoolId !== null ? [className, schoolId] : [className];
 
     const leaderboard = await database.query(`
-      WITH player_stats AS (
+      WITH session_totals AS (
+        SELECT user_id, COUNT(*) as games_played, COALESCE(SUM(score), 0) as total_points
+        FROM math_game_sessions
+        GROUP BY user_id
+      ),
+      player_stats AS (
         SELECT 
           u.id as user_id,
           u.username,
           u.first_name,
           u.last_name,
           u.class,
-          COALESCE(SUM(mgs.score), 0) as total_points,
-          COUNT(mgs.id) as games_played,
+          COALESCE(st.total_points, 0) as total_points,
+          COALESCE(st.games_played, 0)::int as games_played,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'easy' THEN mgh.high_score ELSE 0 END), 0) as high_score_easy,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'medium' THEN mgh.high_score ELSE 0 END), 0) as high_score_medium,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'hard' THEN mgh.high_score ELSE 0 END), 0) as high_score_hard,
           COALESCE(MAX(CASE WHEN mgh.difficulty = 'extreme' THEN mgh.high_score ELSE 0 END), 0) as high_score_extreme
         FROM users u
-        LEFT JOIN math_game_sessions mgs ON u.id = mgs.user_id
+        LEFT JOIN session_totals st ON u.id = st.user_id
         LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id
         WHERE u.role = 'student' AND u.class = $1 ${schoolFilter}
-        GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
-        HAVING COUNT(mgs.id) > 0
+        GROUP BY u.id, u.username, u.first_name, u.last_name, u.class, st.total_points, st.games_played
+        HAVING COALESCE(st.games_played, 0) > 0
       )
       SELECT 
         *,
@@ -148,25 +158,30 @@ router.get('/all-classes', authenticateToken, async (req: AuthenticatedRequest, 
     for (const className of classes) {
       const params = schoolId !== null ? [className, schoolId] : [className];
       const leaderboard = await database.query(`
-        WITH player_stats AS (
+        WITH session_totals AS (
+          SELECT user_id, COUNT(*) as games_played, COALESCE(SUM(score), 0) as total_points
+          FROM math_game_sessions
+          GROUP BY user_id
+        ),
+        player_stats AS (
           SELECT 
             u.id as user_id,
             u.username,
             u.first_name,
             u.last_name,
             u.class,
-            COALESCE(SUM(mgs.score), 0) as total_points,
-            COUNT(mgs.id) as games_played,
+            COALESCE(st.total_points, 0) as total_points,
+            COALESCE(st.games_played, 0)::int as games_played,
             COALESCE(MAX(CASE WHEN mgh.difficulty = 'easy' THEN mgh.high_score ELSE 0 END), 0) as high_score_easy,
             COALESCE(MAX(CASE WHEN mgh.difficulty = 'medium' THEN mgh.high_score ELSE 0 END), 0) as high_score_medium,
             COALESCE(MAX(CASE WHEN mgh.difficulty = 'hard' THEN mgh.high_score ELSE 0 END), 0) as high_score_hard,
             COALESCE(MAX(CASE WHEN mgh.difficulty = 'extreme' THEN mgh.high_score ELSE 0 END), 0) as high_score_extreme
           FROM users u
-          LEFT JOIN math_game_sessions mgs ON u.id = mgs.user_id
+          LEFT JOIN session_totals st ON u.id = st.user_id
           LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id
           WHERE u.role = 'student' AND u.class = $1 ${schoolFilter}
-          GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
-          HAVING COUNT(mgs.id) > 0
+          GROUP BY u.id, u.username, u.first_name, u.last_name, u.class, st.total_points, st.games_played
+          HAVING COALESCE(st.games_played, 0) > 0
         )
         SELECT 
           *,
