@@ -4,7 +4,7 @@ import { usePlugins } from '../../contexts/PluginContext';
 import { Navigate } from 'react-router-dom';
 import { BarChart3, TrendingUp, PieChart, Users, Calendar, Filter } from 'lucide-react';
 import { teacherAnalyticsApi } from '../../services/api';
-import { EngagementAnalytics, EngagementTimeSeries, EngagementByClass, EngagementByStudent } from '../../types';
+import { EngagementAnalytics, EngagementTimeSeries, EngagementByClass, EngagementByStudent, LowLoginStudent } from '../../types';
 
 const AnalyticsPlugin: React.FC = () => {
   const { user } = useAuth();
@@ -283,6 +283,21 @@ const AnalyticsPlugin: React.FC = () => {
     return <Navigate to="/" replace />;
   }
 
+  const formatLastLogin = (iso: string): string => {
+    const d = new Date(iso);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 14) return '1 week ago';
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    if (diffDays < 60) return '1 month ago';
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+    return d.toLocaleDateString();
+  };
+
   const pieData = analytics ? [
     { label: 'Logins', value: analytics.summary.total_logins, color: '#3b82f6' },
     { label: 'Chores', value: analytics.summary.total_chores_sessions, color: '#10b981' },
@@ -403,6 +418,20 @@ const AnalyticsPlugin: React.FC = () => {
             </div>
           </div>
 
+          {/* Logins by town (bar chart) - visible at school level */}
+          {scope === 'school' && analytics.by_class && analytics.by_class.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <BarChart3 className="h-5 w-5 mr-2 text-indigo-600" />
+                Logins by town
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Total logins per class (6A, 6B, 6C) in the selected period. Compare engagement across towns.
+              </p>
+              <BarChart data={analytics.by_class} metric="logins" labelKey="class" />
+            </div>
+          )}
+
           {/* Line Chart - Time Series */}
           {(scope === 'school' || scope === 'classes') && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -484,6 +513,51 @@ const AnalyticsPlugin: React.FC = () => {
                   <BarChart data={analytics.top_students} metric="purchases_count" labelKey="username" />
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Students with few or no logins - who to follow up with */}
+          {analytics.low_login_students !== undefined && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <Users className="h-5 w-5 mr-2 text-amber-600" />
+                Students with few or no logins
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Students with 0 or 1 login in the selected period. Last login is when they were last active (any time). Use this to see who may need a nudge to log in regularly.
+              </p>
+              {analytics.low_login_students.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 border border-dashed border-gray-300 rounded-lg">
+                  All students have logged in at least twice in this period.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Student</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Class</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-700 uppercase">Logins (period)</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Last login</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {analytics.low_login_students.map((s: LowLoginStudent) => (
+                        <tr key={s.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 text-sm text-gray-900">
+                            {s.first_name && s.last_name ? `${s.first_name} ${s.last_name}` : s.username}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-600">{s.class ?? '—'}</td>
+                          <td className="px-4 py-2 text-sm text-right text-gray-600">{s.logins}</td>
+                          <td className="px-4 py-2 text-sm text-gray-600">
+                            {s.last_login ? formatLastLogin(s.last_login) : 'Never'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 

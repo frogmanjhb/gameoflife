@@ -86,6 +86,7 @@ router.get('/engagement',
           time_series: [],
           by_class: [],
           top_students: [],
+          low_login_students: [],
           summary: {
             total_logins_users: 0,
             total_logins: 0,
@@ -209,6 +210,42 @@ router.get('/engagement',
         LEFT JOIN purchases_by_time p ON db.bucket = p.time_bucket
         ORDER BY db.bucket ASC
       `, [dateInterval, startDate, req.schoolId, intervalExpr]);
+
+      // Students with few or no logins in the period (for "not logging in regularly" view)
+      let lowLoginStudents: Array<{ id: number; username: string; first_name?: string; last_name?: string; class?: string; logins: number; last_login: string | null }> = [];
+      if (loginEventsExists) {
+        const lowLoginRows = await database.query(`
+          WITH student_logins AS (
+            SELECT 
+              u.id,
+              u.username,
+              u.first_name,
+              u.last_name,
+              u.class,
+              COUNT(le.id) FILTER (WHERE le.login_at >= $1)::int as logins_in_period,
+              MAX(le.login_at) as last_login
+            FROM users u
+            LEFT JOIN login_events le ON le.user_id = u.id AND le.school_id = $2
+            WHERE u.school_id = $2 
+              AND u.role = 'student'
+              AND u.class IN ('6A', '6B', '6C')
+            GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
+          )
+          SELECT id, username, first_name, last_name, class, logins_in_period as logins, last_login
+          FROM student_logins
+          WHERE logins_in_period <= 1
+          ORDER BY last_login ASC NULLS FIRST, logins_in_period ASC
+        `, [startDate, req.schoolId]);
+        lowLoginStudents = lowLoginRows.map((r: any) => ({
+          id: r.id,
+          username: r.username,
+          first_name: r.first_name,
+          last_name: r.last_name,
+          class: r.class,
+          logins: r.logins,
+          last_login: r.last_login ? new Date(r.last_login).toISOString() : null
+        }));
+      }
 
       // By class breakdown
       const classLoginJoin = loginEventsExists 
@@ -384,6 +421,7 @@ router.get('/engagement',
         time_series: timeSeries,
         by_class: byClass,
         top_students: topStudents,
+        low_login_students: lowLoginStudents,
         summary: summary || {
           total_logins_users: 0,
           total_logins: 0,

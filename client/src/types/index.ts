@@ -479,6 +479,16 @@ export interface EngagementByStudent {
   purchases_count: number;
 }
 
+export interface LowLoginStudent {
+  id: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  class?: string;
+  logins: number;
+  last_login: string | null;
+}
+
 export interface EngagementSummary {
   total_logins_users: number;
   total_logins: number;
@@ -497,5 +507,6 @@ export interface EngagementAnalytics {
   time_series: EngagementTimeSeries[];
   by_class: EngagementByClass[];
   top_students: EngagementByStudent[];
+  low_login_students?: LowLoginStudent[];
   summary: EngagementSummary;
 }
