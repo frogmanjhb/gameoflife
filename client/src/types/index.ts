@@ -384,6 +384,354 @@ export interface EventPlannerGameSubmitRequest {
   answer_sequence: boolean[];
 }
 
+export interface FinancialManagerGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface FinancialManagerGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface FinancialManagerGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface HRDirectorGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface HRDirectorGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface HRDirectorGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface PoliceLieutenantGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface PoliceLieutenantGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface PoliceLieutenantGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface LawyerGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface LawyerGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface LawyerGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface TownPlannerGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface TownPlannerGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface TownPlannerGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface ElectricalEngineerGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface ElectricalEngineerGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface ElectricalEngineerGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface CivilEngineerGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface CivilEngineerGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface CivilEngineerGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface PrincipalGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface PrincipalGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface PrincipalGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface TeacherGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface TeacherGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface TeacherGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface NurseGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface NurseGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface NurseGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface DoctorGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface DoctorGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface DoctorGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface RetailManagerGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface RetailManagerGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface RetailManagerGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
 export interface Plugin {
   id: number;
   name: string;

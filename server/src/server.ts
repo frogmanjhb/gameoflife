@@ -21,6 +21,18 @@ import marketingManagerGameRoutes from './routes/jobchallenges/marketing-manager
 import graphicDesignerGameRoutes from './routes/jobchallenges/graphic-designer-game';
 import journalistGameRoutes from './routes/jobchallenges/journalist-game';
 import eventPlannerGameRoutes from './routes/jobchallenges/event-planner-game';
+import financialManagerGameRoutes from './routes/jobchallenges/financial-manager-game';
+import hrDirectorGameRoutes from './routes/jobchallenges/hr-director-game';
+import policeLieutenantGameRoutes from './routes/jobchallenges/police-lieutenant-game';
+import lawyerGameRoutes from './routes/jobchallenges/lawyer-game';
+import townPlannerGameRoutes from './routes/jobchallenges/town-planner-game';
+import electricalEngineerGameRoutes from './routes/jobchallenges/electrical-engineer-game';
+import civilEngineerGameRoutes from './routes/jobchallenges/civil-engineer-game';
+import principalGameRoutes from './routes/jobchallenges/principal-game';
+import teacherGameRoutes from './routes/jobchallenges/teacher-game';
+import nurseGameRoutes from './routes/jobchallenges/nurse-game';
+import doctorGameRoutes from './routes/jobchallenges/doctor-game';
+import retailManagerGameRoutes from './routes/jobchallenges/retail-manager-game';
 import pluginRoutes from './routes/plugins';
 import announcementRoutes from './routes/announcements';
 import townRoutes from './routes/town';
@@ -171,6 +183,18 @@ app.use('/api/marketing-manager-game', marketingManagerGameRoutes);
 app.use('/api/graphic-designer-game', graphicDesignerGameRoutes);
 app.use('/api/journalist-game', journalistGameRoutes);
 app.use('/api/event-planner-game', eventPlannerGameRoutes);
+app.use('/api/financial-manager-game', financialManagerGameRoutes);
+app.use('/api/hr-director-game', hrDirectorGameRoutes);
+app.use('/api/police-lieutenant-game', policeLieutenantGameRoutes);
+app.use('/api/lawyer-game', lawyerGameRoutes);
+app.use('/api/town-planner-game', townPlannerGameRoutes);
+app.use('/api/electrical-engineer-game', electricalEngineerGameRoutes);
+app.use('/api/civil-engineer-game', civilEngineerGameRoutes);
+app.use('/api/principal-game', principalGameRoutes);
+app.use('/api/teacher-game', teacherGameRoutes);
+app.use('/api/nurse-game', nurseGameRoutes);
+app.use('/api/doctor-game', doctorGameRoutes);
+app.use('/api/retail-manager-game', retailManagerGameRoutes);
 app.use('/api/plugins', pluginRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/town', townRoutes);
@@ -639,6 +663,150 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Show mayor job card migration may have already been applied:', migrationError);
+    }
+
+    // Financial Manager game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '046_add_financial_manager_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Financial manager game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Financial manager game tables migration may have already been applied:', migrationError);
+    }
+
+    // HR Director game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '047_add_hr_director_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ HR director game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ HR director game tables migration may have already been applied:', migrationError);
+    }
+
+    // Police Lieutenant game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '048_add_police_lieutenant_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Police lieutenant game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Police lieutenant game tables migration may have already been applied:', migrationError);
+    }
+
+    // Lawyer game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '049_add_lawyer_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Lawyer game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Lawyer game tables migration may have already been applied:', migrationError);
+    }
+
+    // Town planner game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '050_add_town_planner_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Town planner game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Town planner game tables migration may have already been applied:', migrationError);
+    }
+
+    // Electrical engineer game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '051_add_electrical_engineer_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Electrical engineer game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Electrical engineer game tables migration may have already been applied:', migrationError);
+    }
+
+    // Civil engineer game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '052_add_civil_engineer_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Civil engineer game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Civil engineer game tables migration may have already been applied:', migrationError);
+    }
+
+    // Principal game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '053_add_principal_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Principal game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Principal game tables migration may have already been applied:', migrationError);
+    }
+
+    // Teacher game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '054_add_teacher_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Teacher game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Teacher game tables migration may have already been applied:', migrationError);
+    }
+
+    // Nurse game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '055_add_nurse_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Nurse game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Nurse game tables migration may have already been applied:', migrationError);
+    }
+
+    // Doctor game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '056_add_doctor_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Doctor game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Doctor game tables migration may have already been applied:', migrationError);
+    }
+
+    // Retail manager game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '057_add_retail_manager_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Retail manager game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Retail manager game tables migration may have already been applied:', migrationError);
     }
 
     // Add paid status to shop purchases (Winkel pending/paid tracking)

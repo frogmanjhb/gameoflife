@@ -35,11 +35,11 @@ export const JOB_NAME_TO_DISPLAY: Record<string, string> = {
 
 /** Employment board sections: heading and job names (include both old and new so grouping works before/after migration). */
 export const EMPLOYMENT_BOARD_SECTIONS: { title: string; emoji: string; jobNames: string[] }[] = [
-  { title: 'Government & Finance', emoji: '🏛', jobNames: ['Mayor', 'Financial Manager', 'Assistant Financial Manager', 'Chartered Accountant', 'Junior Chartered Accountant', 'HR Director', 'Assistant HR Director', 'Police Lieutenant', 'Junior Police Lieutenant', 'Lawyer', 'Junior Lawyer', 'Town Planner', 'Assistant Town Planner'] },
+  { title: 'Government & Finance', emoji: '🏛', jobNames: ['Mayor', 'Financial Manager', 'Assistant Financial Manager', 'Chartered Accountant', 'Junior Chartered Accountant', 'HR Director', 'Assistant HR Director', 'Police Lieutenant', 'Junior Police Lieutenant', 'Lawyer', 'Junior Lawyer', 'Town Planner', 'Assistant Town Planner', 'Assistant Risk & Insurance Manager'] },
   { title: 'Infrastructure & Design', emoji: '🏗', jobNames: ['Civil Engineer', 'Assistant Civil Engineer', 'Electrical Engineer', 'Assistant Electrical Engineer', 'Architect', 'Assistant Architect'] },
   { title: 'Education', emoji: '🎓', jobNames: ['School Principal', 'Assistant Principal', 'Teacher', 'Assistant Teacher'] },
   { title: 'Health', emoji: '🏥', jobNames: ['Doctor', 'Junior Doctor', 'Nurse', 'Assistant Nurse'] },
-  { title: 'Economy & Events', emoji: '🛍', jobNames: ['Retail Manager', 'Assistant Retail Manager', 'Event Planner', 'Assistant Event Planner'] },
+  { title: 'Economy & Events', emoji: '🛍', jobNames: ['Retail Manager', 'Assistant Retail Manager', 'Event Planner', 'Assistant Event Planner', 'Entrepreneur – Town Business Founder'] },
   { title: 'Media & Tech', emoji: '🎨', jobNames: ['Marketing Manager', 'Assistant Marketing Manager', 'Graphic Designer', 'Assistant Graphic Designer', 'Journalist', 'Assistant Journalist', 'Software Engineer', 'Assistant Software Engineer'] },
 ];
 

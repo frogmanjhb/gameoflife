@@ -288,6 +288,13 @@ async function seedDatabase() {
         location: 'Finance Office',
         requirements: 'Two positions available.'
       },
+      {
+        name: 'Assistant Risk & Insurance Manager',
+        description: 'Daily: Review property insurance requests. Calculate premium based on risk. Approve or deny cover.\n\nWeekly: Assess biome risk levels. Update premium rates. Pay out claims after disasters. Report financial exposure to Finance.',
+        salary: 7500.00,
+        company_name: 'Town Finance',
+        location: 'Insurance Office'
+      },
       // 🏗 Infrastructure & Design
       {
         name: 'Assistant Civil Engineer',
@@ -354,6 +361,14 @@ async function seedDatabase() {
         salary: 6000.00,
         company_name: 'Town Events',
         location: 'Event Office'
+      },
+      {
+        name: 'Entrepreneur – Town Business Founder',
+        description: 'Daily: Check sales. Adjust pricing. Track expenses. Respond to customer demand.\n\nWeekly: Launch product or service. Apply for investment or loan. Present pitch. Review profit/loss. Decide to expand or pivot.',
+        salary: 6000.00,
+        company_name: 'Town Business',
+        location: 'Town Market',
+        requirements: 'Types of businesses they could start (keep it simple): Food stall; Tech service; Construction service; Tourism business; Transport service; Health products; Event service. Or linked to biome: Desert → solar company; Coastal → tourism; Grassland → agriculture; Forest → timber business.'
       },
       // 🎨 Media & Tech
       {
@@ -454,6 +469,18 @@ async function seedDatabase() {
            location = EXCLUDED.location,
            requirements = EXCLUDED.requirements`,
         [softwareEngineerJob.name, softwareEngineerJob.description, softwareEngineerJob.salary, softwareEngineerJob.company_name, softwareEngineerJob.location, softwareEngineerJob.requirements]
+      );
+    }
+    // Ensure new roles start at R2000 (base_salary)
+    if (jobsHaveSchoolId) {
+      await pool.query(
+        `UPDATE jobs SET base_salary = 2000 WHERE name IN ($1, $2) AND school_id IS NULL`,
+        ['Assistant Risk & Insurance Manager', 'Entrepreneur – Town Business Founder']
+      );
+    } else {
+      await pool.query(
+        `UPDATE jobs SET base_salary = 2000 WHERE name IN ($1, $2)`,
+        ['Assistant Risk & Insurance Manager', 'Entrepreneur – Town Business Founder']
       );
     }
     console.log('✅ Jobs seeded (including Software Engineer)');

@@ -4,9 +4,9 @@ import {
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
   Award, FileText, TrendingUp, Loader2, AlertCircle, Play 
 } from 'lucide-react';
-import { jobsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi } from '../services/api';
+import { jobsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus } from '../types';
+import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, RetailManagerGameStatus } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
 import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../utils/jobDisplay';
 import ArchitectGameModal from './jobchallenges/ArchitectGameModal';
@@ -16,6 +16,18 @@ import MarketingManagerGameModal from './jobchallenges/MarketingManagerGameModal
 import GraphicDesignerGameModal from './jobchallenges/GraphicDesignerGameModal';
 import JournalistGameModal from './jobchallenges/JournalistGameModal';
 import EventPlannerGameModal from './jobchallenges/EventPlannerGameModal';
+import FinancialManagerGameModal from './jobchallenges/FinancialManagerGameModal';
+import HRDirectorGameModal from './jobchallenges/HRDirectorGameModal';
+import PoliceLieutenantGameModal from './jobchallenges/PoliceLieutenantGameModal';
+import LawyerGameModal from './jobchallenges/LawyerGameModal';
+import TownPlannerGameModal from './jobchallenges/TownPlannerGameModal';
+import ElectricalEngineerGameModal from './jobchallenges/ElectricalEngineerGameModal';
+import CivilEngineerGameModal from './jobchallenges/CivilEngineerGameModal';
+import PrincipalGameModal from './jobchallenges/PrincipalGameModal';
+import TeacherGameModal from './jobchallenges/TeacherGameModal';
+import NurseGameModal from './jobchallenges/NurseGameModal';
+import DoctorGameModal from './jobchallenges/DoctorGameModal';
+import RetailManagerGameModal from './jobchallenges/RetailManagerGameModal';
 
 const MyJobDetails: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
@@ -38,6 +50,30 @@ const MyJobDetails: React.FC = () => {
   const [isJournalistGameOpen, setIsJournalistGameOpen] = useState(false);
   const [eventPlannerGameStatus, setEventPlannerGameStatus] = useState<EventPlannerGameStatus | null>(null);
   const [isEventPlannerGameOpen, setIsEventPlannerGameOpen] = useState(false);
+  const [financialManagerGameStatus, setFinancialManagerGameStatus] = useState<FinancialManagerGameStatus | null>(null);
+  const [isFinancialManagerGameOpen, setIsFinancialManagerGameOpen] = useState(false);
+  const [hrDirectorGameStatus, setHRDirectorGameStatus] = useState<HRDirectorGameStatus | null>(null);
+  const [isHRDirectorGameOpen, setIsHRDirectorGameOpen] = useState(false);
+  const [policeLieutenantGameStatus, setPoliceLieutenantGameStatus] = useState<PoliceLieutenantGameStatus | null>(null);
+  const [isPoliceLieutenantGameOpen, setIsPoliceLieutenantGameOpen] = useState(false);
+  const [lawyerGameStatus, setLawyerGameStatus] = useState<LawyerGameStatus | null>(null);
+  const [isLawyerGameOpen, setIsLawyerGameOpen] = useState(false);
+  const [townPlannerGameStatus, setTownPlannerGameStatus] = useState<TownPlannerGameStatus | null>(null);
+  const [isTownPlannerGameOpen, setIsTownPlannerGameOpen] = useState(false);
+  const [electricalEngineerGameStatus, setElectricalEngineerGameStatus] = useState<ElectricalEngineerGameStatus | null>(null);
+  const [isElectricalEngineerGameOpen, setIsElectricalEngineerGameOpen] = useState(false);
+  const [civilEngineerGameStatus, setCivilEngineerGameStatus] = useState<CivilEngineerGameStatus | null>(null);
+  const [isCivilEngineerGameOpen, setIsCivilEngineerGameOpen] = useState(false);
+  const [principalGameStatus, setPrincipalGameStatus] = useState<PrincipalGameStatus | null>(null);
+  const [isPrincipalGameOpen, setIsPrincipalGameOpen] = useState(false);
+  const [teacherGameStatus, setTeacherGameStatus] = useState<TeacherGameStatus | null>(null);
+  const [isTeacherGameOpen, setIsTeacherGameOpen] = useState(false);
+  const [nurseGameStatus, setNurseGameStatus] = useState<NurseGameStatus | null>(null);
+  const [isNurseGameOpen, setIsNurseGameOpen] = useState(false);
+  const [doctorGameStatus, setDoctorGameStatus] = useState<DoctorGameStatus | null>(null);
+  const [isDoctorGameOpen, setIsDoctorGameOpen] = useState(false);
+  const [retailManagerGameStatus, setRetailManagerGameStatus] = useState<RetailManagerGameStatus | null>(null);
+  const [isRetailManagerGameOpen, setIsRetailManagerGameOpen] = useState(false);
 
   useEffect(() => {
     if (jobId) {
@@ -84,6 +120,78 @@ const MyJobDetails: React.FC = () => {
   useEffect(() => {
     if (user && job?.name?.toLowerCase().trim() === 'assistant event planner') {
       fetchEventPlannerGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('financial manager')) {
+      fetchFinancialManagerGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('hr director')) {
+      fetchHRDirectorGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('police lieutenant')) {
+      fetchPoliceLieutenantGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('lawyer')) {
+      fetchLawyerGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('town planner')) {
+      fetchTownPlannerGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('electrical engineer')) {
+      fetchElectricalEngineerGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('civil engineer')) {
+      fetchCivilEngineerGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('principal')) {
+      fetchPrincipalGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('teacher')) {
+      fetchTeacherGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('nurse')) {
+      fetchNurseGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('doctor')) {
+      fetchDoctorGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('retail')) {
+      fetchRetailManagerGameStatus();
     }
   }, [user, job]);
 
@@ -147,6 +255,114 @@ const MyJobDetails: React.FC = () => {
       setEventPlannerGameStatus(response.data);
     } catch (err: any) {
       console.log('Event planner game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchFinancialManagerGameStatus = async () => {
+    try {
+      const response = await financialManagerGameApi.getStatus();
+      setFinancialManagerGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Financial manager game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchHRDirectorGameStatus = async () => {
+    try {
+      const response = await hrDirectorGameApi.getStatus();
+      setHRDirectorGameStatus(response.data);
+    } catch (err: any) {
+      console.log('HR director game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchPoliceLieutenantGameStatus = async () => {
+    try {
+      const response = await policeLieutenantGameApi.getStatus();
+      setPoliceLieutenantGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Police lieutenant game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchLawyerGameStatus = async () => {
+    try {
+      const response = await lawyerGameApi.getStatus();
+      setLawyerGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Lawyer game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchTownPlannerGameStatus = async () => {
+    try {
+      const response = await townPlannerGameApi.getStatus();
+      setTownPlannerGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Town planner game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchElectricalEngineerGameStatus = async () => {
+    try {
+      const response = await electricalEngineerGameApi.getStatus();
+      setElectricalEngineerGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Electrical engineer game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchCivilEngineerGameStatus = async () => {
+    try {
+      const response = await civilEngineerGameApi.getStatus();
+      setCivilEngineerGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Civil engineer game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchPrincipalGameStatus = async () => {
+    try {
+      const response = await principalGameApi.getStatus();
+      setPrincipalGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Principal game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchTeacherGameStatus = async () => {
+    try {
+      const response = await teacherGameApi.getStatus();
+      setTeacherGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Teacher game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchNurseGameStatus = async () => {
+    try {
+      const response = await nurseGameApi.getStatus();
+      setNurseGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Nurse game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchDoctorGameStatus = async () => {
+    try {
+      const response = await doctorGameApi.getStatus();
+      setDoctorGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Doctor game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchRetailManagerGameStatus = async () => {
+    try {
+      const response = await retailManagerGameApi.getStatus();
+      setRetailManagerGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Retail Manager game status not available:', err.response?.data?.error);
     }
   };
 
@@ -650,6 +866,614 @@ const MyJobDetails: React.FC = () => {
           </div>
         )}
 
+        {/* Financial Manager – Town Finance Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('financial manager') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-6 border border-emerald-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-emerald-600" />
+                    Town Finance Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete payroll cycles (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsFinancialManagerGameOpen(true)}
+                  disabled={!financialManagerGameStatus || (financialManagerGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Payroll Cycle</span>
+                </button>
+              </div>
+              {financialManagerGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {financialManagerGameStatus.remaining_plays} / {financialManagerGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{financialManagerGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{financialManagerGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{financialManagerGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* HR Director – People Management Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('hr director') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-lg p-6 border border-violet-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-violet-600" />
+                    People Management Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete HR review cycles (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsHRDirectorGameOpen(true)}
+                  disabled={!hrDirectorGameStatus || (hrDirectorGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-violet-600 hover:bg-violet-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start HR Review Cycle</span>
+                </button>
+              </div>
+              {hrDirectorGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {hrDirectorGameStatus.remaining_plays} / {hrDirectorGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{hrDirectorGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{hrDirectorGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{hrDirectorGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Police Lieutenant – Enforcement Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('police lieutenant') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-lg p-6 border border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-slate-600" />
+                    Enforcement Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete compliance reviews (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsPoliceLieutenantGameOpen(true)}
+                  disabled={!policeLieutenantGameStatus || (policeLieutenantGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-slate-600 hover:bg-slate-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Compliance Review</span>
+                </button>
+              </div>
+              {policeLieutenantGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {policeLieutenantGameStatus.remaining_plays} / {policeLieutenantGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{policeLieutenantGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{policeLieutenantGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{policeLieutenantGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Lawyer – Legal Reasoning Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('lawyer') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-indigo-50 to-violet-50 rounded-lg p-6 border border-indigo-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-indigo-600" />
+                    Legal Reasoning Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete case reviews (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsLawyerGameOpen(true)}
+                  disabled={!lawyerGameStatus || (lawyerGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Case Review</span>
+                </button>
+              </div>
+              {lawyerGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {lawyerGameStatus.remaining_plays} / {lawyerGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{lawyerGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{lawyerGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{lawyerGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Town Planner – Zoning & Biome Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('town planner') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-6 border border-emerald-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-emerald-600" />
+                    Zoning & Biome Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete planning proposals (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsTownPlannerGameOpen(true)}
+                  disabled={!townPlannerGameStatus || (townPlannerGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Planning Proposal</span>
+                </button>
+              </div>
+              {townPlannerGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {townPlannerGameStatus.remaining_plays} / {townPlannerGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{townPlannerGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{townPlannerGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{townPlannerGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Electrical Engineer – Power Systems Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('electrical engineer') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg p-6 border border-amber-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-amber-600" />
+                    Power Systems Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete power allocation reviews (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsElectricalEngineerGameOpen(true)}
+                  disabled={!electricalEngineerGameStatus || (electricalEngineerGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Power Allocation Review</span>
+                </button>
+              </div>
+              {electricalEngineerGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {electricalEngineerGameStatus.remaining_plays} / {electricalEngineerGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{electricalEngineerGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{electricalEngineerGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{electricalEngineerGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Civil Engineer – Infrastructure Design Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('civil engineer') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-slate-50 to-stone-50 rounded-lg p-6 border border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-slate-600" />
+                    Infrastructure Design Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete infrastructure projects (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsCivilEngineerGameOpen(true)}
+                  disabled={!civilEngineerGameStatus || (civilEngineerGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-slate-600 hover:bg-slate-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Infrastructure Project</span>
+                </button>
+              </div>
+              {civilEngineerGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {civilEngineerGameStatus.remaining_plays} / {civilEngineerGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{civilEngineerGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{civilEngineerGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{civilEngineerGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Principal – School Leadership Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('principal') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-violet-50 to-blue-50 rounded-lg p-6 border border-violet-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-violet-600" />
+                    School Leadership Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete school review cycles (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsPrincipalGameOpen(true)}
+                  disabled={!principalGameStatus || (principalGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-violet-600 hover:bg-violet-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start School Review Cycle</span>
+                </button>
+              </div>
+              {principalGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {principalGameStatus.remaining_plays} / {principalGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{principalGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{principalGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{principalGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Extreme High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{principalGameStatus.high_scores?.extreme ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Teacher – Learning Support Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('teacher') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-amber-50 to-emerald-50 rounded-lg p-6 border border-amber-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-amber-600" />
+                    Learning Support Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete teaching cycles (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsTeacherGameOpen(true)}
+                  disabled={!teacherGameStatus || (teacherGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Teaching Cycle</span>
+                </button>
+              </div>
+              {teacherGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {teacherGameStatus.remaining_plays} / {teacherGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{teacherGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{teacherGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{teacherGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Extreme High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{teacherGameStatus.high_scores?.extreme ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Nurse – Health Support Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('nurse') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-rose-50 to-teal-50 rounded-lg p-6 border border-rose-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-rose-600" />
+                    Health Support Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete health check cycles (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsNurseGameOpen(true)}
+                  disabled={!nurseGameStatus || (nurseGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-rose-600 hover:bg-rose-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Health Check Cycle</span>
+                </button>
+              </div>
+              {nurseGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {nurseGameStatus.remaining_plays} / {nurseGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{nurseGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{nurseGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{nurseGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Extreme High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{nurseGameStatus.high_scores?.extreme ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Doctor – Public Health & Biome Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('doctor') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-indigo-50 to-sky-50 rounded-lg p-6 border border-indigo-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-indigo-600" />
+                    Public Health & Biome Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete health investigations (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsDoctorGameOpen(true)}
+                  disabled={!doctorGameStatus || (doctorGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Health Investigation</span>
+                </button>
+              </div>
+              {doctorGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {doctorGameStatus.remaining_plays} / {doctorGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{doctorGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{doctorGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{doctorGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Extreme High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{doctorGameStatus.high_scores?.extreme ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Retail Manager – Shop Profit Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('retail') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-orange-50 to-emerald-50 rounded-lg p-6 border border-orange-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-orange-600" />
+                    Shop Profit Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete trading day reviews (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsRetailManagerGameOpen(true)}
+                  disabled={!retailManagerGameStatus || (retailManagerGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Trading Day Review</span>
+                </button>
+              </div>
+              {retailManagerGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {retailManagerGameStatus.remaining_plays} / {retailManagerGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{retailManagerGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{retailManagerGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{retailManagerGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Extreme High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{retailManagerGameStatus.high_scores?.extreme ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Chartered Accountant – Financial Audit Challenges */}
         {job.name?.toLowerCase().trim() === 'junior chartered accountant' && (
           <div className="pt-6 border-t border-gray-200">
@@ -850,6 +1674,174 @@ const MyJobDetails: React.FC = () => {
           }}
           onGameComplete={() => fetchEventPlannerGameStatus()}
           gameStatus={eventPlannerGameStatus}
+        />
+      )}
+
+      {/* Financial Manager Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('financial manager') && (
+        <FinancialManagerGameModal
+          isOpen={isFinancialManagerGameOpen}
+          onClose={() => {
+            setIsFinancialManagerGameOpen(false);
+            fetchFinancialManagerGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchFinancialManagerGameStatus()}
+          gameStatus={financialManagerGameStatus}
+        />
+      )}
+
+      {/* HR Director Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('hr director') && (
+        <HRDirectorGameModal
+          isOpen={isHRDirectorGameOpen}
+          onClose={() => {
+            setIsHRDirectorGameOpen(false);
+            fetchHRDirectorGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchHRDirectorGameStatus()}
+          gameStatus={hrDirectorGameStatus}
+        />
+      )}
+
+      {/* Police Lieutenant Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('police lieutenant') && (
+        <PoliceLieutenantGameModal
+          isOpen={isPoliceLieutenantGameOpen}
+          onClose={() => {
+            setIsPoliceLieutenantGameOpen(false);
+            fetchPoliceLieutenantGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchPoliceLieutenantGameStatus()}
+          gameStatus={policeLieutenantGameStatus}
+        />
+      )}
+
+      {/* Lawyer Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('lawyer') && (
+        <LawyerGameModal
+          isOpen={isLawyerGameOpen}
+          onClose={() => {
+            setIsLawyerGameOpen(false);
+            fetchLawyerGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchLawyerGameStatus()}
+          gameStatus={lawyerGameStatus}
+        />
+      )}
+
+      {/* Town Planner Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('town planner') && (
+        <TownPlannerGameModal
+          isOpen={isTownPlannerGameOpen}
+          onClose={() => {
+            setIsTownPlannerGameOpen(false);
+            fetchTownPlannerGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchTownPlannerGameStatus()}
+          gameStatus={townPlannerGameStatus}
+        />
+      )}
+
+      {/* Electrical Engineer Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('electrical engineer') && (
+        <ElectricalEngineerGameModal
+          isOpen={isElectricalEngineerGameOpen}
+          onClose={() => {
+            setIsElectricalEngineerGameOpen(false);
+            fetchElectricalEngineerGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchElectricalEngineerGameStatus()}
+          gameStatus={electricalEngineerGameStatus}
+        />
+      )}
+
+      {/* Civil Engineer Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('civil engineer') && (
+        <CivilEngineerGameModal
+          isOpen={isCivilEngineerGameOpen}
+          onClose={() => {
+            setIsCivilEngineerGameOpen(false);
+            fetchCivilEngineerGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchCivilEngineerGameStatus()}
+          gameStatus={civilEngineerGameStatus}
+        />
+      )}
+
+      {/* Principal Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('principal') && (
+        <PrincipalGameModal
+          isOpen={isPrincipalGameOpen}
+          onClose={() => {
+            setIsPrincipalGameOpen(false);
+            fetchPrincipalGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchPrincipalGameStatus()}
+          gameStatus={principalGameStatus}
+        />
+      )}
+
+      {/* Teacher Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('teacher') && (
+        <TeacherGameModal
+          isOpen={isTeacherGameOpen}
+          onClose={() => {
+            setIsTeacherGameOpen(false);
+            fetchTeacherGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchTeacherGameStatus()}
+          gameStatus={teacherGameStatus}
+        />
+      )}
+
+      {/* Nurse Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('nurse') && (
+        <NurseGameModal
+          isOpen={isNurseGameOpen}
+          onClose={() => {
+            setIsNurseGameOpen(false);
+            fetchNurseGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchNurseGameStatus()}
+          gameStatus={nurseGameStatus}
+        />
+      )}
+
+      {/* Doctor Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('doctor') && (
+        <DoctorGameModal
+          isOpen={isDoctorGameOpen}
+          onClose={() => {
+            setIsDoctorGameOpen(false);
+            fetchDoctorGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchDoctorGameStatus()}
+          gameStatus={doctorGameStatus}
+        />
+      )}
+
+      {/* Retail Manager Game Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('retail') && (
+        <RetailManagerGameModal
+          isOpen={isRetailManagerGameOpen}
+          onClose={() => {
+            setIsRetailManagerGameOpen(false);
+            fetchRetailManagerGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchRetailManagerGameStatus()}
+          gameStatus={retailManagerGameStatus}
         />
       )}
     </div>

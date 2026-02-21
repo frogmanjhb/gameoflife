@@ -9,6 +9,18 @@ import {
   GraphicDesignerGameStatus, GraphicDesignerGameStartRequest, GraphicDesignerGameSubmitRequest,
   JournalistGameStatus, JournalistGameStartRequest, JournalistGameSubmitRequest,
   EventPlannerGameStatus, EventPlannerGameStartRequest, EventPlannerGameSubmitRequest,
+  FinancialManagerGameStatus, FinancialManagerGameStartRequest, FinancialManagerGameSubmitRequest,
+  HRDirectorGameStatus, HRDirectorGameStartRequest, HRDirectorGameSubmitRequest,
+  PoliceLieutenantGameStatus, PoliceLieutenantGameStartRequest, PoliceLieutenantGameSubmitRequest,
+  LawyerGameStatus, LawyerGameStartRequest, LawyerGameSubmitRequest,
+  TownPlannerGameStatus, TownPlannerGameStartRequest, TownPlannerGameSubmitRequest,
+  ElectricalEngineerGameStatus, ElectricalEngineerGameStartRequest, ElectricalEngineerGameSubmitRequest,
+  CivilEngineerGameStatus, CivilEngineerGameStartRequest, CivilEngineerGameSubmitRequest,
+  PrincipalGameStatus, PrincipalGameStartRequest, PrincipalGameSubmitRequest,
+  TeacherGameStatus, TeacherGameStartRequest, TeacherGameSubmitRequest,
+  NurseGameStatus, NurseGameStartRequest, NurseGameSubmitRequest,
+  DoctorGameStatus, DoctorGameStartRequest, DoctorGameSubmitRequest,
+  RetailManagerGameStatus, RetailManagerGameStartRequest, RetailManagerGameSubmitRequest,
   Job, JobApplication, LandParcel, LandPurchaseRequest, 
   LandStats, MyPropertiesResponse, BiomeConfig, BiomeType,
   TaxBracket, TreasuryInfo, TaxReport, SalaryPaymentResult, TownSettings,
@@ -178,6 +190,102 @@ export const eventPlannerGameApi = {
     api.post('/event-planner-game/start', data),
   submitGame: (data: EventPlannerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
     api.post('/event-planner-game/submit', data)
+};
+
+export const financialManagerGameApi = {
+  getStatus: (): Promise<{ data: FinancialManagerGameStatus }> => api.get('/financial-manager-game/status'),
+  startGame: (data: FinancialManagerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/financial-manager-game/start', data),
+  submitGame: (data: FinancialManagerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/financial-manager-game/submit', data)
+};
+
+export const hrDirectorGameApi = {
+  getStatus: (): Promise<{ data: HRDirectorGameStatus }> => api.get('/hr-director-game/status'),
+  startGame: (data: HRDirectorGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/hr-director-game/start', data),
+  submitGame: (data: HRDirectorGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/hr-director-game/submit', data)
+};
+
+export const policeLieutenantGameApi = {
+  getStatus: (): Promise<{ data: PoliceLieutenantGameStatus }> => api.get('/police-lieutenant-game/status'),
+  startGame: (data: PoliceLieutenantGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/police-lieutenant-game/start', data),
+  submitGame: (data: PoliceLieutenantGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/police-lieutenant-game/submit', data)
+};
+
+export const lawyerGameApi = {
+  getStatus: (): Promise<{ data: LawyerGameStatus }> => api.get('/lawyer-game/status'),
+  startGame: (data: LawyerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/lawyer-game/start', data),
+  submitGame: (data: LawyerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/lawyer-game/submit', data)
+};
+
+export const townPlannerGameApi = {
+  getStatus: (): Promise<{ data: TownPlannerGameStatus }> => api.get('/town-planner-game/status'),
+  startGame: (data: TownPlannerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/town-planner-game/start', data),
+  submitGame: (data: TownPlannerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/town-planner-game/submit', data)
+};
+
+export const electricalEngineerGameApi = {
+  getStatus: (): Promise<{ data: ElectricalEngineerGameStatus }> => api.get('/electrical-engineer-game/status'),
+  startGame: (data: ElectricalEngineerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/electrical-engineer-game/start', data),
+  submitGame: (data: ElectricalEngineerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/electrical-engineer-game/submit', data)
+};
+
+export const civilEngineerGameApi = {
+  getStatus: (): Promise<{ data: CivilEngineerGameStatus }> => api.get('/civil-engineer-game/status'),
+  startGame: (data: CivilEngineerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/civil-engineer-game/start', data),
+  submitGame: (data: CivilEngineerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/civil-engineer-game/submit', data)
+};
+
+export const principalGameApi = {
+  getStatus: (): Promise<{ data: PrincipalGameStatus }> => api.get('/principal-game/status'),
+  startGame: (data: PrincipalGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/principal-game/start', data),
+  submitGame: (data: PrincipalGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/principal-game/submit', data)
+};
+
+export const teacherGameApi = {
+  getStatus: (): Promise<{ data: TeacherGameStatus }> => api.get('/teacher-game/status'),
+  startGame: (data: TeacherGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/teacher-game/start', data),
+  submitGame: (data: TeacherGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/teacher-game/submit', data)
+};
+
+export const nurseGameApi = {
+  getStatus: (): Promise<{ data: NurseGameStatus }> => api.get('/nurse-game/status'),
+  startGame: (data: NurseGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/nurse-game/start', data),
+  submitGame: (data: NurseGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/nurse-game/submit', data)
+};
+
+export const doctorGameApi = {
+  getStatus: (): Promise<{ data: DoctorGameStatus }> => api.get('/doctor-game/status'),
+  startGame: (data: DoctorGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/doctor-game/start', data),
+  submitGame: (data: DoctorGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/doctor-game/submit', data)
+};
+
+export const retailManagerGameApi = {
+  getStatus: (): Promise<{ data: RetailManagerGameStatus }> => api.get('/retail-manager-game/status'),
+  startGame: (data: RetailManagerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/retail-manager-game/start', data),
+  submitGame: (data: RetailManagerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/retail-manager-game/submit', data)
 };
 
 // Jobs API methods

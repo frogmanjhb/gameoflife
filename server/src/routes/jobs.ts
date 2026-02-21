@@ -382,7 +382,105 @@ router.get('/assignments/overview', authenticateToken, requireTenant, requireRol
   }
 });
 
-// Get job by ID (must come AFTER static routes like /applications; teacher/student only see global or their school's job)
+// Setup routes (must come BEFORE /:id so "setup" is not treated as job id)
+// Add Software Engineer job (one-time setup - teachers only)
+router.get('/setup/software-engineer',
+  authenticateToken,
+  requireRole(['teacher']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const result = await database.run(
+        `INSERT INTO jobs (name, description, base_salary, company_name, location, requirements, is_contractual)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (school_id, name) DO UPDATE SET
+           description = EXCLUDED.description,
+           base_salary = EXCLUDED.base_salary,
+           company_name = EXCLUDED.company_name,
+           location = EXCLUDED.location,
+           requirements = EXCLUDED.requirements,
+           is_contractual = EXCLUDED.is_contractual
+         RETURNING id, name`,
+        [
+          'Software Engineer',
+          'Daily: Check the Software Requests board (a list of problems learners want solved). Choose 1 task to work on or continue. Test the app with 1–2 users and capture feedback.\n\nWeekly: Bug hunt in the Game of Life. Deliver one working micro-app or feature improvement. Publish it in the Town Hub as a "plugin" or tool link. Run a 2–3 minute demo to the class. Log: what problem it solves, how to use it, what changed after feedback.',
+          2000.00,
+          'Town Government / Tech Department',
+          'Development Lab',
+          null,
+          false
+        ]
+      );
+
+      const job = await database.get('SELECT * FROM jobs WHERE id = $1', [result.lastID]);
+      res.json({
+        success: true,
+        message: 'Software Engineer job added successfully!',
+        job
+      });
+    } catch (error) {
+      console.error('Failed to add Software Engineer job:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// Add Risk & Insurance Manager and Entrepreneur jobs (one-time setup - teachers only)
+router.get('/setup/risk-insurance-and-entrepreneur',
+  authenticateToken,
+  requireRole(['teacher']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const jobsToAdd = [
+        {
+          name: 'Assistant Risk & Insurance Manager',
+          description: 'Daily: Review property insurance requests. Calculate premium based on risk. Approve or deny cover.\n\nWeekly: Assess biome risk levels. Update premium rates. Pay out claims after disasters. Report financial exposure to Finance.',
+          company_name: 'Town Finance',
+          location: 'Insurance Office',
+          requirements: null
+        },
+        {
+          name: 'Entrepreneur – Town Business Founder',
+          description: 'Daily: Check sales. Adjust pricing. Track expenses. Respond to customer demand.\n\nWeekly: Launch product or service. Apply for investment or loan. Present pitch. Review profit/loss. Decide to expand or pivot.',
+          company_name: 'Town Business',
+          location: 'Town Market',
+          requirements: 'Types of businesses they could start (keep it simple): Food stall; Tech service; Construction service; Tourism business; Transport service; Health products; Event service. Or linked to biome: Desert → solar company; Coastal → tourism; Grassland → agriculture; Forest → timber business.'
+        }
+      ];
+
+      const baseSalary = 2000.00;
+      const added: { id: number; name: string }[] = [];
+
+      for (const job of jobsToAdd) {
+        await database.run(
+          `INSERT INTO jobs (name, description, base_salary, company_name, location, requirements, is_contractual)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (school_id, name) DO UPDATE SET
+             description = EXCLUDED.description,
+             base_salary = EXCLUDED.base_salary,
+             company_name = EXCLUDED.company_name,
+             location = EXCLUDED.location,
+             requirements = EXCLUDED.requirements,
+             is_contractual = EXCLUDED.is_contractual
+           RETURNING id, name`,
+          [job.name, job.description, baseSalary, job.company_name, job.location, job.requirements, false]
+        );
+        const row = await database.get('SELECT id, name FROM jobs WHERE name = $1 AND school_id IS NULL', [job.name]);
+        if (row) added.push({ id: row.id, name: row.name });
+      }
+
+      res.json({
+        success: true,
+        message: 'Assistant Risk & Insurance Manager and Entrepreneur – Town Business Founder added (or updated). Refresh the Jobs board.',
+        jobs: added
+      });
+    } catch (error) {
+      console.error('Failed to add Risk & Insurance and Entrepreneur jobs:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// Get job by ID (must come AFTER static routes like /applications, /setup/*; teacher/student only see global or their school's job)
 router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const jobId = parseInt(req.params.id);
@@ -689,48 +787,6 @@ router.post('/award-xp',
       });
     } catch (error) {
       console.error('Failed to award XP:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-);
-
-// Add Software Engineer job (one-time setup endpoint - teachers only)
-// Can be accessed via GET request from browser
-router.get('/setup/software-engineer',
-  authenticateToken,
-  requireRole(['teacher']),
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const result = await database.run(
-        `INSERT INTO jobs (name, description, base_salary, company_name, location, requirements, is_contractual)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (school_id, name) DO UPDATE SET
-           description = EXCLUDED.description,
-           base_salary = EXCLUDED.base_salary,
-           company_name = EXCLUDED.company_name,
-           location = EXCLUDED.location,
-           requirements = EXCLUDED.requirements,
-           is_contractual = EXCLUDED.is_contractual
-         RETURNING id, name`,
-        [
-          'Software Engineer',
-          'Daily: Check the Software Requests board (a list of problems learners want solved). Choose 1 task to work on or continue. Test the app with 1–2 users and capture feedback.\n\nWeekly: Bug hunt in the Game of Life. Deliver one working micro-app or feature improvement. Publish it in the Town Hub as a "plugin" or tool link. Run a 2–3 minute demo to the class. Log: what problem it solves, how to use it, what changed after feedback.',
-          2000.00,
-          'Town Government / Tech Department',
-          'Development Lab',
-          null,
-          false
-        ]
-      );
-
-      const job = await database.get('SELECT * FROM jobs WHERE id = $1', [result.lastID]);
-      res.json({ 
-        success: true, 
-        message: 'Software Engineer job added successfully!',
-        job 
-      });
-    } catch (error) {
-      console.error('Failed to add Software Engineer job:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }
