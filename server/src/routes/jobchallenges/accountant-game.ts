@@ -6,7 +6,7 @@ import { JOB_CHALLENGES_DAILY_LIMIT } from './config';
 
 const router = Router();
 
-const ACCOUNTANT_JOB_NAME = 'chartered accountant';
+const ACCOUNTANT_JOB_NAME = 'junior chartered accountant';
 
 function hasAccountantJob(jobName: string | null | undefined): boolean {
   return (jobName || '').toLowerCase().trim() === ACCOUNTANT_JOB_NAME;

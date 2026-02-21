@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Briefcase, DollarSign, MapPin, Building, FileText, AlertCircle, CheckCircle, Edit2, Save } from 'lucide-react';
 import { Job } from '../types';
-import { stripPositionsAvailableFromRequirements } from '../utils/jobDisplay';
+import { stripPositionsAvailableFromRequirements, getJobDisplayNameForBoard } from '../utils/jobDisplay';
 
 interface JobDetailsModalProps {
   isOpen: boolean;
@@ -226,7 +226,7 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
             <>
           {/* Job Title and Salary */}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{job.name}</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{getJobDisplayNameForBoard(job.name) || job.name}</h1>
             {job.company_name && (
               <div className="flex items-center text-gray-600 mb-4">
                 <Building className="h-5 w-5 mr-2" />

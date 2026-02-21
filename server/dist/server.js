@@ -17,6 +17,11 @@ const loans_1 = __importDefault(require("./routes/loans"));
 const students_1 = __importDefault(require("./routes/students"));
 const export_1 = __importDefault(require("./routes/export"));
 const math_game_1 = __importDefault(require("./routes/math-game"));
+const wordle_game_1 = __importDefault(require("./routes/wordle-game"));
+const architect_game_1 = __importDefault(require("./routes/jobchallenges/architect-game"));
+const accountant_game_1 = __importDefault(require("./routes/jobchallenges/accountant-game"));
+const software_engineer_game_1 = __importDefault(require("./routes/jobchallenges/software-engineer-game"));
+const marketing_manager_game_1 = __importDefault(require("./routes/jobchallenges/marketing-manager-game"));
 const plugins_1 = __importDefault(require("./routes/plugins"));
 const announcements_1 = __importDefault(require("./routes/announcements"));
 const town_1 = __importDefault(require("./routes/town"));
@@ -138,6 +143,11 @@ app.use('/api/loans', loans_1.default);
 app.use('/api/students', students_1.default);
 app.use('/api/export', export_1.default);
 app.use('/api/math-game', math_game_1.default);
+app.use('/api/wordle-game', wordle_game_1.default);
+app.use('/api/architect-game', architect_game_1.default);
+app.use('/api/accountant-game', accountant_game_1.default);
+app.use('/api/software-engineer-game', software_engineer_game_1.default);
+app.use('/api/marketing-manager-game', marketing_manager_game_1.default);
 app.use('/api/plugins', plugins_1.default);
 app.use('/api/announcements', announcements_1.default);
 app.use('/api/town', town_1.default);
@@ -471,6 +481,78 @@ async function initializeDatabase() {
         catch (migrationError) {
             console.log('⚠️ Multi-tenant schools migration may have already been applied:', migrationError);
         }
+        // Run Job Wages Restructuring migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '034_restructure_job_wages.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Job wages restructuring migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Job wages restructuring migration may have already been applied:', migrationError);
+        }
+        // Run Architect Game Tables Migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '035_add_architect_game_tables.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Architect game tables migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Architect game tables migration may have already been applied:', migrationError);
+        }
+        // Run Accountant Game Tables Migration
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '036_add_accountant_game_tables.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Accountant game tables migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Accountant game tables migration may have already been applied:', migrationError);
+        }
+        // Add job game daily limit to town_settings (teacher-configurable)
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '037_add_job_game_daily_limit.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Job game daily limit migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Job game daily limit migration may have already been applied:', migrationError);
+        }
+        // Software Engineer game tables
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '038_add_software_engineer_game_tables.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Software engineer game tables migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Software engineer game tables migration may have already been applied:', migrationError);
+        }
+        // Marketing Manager game tables
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '039_add_marketing_manager_game_tables.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Marketing manager game tables migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Marketing manager game tables migration may have already been applied:', migrationError);
+        }
         // Add paid status to shop purchases (Winkel pending/paid tracking)
         try {
             const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '023_shop_purchases_paid_status.sql');
@@ -584,6 +666,39 @@ async function initializeDatabase() {
         }
         catch (migrationError) {
             console.log('⚠️ Analytics plugin migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '032_pizza_time_school_unique.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Pizza time school unique constraint migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Pizza time school unique migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '033_plugins_route_path_per_school.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Plugins route_path per school migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Plugins route_path per school migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '040_add_wordle_and_chores_toggles.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Wordle and chore toggles migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Wordle and chore toggles migration may have already been applied:', migrationError);
         }
         // Sync default plugins (ensures all known plugins exist - no manual script needed)
         try {

@@ -25,7 +25,7 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
       WHERE u.id = $1
     `, [userId]);
     
-    if (!user || user.job_name?.toLowerCase() !== 'architect') {
+    if (!user || user.job_name?.toLowerCase() !== 'assistant architect') {
       return res.status(403).json({ error: 'Only Architects can access this game' });
     }
 
@@ -136,7 +136,7 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
       WHERE u.id = $1
     `, [userId]);
     
-    if (!user || user.job_name?.toLowerCase() !== 'architect') {
+    if (!user || user.job_name?.toLowerCase() !== 'assistant architect') {
       return res.status(403).json({ error: 'Only Architects can play this game' });
     }
 

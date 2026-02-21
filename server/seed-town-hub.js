@@ -233,7 +233,7 @@ async function seedDatabase() {
     console.log('✅ Old placeholder jobs removed');
     
     const jobs = [
-      // 🏛️ GOVERNANCE & ADMINISTRATION
+      // 🏛 Government & Finance (Mayor is elected, not applied for)
       {
         name: 'Mayor',
         description: 'Daily: Check Town Hub announcements and alerts. Respond to issues raised by HR, Police or Planner. Approve minor decisions (with teacher sign-off if needed).\n\nWeekly: Chair town council meeting. Announce laws, tax changes or events. Approve major land or budget decisions. Address the town after major events or disasters.',
@@ -242,7 +242,7 @@ async function seedDatabase() {
         location: 'Town Hall'
       },
       {
-        name: 'Town Planner',
+        name: 'Assistant Town Planner',
         description: 'Daily: Update land ownership records. Answer questions about zoning and building rules. Monitor builds on the physical board.\n\nWeekly: Run land tender process. Approve or reject building plans. Update town map (physical + digital). Work with Engineers on infrastructure planning.',
         salary: 7500.00,
         company_name: 'Town Government',
@@ -250,7 +250,7 @@ async function seedDatabase() {
         requirements: 'Two positions available. Planners work together and must agree on major planning decisions.'
       },
       {
-        name: 'Lawyer',
+        name: 'Junior Lawyer',
         description: 'Daily: Advise students on fines, disputes or rules. Clarify constitution rules when conflicts arise.\n\nWeekly: Help update or interpret town constitution. Represent cases during town disputes. Review contracts (jobs, land, loans). Present legal summary to Mayor.',
         salary: 8000.00,
         company_name: 'Town Government',
@@ -258,7 +258,7 @@ async function seedDatabase() {
         requirements: 'Two positions available.'
       },
       {
-        name: 'Police Lieutenant',
+        name: 'Junior Police Lieutenant',
         description: 'Daily: Record fines issued during the school day. Communicate fines to Financial Manager. Monitor rule compliance.\n\nWeekly: Report fine totals. Build or update police station. Assist during disasters or emergencies. Meet with Mayor and Lawyer on enforcement issues.',
         salary: 7000.00,
         company_name: 'Town Police',
@@ -266,15 +266,14 @@ async function seedDatabase() {
         requirements: 'Two positions available.'
       },
       {
-        name: 'HR Director',
+        name: 'Assistant HR Director',
         description: 'Daily: Track attendance, participation and behaviour. Check in with students struggling in roles. Note conflicts or concerns.\n\nWeekly: Mediate disputes. Report role performance to Mayor/Teacher. Recommend bonuses or warnings. Adjust job assignments if needed.',
         salary: 7200.00,
         company_name: 'Town Government',
         location: 'HR Office'
       },
-      // 💰 FINANCE
       {
-        name: 'Chartered Accountant',
+        name: 'Junior Chartered Accountant',
         description: 'Daily: Check financial accuracy (balances, reports). Flag missing or incorrect data.\n\nWeekly: Audit town finances. Review tax income and expenses. Produce summary report. Advise Mayor on financial risks.',
         salary: 8500.00,
         company_name: 'Town Finance',
@@ -282,105 +281,104 @@ async function seedDatabase() {
         requirements: 'Two positions available.'
       },
       {
-        name: 'Financial Manager',
+        name: 'Assistant Financial Manager',
         description: 'Daily: Process salaries, bonuses and fines. Update banking records. Answer balance queries.\n\nWeekly: Pay salaries. Collect taxes. Transfer funds to Town Bank. Report finances to Accountant.',
         salary: 7800.00,
         company_name: 'Town Finance',
         location: 'Finance Office',
         requirements: 'Two positions available.'
       },
-      // 🏗️ INFRASTRUCTURE & DESIGN
+      // 🏗 Infrastructure & Design
       {
-        name: 'Architect',
-        description: 'Daily: Review building designs. Consult on sustainability requirements. Sketch or revise plans.\n\nWeekly: Design public buildings. Approve private building layouts. Present designs to Town Planner. Update design portfolio.',
-        salary: 8000.00,
-        company_name: 'Town Design',
-        location: 'Design Studio'
-      },
-      {
-        name: 'Civil Engineer',
+        name: 'Assistant Civil Engineer',
         description: 'Daily: Monitor road and transport planning. Assist with build logistics.\n\nWeekly: Design or improve road systems. Plan disaster recovery infrastructure. Work with Architect and Planner. Update infrastructure plans.',
         salary: 7500.00,
         company_name: 'Town Infrastructure',
         location: 'Engineering Office'
       },
       {
-        name: 'Electrical Engineer',
+        name: 'Assistant Electrical Engineer',
         description: 'Daily: Plan power layouts. Advise on energy use and sustainability.\n\nWeekly: Implement renewable energy systems. Support builds needing power. Update town power plan. Assist during power-related disasters.',
         salary: 7500.00,
         company_name: 'Town Infrastructure',
         location: 'Engineering Office'
       },
-      // 🎓 EDUCATION
       {
-        name: 'School Principal',
+        name: 'Assistant Architect',
+        description: 'Daily: Review building designs. Consult on sustainability requirements. Sketch or revise plans.\n\nWeekly: Design public buildings. Approve private building layouts. Present designs to Town Planner. Update design portfolio.',
+        salary: 8000.00,
+        company_name: 'Town Design',
+        location: 'Design Studio'
+      },
+      // 🎓 Education
+      {
+        name: 'Assistant Principal',
         description: 'Daily: Liaise between students and teacher. Check learning progress and understanding.\n\nWeekly: Oversee school build. Address town learning needs. Support assessment alignment. Report to Mayor and Teacher.',
         salary: 9000.00,
         company_name: 'Town Education',
         location: 'School'
       },
       {
-        name: 'Teacher',
+        name: 'Assistant Teacher',
         description: 'Daily: Support learners in projects. Run short learning activities.\n\nWeekly: Plan lessons linked to town needs. Teach skills required for jobs. Assess student work. Report progress.',
         salary: 6000.00,
         company_name: 'Town Education',
         location: 'School'
       },
-      // 🏥 HEALTH
+      // 🏥 Health
       {
-        name: 'Doctor',
+        name: 'Junior Doctor',
         description: 'Daily: Track sick leave and injuries. Manage absenteeism records.\n\nWeekly: Run health briefings. Respond to disaster injuries. Manage hospital build. Report health data to teachers.',
         salary: 9000.00,
         company_name: 'Town Health',
         location: 'Hospital'
       },
       {
-        name: 'Nurse',
+        name: 'Assistant Nurse',
         description: 'Daily: Assist sick or injured students. Record treatments.\n\nWeekly: Support Doctor during emergencies. Update health logs. Prepare medical supplies.',
         salary: 5500.00,
         company_name: 'Town Health',
         location: 'Hospital'
       },
-      // 🏪 BUSINESS & COMMUNITY
+      // 🛍 Economy & Events
       {
-        name: 'Retail Manager',
+        name: 'Assistant Retail Manager',
         description: 'Daily: Track supply and demand. Set prices.\n\nWeekly: Adjust pricing based on economy. Respond to shortages. Report sales to Finance. Update shop on board.',
         salary: 6500.00,
         company_name: 'Town Retail',
         location: 'Town Shop'
       },
       {
-        name: 'Event Planner',
+        name: 'Assistant Event Planner',
         description: 'Daily: Update town calendar. Communicate upcoming events.\n\nWeekly: Plan elections, meetings or celebrations. Co-ordinate logistics. Work with Marketing and Mayor. Evaluate event success.',
         salary: 6000.00,
         company_name: 'Town Events',
         location: 'Event Office'
       },
-      // 📰 MEDIA & COMMUNICATION
+      // 🎨 Media & Tech
       {
-        name: 'Journalist',
-        description: 'Daily: Observe town activity. Take notes and conduct interviews.\n\nWeekly: Write and submit articles. Publish approved news. Cover events and elections. Maintain news archive.',
-        salary: 5500.00,
-        company_name: 'Town News',
-        location: 'News Office'
+        name: 'Assistant Marketing Manager',
+        description: 'Daily: Oversee messaging and tone. Approve designs and articles.\n\nWeekly: Promote town initiatives. Run campaigns (elections, events). Update town brand assets. Report engagement to Mayor.',
+        salary: 7000.00,
+        company_name: 'Town Media',
+        location: 'Marketing Office'
       },
       {
-        name: 'Graphic Designer',
+        name: 'Assistant Graphic Designer',
         description: 'Daily: Design posters, signs or visuals.\n\nWeekly: Support campaigns and events. Update town branding. Collaborate with Journalist and Marketing.',
         salary: 6000.00,
         company_name: 'Town Media',
         location: 'Design Studio'
       },
       {
-        name: 'Marketing Manager',
-        description: 'Daily: Oversee messaging and tone. Approve designs and articles.\n\nWeekly: Promote town initiatives. Run campaigns (elections, events). Update town brand assets. Report engagement to Mayor.',
-        salary: 7000.00,
-        company_name: 'Town Media',
-        location: 'Marketing Office'
+        name: 'Assistant Journalist',
+        description: 'Daily: Observe town activity. Take notes and conduct interviews.\n\nWeekly: Write and submit articles. Publish approved news. Cover events and elections. Maintain news archive.',
+        salary: 5500.00,
+        company_name: 'Town News',
+        location: 'News Office'
       },
-      // 💻 TECHNOLOGY & INNOVATION
       {
-        name: 'Software Engineer',
+        name: 'Assistant Software Engineer',
         description: 'Daily: Check the Software Requests board (a list of problems learners want solved). Choose 1 task to work on or continue. Test the app with 1–2 users and capture feedback.\n\nWeekly: Bug hunt in the Game of Life. Deliver one working micro-app or feature improvement. Publish it in the Town Hub as a "plugin" or tool link. Run a 2–3 minute demo to the class. Log: what problem it solves, how to use it, what changed after feedback.',
         salary: 6000.00,
         company_name: 'Town Government / Tech Department',

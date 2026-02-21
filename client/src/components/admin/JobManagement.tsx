@@ -35,6 +35,7 @@ const JobManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [togglingApplications, setTogglingApplications] = useState(false);
+  const [togglingMayorCard, setTogglingMayorCard] = useState(false);
   const [editingJob, setEditingJob] = useState<JobWithAssignments | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<Job>>({});
   const [savingJob, setSavingJob] = useState(false);
@@ -167,6 +168,24 @@ const JobManagement: React.FC = () => {
     }
   };
 
+  const handleToggleMayorJobCard = async () => {
+    if (!currentTown) return;
+    setTogglingMayorCard(true);
+    try {
+      const newValue = currentTown.show_mayor_job_card !== false ? false : true;
+      await api.put(`/town/settings/${currentTown.id}`, {
+        show_mayor_job_card: newValue
+      });
+      await refreshTown();
+      setSuccess(newValue ? 'Mayor job card is now shown on the employment board' : 'Mayor job card is now hidden on the employment board');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update setting');
+    } finally {
+      setTogglingMayorCard(false);
+    }
+  };
+
   const handleEditJob = (job: JobWithAssignments) => {
     setEditingJob(job);
     setEditFormData({
@@ -263,6 +282,37 @@ const JobManagement: React.FC = () => {
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                   currentTown.job_applications_enabled !== false ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mayor Job Card Toggle */}
+      {currentTown && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Mayor job card</h3>
+              <p className="text-sm text-gray-600">
+                {currentTown.show_mayor_job_card !== false
+                  ? 'Mayor is shown on the employment board (elected role, not applied for)'
+                  : 'Mayor is hidden on the employment board'}
+              </p>
+            </div>
+            <button
+              onClick={handleToggleMayorJobCard}
+              disabled={togglingMayorCard}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                currentTown.show_mayor_job_card !== false
+                  ? 'bg-primary-600'
+                  : 'bg-gray-300'
+              } ${togglingMayorCard ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  currentTown.show_mayor_job_card !== false ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
             </button>

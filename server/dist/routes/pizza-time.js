@@ -14,12 +14,41 @@ function isValidTownClass(townClass) {
     return ['6A', '6B', '6C'].includes(townClass);
 }
 const TOWN_CLASSES = ['6A', '6B', '6C'];
-// Helper: Fetch full status for one class
-async function getPizzaTimeStatusForClass(userClass) {
-    let pizzaTime = await database_prod_1.default.get('SELECT * FROM pizza_time WHERE class = $1', [userClass]);
+// Helper: Fetch full status for one class (optionally scoped by school)
+async function getPizzaTimeStatusForClass(userClass, schoolId = null) {
+    const schoolCondition = schoolId !== null
+        ? 'class = $1 AND school_id = $2'
+        : 'class = $1 AND school_id IS NULL';
+    const params = schoolId !== null ? [userClass, schoolId] : [userClass];
+    let pizzaTime = await database_prod_1.default.get(`SELECT * FROM pizza_time WHERE ${schoolCondition}`, params);
     if (!pizzaTime) {
-        await database_prod_1.default.run('INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)', [userClass, false, 0.00, 100000.00]);
-        pizzaTime = await database_prod_1.default.get('SELECT * FROM pizza_time WHERE class = $1', [userClass]);
+        try {
+            if (schoolId !== null) {
+                await database_prod_1.default.run('INSERT INTO pizza_time (class, is_active, current_fund, goal_amount, school_id) VALUES ($1, $2, $3, $4, $5)', [userClass, false, 0.00, 100000.00, schoolId]);
+            }
+            else {
+                await database_prod_1.default.run('INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)', [userClass, false, 0.00, 100000.00]);
+            }
+        }
+        catch (insertErr) {
+            // Duplicate key (23505): migration 032 may not be run yet (UNIQUE on class only). Re-select.
+            if (insertErr?.code !== '23505')
+                throw insertErr;
+        }
+        pizzaTime = await database_prod_1.default.get(`SELECT * FROM pizza_time WHERE ${schoolCondition}`, params);
+    }
+    // If still no row (e.g. teacher's school has no pizza_time and migration 032 not run), return empty status
+    if (!pizzaTime) {
+        return {
+            id: null,
+            class: userClass,
+            is_active: false,
+            current_fund: 0,
+            goal_amount: 100000,
+            donations: [],
+            donation_count: 0,
+            donation_history: []
+        };
     }
     const donations = await database_prod_1.default.query(`SELECT 
       ptd.*,
@@ -56,7 +85,7 @@ async function getPizzaTimeStatusForClass(userClass) {
         }))
     };
 }
-// GET /api/pizza-time/status/all - Get pizza time status for ALL classes (teachers only)
+// GET /api/pizza-time/status/all - Get pizza time status for ALL classes (teachers only, school-scoped)
 router.get('/status/all', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         try {
@@ -68,7 +97,8 @@ router.get('/status/all', auth_1.authenticateToken, (0, auth_1.requireRole)(['te
             }
             throw tableError;
         }
-        const allStatus = await Promise.all(TOWN_CLASSES.map(async (c) => getPizzaTimeStatusForClass(c)));
+        const schoolId = req.user?.school_id ?? null;
+        const allStatus = await Promise.all(TOWN_CLASSES.map(async (c) => getPizzaTimeStatusForClass(c, schoolId)));
         res.json({
             classes: TOWN_CLASSES.reduce((acc, cls, i) => {
                 acc[cls] = allStatus[i];
@@ -127,7 +157,8 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
             }
             throw tableError;
         }
-        const status = await getPizzaTimeStatusForClass(userClass);
+        const schoolId = req.user?.school_id ?? null;
+        const status = await getPizzaTimeStatusForClass(userClass, schoolId);
         res.json(status);
     }
     catch (error) {
@@ -155,10 +186,10 @@ router.post('/donate', auth_1.authenticateToken, [
         const { amount } = req.body;
         const donationAmount = parseFloat(amount);
         // Validate donation amount is one of the allowed values
-        const allowedAmounts = [500, 1000, 2000, 5000];
+        const allowedAmounts = [100, 500, 1000, 2000, 5000];
         if (!allowedAmounts.includes(donationAmount)) {
             return res.status(400).json({
-                error: 'Invalid donation amount. Allowed amounts: 500, 1000, 2000, 5000'
+                error: 'Invalid donation amount. Allowed amounts: 100, 500, 1000, 2000, 5000'
             });
         }
         // Students must have a valid class
@@ -173,8 +204,13 @@ router.post('/donate', auth_1.authenticateToken, [
                 details: `Your current class value: ${userClass || 'null'}`
             });
         }
-        // Get pizza time for this class
-        let pizzaTime = await database_prod_1.default.get('SELECT * FROM pizza_time WHERE class = $1', [userClass]);
+        // Get pizza time for this class and student's school
+        const schoolId = req.user.school_id ?? null;
+        const schoolCondition = schoolId !== null
+            ? 'class = $1 AND school_id = $2'
+            : 'class = $1 AND school_id IS NULL';
+        const pizzaParams = schoolId !== null ? [userClass, schoolId] : [userClass];
+        let pizzaTime = await database_prod_1.default.get(`SELECT * FROM pizza_time WHERE ${schoolCondition}`, pizzaParams);
         if (!pizzaTime) {
             return res.status(404).json({ error: 'Pizza time not found for this class' });
         }
@@ -246,15 +282,25 @@ router.post('/toggle', auth_1.authenticateToken, (0, auth_1.requireRole)(['teach
         if (!isValidTownClass(townClass)) {
             return res.status(400).json({ error: 'Invalid town class' });
         }
-        // Get or create pizza time for this class
-        let pizzaTime = await database_prod_1.default.get('SELECT * FROM pizza_time WHERE class = $1', [townClass]);
+        const schoolId = req.user?.school_id ?? null;
+        const schoolCondition = schoolId !== null
+            ? 'class = $1 AND school_id = $2'
+            : 'class = $1 AND school_id IS NULL';
+        const params = schoolId !== null ? [townClass, schoolId] : [townClass];
+        // Get or create pizza time for this class and school
+        let pizzaTime = await database_prod_1.default.get(`SELECT * FROM pizza_time WHERE ${schoolCondition}`, params);
         if (!pizzaTime) {
-            await database_prod_1.default.run('INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)', [townClass, is_active, 0.00, 100000.00]);
-            pizzaTime = await database_prod_1.default.get('SELECT * FROM pizza_time WHERE class = $1', [townClass]);
+            if (schoolId !== null) {
+                await database_prod_1.default.run('INSERT INTO pizza_time (class, is_active, current_fund, goal_amount, school_id) VALUES ($1, $2, $3, $4, $5)', [townClass, is_active, 0.00, 100000.00, schoolId]);
+            }
+            else {
+                await database_prod_1.default.run('INSERT INTO pizza_time (class, is_active, current_fund, goal_amount) VALUES ($1, $2, $3, $4)', [townClass, is_active, 0.00, 100000.00]);
+            }
+            pizzaTime = await database_prod_1.default.get(`SELECT * FROM pizza_time WHERE ${schoolCondition}`, params);
         }
         else {
-            await database_prod_1.default.run('UPDATE pizza_time SET is_active = $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2', [is_active, townClass]);
-            pizzaTime = await database_prod_1.default.get('SELECT * FROM pizza_time WHERE class = $1', [townClass]);
+            await database_prod_1.default.run(`UPDATE pizza_time SET is_active = $1, updated_at = CURRENT_TIMESTAMP WHERE ${schoolCondition}`, schoolId !== null ? [is_active, townClass, schoolId] : [is_active, townClass]);
+            pizzaTime = await database_prod_1.default.get(`SELECT * FROM pizza_time WHERE ${schoolCondition}`, params);
         }
         res.json({
             message: `Pizza time ${is_active ? 'activated' : 'deactivated'} for ${townClass}`,
@@ -283,11 +329,14 @@ router.post('/reset', auth_1.authenticateToken, (0, auth_1.requireRole)(['teache
         if (!isValidTownClass(townClass)) {
             return res.status(400).json({ error: 'Invalid town class' });
         }
-        // Reset fund to 0
-        await database_prod_1.default.run('UPDATE pizza_time SET current_fund = 0.00, updated_at = CURRENT_TIMESTAMP WHERE class = $1', [townClass]);
-        // Optionally delete donation history (commented out - keep history)
-        // await database.run('DELETE FROM pizza_time_donations WHERE pizza_time_id = (SELECT id FROM pizza_time WHERE class = $1)', [townClass]);
-        const pizzaTime = await database_prod_1.default.get('SELECT * FROM pizza_time WHERE class = $1', [townClass]);
+        const schoolId = req.user?.school_id ?? null;
+        const schoolCondition = schoolId !== null
+            ? 'class = $1 AND school_id = $2'
+            : 'class = $1 AND school_id IS NULL';
+        const params = schoolId !== null ? [townClass, schoolId] : [townClass];
+        // Reset fund to 0 (school-scoped)
+        await database_prod_1.default.run(`UPDATE pizza_time SET current_fund = 0.00, updated_at = CURRENT_TIMESTAMP WHERE ${schoolCondition}`, params);
+        const pizzaTime = await database_prod_1.default.get(`SELECT * FROM pizza_time WHERE ${schoolCondition}`, params);
         res.json({
             message: `Pizza time fund reset for ${townClass}`,
             pizza_time: {

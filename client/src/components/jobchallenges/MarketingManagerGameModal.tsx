@@ -1,0 +1,371 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Play, Trophy, Clock, Target, Zap, CheckCircle, XCircle, Award, Megaphone } from 'lucide-react';
+import { marketingManagerGameApi } from '../../services/api';
+import { MarketingManagerGameStatus } from '../../types';
+import { MarketingManagerQuestion, getMarketingManagerQuestion } from '../../utils/jobchallenges/marketingManagerQuestions';
+
+interface MarketingManagerGameModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onGameComplete: () => void;
+  gameStatus: MarketingManagerGameStatus | null;
+}
+
+type GameState = 'difficulty' | 'playing' | 'results';
+type Difficulty = 'easy' | 'medium' | 'hard' | 'extreme';
+
+const MarketingManagerGameModal: React.FC<MarketingManagerGameModalProps> = ({
+  isOpen,
+  onClose,
+  onGameComplete,
+  gameStatus
+}) => {
+  const [gameState, setGameState] = useState<GameState>('difficulty');
+  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
+  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [score, setScore] = useState(0);
+  const [currentProblem, setCurrentProblem] = useState<MarketingManagerQuestion | null>(null);
+  const [userAnswer, setUserAnswer] = useState('');
+  const [answerSequence, setAnswerSequence] = useState<boolean[]>([]);
+  const [streak, setStreak] = useState(0);
+  const [maxStreak, setMaxStreak] = useState(0);
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [gameResults, setGameResults] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [spamMessage, setSpamMessage] = useState<string | null>(null);
+  const [problemsCompleted, setProblemsCompleted] = useState(0);
+  const MAX_PROBLEMS = 5;
+
+  const spamMessages = [
+    "One answer per question!",
+    "Wait for the next problem!",
+    "No spam!",
+    "Slow down!",
+  ];
+
+  const startGame = async (diff: Difficulty) => {
+    try {
+      setDifficulty(diff);
+      const response = await marketingManagerGameApi.startGame({ difficulty: diff });
+      setSessionId(response.data.session.id);
+      setGameState('playing');
+      setTimeLeft(60);
+      setScore(0);
+      setAnswerSequence([]);
+      setStreak(0);
+      setMaxStreak(0);
+      setUserAnswer('');
+      setProblemsCompleted(0);
+      setCurrentProblem(getMarketingManagerQuestion(diff));
+    } catch (error: any) {
+      console.error('Failed to start game:', error);
+      alert(error.response?.data?.error || 'Failed to start campaign. Please try again.');
+    }
+  };
+
+  const handleAnswerSubmit = () => {
+    if (showFeedback) {
+      const msg = spamMessages[Math.floor(Math.random() * spamMessages.length)];
+      setSpamMessage(msg);
+      setTimeout(() => setSpamMessage(null), 1500);
+      return;
+    }
+    if (!currentProblem || !userAnswer.trim()) return;
+
+    const userAnswerNum = parseFloat(userAnswer.replace(/,/g, ''));
+    const correct = Math.abs(userAnswerNum - currentProblem.answer) < 0.01;
+
+    setIsCorrect(correct);
+    setShowFeedback(true);
+    setAnswerSequence(prev => [...prev, correct]);
+    setProblemsCompleted(prev => prev + 1);
+
+    if (correct) {
+      setStreak(s => s + 1);
+      setMaxStreak(prev => Math.max(prev, streak + 1));
+      setScore(prev => prev + 1);
+    } else {
+      setStreak(0);
+    }
+
+    if (problemsCompleted + 1 >= MAX_PROBLEMS) {
+      setTimeout(() => endGame(), 1000);
+      return;
+    }
+
+    setTimeout(() => {
+      setUserAnswer('');
+      setCurrentProblem(getMarketingManagerQuestion(difficulty));
+      setIsCorrect(null);
+      setShowFeedback(false);
+    }, 1000);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleAnswerSubmit();
+  };
+
+  const endGame = useCallback(async () => {
+    if (!sessionId || isSubmitting) return;
+    setIsSubmitting(true);
+    setGameState('results');
+    try {
+      const response = await marketingManagerGameApi.submitGame({
+        session_id: sessionId,
+        score,
+        correct_answers: score,
+        total_problems: answerSequence.length,
+        answer_sequence: answerSequence
+      });
+      setGameResults({
+        score,
+        correctAnswers: score,
+        totalProblems: answerSequence.length,
+        earnings: response.data.earnings,
+        experience_points: response.data.experience_points,
+        new_level: response.data.new_level,
+        isNewHighScore: response.data.isNewHighScore,
+        accuracy: answerSequence.length > 0 ? (score / answerSequence.length) * 100 : 0
+      });
+      onGameComplete();
+    } catch (error: any) {
+      setGameResults({
+        score,
+        correctAnswers: score,
+        totalProblems: answerSequence.length,
+        earnings: 0,
+        experience_points: 0,
+        new_level: null,
+        isNewHighScore: false,
+        accuracy: answerSequence.length > 0 ? (score / answerSequence.length) * 100 : 0,
+        error: error.response?.data?.error || 'Failed to submit campaign results'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [sessionId, score, answerSequence, isSubmitting, onGameComplete]);
+
+  useEffect(() => {
+    if (gameState === 'playing' && timeLeft > 0 && problemsCompleted < MAX_PROBLEMS) {
+      const t = setTimeout(() => setTimeLeft(prev => prev - 1), 1000);
+      return () => clearTimeout(t);
+    } else if (gameState === 'playing' && (timeLeft === 0 || problemsCompleted >= MAX_PROBLEMS)) {
+      endGame();
+    }
+  }, [gameState, timeLeft, problemsCompleted, endGame]);
+
+  const resetModal = () => {
+    setGameState('difficulty');
+    setSessionId(null);
+    setTimeLeft(60);
+    setScore(0);
+    setCurrentProblem(null);
+    setUserAnswer('');
+    setAnswerSequence([]);
+    setStreak(0);
+    setMaxStreak(0);
+    setIsCorrect(null);
+    setShowFeedback(false);
+    setGameResults(null);
+    setIsSubmitting(false);
+    setSpamMessage(null);
+    setProblemsCompleted(0);
+  };
+
+  const handleClose = () => {
+    resetModal();
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="bg-gradient-to-r from-rose-600 to-pink-600 p-6 rounded-t-2xl flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Megaphone className="h-6 w-6 text-white" />
+            <h2 className="text-xl font-bold text-white">Campaign Strategy Challenge</h2>
+          </div>
+          <button onClick={handleClose} className="text-white hover:text-gray-200 transition-colors">
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        {gameState === 'difficulty' && (
+          <div className="p-6 space-y-4">
+            <div className="text-center mb-6">
+              <p className="text-gray-300 mb-2">Answer campaign maths to run successful campaigns</p>
+              <p className="text-sm text-gray-400">
+                {gameStatus?.remaining_plays ?? 0} / {gameStatus?.daily_limit ?? 3} campaigns remaining today
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {(['easy', 'medium', 'hard', 'extreme'] as Difficulty[]).map((diff) => (
+                <button
+                  key={diff}
+                  onClick={() => startGame(diff)}
+                  disabled={!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    !gameStatus || (gameStatus.remaining_plays ?? 0) <= 0
+                      ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
+                      : 'border-rose-500 bg-gray-800 text-white hover:bg-rose-600 hover:border-rose-400'
+                  }`}
+                >
+                  <div className="text-lg font-semibold capitalize mb-1">{diff}</div>
+                  <div className="text-xs text-gray-400">
+                    {diff === 'easy' && 'Sales & Revenue'}
+                    {diff === 'medium' && 'Percentage & Growth'}
+                    {diff === 'hard' && 'ROI'}
+                    {diff === 'extreme' && 'Strategy & Optimisation'}
+                  </div>
+                  <div className="text-xs mt-1">High: {gameStatus?.high_scores?.[diff] ?? 0}</div>
+                </button>
+              ))}
+            </div>
+            {gameStatus && (gameStatus.remaining_plays ?? 0) <= 0 && (
+              <div className="text-center text-gray-400 text-sm mt-4">
+                No campaigns remaining today. Try again tomorrow!
+              </div>
+            )}
+          </div>
+        )}
+
+        {gameState === 'playing' && (
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between text-white">
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <Clock className="h-5 w-5 text-rose-400" />
+                  <span className="text-lg font-bold">{timeLeft}s</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Target className="h-5 w-5 text-pink-400" />
+                  <span className="text-lg font-bold">{score}</span>
+                </div>
+                {streak > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <Zap className="h-5 w-5 text-yellow-400" />
+                    <span className="text-lg font-bold">{streak}</span>
+                  </div>
+                )}
+              </div>
+              <div className="text-sm text-gray-400">
+                Question {problemsCompleted + 1} / {MAX_PROBLEMS}
+              </div>
+            </div>
+
+            {currentProblem && (
+              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <div className="text-white text-lg mb-4 leading-relaxed">{currentProblem.question}</div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <input
+                    type="number"
+                    value={userAnswer}
+                    onChange={(e) => setUserAnswer(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Your answer (number)"
+                    className="flex-1 px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:border-rose-500 text-lg"
+                    autoFocus
+                    disabled={showFeedback}
+                  />
+                </div>
+                {showFeedback && (
+                  <div className={`p-4 rounded-lg flex items-center space-x-3 ${
+                    isCorrect ? 'bg-green-900 border border-green-700' : 'bg-red-900 border border-red-700'
+                  }`}>
+                    {isCorrect ? (
+                      <>
+                        <CheckCircle className="h-6 w-6 text-green-400" />
+                        <div className="text-green-300">
+                          <div className="font-semibold">Correct! ✓</div>
+                          {currentProblem.explanation && <div className="text-sm mt-1">{currentProblem.explanation}</div>}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="h-6 w-6 text-red-400" />
+                        <div className="text-red-300">
+                          <div className="font-semibold">Incorrect</div>
+                          <div className="text-sm mt-1">Correct answer: {currentProblem.answer}</div>
+                          {currentProblem.explanation && <div className="text-sm mt-1">{currentProblem.explanation}</div>}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+                {spamMessage && (
+                  <div className="mt-2 text-center text-yellow-400 text-sm animate-pulse">{spamMessage}</div>
+                )}
+                {!showFeedback && (
+                  <button
+                    onClick={handleAnswerSubmit}
+                    disabled={!userAnswer.trim()}
+                    className="w-full mt-4 bg-rose-600 hover:bg-rose-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:bg-gray-700 disabled:text-gray-500"
+                  >
+                    Submit Answer
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {gameState === 'results' && gameResults && (
+          <div className="p-6 space-y-4">
+            <div className="text-center">
+              <Trophy className="h-16 w-16 text-rose-400 mx-auto mb-4" />
+              <h3 className="text-2xl font-bold text-white mb-2">Campaign Complete!</h3>
+              {gameResults.error && (
+                <div className="bg-red-900 border border-red-700 text-red-300 p-3 rounded-lg mb-4">{gameResults.error}</div>
+              )}
+            </div>
+            <div className="bg-gray-800 rounded-lg p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <div className="text-gray-400 text-sm">Score</div>
+                  <div className="text-2xl font-bold text-white">{gameResults.score}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-gray-400 text-sm">Accuracy</div>
+                  <div className="text-2xl font-bold text-white">{Math.round(gameResults.accuracy)}%</div>
+                </div>
+              </div>
+              <div className="border-t border-gray-700 pt-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Experience Points</span>
+                  <span className="text-xl font-bold text-rose-400 flex items-center space-x-1">
+                    <Award className="h-5 w-5" />
+                    <span>+{gameResults.experience_points}</span>
+                  </span>
+                </div>
+                {gameResults.new_level && (
+                  <div className="bg-green-900 border border-green-700 p-3 rounded-lg text-center">
+                    <div className="text-green-300 font-semibold text-lg">🎉 Level Up! Level {gameResults.new_level}</div>
+                  </div>
+                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Earnings</span>
+                  <span className="text-xl font-bold text-green-400">R{gameResults.earnings.toFixed(2)}</span>
+                </div>
+                {gameResults.isNewHighScore && (
+                  <div className="text-center text-rose-400 font-semibold mt-2">🏆 New High Score!</div>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={handleClose}
+              className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold py-3 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default MarketingManagerGameModal;

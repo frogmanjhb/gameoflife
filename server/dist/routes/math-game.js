@@ -19,11 +19,31 @@ async function getMathGameDailyLimit() {
         return 3;
     }
 }
+// Helper: whether math chores are enabled for students
+async function isMathChoresEnabled() {
+    try {
+        const setting = await database_prod_1.default.get('SELECT setting_value FROM bank_settings WHERE setting_key = $1', ['math_chores_enabled']);
+        return (setting?.setting_value || 'true').toLowerCase() === 'true';
+    }
+    catch (error) {
+        return true;
+    }
+}
 // Get math game status (remaining plays, high scores, recent sessions)
 router.get('/status', auth_1.authenticateToken, async (req, res) => {
     try {
         if (!req.user || req.user.role !== 'student') {
             return res.status(403).json({ error: 'Only students can access math game' });
+        }
+        const mathChoresEnabled = await isMathChoresEnabled();
+        if (!mathChoresEnabled) {
+            return res.json({
+                enabled: false,
+                remaining_plays: 0,
+                daily_limit: 0,
+                high_scores: { easy: 0, medium: 0, hard: 0, extreme: 0 },
+                recent_sessions: []
+            });
         }
         const userId = req.user.id;
         // Get daily limit from settings
@@ -35,6 +55,7 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
         catch (tableError) {
             console.log('Math game tables not found, returning default status');
             return res.json({
+                enabled: true,
                 remaining_plays: dailyLimit,
                 daily_limit: dailyLimit,
                 high_scores: { easy: 0, medium: 0, hard: 0, extreme: 0 },
@@ -80,6 +101,7 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
       LIMIT 5
     `, [userId]);
         const status = {
+            enabled: true,
             remaining_plays: remainingPlays,
             daily_limit: dailyLimit,
             high_scores: highScoreMap,
@@ -97,6 +119,9 @@ router.post('/start', auth_1.authenticateToken, async (req, res) => {
     try {
         if (!req.user || req.user.role !== 'student') {
             return res.status(403).json({ error: 'Only students can start math games' });
+        }
+        if (!(await isMathChoresEnabled())) {
+            return res.status(403).json({ error: 'Math chores are currently disabled.' });
         }
         const { difficulty } = req.body;
         if (!difficulty || !['easy', 'medium', 'hard', 'extreme'].includes(difficulty)) {
@@ -146,6 +171,9 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
     try {
         if (!req.user || req.user.role !== 'student') {
             return res.status(403).json({ error: 'Only students can submit math games' });
+        }
+        if (!(await isMathChoresEnabled())) {
+            return res.status(403).json({ error: 'Math chores are currently disabled.' });
         }
         const { session_id, score, correct_answers, total_problems, answer_sequence } = req.body;
         console.log(`📝 Math game submission from ${req.user.username}:`, {

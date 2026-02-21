@@ -11,6 +11,7 @@ import MyTendersCard from './MyTendersCard';
 import { Grid } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, X } from 'lucide-react';
+import { getDisplayJobTitle } from '../utils/jobDisplay';
 
 // Header color themes for student dashboard - changes randomly each login
 const headerColorThemes = [
@@ -51,7 +52,7 @@ const StudentDashboard: React.FC = () => {
     ? `${user.first_name} ${user.last_name}`
     : user?.username || 'Student';
 
-  const jobName = user?.job_name || 'No job assigned';
+  const jobName = user?.job_name ? getDisplayJobTitle(user.job_name, user.job_level) : 'No job assigned';
 
   // Show a very noticeable banner when a new tender announcement is posted
   const [dismissedTenderAnnouncementId, setDismissedTenderAnnouncementId] = useState<number>(() => {

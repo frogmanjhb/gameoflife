@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Job } from '../types';
 import { Briefcase, DollarSign, CheckCircle } from 'lucide-react';
+import { getJobDisplayNameForBoard } from '../utils/jobDisplay';
 
 interface JobCardProps {
   job: Job;
@@ -159,7 +160,7 @@ const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0, isFulfill
         </div>
 
         <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-2">
-          {job.name}
+          {getJobDisplayNameForBoard(job.name) || job.name}
         </h3>
 
         {job.company_name && (
@@ -201,7 +202,7 @@ const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0, isFulfill
           <div className={`absolute left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl z-50 pointer-events-none whitespace-nowrap ${
             isTopRow ? 'top-full mt-2' : '-top-24'
           }`}>
-            <div className="font-semibold">{job.name}</div>
+            <div className="font-semibold">{getJobDisplayNameForBoard(job.name) || job.name}</div>
             <div className="text-gray-300">
               Starts: {formatSalary(baseSalary)}
               {job.is_contractual && <span className="text-purple-300 ml-1">(Contractual)</span>}

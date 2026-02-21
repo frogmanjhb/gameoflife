@@ -8,18 +8,20 @@ const express_validator_1 = require("express-validator");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
-// Get announcements (filtered by town_class if provided)
+// Get announcements (filtered by town_class if provided, school-scoped)
 router.get('/', auth_1.authenticateToken, async (req, res) => {
     try {
         const { town_class } = req.query;
+        const schoolId = req.user?.school_id ?? null;
         let query = `
       SELECT a.*, u.username as created_by_username
       FROM announcements a
       JOIN users u ON a.created_by = u.id
+      WHERE (a.school_id = $1 OR (a.school_id IS NULL AND $1 IS NULL))
     `;
-        const params = [];
+        const params = [schoolId];
         if (town_class && ['6A', '6B', '6C'].includes(town_class)) {
-            query += ' WHERE a.town_class = $1';
+            query += ' AND a.town_class = $2';
             params.push(town_class);
         }
         query += ' ORDER BY a.created_at DESC';
@@ -48,7 +50,8 @@ router.post('/', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']),
         if (!req.user) {
             return res.status(401).json({ error: 'User not found' });
         }
-        const result = await database_prod_1.default.run('INSERT INTO announcements (title, content, town_class, created_by, background_color, enable_wiggle) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id', [title, content, town_class, req.user.id, background_color, enable_wiggle]);
+        const schoolId = req.user?.school_id ?? null;
+        const result = await database_prod_1.default.run('INSERT INTO announcements (title, content, town_class, created_by, background_color, enable_wiggle, school_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id', [title, content, town_class, req.user.id, background_color, enable_wiggle, schoolId]);
         const announcement = await database_prod_1.default.get('SELECT a.*, u.username as created_by_username FROM announcements a JOIN users u ON a.created_by = u.id WHERE a.id = $1', [result.lastID]);
         res.status(201).json(announcement);
     }
@@ -74,8 +77,12 @@ router.put('/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']
         if (isNaN(announcementId)) {
             return res.status(400).json({ error: 'Invalid announcement ID' });
         }
+        const schoolId = req.user?.school_id ?? null;
         const announcement = await database_prod_1.default.get('SELECT * FROM announcements WHERE id = $1', [announcementId]);
         if (!announcement) {
+            return res.status(404).json({ error: 'Announcement not found' });
+        }
+        if (schoolId !== null && (announcement.school_id == null || announcement.school_id !== schoolId)) {
             return res.status(404).json({ error: 'Announcement not found' });
         }
         const { title, content, town_class, background_color, enable_wiggle } = req.body;
@@ -116,15 +123,19 @@ router.put('/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Delete announcement (teachers only)
+// Delete announcement (teachers only, same school)
 router.delete('/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         const announcementId = parseInt(req.params.id);
         if (isNaN(announcementId)) {
             return res.status(400).json({ error: 'Invalid announcement ID' });
         }
+        const schoolId = req.user?.school_id ?? null;
         const announcement = await database_prod_1.default.get('SELECT * FROM announcements WHERE id = $1', [announcementId]);
         if (!announcement) {
+            return res.status(404).json({ error: 'Announcement not found' });
+        }
+        if (schoolId !== null && (announcement.school_id == null || announcement.school_id !== schoolId)) {
             return res.status(404).json({ error: 'Announcement not found' });
         }
         await database_prod_1.default.run('DELETE FROM announcements WHERE id = $1', [announcementId]);

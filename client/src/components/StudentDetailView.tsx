@@ -6,6 +6,7 @@ import {
   Clock, CheckCircle, XCircle, AlertCircle, Loader, Building2
 } from 'lucide-react';
 import api from '../services/api';
+import { getDisplayJobTitle } from '../utils/jobDisplay';
 
 interface StudentDetail {
   id?: number;
@@ -18,6 +19,7 @@ interface StudentDetail {
   created_at?: string;
   updated_at?: string;
   job_id?: number;
+  job_level?: number;
   job_name?: string;
   job_description?: string;
   job_salary?: number;
@@ -443,7 +445,7 @@ const StudentDetailView: React.FC = () => {
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-gray-500">Position</p>
-                <p className="text-lg font-semibold text-gray-900">{student.job_name}</p>
+                <p className="text-lg font-semibold text-gray-900">{getDisplayJobTitle(student.job_name, student.job_level)}</p>
               </div>
               {student.job_company_name && (
                 <div>

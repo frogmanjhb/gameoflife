@@ -13,8 +13,14 @@ import loanRoutes from './routes/loans';
 import studentRoutes from './routes/students';
 import exportRoutes from './routes/export';
 import mathGameRoutes from './routes/math-game';
+import wordleGameRoutes from './routes/wordle-game';
 import architectGameRoutes from './routes/jobchallenges/architect-game';
 import accountantGameRoutes from './routes/jobchallenges/accountant-game';
+import softwareEngineerGameRoutes from './routes/jobchallenges/software-engineer-game';
+import marketingManagerGameRoutes from './routes/jobchallenges/marketing-manager-game';
+import graphicDesignerGameRoutes from './routes/jobchallenges/graphic-designer-game';
+import journalistGameRoutes from './routes/jobchallenges/journalist-game';
+import eventPlannerGameRoutes from './routes/jobchallenges/event-planner-game';
 import pluginRoutes from './routes/plugins';
 import announcementRoutes from './routes/announcements';
 import townRoutes from './routes/town';
@@ -157,8 +163,14 @@ app.use('/api/loans', loanRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/math-game', mathGameRoutes);
+app.use('/api/wordle-game', wordleGameRoutes);
 app.use('/api/architect-game', architectGameRoutes);
 app.use('/api/accountant-game', accountantGameRoutes);
+app.use('/api/software-engineer-game', softwareEngineerGameRoutes);
+app.use('/api/marketing-manager-game', marketingManagerGameRoutes);
+app.use('/api/graphic-designer-game', graphicDesignerGameRoutes);
+app.use('/api/journalist-game', journalistGameRoutes);
+app.use('/api/event-planner-game', eventPlannerGameRoutes);
 app.use('/api/plugins', pluginRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/town', townRoutes);
@@ -545,6 +557,90 @@ async function initializeDatabase() {
       console.log('⚠️ Job game daily limit migration may have already been applied:', migrationError);
     }
 
+    // Software Engineer game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '038_add_software_engineer_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Software engineer game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Software engineer game tables migration may have already been applied:', migrationError);
+    }
+
+    // Marketing Manager game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '039_add_marketing_manager_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Marketing manager game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Marketing manager game tables migration may have already been applied:', migrationError);
+    }
+
+    // Graphic Designer game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '041_add_graphic_designer_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Graphic designer game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Graphic designer game tables migration may have already been applied:', migrationError);
+    }
+
+    // Journalist game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '042_add_journalist_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Journalist game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Journalist game tables migration may have already been applied:', migrationError);
+    }
+
+    // Event Planner game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '043_add_event_planner_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Event planner game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Event planner game tables migration may have already been applied:', migrationError);
+    }
+
+    // Rename jobs to Assistant/Junior entry-level titles (Mayor unchanged)
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '044_rename_jobs_to_assistant_junior_titles.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Job title rename migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Job title rename migration may have already been applied:', migrationError);
+    }
+
+    // Show mayor job card on employment board (teacher toggle)
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '045_add_show_mayor_job_card.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Show mayor job card migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Show mayor job card migration may have already been applied:', migrationError);
+    }
+
     // Add paid status to shop purchases (Winkel pending/paid tracking)
     try {
       const migrationPath = join(__dirname, '..', 'migrations', '023_shop_purchases_paid_status.sql');
@@ -679,6 +775,17 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Plugins route_path per school migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '040_add_wordle_and_chores_toggles.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Wordle and chore toggles migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Wordle and chore toggles migration may have already been applied:', migrationError);
     }
 
     // Sync default plugins (ensures all known plugins exist - no manual script needed)

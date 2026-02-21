@@ -9,12 +9,12 @@ const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
 const router = (0, express_1.Router)();
-// TEMPORARY: Diagnose student data issues (teachers only)
-router.get('/diagnose/:searchTerm', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// TEMPORARY: Diagnose student data issues (teachers only, same school)
+router.get('/diagnose/:searchTerm', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         const { searchTerm } = req.params;
         const searchLower = `%${searchTerm.toLowerCase()}%`;
-        // Search for students by name or username (case-insensitive)
+        // Search for students by name or username (case-insensitive), same school only
         const students = await database_prod_1.default.query(`
       SELECT 
         u.id,
@@ -37,7 +37,8 @@ router.get('/diagnose/:searchTerm', auth_1.authenticateToken, (0, auth_1.require
          OR LOWER(u.last_name) LIKE $1 
          OR LOWER(u.username) LIKE $1)
         AND u.role = 'student'
-    `, [searchLower]);
+        AND u.school_id = $2
+    `, [searchLower, req.schoolId]);
         // Get additional info for each student found
         const diagnosticInfo = students.map((s) => ({
             ...s,
@@ -361,10 +362,11 @@ router.post('/:username/reset-password', auth_1.authenticateToken, tenant_1.requ
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Get account details by account number (teachers only) - MUST be before /:username/details to avoid "account" matching as username
-router.get('/account/:accountNumber/details', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// Get account details by account number (teachers only, same school) - MUST be before /:username/details to avoid "account" matching as username
+router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         const { accountNumber } = req.params;
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
         // Get account with user info
         const account = await database_prod_1.default.get(`
       SELECT 
@@ -383,6 +385,7 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, (0, auth
         u.created_at as user_created_at,
         u.updated_at as user_updated_at,
         u.job_id,
+        u.school_id as user_school_id,
         j.name as job_name,
         j.description as job_description,
         j.salary as job_salary,
@@ -393,6 +396,10 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, (0, auth
       WHERE a.account_number = $1
     `, [accountNumber]);
         if (!account) {
+            return res.status(404).json({ error: 'Account not found' });
+        }
+        // If account has a user, they must be in teacher's school
+        if (account.user_id && schoolId !== null && account.user_school_id !== schoolId) {
             return res.status(404).json({ error: 'Account not found' });
         }
         // If no user associated, return account info only
@@ -584,14 +591,14 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, (0, auth
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Get comprehensive student details (teachers only)
-router.get('/:username/details', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// Get comprehensive student details (teachers only, same school)
+router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         const { username } = req.params;
         console.log('🔍 Looking up student details for username:', JSON.stringify(username));
         console.log('🔍 Username length:', username?.length);
         console.log('🔍 Username chars:', username?.split('').map(c => `${c}(${c.charCodeAt(0)})`));
-        // Get student info with job details
+        // Get student info with job details (same school only)
         const student = await database_prod_1.default.get(`
       SELECT 
         u.id,
@@ -614,8 +621,8 @@ router.get('/:username/details', auth_1.authenticateToken, (0, auth_1.requireRol
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
       LEFT JOIN jobs j ON u.job_id = j.id
-      WHERE u.username = $1 AND u.role = 'student'
-    `, [username]);
+      WHERE u.username = $1 AND u.role = 'student' AND u.school_id = $2
+    `, [username, req.schoolId]);
         if (!student) {
             return res.status(404).json({ error: 'Student not found' });
         }
@@ -783,19 +790,23 @@ router.get('/:username/details', auth_1.authenticateToken, (0, auth_1.requireRol
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Delete an account by account number (teachers only) - for orphaned accounts
-router.delete('/account/:accountNumber', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// Delete an account by account number (teachers only, same school) - for orphaned accounts
+router.delete('/account/:accountNumber', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         const { accountNumber } = req.params;
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
         // Get account info
         const account = await database_prod_1.default.get('SELECT id, user_id FROM accounts WHERE account_number = $1', [accountNumber]);
         if (!account) {
             return res.status(404).json({ error: 'Account not found' });
         }
-        // If account has a user, check if user exists
+        // If account has a user, check user exists and is in this school
         let user = null;
         if (account.user_id) {
-            user = await database_prod_1.default.get('SELECT id, username, role FROM users WHERE id = $1', [account.user_id]);
+            user = await database_prod_1.default.get('SELECT id, username, role, school_id FROM users WHERE id = $1', [account.user_id]);
+            if (user && schoolId !== null && user.school_id !== schoolId) {
+                return res.status(404).json({ error: 'Account not found' });
+            }
         }
         // Delete related data in order (respecting foreign key constraints)
         // 1. Delete transactions involving this account
@@ -835,11 +846,11 @@ router.delete('/account/:accountNumber', auth_1.authenticateToken, (0, auth_1.re
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Get student details with loan information (teachers only) - Legacy endpoint
-router.get('/:username', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// Get student details with loan information (teachers only, same school) - Legacy endpoint
+router.get('/:username', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         const { username } = req.params;
-        // Get student info
+        // Get student info (same school only)
         const student = await database_prod_1.default.get(`
       SELECT 
         u.id,
@@ -850,8 +861,8 @@ router.get('/:username', auth_1.authenticateToken, (0, auth_1.requireRole)(['tea
         a.updated_at as last_activity
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
-      WHERE u.username = $1 AND u.role = 'student'
-    `, [username]);
+      WHERE u.username = $1 AND u.role = 'student' AND u.school_id = $2
+    `, [username, req.schoolId]);
         if (!student) {
             return res.status(404).json({ error: 'Student not found' });
         }

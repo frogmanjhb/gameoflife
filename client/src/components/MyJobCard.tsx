@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { User } from '../types';
 import { Briefcase, DollarSign, MapPin, Building2, ClipboardList, Award, ArrowRight } from 'lucide-react';
 import { getXPProgress } from '../utils/jobProgression';
-import { stripPositionsAvailableFromRequirements } from '../utils/jobDisplay';
+import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../utils/jobDisplay';
 
 interface MyJobCardProps {
   user: User;
@@ -92,7 +92,7 @@ const MyJobCard: React.FC<MyJobCardProps> = ({ user }) => {
           <div>
             <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
               <Award className="h-5 w-5 text-amber-600" />
-              {user.job_name}
+              {getDisplayJobTitle(user.job_name, user.job_level)}
             </h3>
             {user.job_company_name && (
               <div className="flex items-center text-sm text-gray-600 mt-1">

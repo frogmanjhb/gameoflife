@@ -9,6 +9,7 @@ import { jobsApi } from '../../services/api';
 import JobCard from '../JobCard';
 import JobDetailsModal from '../JobDetailsModal';
 import JobApplicationForm from '../JobApplicationForm';
+import { EMPLOYMENT_BOARD_SECTIONS, getDisplayJobTitle } from '../../utils/jobDisplay';
 
 const JobsPlugin: React.FC = () => {
   const { plugins, loading: pluginsLoading } = usePlugins();
@@ -29,6 +30,11 @@ const JobsPlugin: React.FC = () => {
   
   // Check if job applications are enabled
   const applicationsEnabled = currentTown?.job_applications_enabled !== false;
+
+  // Hide Mayor from board when teacher has turned off the mayor job card
+  const displayJobs = currentTown?.show_mayor_job_card === false
+    ? jobs.filter((j) => j.name !== 'Mayor')
+    : jobs;
 
   useEffect(() => {
     if (jobsPlugin && jobsPlugin.enabled) {
@@ -117,7 +123,7 @@ const JobsPlugin: React.FC = () => {
           {userHasJob && (
             <div className="bg-white bg-opacity-20 rounded-lg px-4 py-2 flex items-center space-x-2">
               <AlertCircle className="h-5 w-5" />
-              <span className="text-sm font-medium">You are employed as: {user?.job_name}</span>
+              <span className="text-sm font-medium">You are employed as: {getDisplayJobTitle(user?.job_name, user?.job_level)}</span>
             </div>
           )}
         </div>
@@ -148,14 +154,15 @@ const JobsPlugin: React.FC = () => {
           </div>
 
           <div>
-            <h3 className="font-semibold text-gray-900 mb-2">⭐ Job Levels</h3>
-            <p className="mb-2">You start at <strong>Level 1</strong> when assigned to a job. Your level increases based on:</p>
+            <h3 className="font-semibold text-gray-900 mb-2">⭐ Job Levels & Title Progression</h3>
+            <p className="mb-2">You start at <strong>Level 1</strong> when assigned to a job. Your level increases based on job performance, experience points from job tasks, and consistency.</p>
+            <p className="mb-2">Your <strong>job title</strong> reflects your level:</p>
             <ul className="list-disc list-inside ml-2 space-y-1 text-gray-600">
-              <li>Job performance and quality of work</li>
-              <li>Experience points earned through completing job tasks</li>
-              <li>Consistency and reliability</li>
+              <li><strong>Level 1–3:</strong> Assistant / Junior (entry level)</li>
+              <li><strong>Level 4–8:</strong> Associate</li>
+              <li><strong>Level 9–10:</strong> Senior</li>
             </ul>
-            <p className="mt-2 text-gray-600">Levels range from <strong>1 to 10</strong>, with Level 10 being the highest achievement.</p>
+            <p className="mt-2 text-gray-600">Levels range from <strong>1 to 10</strong>. The Mayor role is elected and does not use this progression.</p>
           </div>
 
           <div>
@@ -178,7 +185,7 @@ const JobsPlugin: React.FC = () => {
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
           </div>
-        ) : jobs.length === 0 ? (
+        ) : displayJobs.length === 0 ? (
           <div className="text-center py-16">
             <Briefcase className="h-16 w-16 mx-auto mb-4 text-gray-400" />
             <h2 className="text-xl font-semibold text-gray-700 mb-2">No Jobs Available</h2>
@@ -187,15 +194,49 @@ const JobsPlugin: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {jobs.map((job, index) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                onClick={() => handleJobClick(job)}
-                rotation={getRotation(index)}
-              />
-            ))}
+          <div className="space-y-8">
+            {EMPLOYMENT_BOARD_SECTIONS.map((section) => {
+              const sectionJobs = displayJobs.filter((j) => section.jobNames.includes(j.name));
+              if (sectionJobs.length === 0) return null;
+              return (
+                <div key={section.title}>
+                  <h2 className="text-2xl font-semibold text-gray-800 mb-4 flex items-center justify-center gap-2">
+                    <span>{section.emoji}</span>
+                    <span>{section.title}</span>
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {sectionJobs.map((job, index) => (
+                      <JobCard
+                        key={job.id}
+                        job={job}
+                        onClick={() => handleJobClick(job)}
+                        rotation={getRotation(index)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {(() => {
+              const assignedNames = new Set(EMPLOYMENT_BOARD_SECTIONS.flatMap((s) => s.jobNames));
+              const otherJobs = displayJobs.filter((j) => !assignedNames.has(j.name));
+              if (otherJobs.length === 0) return null;
+              return (
+                <div>
+                  <h2 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Other</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {otherJobs.map((job, index) => (
+                      <JobCard
+                        key={job.id}
+                        job={job}
+                        onClick={() => handleJobClick(job)}
+                        rotation={getRotation(index)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

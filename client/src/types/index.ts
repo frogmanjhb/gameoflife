@@ -8,6 +8,7 @@ export interface User {
   email?: string;
   school_id?: number | null;
   job_id?: number;
+  job_level?: number;
   job_name?: string;
   job_description?: string;
   job_salary?: number;
@@ -105,6 +106,7 @@ export interface MathGameSession {
 }
 
 export interface MathGameStatus {
+  enabled?: boolean;
   remaining_plays: number;
   daily_limit: number;
   high_scores: {
@@ -114,6 +116,35 @@ export interface MathGameStatus {
     extreme: number;
   };
   recent_sessions: MathGameSession[];
+}
+
+export interface WordleGameSession {
+  id: number;
+  status: string;
+  guesses_count: number;
+  earnings: number;
+  played_at: string;
+}
+
+export interface WordleGameStatus {
+  enabled?: boolean;
+  remaining_plays: number;
+  daily_limit: number;
+  recent_sessions: WordleGameSession[];
+}
+
+export interface WordleGuessResponse {
+  feedback: number[];
+  game_over: boolean;
+  won: boolean;
+  guesses_count: number;
+}
+
+export interface WordleCompleteResponse {
+  success: boolean;
+  earnings: number;
+  experience_points: number;
+  new_level: number | null;
 }
 
 export interface MathProblem {
@@ -208,6 +239,151 @@ export interface AccountantGameSubmitRequest {
   answer_sequence: boolean[];
 }
 
+export interface SoftwareEngineerGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface SoftwareEngineerGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface SoftwareEngineerGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface MarketingManagerGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface MarketingManagerGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface MarketingManagerGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface GraphicDesignerGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface GraphicDesignerGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface GraphicDesignerGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface JournalistGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface JournalistGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface JournalistGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface EventPlannerGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface EventPlannerGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface EventPlannerGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
 export interface Plugin {
   id: number;
   name: string;
@@ -240,6 +416,7 @@ export interface TownSettings {
   tax_enabled: boolean;
   job_applications_enabled?: boolean;
   job_game_daily_limit?: number;
+  show_mayor_job_card?: boolean;
   treasury_balance: number;
   created_at: string;
   updated_at: string;

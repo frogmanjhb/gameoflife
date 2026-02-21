@@ -558,11 +558,16 @@ router.post('/pay-basic-salary', [
             amount = parseFloat(setting?.setting_value || '1500');
         }
         console.log('💰 Paying basic salary to unemployed students:', amount);
-        // Get all students without jobs, including their class
+        const schoolId = req.user?.school_id ?? req.schoolId ?? null;
+        const schoolFilter = schoolId !== null
+            ? 'AND u.school_id = $1'
+            : 'AND u.school_id IS NULL';
+        const studentParams = schoolId !== null ? [schoolId] : [];
+        // Get unemployed students in teacher's school only
         const students = await database_prod_1.default.query(`SELECT u.id, u.username, u.class, a.id as account_id 
        FROM users u 
        LEFT JOIN accounts a ON u.id = a.user_id 
-       WHERE u.role = 'student' AND (u.job_id IS NULL OR u.job_id = 0)`, []);
+       WHERE u.role = 'student' AND (u.job_id IS NULL OR u.job_id = 0) ${schoolFilter}`, studentParams);
         if (students.length === 0) {
             return res.json({ message: 'No unemployed students found', updated_count: 0 });
         }
@@ -578,10 +583,12 @@ router.post('/pay-basic-salary', [
                 studentsByClass[studentClass].push(student);
             }
         }
-        // Check each class treasury has sufficient funds
+        // Check each class treasury has sufficient funds (teacher's school)
         for (const [townClass, classStudents] of Object.entries(studentsByClass)) {
             const totalNeeded = classStudents.filter(s => s.account_id).length * amount;
-            const town = await database_prod_1.default.get('SELECT treasury_balance FROM town_settings WHERE class = $1', [townClass]);
+            const town = schoolId != null
+                ? await database_prod_1.default.get('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id = $2', [townClass, schoolId])
+                : await database_prod_1.default.get('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id IS NULL', [townClass]);
             const treasuryBalance = parseFloat(town?.treasury_balance || '0');
             if (treasuryBalance < totalNeeded) {
                 return res.status(400).json({
@@ -614,16 +621,15 @@ router.post('/pay-basic-salary', [
                 }
             }
             // Deduct from each class treasury (filtered by school_id)
-            const basicSchoolId = req.user?.school_id ?? req.schoolId ?? null;
             for (const [townClass, totals] of Object.entries(classTotals)) {
-                if (basicSchoolId != null) {
-                    await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [totals.total, townClass, basicSchoolId]);
+                if (schoolId != null) {
+                    await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [totals.total, townClass, schoolId]);
                 }
                 else {
                     await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [totals.total, townClass]);
                 }
                 // Record treasury transaction
-                await client.query('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [basicSchoolId, townClass, totals.total, 'withdrawal', `Basic salary payments to ${totals.count} unemployed students`, req.user?.id]);
+                await client.query('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [schoolId, townClass, totals.total, 'withdrawal', `Basic salary payments to ${totals.count} unemployed students`, req.user?.id]);
             }
             // Update last run timestamp
             await client.query('UPDATE bank_settings SET setting_value = $1, updated_at = CURRENT_TIMESTAMP WHERE setting_key = $2', [new Date().toISOString(), 'last_basic_salary_run']);
@@ -644,14 +650,19 @@ router.post('/pay-basic-salary', [
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Get unemployed students count (teachers only)
+// Get unemployed students count (teachers only, school-scoped)
 router.get('/unemployed-students', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
+        const schoolId = req.user?.school_id ?? req.schoolId ?? null;
+        const schoolFilter = schoolId !== null
+            ? 'AND u.school_id = $1'
+            : 'AND u.school_id IS NULL';
+        const params = schoolId !== null ? [schoolId] : [];
         const students = await database_prod_1.default.query(`SELECT u.id, u.username, u.first_name, u.last_name, u.class, a.balance, a.account_number
        FROM users u 
        LEFT JOIN accounts a ON u.id = a.user_id 
-       WHERE u.role = 'student' AND (u.job_id IS NULL OR u.job_id = 0)
-       ORDER BY u.class, u.last_name, u.first_name`, []);
+       WHERE u.role = 'student' AND (u.job_id IS NULL OR u.job_id = 0) ${schoolFilter}
+       ORDER BY u.class, u.last_name, u.first_name`, params);
         res.json({ students, count: students.length });
     }
     catch (error) {

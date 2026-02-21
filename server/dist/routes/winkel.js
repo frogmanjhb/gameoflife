@@ -7,6 +7,7 @@ const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
+const tenant_1 = require("../middleware/tenant");
 const router = (0, express_1.Router)();
 // Helper: Get Monday of the current week
 function getWeekStartDate(date = new Date()) {
@@ -177,7 +178,7 @@ router.delete('/items/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['
     }
 });
 // GET /api/winkel/purchases - Get purchase history
-router.get('/purchases', auth_1.authenticateToken, async (req, res) => {
+router.get('/purchases', auth_1.authenticateToken, tenant_1.requireTenant, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({ error: 'User not found' });
@@ -196,7 +197,10 @@ router.get('/purchases', auth_1.authenticateToken, async (req, res) => {
          ORDER BY sp.purchase_date DESC, sp.created_at DESC`, [req.user.id]);
         }
         else {
-            // Teachers see all purchases (with paid status if column exists)
+            // Teachers see only purchases from students in their school
+            const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+            const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
+            const purchaseParams = schoolId !== null ? [schoolId] : [];
             try {
                 purchases = await database_prod_1.default.query(`SELECT 
             sp.id,
@@ -222,7 +226,8 @@ router.get('/purchases', auth_1.authenticateToken, async (req, res) => {
            JOIN shop_items si ON sp.item_id = si.id
            JOIN users u ON sp.user_id = u.id
            LEFT JOIN users payer ON sp.paid_by = payer.id
-           ORDER BY COALESCE(sp.paid, false) ASC, sp.purchase_date DESC, sp.created_at DESC`);
+           WHERE 1=1 ${schoolFilter}
+           ORDER BY COALESCE(sp.paid, false) ASC, sp.purchase_date DESC, sp.created_at DESC`, purchaseParams);
             }
             catch (queryError) {
                 // Fallback query if paid column doesn't exist yet
@@ -244,7 +249,8 @@ router.get('/purchases', auth_1.authenticateToken, async (req, res) => {
            FROM shop_purchases sp
            JOIN shop_items si ON sp.item_id = si.id
            JOIN users u ON sp.user_id = u.id
-           ORDER BY sp.purchase_date DESC, sp.created_at DESC`);
+           WHERE 1=1 ${schoolFilter}
+           ORDER BY sp.purchase_date DESC, sp.created_at DESC`, purchaseParams);
             }
         }
         res.json(purchases);
@@ -509,8 +515,8 @@ router.post('/purchase', auth_1.authenticateToken, [
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// GET /api/winkel/balance - Get shop balance (teacher only)
-router.get('/balance', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// GET /api/winkel/balance - Get shop balance (teacher only, tenant context)
+router.get('/balance', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         const shopBalance = await database_prod_1.default.get('SELECT balance FROM shop_balance WHERE id = 1');
         res.json({
@@ -522,20 +528,33 @@ router.get('/balance', auth_1.authenticateToken, (0, auth_1.requireRole)(['teach
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// GET /api/winkel/stats - Get shop statistics (teacher only)
-router.get('/stats', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// GET /api/winkel/stats - Get shop statistics (teacher only, school-scoped)
+router.get('/stats', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        const schoolFilter = schoolId !== null
+            ? 'AND (sp.id IS NULL OR u.school_id = $1)'
+            : '';
+        const params = schoolId !== null ? [schoolId] : [];
         const stats = await database_prod_1.default.query(`SELECT 
         si.category,
         si.name,
         COUNT(sp.id) as purchase_count,
-        SUM(sp.price_paid) as total_revenue
+        COALESCE(SUM(CASE WHEN sp.id IS NOT NULL THEN sp.price_paid END), 0) as total_revenue
        FROM shop_items si
        LEFT JOIN shop_purchases sp ON si.id = sp.item_id
+       LEFT JOIN users u ON sp.user_id = u.id
+       WHERE 1=1 ${schoolFilter}
        GROUP BY si.id, si.category, si.name
-       ORDER BY si.category, purchase_count DESC`);
-        const totalPurchases = await database_prod_1.default.get('SELECT COUNT(*) as count FROM shop_purchases');
-        const totalRevenue = await database_prod_1.default.get('SELECT COALESCE(SUM(price_paid), 0) as total FROM shop_purchases');
+       ORDER BY si.category, purchase_count DESC`, params);
+        const totalPurchasesQ = schoolId !== null
+            ? database_prod_1.default.get('SELECT COUNT(*) as count FROM shop_purchases sp JOIN users u ON sp.user_id = u.id WHERE u.school_id = $1', [schoolId])
+            : database_prod_1.default.get('SELECT COUNT(*) as count FROM shop_purchases');
+        const totalPurchases = await totalPurchasesQ;
+        const totalRevenueQ = schoolId !== null
+            ? database_prod_1.default.get('SELECT COALESCE(SUM(sp.price_paid), 0) as total FROM shop_purchases sp JOIN users u ON sp.user_id = u.id WHERE u.school_id = $1', [schoolId])
+            : database_prod_1.default.get('SELECT COALESCE(SUM(price_paid), 0) as total FROM shop_purchases');
+        const totalRevenue = await totalRevenueQ;
         const shopBalance = await database_prod_1.default.get('SELECT balance FROM shop_balance WHERE id = 1');
         res.json({
             item_stats: stats,
@@ -593,12 +612,15 @@ router.post('/change-emoji', auth_1.authenticateToken, [
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// PUT /api/winkel/purchases/:id/paid - Mark a purchase as paid (teacher only)
-router.put('/purchases/:id/paid', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// PUT /api/winkel/purchases/:id/paid - Mark a purchase as paid (teacher only, same school)
+router.put('/purchases/:id/paid', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         const { id } = req.params;
-        // Check if purchase exists
-        const purchase = await database_prod_1.default.get('SELECT * FROM shop_purchases WHERE id = $1', [id]);
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        // Check if purchase exists and purchaser is in teacher's school
+        const purchase = await database_prod_1.default.get(`SELECT sp.* FROM shop_purchases sp
+         JOIN users u ON sp.user_id = u.id
+         WHERE sp.id = $1 ${schoolId !== null ? 'AND u.school_id = $2' : ''}`, schoolId !== null ? [id, schoolId] : [id]);
         if (!purchase) {
             return res.status(404).json({ error: 'Purchase not found' });
         }

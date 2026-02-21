@@ -7,12 +7,13 @@ const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
+const tenant_1 = require("../middleware/tenant");
 const router = (0, express_1.Router)();
 function isValidTownClass(townClass) {
     return townClass === '6A' || townClass === '6B' || townClass === '6C';
 }
-// Pay an awarded tender from the town treasury to the awarded student (teachers only)
-router.post('/:id/pay', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// Pay an awarded tender from the town treasury to the awarded student (teachers only, same school)
+router.post('/:id/pay', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         const tenderId = parseInt(req.params.id);
         if (isNaN(tenderId)) {
@@ -21,8 +22,12 @@ router.post('/:id/pay', auth_1.authenticateToken, (0, auth_1.requireRole)(['teac
         if (!req.user) {
             return res.status(401).json({ error: 'User not found' });
         }
+        const schoolId = req.schoolId ?? req.user.school_id ?? null;
         const tender = await database_prod_1.default.get('SELECT * FROM tenders WHERE id = $1', [tenderId]);
         if (!tender) {
+            return res.status(404).json({ error: 'Tender not found' });
+        }
+        if (schoolId !== null && (tender.school_id == null || tender.school_id !== schoolId)) {
             return res.status(404).json({ error: 'Tender not found' });
         }
         if (tender.status !== 'awarded') {
@@ -42,7 +47,9 @@ router.post('/:id/pay', auth_1.authenticateToken, (0, auth_1.requireRole)(['teac
         if (!isValidTownClass(townClass)) {
             return res.status(400).json({ error: 'Invalid town class on tender' });
         }
-        const town = await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1', [townClass]);
+        const town = schoolId != null
+            ? await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1 AND school_id = $2', [townClass, schoolId])
+            : await database_prod_1.default.get('SELECT * FROM town_settings WHERE class = $1 AND school_id IS NULL', [townClass]);
         if (!town) {
             return res.status(404).json({ error: 'Town not found' });
         }
@@ -101,12 +108,15 @@ router.post('/:id/pay', auth_1.authenticateToken, (0, auth_1.requireRole)(['teac
 router.get('/', auth_1.authenticateToken, async (req, res) => {
     try {
         const requestedTownClass = req.query.town_class;
-        // Students can ONLY see their own class tenders
+        const schoolId = req.user?.school_id ?? null;
+        // Students can ONLY see their own class tenders in their school
         if (req.user?.role === 'student') {
             const townClass = req.user?.class;
             if (!isValidTownClass(townClass)) {
                 return res.status(400).json({ error: 'Student has no valid town class' });
             }
+            const schoolFilter = schoolId !== null ? 'AND t.school_id = $3' : 'AND t.school_id IS NULL';
+            const params = schoolId !== null ? [req.user.id, townClass, schoolId] : [req.user.id, townClass];
             const tenders = await database_prod_1.default.query(`SELECT 
             t.*,
             u.username AS created_by_username,
@@ -118,11 +128,11 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
          LEFT JOIN users au ON t.awarded_to_user_id = au.id
          LEFT JOIN tender_applications a 
            ON a.tender_id = t.id AND a.applicant_id = $1
-         WHERE t.town_class = $2
-         ORDER BY t.created_at DESC`, [req.user.id, townClass]);
+         WHERE t.town_class = $2 ${schoolFilter}
+         ORDER BY t.created_at DESC`, params);
             return res.json(tenders);
         }
-        // Teachers: can request a town_class, default to their class (or 6A fallback)
+        // Teachers: can request a town_class, default to their class (or 6A fallback); only see tenders in their school
         let townClass = '6A';
         if (isValidTownClass(requestedTownClass)) {
             townClass = requestedTownClass;
@@ -130,6 +140,8 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
         else if (isValidTownClass(req.user?.class)) {
             townClass = req.user.class;
         }
+        const schoolFilter = schoolId !== null ? 'AND t.school_id = $2' : 'AND t.school_id IS NULL';
+        const listParams = schoolId !== null ? [townClass, schoolId] : [townClass];
         const tenders = await database_prod_1.default.query(`SELECT 
           t.*,
           u.username AS created_by_username,
@@ -139,8 +151,8 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
        FROM tenders t
        LEFT JOIN users u ON t.created_by = u.id
        LEFT JOIN users au ON t.awarded_to_user_id = au.id
-       WHERE t.town_class = $1
-       ORDER BY t.created_at DESC`, [townClass]);
+       WHERE t.town_class = $1 ${schoolFilter}
+       ORDER BY t.created_at DESC`, listParams);
         return res.json(tenders);
     }
     catch (error) {
@@ -148,8 +160,8 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Create a tender (teachers only)
-router.post('/', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), [
+// Create a tender (teachers only, school-scoped)
+router.post('/', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), [
     (0, express_validator_1.body)('town_class').isIn(['6A', '6B', '6C']).withMessage('Town class must be 6A, 6B, or 6C'),
     (0, express_validator_1.body)('name').isString().trim().notEmpty().withMessage('Tender name is required'),
     (0, express_validator_1.body)('description').optional().isString(),
@@ -163,10 +175,11 @@ router.post('/', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']),
         if (!req.user) {
             return res.status(401).json({ error: 'User not found' });
         }
+        const schoolId = req.schoolId ?? req.user.school_id ?? null;
         const { town_class, name, description, value } = req.body;
-        const result = await database_prod_1.default.run(`INSERT INTO tenders (town_class, name, description, value, status, created_by)
-         VALUES ($1, $2, $3, $4, 'open', $5)
-         RETURNING id`, [town_class, name, description || null, value, req.user.id]);
+        const result = await database_prod_1.default.run(`INSERT INTO tenders (town_class, name, description, value, status, created_by, school_id)
+         VALUES ($1, $2, $3, $4, 'open', $5, $6)
+         RETURNING id`, [town_class, name, description || null, value, req.user.id, schoolId]);
         const tender = await database_prod_1.default.get(`SELECT t.*, u.username AS created_by_username
          FROM tenders t
          LEFT JOIN users u ON t.created_by = u.id
@@ -179,7 +192,7 @@ router.post('/', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']),
                 `Value: R${Number(value).toFixed(2)}`,
                 `Open the Tenders system to apply.`
             ].filter(Boolean);
-            await database_prod_1.default.run('INSERT INTO announcements (title, content, town_class, created_by) VALUES ($1, $2, $3, $4)', [title, contentParts.join('\n\n'), town_class, req.user.id]);
+            await database_prod_1.default.run('INSERT INTO announcements (title, content, town_class, created_by, school_id) VALUES ($1, $2, $3, $4, $5)', [title, contentParts.join('\n\n'), town_class, req.user.id, schoolId]);
         }
         catch (announcementError) {
             console.warn('⚠️ Failed to create tender announcement:', announcementError);
@@ -207,6 +220,10 @@ router.post('/:id/apply', auth_1.authenticateToken, (0, auth_1.requireRole)(['st
         }
         const tender = await database_prod_1.default.get('SELECT * FROM tenders WHERE id = $1', [tenderId]);
         if (!tender) {
+            return res.status(404).json({ error: 'Tender not found' });
+        }
+        const studentSchoolId = req.user.school_id ?? null;
+        if (studentSchoolId !== null && (tender.school_id == null || tender.school_id !== studentSchoolId)) {
             return res.status(404).json({ error: 'Tender not found' });
         }
         if (tender.town_class !== townClass) {
@@ -237,15 +254,19 @@ router.post('/:id/apply', auth_1.authenticateToken, (0, auth_1.requireRole)(['st
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Get applications for a tender (teachers only)
-router.get('/:id/applications', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// Get applications for a tender (teachers only, same school as tender)
+router.get('/:id/applications', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
         const tenderId = parseInt(req.params.id);
         if (isNaN(tenderId)) {
             return res.status(400).json({ error: 'Invalid tender ID' });
         }
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
         const tender = await database_prod_1.default.get('SELECT * FROM tenders WHERE id = $1', [tenderId]);
         if (!tender) {
+            return res.status(404).json({ error: 'Tender not found' });
+        }
+        if (schoolId !== null && (tender.school_id == null || tender.school_id !== schoolId)) {
             return res.status(404).json({ error: 'Tender not found' });
         }
         const applications = await database_prod_1.default.query(`SELECT 
@@ -267,8 +288,8 @@ router.get('/:id/applications', auth_1.authenticateToken, (0, auth_1.requireRole
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Approve/deny an application (teachers only)
-router.put('/applications/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), [(0, express_validator_1.body)('status').isIn(['approved', 'denied']).withMessage('Status must be approved or denied')], async (req, res) => {
+// Approve/deny an application (teachers only, tender must be in teacher's school)
+router.put('/applications/:id', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), [(0, express_validator_1.body)('status').isIn(['approved', 'denied']).withMessage('Status must be approved or denied')], async (req, res) => {
     const errors = (0, express_validator_1.validationResult)(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
@@ -282,12 +303,16 @@ router.put('/applications/:id', auth_1.authenticateToken, (0, auth_1.requireRole
             return res.status(401).json({ error: 'User not found' });
         }
         const { status } = req.body;
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
         const application = await database_prod_1.default.get('SELECT * FROM tender_applications WHERE id = $1', [applicationId]);
         if (!application) {
             return res.status(404).json({ error: 'Application not found' });
         }
         const tender = await database_prod_1.default.get('SELECT * FROM tenders WHERE id = $1', [application.tender_id]);
         if (!tender) {
+            return res.status(404).json({ error: 'Tender not found' });
+        }
+        if (schoolId !== null && (tender.school_id == null || tender.school_id !== schoolId)) {
             return res.status(404).json({ error: 'Tender not found' });
         }
         // For approval, enforce "open" and one-award policy

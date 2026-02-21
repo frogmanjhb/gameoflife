@@ -1,8 +1,14 @@
 import axios from 'axios';
 import { 
-  MathGameStatus, MathGameStartRequest, MathGameSubmitRequest, 
+  MathGameStatus, MathGameStartRequest, MathGameSubmitRequest,
+  WordleGameStatus, WordleGuessResponse, WordleCompleteResponse,
   ArchitectGameStatus, ArchitectGameStartRequest, ArchitectGameSubmitRequest,
   AccountantGameStatus, AccountantGameStartRequest, AccountantGameSubmitRequest,
+  SoftwareEngineerGameStatus, SoftwareEngineerGameStartRequest, SoftwareEngineerGameSubmitRequest,
+  MarketingManagerGameStatus, MarketingManagerGameStartRequest, MarketingManagerGameSubmitRequest,
+  GraphicDesignerGameStatus, GraphicDesignerGameStartRequest, GraphicDesignerGameSubmitRequest,
+  JournalistGameStatus, JournalistGameStartRequest, JournalistGameSubmitRequest,
+  EventPlannerGameStatus, EventPlannerGameStartRequest, EventPlannerGameSubmitRequest,
   Job, JobApplication, LandParcel, LandPurchaseRequest, 
   LandStats, MyPropertiesResponse, BiomeConfig, BiomeType,
   TaxBracket, TreasuryInfo, TaxReport, SalaryPaymentResult, TownSettings,
@@ -84,6 +90,22 @@ export const mathGameApi = {
   }
 };
 
+// Wordle Game API methods
+export const wordleGameApi = {
+  getStatus: (): Promise<{ data: WordleGameStatus }> => {
+    return api.get('/wordle-game/status');
+  },
+  startGame: (): Promise<{ data: { session_id: number } }> => {
+    return api.post('/wordle-game/start', {});
+  },
+  guess: (sessionId: number, guess: string): Promise<{ data: WordleGuessResponse }> => {
+    return api.post('/wordle-game/guess', { session_id: sessionId, guess });
+  },
+  complete: (sessionId: number): Promise<{ data: WordleCompleteResponse }> => {
+    return api.post('/wordle-game/complete', { session_id: sessionId });
+  }
+};
+
 // Architect Game API methods
 export const architectGameApi = {
   // Get architect game status (remaining plays, high scores, recent sessions)
@@ -116,6 +138,46 @@ export const accountantGameApi = {
     api.post('/accountant-game/start', data),
   submitGame: (data: AccountantGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
     api.post('/accountant-game/submit', data)
+};
+
+export const softwareEngineerGameApi = {
+  getStatus: (): Promise<{ data: SoftwareEngineerGameStatus }> => api.get('/software-engineer-game/status'),
+  startGame: (data: SoftwareEngineerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/software-engineer-game/start', data),
+  submitGame: (data: SoftwareEngineerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/software-engineer-game/submit', data)
+};
+
+export const marketingManagerGameApi = {
+  getStatus: (): Promise<{ data: MarketingManagerGameStatus }> => api.get('/marketing-manager-game/status'),
+  startGame: (data: MarketingManagerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/marketing-manager-game/start', data),
+  submitGame: (data: MarketingManagerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/marketing-manager-game/submit', data)
+};
+
+export const graphicDesignerGameApi = {
+  getStatus: (): Promise<{ data: GraphicDesignerGameStatus }> => api.get('/graphic-designer-game/status'),
+  startGame: (data: GraphicDesignerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/graphic-designer-game/start', data),
+  submitGame: (data: GraphicDesignerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/graphic-designer-game/submit', data)
+};
+
+export const journalistGameApi = {
+  getStatus: (): Promise<{ data: JournalistGameStatus }> => api.get('/journalist-game/status'),
+  startGame: (data: JournalistGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/journalist-game/start', data),
+  submitGame: (data: JournalistGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/journalist-game/submit', data)
+};
+
+export const eventPlannerGameApi = {
+  getStatus: (): Promise<{ data: EventPlannerGameStatus }> => api.get('/event-planner-game/status'),
+  startGame: (data: EventPlannerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/event-planner-game/start', data),
+  submitGame: (data: EventPlannerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/event-planner-game/submit', data)
 };
 
 // Jobs API methods

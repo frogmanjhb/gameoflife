@@ -80,7 +80,8 @@ router.put('/settings/:id',
     body('tax_rate').optional().isFloat({ min: 0, max: 100 }).withMessage('Tax rate must be between 0 and 100'),
     body('tax_enabled').optional().isBoolean().withMessage('Tax enabled must be a boolean'),
     body('job_applications_enabled').optional().isBoolean().withMessage('Job applications enabled must be a boolean'),
-    body('job_game_daily_limit').optional().isInt({ min: 0, max: 50 }).withMessage('Job game daily limit must be between 0 and 50')
+    body('job_game_daily_limit').optional().isInt({ min: 0, max: 50 }).withMessage('Job game daily limit must be between 0 and 50'),
+    body('show_mayor_job_card').optional().isBoolean().withMessage('Show mayor job card must be a boolean')
   ],
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -103,7 +104,7 @@ router.put('/settings/:id',
         return res.status(403).json({ error: 'You can only update towns in your school' });
       }
 
-      const { town_name, mayor_name, tax_rate, tax_enabled, job_applications_enabled, job_game_daily_limit } = req.body;
+      const { town_name, mayor_name, tax_rate, tax_enabled, job_applications_enabled, job_game_daily_limit, show_mayor_job_card } = req.body;
       const updates: string[] = [];
       const params: any[] = [];
       let paramIndex = 1;
@@ -131,6 +132,10 @@ router.put('/settings/:id',
       if (job_game_daily_limit !== undefined) {
         updates.push(`job_game_daily_limit = $${paramIndex++}`);
         params.push(job_game_daily_limit);
+      }
+      if (show_mayor_job_card !== undefined) {
+        updates.push(`show_mayor_job_card = $${paramIndex++}`);
+        params.push(show_mayor_job_card);
       }
 
       if (updates.length === 0) {

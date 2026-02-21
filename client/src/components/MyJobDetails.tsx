@@ -4,13 +4,18 @@ import {
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
   Award, FileText, TrendingUp, Loader2, AlertCircle, Play 
 } from 'lucide-react';
-import { jobsApi, architectGameApi, accountantGameApi } from '../services/api';
+import { jobsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Job, ArchitectGameStatus, AccountantGameStatus } from '../types';
+import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
-import { stripPositionsAvailableFromRequirements } from '../utils/jobDisplay';
+import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../utils/jobDisplay';
 import ArchitectGameModal from './jobchallenges/ArchitectGameModal';
 import AccountantGameModal from './jobchallenges/AccountantGameModal';
+import SoftwareEngineerGameModal from './jobchallenges/SoftwareEngineerGameModal';
+import MarketingManagerGameModal from './jobchallenges/MarketingManagerGameModal';
+import GraphicDesignerGameModal from './jobchallenges/GraphicDesignerGameModal';
+import JournalistGameModal from './jobchallenges/JournalistGameModal';
+import EventPlannerGameModal from './jobchallenges/EventPlannerGameModal';
 
 const MyJobDetails: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
@@ -23,6 +28,16 @@ const MyJobDetails: React.FC = () => {
   const [isArchitectGameOpen, setIsArchitectGameOpen] = useState(false);
   const [accountantGameStatus, setAccountantGameStatus] = useState<AccountantGameStatus | null>(null);
   const [isAccountantGameOpen, setIsAccountantGameOpen] = useState(false);
+  const [softwareEngineerGameStatus, setSoftwareEngineerGameStatus] = useState<SoftwareEngineerGameStatus | null>(null);
+  const [isSoftwareEngineerGameOpen, setIsSoftwareEngineerGameOpen] = useState(false);
+  const [marketingManagerGameStatus, setMarketingManagerGameStatus] = useState<MarketingManagerGameStatus | null>(null);
+  const [isMarketingManagerGameOpen, setIsMarketingManagerGameOpen] = useState(false);
+  const [graphicDesignerGameStatus, setGraphicDesignerGameStatus] = useState<GraphicDesignerGameStatus | null>(null);
+  const [isGraphicDesignerGameOpen, setIsGraphicDesignerGameOpen] = useState(false);
+  const [journalistGameStatus, setJournalistGameStatus] = useState<JournalistGameStatus | null>(null);
+  const [isJournalistGameOpen, setIsJournalistGameOpen] = useState(false);
+  const [eventPlannerGameStatus, setEventPlannerGameStatus] = useState<EventPlannerGameStatus | null>(null);
+  const [isEventPlannerGameOpen, setIsEventPlannerGameOpen] = useState(false);
 
   useEffect(() => {
     if (jobId) {
@@ -31,14 +46,44 @@ const MyJobDetails: React.FC = () => {
   }, [jobId]);
 
   useEffect(() => {
-    if (user && job?.name?.toLowerCase() === 'architect') {
+    if (user && job?.name?.toLowerCase() === 'assistant architect') {
       fetchArchitectGameStatus();
     }
   }, [user, job]);
 
   useEffect(() => {
-    if (user && job?.name?.toLowerCase().trim() === 'chartered accountant') {
+    if (user && job?.name?.toLowerCase().trim() === 'junior chartered accountant') {
       fetchAccountantGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && job?.name?.toLowerCase().trim() === 'assistant software engineer') {
+      fetchSoftwareEngineerGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && job?.name?.toLowerCase().trim() === 'assistant marketing manager') {
+      fetchMarketingManagerGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && job?.name?.toLowerCase().trim() === 'assistant graphic designer') {
+      fetchGraphicDesignerGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && job?.name?.toLowerCase().trim() === 'assistant journalist') {
+      fetchJournalistGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && job?.name?.toLowerCase().trim() === 'assistant event planner') {
+      fetchEventPlannerGameStatus();
     }
   }, [user, job]);
 
@@ -57,6 +102,51 @@ const MyJobDetails: React.FC = () => {
       setAccountantGameStatus(response.data);
     } catch (err: any) {
       console.log('Accountant game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchSoftwareEngineerGameStatus = async () => {
+    try {
+      const response = await softwareEngineerGameApi.getStatus();
+      setSoftwareEngineerGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Software engineer game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchMarketingManagerGameStatus = async () => {
+    try {
+      const response = await marketingManagerGameApi.getStatus();
+      setMarketingManagerGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Marketing manager game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchGraphicDesignerGameStatus = async () => {
+    try {
+      const response = await graphicDesignerGameApi.getStatus();
+      setGraphicDesignerGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Graphic designer game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchJournalistGameStatus = async () => {
+    try {
+      const response = await journalistGameApi.getStatus();
+      setJournalistGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Journalist game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchEventPlannerGameStatus = async () => {
+    try {
+      const response = await eventPlannerGameApi.getStatus();
+      setEventPlannerGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Event planner game status not available:', err.response?.data?.error);
     }
   };
 
@@ -151,7 +241,7 @@ const MyJobDetails: React.FC = () => {
             <div>
               <h2 className="font-bold text-2xl text-gray-900 flex items-center gap-2 mb-2">
                 <Award className="h-6 w-6 text-amber-600" />
-                {job.name}
+                {getDisplayJobTitle(job.name, jobLevel)}
               </h2>
               {job.company_name && (
                 <div className="flex items-center text-gray-600 mb-1">
@@ -315,8 +405,253 @@ const MyJobDetails: React.FC = () => {
           ) : null;
         })()}
 
+        {/* Software Engineer – Logic & Systems Challenge */}
+        {job.name?.toLowerCase().trim() === 'assistant software engineer' && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-blue-50 to-violet-50 rounded-lg p-6 border border-blue-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-blue-600" />
+                    Logic & Systems Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete build sprints (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsSoftwareEngineerGameOpen(true)}
+                  disabled={!softwareEngineerGameStatus || (softwareEngineerGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Build Sprint</span>
+                </button>
+              </div>
+              {softwareEngineerGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {softwareEngineerGameStatus.remaining_plays} / {softwareEngineerGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{softwareEngineerGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{softwareEngineerGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{softwareEngineerGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Marketing Manager – Campaign Strategy Challenge */}
+        {job.name?.toLowerCase().trim() === 'assistant marketing manager' && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg p-6 border border-rose-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-rose-600" />
+                    Campaign Strategy Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete campaigns (5 questions each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsMarketingManagerGameOpen(true)}
+                  disabled={!marketingManagerGameStatus || (marketingManagerGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-rose-600 hover:bg-rose-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Campaign</span>
+                </button>
+              </div>
+              {marketingManagerGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {marketingManagerGameStatus.remaining_plays} / {marketingManagerGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{marketingManagerGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{marketingManagerGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{marketingManagerGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Graphic Designer – Design Precision Challenge */}
+        {job.name?.toLowerCase().trim() === 'assistant graphic designer' && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-lg p-6 border border-teal-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-teal-600" />
+                    Design Precision Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete design briefs (5 questions each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsGraphicDesignerGameOpen(true)}
+                  disabled={!graphicDesignerGameStatus || (graphicDesignerGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-teal-600 hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Design Brief</span>
+                </button>
+              </div>
+              {graphicDesignerGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {graphicDesignerGameStatus.remaining_plays} / {graphicDesignerGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{graphicDesignerGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{graphicDesignerGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{graphicDesignerGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Journalist – Data & Reporting Challenge */}
+        {job.name?.toLowerCase().trim() === 'assistant journalist' && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-indigo-50 to-slate-50 rounded-lg p-6 border border-indigo-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-indigo-600" />
+                    Data & Reporting Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete economic news investigations (5 questions each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsJournalistGameOpen(true)}
+                  disabled={!journalistGameStatus || (journalistGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Investigation</span>
+                </button>
+              </div>
+              {journalistGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {journalistGameStatus.remaining_plays} / {journalistGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{journalistGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{journalistGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{journalistGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Event Planner – Event Budget Challenge */}
+        {job.name?.toLowerCase().trim() === 'assistant event planner' && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg p-6 border border-amber-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-amber-600" />
+                    Event Budget Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete event proposals (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsEventPlannerGameOpen(true)}
+                  disabled={!eventPlannerGameStatus || (eventPlannerGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Event Proposal</span>
+                </button>
+              </div>
+              {eventPlannerGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {eventPlannerGameStatus.remaining_plays} / {eventPlannerGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{eventPlannerGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{eventPlannerGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{eventPlannerGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Chartered Accountant – Financial Audit Challenges */}
-        {job.name?.toLowerCase().trim() === 'chartered accountant' && (
+        {job.name?.toLowerCase().trim() === 'junior chartered accountant' && (
           <div className="pt-6 border-t border-gray-200">
             <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-6 border border-emerald-200">
               <div className="flex items-center justify-between mb-4">
@@ -365,7 +700,7 @@ const MyJobDetails: React.FC = () => {
         )}
 
         {/* Architect Game Section */}
-        {job.name?.toLowerCase() === 'architect' && (
+        {job.name?.toLowerCase() === 'assistant architect' && (
           <div className="pt-6 border-t border-gray-200">
             <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-6 border border-amber-200">
               <div className="flex items-center justify-between mb-4">
@@ -421,7 +756,7 @@ const MyJobDetails: React.FC = () => {
       </div>
 
       {/* Architect Game Modal */}
-      {job.name?.toLowerCase() === 'architect' && (
+      {job.name?.toLowerCase() === 'assistant architect' && (
         <ArchitectGameModal
           isOpen={isArchitectGameOpen}
           onClose={() => {
@@ -435,7 +770,7 @@ const MyJobDetails: React.FC = () => {
       )}
 
       {/* Accountant Game Modal */}
-      {job.name?.toLowerCase().trim() === 'chartered accountant' && (
+      {job.name?.toLowerCase().trim() === 'junior chartered accountant' && (
         <AccountantGameModal
           isOpen={isAccountantGameOpen}
           onClose={() => {
@@ -445,6 +780,76 @@ const MyJobDetails: React.FC = () => {
           }}
           onGameComplete={() => fetchAccountantGameStatus()}
           gameStatus={accountantGameStatus}
+        />
+      )}
+
+      {/* Software Engineer Game Modal */}
+      {job.name?.toLowerCase().trim() === 'assistant software engineer' && (
+        <SoftwareEngineerGameModal
+          isOpen={isSoftwareEngineerGameOpen}
+          onClose={() => {
+            setIsSoftwareEngineerGameOpen(false);
+            fetchSoftwareEngineerGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchSoftwareEngineerGameStatus()}
+          gameStatus={softwareEngineerGameStatus}
+        />
+      )}
+
+      {/* Marketing Manager Game Modal */}
+      {job.name?.toLowerCase().trim() === 'assistant marketing manager' && (
+        <MarketingManagerGameModal
+          isOpen={isMarketingManagerGameOpen}
+          onClose={() => {
+            setIsMarketingManagerGameOpen(false);
+            fetchMarketingManagerGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchMarketingManagerGameStatus()}
+          gameStatus={marketingManagerGameStatus}
+        />
+      )}
+
+      {/* Graphic Designer Game Modal */}
+      {job.name?.toLowerCase().trim() === 'assistant graphic designer' && (
+        <GraphicDesignerGameModal
+          isOpen={isGraphicDesignerGameOpen}
+          onClose={() => {
+            setIsGraphicDesignerGameOpen(false);
+            fetchGraphicDesignerGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchGraphicDesignerGameStatus()}
+          gameStatus={graphicDesignerGameStatus}
+        />
+      )}
+
+      {/* Journalist Game Modal */}
+      {job.name?.toLowerCase().trim() === 'assistant journalist' && (
+        <JournalistGameModal
+          isOpen={isJournalistGameOpen}
+          onClose={() => {
+            setIsJournalistGameOpen(false);
+            fetchJournalistGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchJournalistGameStatus()}
+          gameStatus={journalistGameStatus}
+        />
+      )}
+
+      {/* Event Planner Game Modal */}
+      {job.name?.toLowerCase().trim() === 'assistant event planner' && (
+        <EventPlannerGameModal
+          isOpen={isEventPlannerGameOpen}
+          onClose={() => {
+            setIsEventPlannerGameOpen(false);
+            fetchEventPlannerGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchEventPlannerGameStatus()}
+          gameStatus={eventPlannerGameStatus}
         />
       )}
     </div>

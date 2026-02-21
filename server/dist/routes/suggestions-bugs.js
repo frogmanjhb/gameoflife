@@ -7,6 +7,7 @@ const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
+const tenant_1 = require("../middleware/tenant");
 const router = (0, express_1.Router)();
 const REWARD_AMOUNT = 1000;
 // Student: submit a suggestion
@@ -83,9 +84,12 @@ router.get('/my', auth_1.authenticateToken, (0, auth_1.requireRole)(['student'])
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Teacher: review queue (pending only)
-router.get('/admin/queue', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (_req, res) => {
+// Teacher: review queue (pending only, same school)
+router.get('/admin/queue', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
+        const params = schoolId !== null ? [schoolId] : [];
         const suggestions = await database_prod_1.default.query(`
       SELECT
         s.*,
@@ -95,9 +99,9 @@ router.get('/admin/queue', auth_1.authenticateToken, (0, auth_1.requireRole)(['t
         u.class
       FROM suggestions s
       JOIN users u ON s.user_id = u.id
-      WHERE s.status = 'pending'
+      WHERE s.status = 'pending' ${schoolFilter}
       ORDER BY s.created_at ASC
-      `);
+      `, params);
         const bugReports = await database_prod_1.default.query(`
       SELECT
         b.*,
@@ -107,9 +111,9 @@ router.get('/admin/queue', auth_1.authenticateToken, (0, auth_1.requireRole)(['t
         u.class
       FROM bug_reports b
       JOIN users u ON b.user_id = u.id
-      WHERE b.status = 'pending'
+      WHERE b.status = 'pending' ${schoolFilter}
       ORDER BY b.created_at ASC
-      `);
+      `, params);
         res.json({ suggestions, bugReports });
     }
     catch (error) {
@@ -117,9 +121,12 @@ router.get('/admin/queue', auth_1.authenticateToken, (0, auth_1.requireRole)(['t
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Teacher: all suggestions/bugs (for tabs: approved/denied/pending)
-router.get('/admin/all', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (_req, res) => {
+// Teacher: all suggestions/bugs (for tabs: approved/denied/pending, same school)
+router.get('/admin/all', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
+        const params = schoolId !== null ? [schoolId] : [];
         const suggestions = await database_prod_1.default.query(`
       SELECT
         s.*,
@@ -131,9 +138,10 @@ router.get('/admin/all', auth_1.authenticateToken, (0, auth_1.requireRole)(['tea
       FROM suggestions s
       JOIN users u ON s.user_id = u.id
       LEFT JOIN users ru ON s.reviewed_by = ru.id
+      WHERE 1=1 ${schoolFilter}
       ORDER BY s.created_at DESC
       LIMIT 500
-      `);
+      `, params);
         const bugReports = await database_prod_1.default.query(`
       SELECT
         b.*,
@@ -145,9 +153,10 @@ router.get('/admin/all', auth_1.authenticateToken, (0, auth_1.requireRole)(['tea
       FROM bug_reports b
       JOIN users u ON b.user_id = u.id
       LEFT JOIN users ru ON b.reviewed_by = ru.id
+      WHERE 1=1 ${schoolFilter}
       ORDER BY b.created_at DESC
       LIMIT 500
-      `);
+      `, params);
         res.json({ suggestions, bugReports });
     }
     catch (error) {
@@ -155,8 +164,8 @@ router.get('/admin/all', auth_1.authenticateToken, (0, auth_1.requireRole)(['tea
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Teacher: review suggestion (approve/deny). Approve auto-pays reward once.
-router.put('/admin/suggestions/:id/review', [(0, express_validator_1.body)('status').isIn(['approved', 'denied']).withMessage('Status must be approved or denied')], auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// Teacher: review suggestion (approve/deny). Approve auto-pays reward once. Same school only.
+router.put('/admin/suggestions/:id/review', [(0, express_validator_1.body)('status').isIn(['approved', 'denied']).withMessage('Status must be approved or denied')], auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     const errors = (0, express_validator_1.validationResult)(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
@@ -169,12 +178,17 @@ router.put('/admin/suggestions/:id/review', [(0, express_validator_1.body)('stat
         return res.status(400).json({ error: 'Invalid suggestion id' });
     }
     const { status } = req.body;
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
     const client = await database_prod_1.default.pool.connect();
     try {
         await client.query('BEGIN');
-        const suggestionRes = await client.query('SELECT * FROM suggestions WHERE id = $1 FOR UPDATE', [id]);
+        const suggestionRes = await client.query('SELECT s.*, u.school_id as submitter_school_id FROM suggestions s JOIN users u ON s.user_id = u.id WHERE s.id = $1 FOR UPDATE', [id]);
         const suggestion = suggestionRes.rows?.[0];
         if (!suggestion) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Suggestion not found' });
+        }
+        if (schoolId !== null && suggestion.submitter_school_id !== schoolId) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Suggestion not found' });
         }
@@ -241,8 +255,8 @@ router.put('/admin/suggestions/:id/review', [(0, express_validator_1.body)('stat
         client.release();
     }
 });
-// Teacher: review bug report (verify/deny). Verify auto-pays reward once.
-router.put('/admin/bugs/:id/review', [(0, express_validator_1.body)('status').isIn(['verified', 'denied']).withMessage('Status must be verified or denied')], auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+// Teacher: review bug report (verify/deny). Verify auto-pays reward once. Same school only.
+router.put('/admin/bugs/:id/review', [(0, express_validator_1.body)('status').isIn(['verified', 'denied']).withMessage('Status must be verified or denied')], auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     const errors = (0, express_validator_1.validationResult)(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
@@ -255,12 +269,17 @@ router.put('/admin/bugs/:id/review', [(0, express_validator_1.body)('status').is
         return res.status(400).json({ error: 'Invalid bug report id' });
     }
     const { status } = req.body;
+    const schoolId = req.schoolId ?? req.user?.school_id ?? null;
     const client = await database_prod_1.default.pool.connect();
     try {
         await client.query('BEGIN');
-        const bugRes = await client.query('SELECT * FROM bug_reports WHERE id = $1 FOR UPDATE', [id]);
+        const bugRes = await client.query('SELECT b.*, u.school_id as submitter_school_id FROM bug_reports b JOIN users u ON b.user_id = u.id WHERE b.id = $1 FOR UPDATE', [id]);
         const bug = bugRes.rows?.[0];
         if (!bug) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Bug report not found' });
+        }
+        if (schoolId !== null && bug.submitter_school_id !== schoolId) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Bug report not found' });
         }
