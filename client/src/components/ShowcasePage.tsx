@@ -16,7 +16,13 @@ import {
   Newspaper,
   Building2,
   ArrowRight,
-  LogIn
+  LogIn,
+  ScrollText,
+  ClipboardList,
+  Shield,
+  Zap,
+  School,
+  UserCog
 } from 'lucide-react';
 
 const ShowcasePage: React.FC = () => {
@@ -132,6 +138,38 @@ const ShowcasePage: React.FC = () => {
       color: 'from-violet-500 to-violet-600',
       iconBg: 'bg-violet-100',
       iconColor: 'text-violet-600'
+    },
+    {
+      icon: ScrollText,
+      title: 'Town Rules',
+      description: 'View your class town rules and expectations. Teachers can edit rules per town for a consistent learning environment.',
+      color: 'from-slate-500 to-slate-600',
+      iconBg: 'bg-slate-100',
+      iconColor: 'text-slate-600'
+    },
+    {
+      icon: ClipboardList,
+      title: 'Chores',
+      description: 'Complete chore challenges using the math game. Earn money by solving sums and building good habits.',
+      color: 'from-lime-500 to-lime-600',
+      iconBg: 'bg-lime-100',
+      iconColor: 'text-lime-600'
+    },
+    {
+      icon: Shield,
+      title: 'Insurance',
+      description: 'Protect your virtual assets. Learn about risk and how insurance works in the town economy.',
+      color: 'from-sky-500 to-sky-600',
+      iconBg: 'bg-sky-100',
+      iconColor: 'text-sky-600'
+    },
+    {
+      icon: Zap,
+      title: 'Doubles Day',
+      description: 'Special events with doubled rewards. Look out for bonus opportunities in the town.',
+      color: 'from-fuchsia-500 to-fuchsia-600',
+      iconBg: 'bg-fuchsia-100',
+      iconColor: 'text-fuchsia-600'
     }
   ];
 
@@ -142,14 +180,14 @@ const ShowcasePage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
           <div className="text-center">
             <h1 className="text-4xl md:text-6xl font-bold mb-6">
-              🎮 Game of Life Classroom Simulation
+              CivicLab
             </h1>
             <p className="text-xl md:text-2xl mb-4 text-primary-100">
               Learn Financial Literacy Through Interactive Play
             </p>
             <p className="text-lg md:text-xl mb-8 text-primary-200 max-w-3xl mx-auto">
-              A comprehensive town economy simulator designed for Grade 6 students. 
-              Master money management, banking, jobs, and civic responsibility in a safe, engaging virtual environment.
+              A multi-tenant town economy simulator for Grade 6. Each school has its own classes (towns); students and teachers join by school.
+              Master money management, banking, jobs, loans, property, and civic responsibility in a safe, engaging virtual environment.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
@@ -198,6 +236,38 @@ const ShowcasePage: React.FC = () => {
               </div>
             );
           })}
+        </div>
+
+        {/* For Teachers & Schools */}
+        <div className="mt-16 pt-12 border-t border-gray-200">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              For Teachers & Schools
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Full control over your classroom economy. Multi-tenant by school; super admins can manage multiple schools from one place.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 hover:shadow-xl transition-all">
+              <div className="bg-primary-100 w-14 h-14 rounded-lg flex items-center justify-center mb-4">
+                <UserCog className="h-7 w-7 text-primary-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Teacher Tools</h3>
+              <p className="text-gray-600 mb-3">
+                Approve students, manage balances, run salaries and tax, approve loans and land purchases, create tenders and announcements, manage Winkel and Pizza Time, trigger disasters, review suggestions and bugs, export CSV, and factory reset when needed.
+              </p>
+            </div>
+            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 hover:shadow-xl transition-all">
+              <div className="bg-primary-100 w-14 h-14 rounded-lg flex items-center justify-center mb-4">
+                <School className="h-7 w-7 text-primary-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Multi-School & Analytics</h3>
+              <p className="text-gray-600 mb-3">
+                Super admins create schools and teachers, view system-wide analytics, and archive or reactivate schools. Teachers enable or disable plugins per system. Analytics and reporting help track engagement and outcomes.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -311,7 +381,7 @@ const ShowcasePage: React.FC = () => {
       <footer className="bg-gray-900 text-gray-400 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-2">
           <p className="text-sm">
-            Game of Life Classroom Simulation — Teaching Financial Literacy Through Interactive Play
+            CivicLab — Teaching Financial Literacy Through Interactive Play
           </p>
           <p className="text-sm">
             Created by{' '}

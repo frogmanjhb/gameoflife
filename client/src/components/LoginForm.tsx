@@ -109,7 +109,7 @@ const LoginForm: React.FC = () => {
             </div>
           </div>
           <h2 className="text-3xl font-bold text-gray-900">
-            {isLogin ? 'Game of Life Town Hub' : 'Join the Game!'}
+            {isLogin ? 'CivicLab Town Hub' : 'Join CivicLab!'}
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             {isLogin ? 'Sign in to your account' : 'Create your classroom account'}

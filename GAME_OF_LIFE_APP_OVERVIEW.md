@@ -1,8 +1,8 @@
-# Game of Life (Classroom Simulation) — App Overview
+# CivicLab — App Overview
 
 This repository contains a classroom-focused web application that simulates a small “town economy” to help Grade 6 students learn financial literacy and civic/economic concepts through structured gameplay.
 
-The app is often described as a “Game of Life” simulation, but technically it is a **town/role economy simulator** with a bank account system, teacher and super-admin tools, and optional “Town Hub” modules (plugins) such as Jobs, Land, Government/Treasury, Tenders, News, Math Game, Leaderboard, Town Rules, Winkel (shop), Pizza Time, Suggestions/Bugs, Disasters, and Chores. The system supports **multi-tenant schools**: each school has its own towns, students, and settings; a **super admin** can manage multiple schools from a central dashboard.
+CivicLab is a **town/role economy simulator** with a bank account system, teacher and super-admin tools, and optional “Town Hub” modules (plugins) such as Jobs, Land, Government/Treasury, Tenders, News, Math Game, Leaderboard, Town Rules, Winkel (shop), Pizza Time, Suggestions/Bugs, Disasters, and Chores. The system supports **multi-tenant schools**: each school has its own towns, students, and settings; a **super admin** can manage multiple schools from a central dashboard.
 
 ---
 

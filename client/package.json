@@ -1,7 +1,7 @@
 {
   "name": "game-of-life-client",
   "version": "1.0.0",
-  "description": "Frontend client for Game of Life classroom simulation",
+  "description": "Frontend client for CivicLab",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -1,7 +1,7 @@
 {
   "name": "game-of-life-server",
   "version": "1.0.0",
-  "description": "Backend server for Game of Life classroom simulation",
+  "description": "Backend server for CivicLab",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

@@ -1,4 +1,4 @@
--- Game of Life Classroom Database Schema for PostgreSQL
+-- CivicLab Database Schema for PostgreSQL
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (

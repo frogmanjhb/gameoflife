@@ -40,7 +40,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Town Hub</h1>
-                <p className="text-sm text-gray-500">Game of Life Control Center</p>
+                <p className="text-sm text-gray-500">CivicLab Control Center</p>
               </div>
             </div>
             

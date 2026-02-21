@@ -135,7 +135,7 @@ const TownRulesPlugin: React.FC = () => {
         <div className="flex items-center space-x-3">
           <div className="text-4xl">🏛</div>
           <div>
-            <h1 className="text-2xl font-bold">Game of Life – App Rules</h1>
+            <h1 className="text-2xl font-bold">CivicLab – App Rules</h1>
             <p className="text-primary-100">These rules help our town run fairly and smoothly.</p>
           </div>
         </div>

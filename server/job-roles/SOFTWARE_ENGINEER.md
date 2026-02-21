@@ -2,7 +2,7 @@
 
 ## Core Purpose
 
-Build small, useful digital tools that support learning during the Game of Life and broader class tasks.
+Build small, useful digital tools that support learning during CivicLab and broader class tasks.
 
 ## Tangible Responsibilities
 
@@ -14,7 +14,7 @@ Build small, useful digital tools that support learning during the Game of Life 
 
 ### Weekly (30–45 min total across the week)
 
-- Bug hunt in the Game of Life
+- Bug hunt in CivicLab
 - Deliver one working micro-app or feature improvement
 - Publish it in the Town Hub as a "plugin" or tool link
 - Run a 2–3 minute demo to the class
@@ -27,7 +27,7 @@ Build small, useful digital tools that support learning during the Game of Life 
 
 Keep it to tools that take minutes to use, not days to build.
 
-### Examples that fit the Game of Life
+### Examples that fit CivicLab
 
 - Budget calculator (rent + savings + spending)
 - Loan repayment planner

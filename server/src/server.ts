@@ -1051,7 +1051,7 @@ async function startServer() {
   
   const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📊 Game of Life Classroom Simulation API`);
+    console.log(`📊 CivicLab API`);
     console.log(`🌐 Health check: http://localhost:${PORT}/health`);
     console.log(`🔍 Detailed health: http://localhost:${PORT}/api/health`);
   });

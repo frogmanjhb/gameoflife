@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting Game of Life Server..."
+echo "🚀 Starting CivicLab Server..."
 
 # Change to server directory
 cd server

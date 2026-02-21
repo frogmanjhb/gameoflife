@@ -1,7 +1,7 @@
 {
   "name": "game-of-life-classroom",
   "version": "1.0.0",
-  "description": "A classroom Game of Life simulation for teaching financial literacy",
+  "description": "CivicLab — classroom simulation for teaching financial literacy",
   "main": "dist/server.js",
   "scripts": {
     "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
@@ -32,7 +32,7 @@
     "classroom",
     "railway"
   ],
-  "author": "Classroom Game of Life",
+  "author": "CivicLab",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0",

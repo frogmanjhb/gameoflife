@@ -1,4 +1,4 @@
-# 🎮 Game of Life Classroom Simulation
+# CivicLab
 
 A comprehensive web application designed to teach financial literacy to Grade 6 students through interactive gameplay. Students learn about banking, loans, money management, and peer-to-peer transactions in a safe, virtual environment.
 
@@ -249,6 +249,6 @@ For questions or issues:
 
 ---
 
-**Your Game of Life Classroom Simulation is ready to teach financial literacy! 🎉**
+**CivicLab is ready to teach financial literacy! 🎉**
 
 Start with teacher registration, create student accounts, and watch your classroom learn about money management through interactive gameplay.

@@ -1,9 +1,9 @@
 ---
-description: Game of Life (Town Hub) client — React/JS standards, minimal diffs, agent operating mode
+description: CivicLab (Town Hub) client — React/JS standards, minimal diffs, agent operating mode
 alwaysApply: true
 ---
 
-# Cursor Rules: Game of Life (Town Hub) — Client
+# Cursor Rules: CivicLab (Town Hub) — Client
 
 **Rule precedence:** If any ambiguity or conflict exists, prioritise: Correctness → Tenant isolation → Domain rules → Existing patterns → Performance → Code elegance.
 

@@ -36,7 +36,7 @@ const GovernmentPlugin: React.FC = () => {
         <Building className="h-16 w-16 mx-auto mb-4 text-gray-300" />
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Government Services</h2>
         <p className="text-gray-600 mb-4">
-          This system is part of the Game of Life Town Hub.
+          This system is part of the CivicLab Town Hub.
         </p>
         <p className="text-sm text-gray-500">
           Government services and information will be available here soon.
