@@ -112,7 +112,7 @@ Operational details:
 ### Jobs and salaries
 
 The Jobs module supports:
-- A catalog of jobs (seeded with detailed “role” descriptions and salaries)
+- A catalog of jobs (seeded with detailed “role” descriptions; base salary R2,000 at Level 1, scaling by level 1–10 to ~R15,000; contractual 1.5×)
 - Student job applications with answer forms
 - Teacher approval/denial of applications
 - Teacher ability to assign/remove jobs directly

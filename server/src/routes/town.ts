@@ -468,7 +468,7 @@ router.post('/pay-salaries/:class',
       }
 
       // Get all employed students in this class with their salaries
-      // Calculate salary dynamically: base_salary * (1 + (job_level - 1) * 0.1) * (is_contractual ? 1.5 : 1.0)
+      // Level-based: base_salary * (1 + (job_level - 1) * 0.7222) * (is_contractual ? 1.5 : 1.0); Level 1 = R2,000, Level 10 = R15,000
       const students = await database.query(
         `SELECT u.id, u.username, u.first_name, u.last_name, u.class, 
                 u.job_level,

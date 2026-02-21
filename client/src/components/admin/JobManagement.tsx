@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Briefcase, CheckCircle, XCircle, UserPlus, UserMinus, Clock, Users, ToggleLeft, ToggleRight, Edit2, X, Save, Award, Plus } from 'lucide-react';
-import { jobsApi } from '../../services/api';
+import { jobsApi, businessProposalsApi } from '../../services/api';
 import api from '../../services/api';
-import { Job, JobApplication } from '../../types';
+import { Job, JobApplication, BusinessProposal } from '../../types';
 import { useTown } from '../../contexts/TownContext';
 import { getXPProgress } from '../../utils/jobProgression';
 
@@ -25,12 +25,13 @@ interface JobWithAssignments extends Job {
 
 const JobManagement: React.FC = () => {
   const { currentTownClass, allTowns, currentTown, refreshTown } = useTown();
-  const [activeTab, setActiveTab] = useState<'jobs' | 'applications'>('jobs');
+  const [activeTab, setActiveTab] = useState<'jobs' | 'applications' | 'business-proposals'>('jobs');
   const [selectedClass, setSelectedClass] = useState<string>(currentTownClass || 'all');
   const [selectedJobAssignmentsClass, setSelectedJobAssignmentsClass] = useState<string>('6A');
   const [jobs, setJobs] = useState<JobWithAssignments[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [applications, setApplications] = useState<JobApplication[]>([]);
+  const [businessProposals, setBusinessProposals] = useState<BusinessProposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -56,6 +57,9 @@ const JobManagement: React.FC = () => {
         const response = await jobsApi.getJobAssignmentsOverview();
         setJobs(response.data.jobs);
         setStudents(response.data.students);
+      } else if (activeTab === 'business-proposals') {
+        const response = await businessProposalsApi.list();
+        setBusinessProposals(response.data || []);
       } else {
         const className = selectedClass === 'all' ? undefined : selectedClass;
         const filters: any = { status: 'pending' };
@@ -146,6 +150,30 @@ const JobManagement: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to deny application');
+    }
+  };
+
+  const handleApproveBusinessProposal = async (id: number) => {
+    try {
+      setError(null);
+      await businessProposalsApi.updateStatus(id, 'approved');
+      setSuccess('Business proposal approved');
+      fetchData();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to approve proposal');
+    }
+  };
+
+  const handleDenyBusinessProposal = async (id: number, denialReason?: string) => {
+    try {
+      setError(null);
+      await businessProposalsApi.updateStatus(id, 'denied', denialReason);
+      setSuccess('Business proposal denied');
+      fetchData();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to deny proposal');
     }
   };
 
@@ -248,7 +276,7 @@ const JobManagement: React.FC = () => {
     return match ? parseInt(match[1]) : null;
   };
 
-  if (loading && jobs.length === 0 && applications.length === 0) {
+  if (loading && jobs.length === 0 && applications.length === 0 && (activeTab !== 'business-proposals' || businessProposals.length === 0)) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -379,6 +407,22 @@ const JobManagement: React.FC = () => {
             {applications.length > 0 && (
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
                 {applications.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('business-proposals')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+              activeTab === 'business-proposals'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Briefcase className="h-4 w-4" />
+            <span>Business Proposals</span>
+            {businessProposals.filter((p) => p.status === 'pending').length > 0 && (
+              <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">
+                {businessProposals.filter((p) => p.status === 'pending').length}
               </span>
             )}
           </button>
@@ -703,6 +747,99 @@ const JobManagement: React.FC = () => {
                 </div>
               </div>
             ))
+          )}
+        </div>
+      )}
+
+      {/* Business Proposals Tab */}
+      {activeTab === 'business-proposals' && (
+        <div className="space-y-4">
+          {businessProposals.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+              <Briefcase className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <p className="text-gray-600">No business proposals yet</p>
+              <p className="text-sm text-gray-500 mt-1">Entrepreneurs submit proposals from their job detail page.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {businessProposals
+                .sort((a, b) => (a.status === 'pending' ? -1 : b.status === 'pending' ? 1 : 0))
+                .map((proposal) => (
+                  <div key={proposal.id} className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1">{proposal.business_name}</h3>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span
+                            className={`text-xs font-medium px-2 py-1 rounded ${
+                              proposal.status === 'pending'
+                                ? 'bg-amber-100 text-amber-800'
+                                : proposal.status === 'approved'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {proposal.status}
+                          </span>
+                        </div>
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <p>
+                            <strong>Entrepreneur:</strong>{' '}
+                            {(proposal as any).applicant_first_name} {(proposal as any).applicant_last_name} (
+                            {(proposal as any).applicant_username})
+                          </p>
+                          <p>
+                            <strong>Class:</strong> {(proposal as any).applicant_class || '—'}
+                          </p>
+                          <p>
+                            <strong>Submitted:</strong> {new Date(proposal.created_at).toLocaleDateString()}
+                          </p>
+                          {proposal.status === 'denied' && proposal.denial_reason && (
+                            <p className="text-red-600">
+                              <strong>Reason:</strong> {proposal.denial_reason}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {proposal.status === 'pending' && (
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleApproveBusinessProposal(proposal.id)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 text-sm font-medium"
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                            <span>Approve</span>
+                          </button>
+                          <button
+                            onClick={() => handleDenyBusinessProposal(proposal.id)}
+                            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 text-sm font-medium"
+                          >
+                            <XCircle className="h-4 w-4" />
+                            <span>Deny</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {proposal.payload && Object.keys(proposal.payload).length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Proposal details</h4>
+                        <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-800 space-y-1 max-h-48 overflow-y-auto">
+                          {Object.entries(proposal.payload).map(([key, value]) => {
+                            if (value === undefined || value === null || value === '') return null;
+                            const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                            const display = Array.isArray(value) ? value.join(', ') : String(value);
+                            return (
+                              <p key={key}>
+                                <strong>{label}:</strong> {display}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
           )}
         </div>
       )}

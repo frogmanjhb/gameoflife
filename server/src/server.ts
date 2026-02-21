@@ -37,6 +37,7 @@ import pluginRoutes from './routes/plugins';
 import announcementRoutes from './routes/announcements';
 import townRoutes from './routes/town';
 import jobRoutes from './routes/jobs';
+import businessProposalsRoutes from './routes/business-proposals';
 import landRoutes from './routes/land';
 import tenderRoutes from './routes/tenders';
 import townRulesRoutes from './routes/town-rules';
@@ -198,6 +199,7 @@ app.use('/api/retail-manager-game', retailManagerGameRoutes);
 app.use('/api/plugins', pluginRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/town', townRoutes);
+app.use('/api/jobs/business-proposals', businessProposalsRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/land', landRoutes);
 app.use('/api/tenders', tenderRoutes);
@@ -807,6 +809,18 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Retail manager game tables migration may have already been applied:', migrationError);
+    }
+
+    // Business proposals (Entrepreneur job)
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '059_add_business_proposals.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Business proposals migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Business proposals migration may have already been applied:', migrationError);
     }
 
     // Add paid status to shop purchases (Winkel pending/paid tracking)

@@ -156,7 +156,7 @@ router.get('/', authenticateToken, requireTenant, requireRole(['teacher']), asyn
         a.balance,
         a.updated_at as last_activity,
         j.name as job_name,
-        j.salary as job_salary
+        (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
       LEFT JOIN jobs j ON u.job_id = j.id
@@ -450,7 +450,7 @@ router.get('/account/:accountNumber/details', authenticateToken, requireTenant, 
         u.school_id as user_school_id,
         j.name as job_name,
         j.description as job_description,
-        j.salary as job_salary,
+        (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary,
         j.company_name as job_company_name
       FROM accounts a
       LEFT JOIN users u ON a.user_id = u.id
@@ -701,7 +701,7 @@ router.get('/:username/details', authenticateToken, requireTenant, requireRole([
         u.job_level,
         j.name as job_name,
         j.description as job_description,
-        j.salary as job_salary,
+        (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary,
         j.company_name as job_company_name,
         a.account_number,
         a.balance,
@@ -818,7 +818,7 @@ router.get('/:username/details', authenticateToken, requireTenant, requireRole([
         ja.created_at,
         ja.reviewed_at,
         j.name as job_name,
-        j.salary as job_salary
+        COALESCE(j.base_salary, 2000.00) as job_salary
       FROM job_applications ja
       JOIN jobs j ON ja.job_id = j.id
       WHERE ja.user_id = $1

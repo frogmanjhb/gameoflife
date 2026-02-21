@@ -81,19 +81,18 @@ async function seedDatabase() {
     } catch (_) {
       // Column doesn't exist (pre-022)
     }
-    // route_path is UNIQUE (migration 002); after 022 (school_id, name) is also unique.
-    // Use ON CONFLICT (route_path) so we never duplicate route_path (e.g. existing row from another school_id).
+    // After migration 022: unique is (school_id, name). Pre-022: name or route_path may be unique.
+    // Use ON CONFLICT (school_id, name) when school_id exists so we match the composite constraint.
     for (const plugin of plugins) {
       if (pluginsHaveSchoolId) {
         await pool.query(
           `INSERT INTO plugins (name, enabled, route_path, icon, description, school_id)
            VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (route_path) DO UPDATE SET
-             name = EXCLUDED.name,
+           ON CONFLICT (school_id, name) DO UPDATE SET
              enabled = EXCLUDED.enabled,
+             route_path = EXCLUDED.route_path,
              icon = EXCLUDED.icon,
-             description = EXCLUDED.description,
-             school_id = EXCLUDED.school_id`,
+             description = EXCLUDED.description`,
           [plugin.name, true, plugin.route_path, plugin.icon, plugin.description, null]
         );
       } else {
@@ -403,15 +402,18 @@ async function seedDatabase() {
 
     // Multi-tenant: use school_id NULL for global jobs. ON CONFLICT must match the unique
     // constraint: (school_id, name) after migration 022, or (name) on older DBs.
-    let jobsHaveSchoolId = false;
+    let jobsUseSchoolIdConflict = false;
     try {
       await pool.query('SELECT school_id FROM jobs LIMIT 1');
-      jobsHaveSchoolId = true;
+      const constraintCheck = await pool.query(
+        `SELECT 1 FROM pg_constraint WHERE conrelid = 'jobs'::regclass AND conname = 'jobs_school_name_unique' LIMIT 1`
+      );
+      jobsUseSchoolIdConflict = constraintCheck.rows && constraintCheck.rows.length > 0;
     } catch (_) {
-      // Column doesn't exist (pre-022); use old INSERT with ON CONFLICT (name)
+      // Column or table issue; use ON CONFLICT (name)
     }
     for (const job of jobs) {
-      if (jobsHaveSchoolId) {
+      if (jobsUseSchoolIdConflict) {
         await pool.query(
           `INSERT INTO jobs (name, description, salary, company_name, location, requirements, school_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -437,42 +439,9 @@ async function seedDatabase() {
         );
       }
     }
-    // Explicitly ensure Software Engineer exists (visible to all schools as global job)
-    const softwareEngineerJob = {
-      name: 'Software Engineer',
-      description: 'Daily: Check the Software Requests board (a list of problems learners want solved). Choose 1 task to work on or continue. Test the app with 1–2 users and capture feedback.\n\nWeekly: Bug hunt in the Game of Life. Deliver one working micro-app or feature improvement. Publish it in the Town Hub as a "plugin" or tool link. Run a 2–3 minute demo to the class. Log: what problem it solves, how to use it, what changed after feedback.',
-      salary: 6000.00,
-      company_name: 'Town Government / Tech Department',
-      location: 'Development Lab',
-      requirements: null
-    };
-    if (jobsHaveSchoolId) {
-      await pool.query(
-        `INSERT INTO jobs (name, description, salary, company_name, location, requirements, school_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (school_id, name) DO UPDATE SET
-           description = EXCLUDED.description,
-           salary = EXCLUDED.salary,
-           company_name = EXCLUDED.company_name,
-           location = EXCLUDED.location,
-           requirements = EXCLUDED.requirements`,
-        [softwareEngineerJob.name, softwareEngineerJob.description, softwareEngineerJob.salary, softwareEngineerJob.company_name, softwareEngineerJob.location, softwareEngineerJob.requirements, null]
-      );
-    } else {
-      await pool.query(
-        `INSERT INTO jobs (name, description, salary, company_name, location, requirements)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (name) DO UPDATE SET
-           description = EXCLUDED.description,
-           salary = EXCLUDED.salary,
-           company_name = EXCLUDED.company_name,
-           location = EXCLUDED.location,
-           requirements = EXCLUDED.requirements`,
-        [softwareEngineerJob.name, softwareEngineerJob.description, softwareEngineerJob.salary, softwareEngineerJob.company_name, softwareEngineerJob.location, softwareEngineerJob.requirements]
-      );
-    }
+    // Assistant Software Engineer is already in the jobs array above; do not insert duplicate "Software Engineer".
     // Ensure new roles start at R2000 (base_salary)
-    if (jobsHaveSchoolId) {
+    if (jobsUseSchoolIdConflict) {
       await pool.query(
         `UPDATE jobs SET base_salary = 2000 WHERE name IN ($1, $2) AND school_id IS NULL`,
         ['Assistant Risk & Insurance Manager', 'Entrepreneur – Town Business Founder']
@@ -483,7 +452,7 @@ async function seedDatabase() {
         ['Assistant Risk & Insurance Manager', 'Entrepreneur – Town Business Founder']
       );
     }
-    console.log('✅ Jobs seeded (including Software Engineer)');
+    console.log('✅ Jobs seeded');
 
     // Seed Town Settings. After migration 022, unique is (school_id, class).
     console.log('🏘️ Seeding town settings...');

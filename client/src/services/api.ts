@@ -364,6 +364,18 @@ export const jobsApi = {
   }
 };
 
+// Business proposals (Entrepreneur job) – students submit, teachers approve/deny
+export const businessProposalsApi = {
+  submit: (data: { business_name: string; payload: Record<string, unknown> }): Promise<{ data: import('../types').BusinessProposal }> =>
+    api.post('/jobs/business-proposals', data),
+  getMy: (): Promise<{ data: import('../types').BusinessProposal[] }> =>
+    api.get('/jobs/business-proposals/my'),
+  list: (): Promise<{ data: import('../types').BusinessProposal[] }> =>
+    api.get('/jobs/business-proposals'),
+  updateStatus: (id: number, status: 'approved' | 'denied', denialReason?: string): Promise<{ data: import('../types').BusinessProposal }> =>
+    api.put(`/jobs/business-proposals/${id}`, { status, denial_reason: denialReason })
+};
+
 // Land API methods
 export const landApi = {
   // Get parcels (with optional viewport filtering)

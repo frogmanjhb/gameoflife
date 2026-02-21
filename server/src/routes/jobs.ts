@@ -127,7 +127,7 @@ router.get('/applications', authenticateToken, requireTenant, requireRole(['teac
              u.last_name as applicant_last_name,
              u.class as applicant_class,
              j.name as job_name,
-             j.salary as job_salary,
+             COALESCE(j.base_salary, 2000.00) as job_salary,
              reviewer.username as reviewer_username
       FROM job_applications ja
       JOIN users u ON ja.user_id = u.id
@@ -190,7 +190,7 @@ router.get('/applications/:id', authenticateToken, requireTenant, requireRole(['
               u.last_name as applicant_last_name,
               u.class as applicant_class,
               j.name as job_name,
-              j.salary as job_salary,
+              COALESCE(j.base_salary, 2000.00) as job_salary,
               j.description as job_description,
               j.requirements as job_requirements,
               reviewer.username as reviewer_username
@@ -270,7 +270,7 @@ router.put('/applications/:id',
                 u.first_name as applicant_first_name,
                 u.last_name as applicant_last_name,
                 j.name as job_name,
-                j.salary as job_salary,
+                COALESCE(j.base_salary, 2000.00) as job_salary,
                 reviewer.username as reviewer_username
          FROM job_applications ja
          JOIN users u ON ja.user_id = u.id
@@ -383,7 +383,7 @@ router.get('/assignments/overview', authenticateToken, requireTenant, requireRol
 });
 
 // Setup routes (must come BEFORE /:id so "setup" is not treated as job id)
-// Add Software Engineer job (one-time setup - teachers only)
+// Add Assistant Software Engineer job (one-time setup - teachers only). Use canonical name to avoid duplicate with seed.
 router.get('/setup/software-engineer',
   authenticateToken,
   requireRole(['teacher']),
@@ -401,7 +401,7 @@ router.get('/setup/software-engineer',
            is_contractual = EXCLUDED.is_contractual
          RETURNING id, name`,
         [
-          'Software Engineer',
+          'Assistant Software Engineer',
           'Daily: Check the Software Requests board (a list of problems learners want solved). Choose 1 task to work on or continue. Test the app with 1–2 users and capture feedback.\n\nWeekly: Bug hunt in the Game of Life. Deliver one working micro-app or feature improvement. Publish it in the Town Hub as a "plugin" or tool link. Run a 2–3 minute demo to the class. Log: what problem it solves, how to use it, what changed after feedback.',
           2000.00,
           'Town Government / Tech Department',
@@ -414,11 +414,11 @@ router.get('/setup/software-engineer',
       const job = await database.get('SELECT * FROM jobs WHERE id = $1', [result.lastID]);
       res.json({
         success: true,
-        message: 'Software Engineer job added successfully!',
+        message: 'Assistant Software Engineer job added or updated (R2,000 starting).',
         job
       });
     } catch (error) {
-      console.error('Failed to add Software Engineer job:', error);
+      console.error('Failed to add Assistant Software Engineer job:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

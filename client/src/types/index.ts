@@ -805,6 +805,47 @@ export interface JobApplication {
   reviewer_username?: string;
 }
 
+/** Business proposal form payload (Entrepreneur job) */
+export interface BusinessProposalPayload {
+  entrepreneur_name?: string;
+  town_biome?: string;
+  business_model?: 'product' | 'service' | 'hybrid';
+  industry_type?: string[];
+  problem_solved?: string;
+  product_service_description?: string;
+  target_customers?: string[];
+  pricing_type?: 'per_unit' | 'per_hour' | 'per_job' | 'weekly_contract';
+  price_per_unit?: number;
+  estimated_units_per_week?: number;
+  cost_per_unit?: number;
+  weekly_fixed_costs?: number;
+  startup_cost?: number;
+  need_loan?: boolean;
+  loan_amount_requested?: number;
+  biome_impact?: string;
+  risk_level?: 'low' | 'medium' | 'high';
+  growth_plan?: string[];
+  growth_explanation?: string;
+  [key: string]: unknown;
+}
+
+export interface BusinessProposal {
+  id: number;
+  user_id: number;
+  school_id?: number | null;
+  status: 'pending' | 'approved' | 'denied';
+  business_name: string;
+  payload: BusinessProposalPayload;
+  created_at: string;
+  reviewed_at?: string | null;
+  reviewed_by?: number | null;
+  denial_reason?: string | null;
+  applicant_username?: string;
+  applicant_first_name?: string;
+  applicant_last_name?: string;
+  applicant_class?: string;
+}
+
 export type QuestionType = 'short_answer' | 'long_answer' | 'multiple_choice' | 'yes_no';
 
 export interface ApplicationQuestion {

@@ -109,9 +109,10 @@ router.get('/eligibility', authenticateToken, requireRole(['student']), async (r
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // Get user's job information
+    // Get user's job information (level-based calculated salary for loan eligibility)
     const user = await database.get(
-      `SELECT u.id, u.job_id, j.name as job_name, j.salary as job_salary
+      `SELECT u.id, u.job_id, u.job_level, j.name as job_name,
+              (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary
        FROM users u
        LEFT JOIN jobs j ON u.job_id = j.id
        WHERE u.id = $1`,
@@ -209,9 +210,10 @@ router.post('/apply', [
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // Get user's job information
+    // Get user's job information (level-based calculated salary)
     const user = await database.get(
-      `SELECT u.id, u.job_id, j.name as job_name, j.salary as job_salary
+      `SELECT u.id, u.job_id, u.job_level, j.name as job_name,
+              (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary
        FROM users u
        LEFT JOIN jobs j ON u.job_id = j.id
        WHERE u.id = $1`,

@@ -4,7 +4,7 @@ import {
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
   Award, FileText, TrendingUp, Loader2, AlertCircle, Play 
 } from 'lucide-react';
-import { jobsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi } from '../services/api';
+import { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, RetailManagerGameStatus } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
@@ -28,6 +28,8 @@ import TeacherGameModal from './jobchallenges/TeacherGameModal';
 import NurseGameModal from './jobchallenges/NurseGameModal';
 import DoctorGameModal from './jobchallenges/DoctorGameModal';
 import RetailManagerGameModal from './jobchallenges/RetailManagerGameModal';
+import EntrepreneurBusinessProposalModal from './jobchallenges/EntrepreneurBusinessProposalModal';
+import EntrepreneurApprovedInstructions from './jobchallenges/EntrepreneurApprovedInstructions';
 
 const MyJobDetails: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
@@ -74,6 +76,9 @@ const MyJobDetails: React.FC = () => {
   const [isDoctorGameOpen, setIsDoctorGameOpen] = useState(false);
   const [retailManagerGameStatus, setRetailManagerGameStatus] = useState<RetailManagerGameStatus | null>(null);
   const [isRetailManagerGameOpen, setIsRetailManagerGameOpen] = useState(false);
+  const [entrepreneurProposals, setEntrepreneurProposals] = useState<import('../types').BusinessProposal[]>([]);
+  const [entrepreneurProposalsLoading, setEntrepreneurProposalsLoading] = useState(false);
+  const [isEntrepreneurProposalModalOpen, setIsEntrepreneurProposalModalOpen] = useState(false);
 
   useEffect(() => {
     if (jobId) {
@@ -194,6 +199,24 @@ const MyJobDetails: React.FC = () => {
       fetchRetailManagerGameStatus();
     }
   }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('entrepreneur')) {
+      fetchEntrepreneurProposals();
+    }
+  }, [user, job]);
+
+  const fetchEntrepreneurProposals = async () => {
+    try {
+      setEntrepreneurProposalsLoading(true);
+      const response = await businessProposalsApi.getMy();
+      setEntrepreneurProposals(response.data || []);
+    } catch {
+      setEntrepreneurProposals([]);
+    } finally {
+      setEntrepreneurProposalsLoading(false);
+    }
+  };
 
   const fetchArchitectGameStatus = async () => {
     try {
@@ -620,6 +643,62 @@ const MyJobDetails: React.FC = () => {
             </div>
           ) : null;
         })()}
+
+        {/* Entrepreneur – Business Proposal & Instructions */}
+        {(job?.name || '').toLowerCase().trim().includes('entrepreneur') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-6 border border-amber-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                <Briefcase className="h-5 w-5 text-amber-600" />
+                🚀 TownSim – Your Business
+              </h3>
+              {entrepreneurProposalsLoading ? (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>Loading...</span>
+                </div>
+              ) : (() => {
+                const approved = entrepreneurProposals.find((p) => p.status === 'approved');
+                const pending = entrepreneurProposals.find((p) => p.status === 'pending');
+                if (approved) {
+                  return (
+                    <div className="space-y-4">
+                      <p className="text-sm text-gray-700">
+                        Your business <strong>{approved.business_name}</strong> has been approved. Follow the steps below to run it.
+                      </p>
+                      <EntrepreneurApprovedInstructions />
+                    </div>
+                  );
+                }
+                if (pending) {
+                  return (
+                    <div className="space-y-3">
+                      <p className="text-sm text-amber-800 font-medium">
+                        Your proposal &quot;{pending.business_name}&quot; is waiting for teacher approval. You cannot start working on it until it is approved.
+                      </p>
+                      <p className="text-xs text-gray-600">Submitted {new Date(pending.created_at).toLocaleDateString()}</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-700">
+                      Submit a business proposal for teacher approval. Once approved, you can start your business and follow the weekly instructions.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsEntrepreneurProposalModalOpen(true)}
+                      className="btn-primary flex items-center gap-2"
+                    >
+                      <FileText className="h-5 w-5" />
+                      Submit Business Proposal
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
 
         {/* Software Engineer – Logic & Systems Challenge */}
         {job.name?.toLowerCase().trim() === 'assistant software engineer' && (
@@ -1842,6 +1921,15 @@ const MyJobDetails: React.FC = () => {
           }}
           onGameComplete={() => fetchRetailManagerGameStatus()}
           gameStatus={retailManagerGameStatus}
+        />
+      )}
+
+      {/* Entrepreneur – Business Proposal Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('entrepreneur') && (
+        <EntrepreneurBusinessProposalModal
+          isOpen={isEntrepreneurProposalModalOpen}
+          onClose={() => setIsEntrepreneurProposalModalOpen(false)}
+          onSuccess={() => fetchEntrepreneurProposals()}
         />
       )}
     </div>
