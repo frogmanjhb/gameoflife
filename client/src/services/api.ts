@@ -21,6 +21,7 @@ import {
   NurseGameStatus, NurseGameStartRequest, NurseGameSubmitRequest,
   DoctorGameStatus, DoctorGameStartRequest, DoctorGameSubmitRequest,
   RetailManagerGameStatus, RetailManagerGameStartRequest, RetailManagerGameSubmitRequest,
+  EntrepreneurGameStatus, EntrepreneurGameStartRequest, EntrepreneurGameSubmitRequest,
   Job, JobApplication, LandParcel, LandPurchaseRequest, 
   LandStats, MyPropertiesResponse, BiomeConfig, BiomeType,
   TaxBracket, TreasuryInfo, TaxReport, SalaryPaymentResult, TownSettings,
@@ -286,6 +287,14 @@ export const retailManagerGameApi = {
     api.post('/retail-manager-game/start', data),
   submitGame: (data: RetailManagerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
     api.post('/retail-manager-game/submit', data)
+};
+
+export const entrepreneurGameApi = {
+  getStatus: (): Promise<{ data: EntrepreneurGameStatus }> => api.get('/entrepreneur-game/status'),
+  startGame: (data: EntrepreneurGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/entrepreneur-game/start', data),
+  submitGame: (data: EntrepreneurGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/entrepreneur-game/submit', data)
 };
 
 // Jobs API methods

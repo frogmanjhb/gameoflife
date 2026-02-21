@@ -4,9 +4,9 @@ import {
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
   Award, FileText, TrendingUp, Loader2, AlertCircle, Play 
 } from 'lucide-react';
-import { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi } from '../services/api';
+import { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi, entrepreneurGameApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, RetailManagerGameStatus } from '../types';
+import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, RetailManagerGameStatus, EntrepreneurGameStatus } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
 import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../utils/jobDisplay';
 import ArchitectGameModal from './jobchallenges/ArchitectGameModal';
@@ -28,6 +28,7 @@ import TeacherGameModal from './jobchallenges/TeacherGameModal';
 import NurseGameModal from './jobchallenges/NurseGameModal';
 import DoctorGameModal from './jobchallenges/DoctorGameModal';
 import RetailManagerGameModal from './jobchallenges/RetailManagerGameModal';
+import EntrepreneurGameModal from './jobchallenges/EntrepreneurGameModal';
 import EntrepreneurBusinessProposalModal from './jobchallenges/EntrepreneurBusinessProposalModal';
 import EntrepreneurApprovedInstructions from './jobchallenges/EntrepreneurApprovedInstructions';
 
@@ -76,6 +77,8 @@ const MyJobDetails: React.FC = () => {
   const [isDoctorGameOpen, setIsDoctorGameOpen] = useState(false);
   const [retailManagerGameStatus, setRetailManagerGameStatus] = useState<RetailManagerGameStatus | null>(null);
   const [isRetailManagerGameOpen, setIsRetailManagerGameOpen] = useState(false);
+  const [entrepreneurGameStatus, setEntrepreneurGameStatus] = useState<EntrepreneurGameStatus | null>(null);
+  const [isEntrepreneurGameOpen, setIsEntrepreneurGameOpen] = useState(false);
   const [entrepreneurProposals, setEntrepreneurProposals] = useState<import('../types').BusinessProposal[]>([]);
   const [entrepreneurProposalsLoading, setEntrepreneurProposalsLoading] = useState(false);
   const [isEntrepreneurProposalModalOpen, setIsEntrepreneurProposalModalOpen] = useState(false);
@@ -203,6 +206,12 @@ const MyJobDetails: React.FC = () => {
   useEffect(() => {
     if (user && (job?.name || '').toLowerCase().trim().includes('entrepreneur')) {
       fetchEntrepreneurProposals();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('entrepreneur')) {
+      fetchEntrepreneurGameStatus();
     }
   }, [user, job]);
 
@@ -386,6 +395,15 @@ const MyJobDetails: React.FC = () => {
       setRetailManagerGameStatus(response.data);
     } catch (err: any) {
       console.log('Retail Manager game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchEntrepreneurGameStatus = async () => {
+    try {
+      const response = await entrepreneurGameApi.getStatus();
+      setEntrepreneurGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Entrepreneur game status not available:', err.response?.data?.error);
     }
   };
 
@@ -696,6 +714,59 @@ const MyJobDetails: React.FC = () => {
                   </div>
                 );
               })()}
+            </div>
+          </div>
+        )}
+
+        {/* Entrepreneur – Business Builder Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('entrepreneur') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-violet-50 to-amber-50 rounded-lg p-6 border border-violet-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-violet-600" />
+                    Business Builder Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete business scenarios (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsEntrepreneurGameOpen(true)}
+                  disabled={!entrepreneurGameStatus || (entrepreneurGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-violet-600 hover:bg-violet-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Business Scenario</span>
+                </button>
+              </div>
+              {entrepreneurGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {entrepreneurGameStatus.remaining_plays} / {entrepreneurGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{entrepreneurGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{entrepreneurGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{entrepreneurGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Extreme High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{entrepreneurGameStatus.high_scores?.extreme ?? 0}</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1921,6 +1992,20 @@ const MyJobDetails: React.FC = () => {
           }}
           onGameComplete={() => fetchRetailManagerGameStatus()}
           gameStatus={retailManagerGameStatus}
+        />
+      )}
+
+      {/* Entrepreneur Game Modal – Business Builder Challenge */}
+      {(job?.name || '').toLowerCase().trim().includes('entrepreneur') && (
+        <EntrepreneurGameModal
+          isOpen={isEntrepreneurGameOpen}
+          onClose={() => {
+            setIsEntrepreneurGameOpen(false);
+            fetchEntrepreneurGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchEntrepreneurGameStatus()}
+          gameStatus={entrepreneurGameStatus}
         />
       )}
 

@@ -33,6 +33,7 @@ import teacherGameRoutes from './routes/jobchallenges/teacher-game';
 import nurseGameRoutes from './routes/jobchallenges/nurse-game';
 import doctorGameRoutes from './routes/jobchallenges/doctor-game';
 import retailManagerGameRoutes from './routes/jobchallenges/retail-manager-game';
+import entrepreneurGameRoutes from './routes/jobchallenges/entrepreneur-game';
 import pluginRoutes from './routes/plugins';
 import announcementRoutes from './routes/announcements';
 import townRoutes from './routes/town';
@@ -197,6 +198,7 @@ app.use('/api/teacher-game', teacherGameRoutes);
 app.use('/api/nurse-game', nurseGameRoutes);
 app.use('/api/doctor-game', doctorGameRoutes);
 app.use('/api/retail-manager-game', retailManagerGameRoutes);
+app.use('/api/entrepreneur-game', entrepreneurGameRoutes);
 app.use('/api/plugins', pluginRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/town', townRoutes);
@@ -847,6 +849,18 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Insurance transaction type migration may have already been applied:', migrationError);
+    }
+
+    // Entrepreneur (Business Builder) game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '062_add_entrepreneur_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Entrepreneur game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Entrepreneur game tables migration may have already been applied:', migrationError);
     }
 
     // Add paid status to shop purchases (Winkel pending/paid tracking)

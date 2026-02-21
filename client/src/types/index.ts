@@ -732,6 +732,35 @@ export interface RetailManagerGameSubmitRequest {
   answer_sequence: boolean[];
 }
 
+export interface EntrepreneurGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface EntrepreneurGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface EntrepreneurGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
 export interface Plugin {
   id: number;
   name: string;
