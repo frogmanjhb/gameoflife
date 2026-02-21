@@ -7,28 +7,29 @@ import { requireTenant } from '../middleware/tenant';
 const router = Router();
 const INSURANCE_RATE = 0.05; // 5% of salary per type per week
 const VALID_TYPES = ['health', 'cyber', 'property'] as const;
-
-function getWeekStartDate(date: Date = new Date()): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+const SA_TIMEZONE = 'Africa/Johannesburg';
 
 function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
-// Today's date in local YYYY-MM-DD (for active-policy comparison)
-function todayLocal(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+// Today's date in South Africa YYYY-MM-DD (for active-policy comparison and week start)
+function todayInSA(): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SA_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = formatter.formatToParts(new Date());
+  const y = parts.find((p) => p.type === 'year')!.value;
+  const m = parts.find((p) => p.type === 'month')!.value;
+  const d = parts.find((p) => p.type === 'day')!.value;
+  return `${y}-${m}-${d}`;
 }
+
+// Coverage starts on the purchase date (today in SA), not the Monday of the week.
+// 1 week = 7 days from start: e.g. buy 22 Feb → coverage 22–28 Feb.
 
 // Normalize a date from DB (Date or string) to YYYY-MM-DD
 function toDateString(val: Date | string | null | undefined): string {
@@ -87,15 +88,15 @@ router.get('/my-policies', authenticateToken, requireTenant, async (req: Authent
        ORDER BY created_at DESC`,
       [req.user.id]
     );
-    const today = todayLocal();
+    const today = todayInSA();
     const withActive = (policies as any[]).map((p) => {
       const startStr = toDateString(p.week_start_date);
       if (!startStr) return { ...p, active: false };
       // N weeks = 7*N days; coverage runs from start through start + (weeks*7 - 1) days
-      const endDate = new Date(startStr + 'T12:00:00');
-      if (isNaN(endDate.getTime())) return { ...p, active: false };
-      endDate.setDate(endDate.getDate() + p.weeks * 7 - 1);
-      const end = formatDate(endDate);
+      const [y, m, day] = startStr.split('-').map(Number);
+      const startUTC = Date.UTC(y, m - 1, day);
+      const endUTC = startUTC + (p.weeks * 7 - 1) * 24 * 60 * 60 * 1000;
+      const end = formatDate(new Date(endUTC));
       return { ...p, active: today >= startStr && today <= end };
     });
     res.json(withActive);
@@ -154,7 +155,7 @@ router.post(
         });
       }
 
-      const weekStart = formatDate(getWeekStartDate());
+      const weekStart = todayInSA(); // coverage starts on purchase date (SA), lasts for N weeks from that day
       const client = await database.pool.connect();
       try {
         await client.query('BEGIN');
