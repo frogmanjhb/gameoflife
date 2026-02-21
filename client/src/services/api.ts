@@ -2,6 +2,7 @@ import axios from 'axios';
 import { 
   MathGameStatus, MathGameStartRequest, MathGameSubmitRequest, 
   ArchitectGameStatus, ArchitectGameStartRequest, ArchitectGameSubmitRequest,
+  AccountantGameStatus, AccountantGameStartRequest, AccountantGameSubmitRequest,
   Job, JobApplication, LandParcel, LandPurchaseRequest, 
   LandStats, MyPropertiesResponse, BiomeConfig, BiomeType,
   TaxBracket, TreasuryInfo, TaxReport, SalaryPaymentResult, TownSettings,
@@ -106,6 +107,15 @@ export const architectGameApi = {
     // For now, we'll generate questions client-side from the question bank
     return Promise.resolve({ data: { question: '', answer: 0 } });
   }
+};
+
+// Accountant (Chartered Accountant) Audit Game API
+export const accountantGameApi = {
+  getStatus: (): Promise<{ data: AccountantGameStatus }> => api.get('/accountant-game/status'),
+  startGame: (data: AccountantGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/accountant-game/start', data),
+  submitGame: (data: AccountantGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/accountant-game/submit', data)
 };
 
 // Jobs API methods

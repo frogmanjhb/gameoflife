@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { TownSettings as TownSettingsType } from '../../types';
 import { useTown } from '../../contexts/TownContext';
 import api, { treasuryApi } from '../../services/api';
-import { Save, ToggleLeft, ToggleRight, Wallet, AlertTriangle, Home } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Wallet, AlertTriangle, Home, Gamepad2 } from 'lucide-react';
 
 const TownSettings: React.FC = () => {
   const { allTowns, refreshTown } = useTown();
   const [selectedTownId, setSelectedTownId] = useState<number | null>(allTowns[0]?.id || null);
   const [formData, setFormData] = useState<Partial<TownSettingsType>>({});
   const [saving, setSaving] = useState(false);
+  const [savingJobGame, setSavingJobGame] = useState(false);
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetting, setResetting] = useState(false);
   
@@ -40,7 +41,8 @@ const TownSettings: React.FC = () => {
         town_name: selectedTown.town_name,
         mayor_name: selectedTown.mayor_name || '',
         tax_rate: selectedTown.tax_rate,
-        tax_enabled: selectedTown.tax_enabled
+        tax_enabled: selectedTown.tax_enabled,
+        job_game_daily_limit: selectedTown.job_game_daily_limit ?? 3
       });
     }
   }, [selectedTown]);
@@ -242,6 +244,68 @@ const TownSettings: React.FC = () => {
           </form>
         )}
       </div>
+
+      {/* Job Game Settings (per town) */}
+      {selectedTown && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-start space-x-3 mb-4">
+            <div className="p-2 rounded-lg bg-amber-100">
+              <Gamepad2 className="h-5 w-5 text-amber-700" />
+            </div>
+            <div>
+              <h4 className="text-lg font-semibold text-gray-900">Job Game Settings</h4>
+              <p className="text-sm text-gray-500 mt-1">
+                For <span className="font-medium">{selectedTown.town_name}</span> (Class {selectedTown.class}): daily limit for job challenge games (e.g. Design Approval, Financial Audit)
+              </p>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Job game daily limit
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Number of job challenge plays (Architect reviews, Accountant audit cases) each student in this town can do per day (resets at 6 AM SAST)
+              </p>
+              <div className="flex items-center space-x-3">
+                <input
+                  type="number"
+                  min="0"
+                  max="50"
+                  value={formData.job_game_daily_limit ?? 3}
+                  onChange={(e) => setFormData({ ...formData, job_game_daily_limit: parseInt(e.target.value, 10) || 0 })}
+                  className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
+                />
+                <span className="text-sm text-gray-600">plays per day</span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (selectedTownId == null) return;
+                    setSavingJobGame(true);
+                    try {
+                      await api.put(`/town/settings/${selectedTownId}`, { job_game_daily_limit: formData.job_game_daily_limit ?? 3 });
+                      await refreshTown();
+                      alert('Job game settings saved.');
+                    } catch (err: any) {
+                      alert(err.response?.data?.error || 'Failed to save');
+                    } finally {
+                      setSavingJobGame(false);
+                    }
+                  }}
+                  disabled={savingJobGame}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>{savingJobGame ? 'Saving...' : 'Save'}</span>
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Set to 0 to disable job challenge games for this town. Default is 3.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Chores Game Settings */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

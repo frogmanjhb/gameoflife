@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { User } from '../types';
 import { Briefcase, DollarSign, MapPin, Building2, ClipboardList, Award, ArrowRight } from 'lucide-react';
 import { getXPProgress } from '../utils/jobProgression';
+import { stripPositionsAvailableFromRequirements } from '../utils/jobDisplay';
 
 interface MyJobCardProps {
   user: User;
@@ -195,13 +196,16 @@ const MyJobCard: React.FC<MyJobCardProps> = ({ user }) => {
         </div>
       )}
 
-      {/* Requirements section if different from description */}
-      {user.job_requirements && user.job_requirements !== user.job_description && (
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <h4 className="font-semibold text-sm text-gray-700 mb-2">Requirements</h4>
-          <p className="text-sm text-gray-600">{user.job_requirements}</p>
-        </div>
-      )}
+      {/* Requirements section (positions-available text stripped for awarded job view) */}
+      {(() => {
+        const requirements = stripPositionsAvailableFromRequirements(user.job_requirements);
+        return requirements && requirements !== stripPositionsAvailableFromRequirements(user.job_description) ? (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <h4 className="font-semibold text-sm text-gray-700 mb-2">Requirements</h4>
+            <p className="text-sm text-gray-600">{requirements}</p>
+          </div>
+        ) : null;
+      })()}
     </div>
   );
 };

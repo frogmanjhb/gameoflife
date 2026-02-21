@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Briefcase, DollarSign, MapPin, Building, FileText, AlertCircle, CheckCircle, Edit2, Save } from 'lucide-react';
 import { Job } from '../types';
+import { stripPositionsAvailableFromRequirements } from '../utils/jobDisplay';
 
 interface JobDetailsModalProps {
   isOpen: boolean;
@@ -291,15 +292,18 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
             </div>
           )}
 
-          {/* Requirements */}
-          {job.requirements && (
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Requirements</h3>
-              <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                {job.requirements}
-              </p>
-            </div>
-          )}
+          {/* Requirements (positions-available text stripped in job detail view) */}
+          {(() => {
+            const requirements = stripPositionsAvailableFromRequirements(job.requirements);
+            return requirements ? (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Requirements</h3>
+                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {requirements}
+                </p>
+              </div>
+            ) : null;
+          })()}
 
           {/* Posted Date */}
           <div className="text-sm text-gray-500 border-t border-gray-200 pt-4">

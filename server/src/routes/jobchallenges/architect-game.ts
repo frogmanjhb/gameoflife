@@ -28,9 +28,19 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
     if (!user || user.job_name?.toLowerCase() !== 'architect') {
       return res.status(403).json({ error: 'Only Architects can access this game' });
     }
-    
-    // All job challenges: 3 tries per day
-    const dailyLimit = JOB_CHALLENGES_DAILY_LIMIT;
+
+    // Per-town job game daily limit (teacher-configurable in town settings)
+    let dailyLimit = JOB_CHALLENGES_DAILY_LIMIT;
+    const userClass = req.user?.class;
+    const schoolId = req.user?.school_id ?? null;
+    if (userClass && ['6A', '6B', '6C'].includes(userClass)) {
+      try {
+        const row = schoolId != null
+          ? await database.get('SELECT job_game_daily_limit FROM town_settings WHERE class = $1 AND school_id = $2', [userClass, schoolId])
+          : await database.get('SELECT job_game_daily_limit FROM town_settings WHERE class = $1 AND school_id IS NULL', [userClass]);
+        if (row != null && row.job_game_daily_limit != null) dailyLimit = parseInt(String(row.job_game_daily_limit), 10) || dailyLimit;
+      } catch (_) { /* use default */ }
+    }
 
     // Check if architect game tables exist, if not return default status
     try {
@@ -129,9 +139,19 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
     if (!user || user.job_name?.toLowerCase() !== 'architect') {
       return res.status(403).json({ error: 'Only Architects can play this game' });
     }
-    
-    // All job challenges: 3 tries per day
-    const dailyLimit = JOB_CHALLENGES_DAILY_LIMIT;
+
+    // Per-town job game daily limit (teacher-configurable in town settings)
+    let dailyLimit = JOB_CHALLENGES_DAILY_LIMIT;
+    const userClass = req.user?.class;
+    const schoolId = req.user?.school_id ?? null;
+    if (userClass && ['6A', '6B', '6C'].includes(userClass)) {
+      try {
+        const row = schoolId != null
+          ? await database.get('SELECT job_game_daily_limit FROM town_settings WHERE class = $1 AND school_id = $2', [userClass, schoolId])
+          : await database.get('SELECT job_game_daily_limit FROM town_settings WHERE class = $1 AND school_id IS NULL', [userClass]);
+        if (row != null && row.job_game_daily_limit != null) dailyLimit = parseInt(String(row.job_game_daily_limit), 10) || dailyLimit;
+      } catch (_) { /* use default */ }
+    }
 
     // Check if architect game tables exist
     try {

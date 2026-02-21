@@ -14,6 +14,7 @@ import studentRoutes from './routes/students';
 import exportRoutes from './routes/export';
 import mathGameRoutes from './routes/math-game';
 import architectGameRoutes from './routes/jobchallenges/architect-game';
+import accountantGameRoutes from './routes/jobchallenges/accountant-game';
 import pluginRoutes from './routes/plugins';
 import announcementRoutes from './routes/announcements';
 import townRoutes from './routes/town';
@@ -157,6 +158,7 @@ app.use('/api/students', studentRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/math-game', mathGameRoutes);
 app.use('/api/architect-game', architectGameRoutes);
+app.use('/api/accountant-game', accountantGameRoutes);
 app.use('/api/plugins', pluginRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/town', townRoutes);
@@ -517,6 +519,30 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Architect game tables migration may have already been applied:', migrationError);
+    }
+
+    // Run Accountant Game Tables Migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '036_add_accountant_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Accountant game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Accountant game tables migration may have already been applied:', migrationError);
+    }
+
+    // Add job game daily limit to town_settings (teacher-configurable)
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '037_add_job_game_daily_limit.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Job game daily limit migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Job game daily limit migration may have already been applied:', migrationError);
     }
 
     // Add paid status to shop purchases (Winkel pending/paid tracking)

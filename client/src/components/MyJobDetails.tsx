@@ -4,11 +4,13 @@ import {
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
   Award, FileText, TrendingUp, Loader2, AlertCircle, Play 
 } from 'lucide-react';
-import { jobsApi, architectGameApi } from '../services/api';
+import { jobsApi, architectGameApi, accountantGameApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Job, ArchitectGameStatus } from '../types';
+import { Job, ArchitectGameStatus, AccountantGameStatus } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
+import { stripPositionsAvailableFromRequirements } from '../utils/jobDisplay';
 import ArchitectGameModal from './jobchallenges/ArchitectGameModal';
+import AccountantGameModal from './jobchallenges/AccountantGameModal';
 
 const MyJobDetails: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
@@ -19,6 +21,8 @@ const MyJobDetails: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [architectGameStatus, setArchitectGameStatus] = useState<ArchitectGameStatus | null>(null);
   const [isArchitectGameOpen, setIsArchitectGameOpen] = useState(false);
+  const [accountantGameStatus, setAccountantGameStatus] = useState<AccountantGameStatus | null>(null);
+  const [isAccountantGameOpen, setIsAccountantGameOpen] = useState(false);
 
   useEffect(() => {
     if (jobId) {
@@ -27,9 +31,14 @@ const MyJobDetails: React.FC = () => {
   }, [jobId]);
 
   useEffect(() => {
-    // Fetch architect game status if user is an Architect
     if (user && job?.name?.toLowerCase() === 'architect') {
       fetchArchitectGameStatus();
+    }
+  }, [user, job]);
+
+  useEffect(() => {
+    if (user && job?.name?.toLowerCase().trim() === 'chartered accountant') {
+      fetchAccountantGameStatus();
     }
   }, [user, job]);
 
@@ -38,8 +47,16 @@ const MyJobDetails: React.FC = () => {
       const response = await architectGameApi.getStatus();
       setArchitectGameStatus(response.data);
     } catch (err: any) {
-      // If user is not an architect or game not available, ignore error
       console.log('Architect game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchAccountantGameStatus = async () => {
+    try {
+      const response = await accountantGameApi.getStatus();
+      setAccountantGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Accountant game status not available:', err.response?.data?.error);
     }
   };
 
@@ -287,11 +304,63 @@ const MyJobDetails: React.FC = () => {
           </div>
         )}
 
-        {/* Requirements */}
-        {job.requirements && (
+        {/* Requirements (positions-available text stripped for awarded job view) */}
+        {(() => {
+          const requirements = stripPositionsAvailableFromRequirements(job.requirements);
+          return requirements ? (
+            <div className="pt-6 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Requirements</h3>
+              <p className="text-gray-700 whitespace-pre-wrap">{requirements}</p>
+            </div>
+          ) : null;
+        })()}
+
+        {/* Chartered Accountant – Financial Audit Challenges */}
+        {job.name?.toLowerCase().trim() === 'chartered accountant' && (
           <div className="pt-6 border-t border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Requirements</h3>
-            <p className="text-gray-700 whitespace-pre-wrap">{job.requirements}</p>
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-6 border border-emerald-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-emerald-600" />
+                    Financial Audit Challenges
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Solve audit cases (5 questions each) to earn XP.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsAccountantGameOpen(true)}
+                  disabled={!accountantGameStatus || (accountantGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Audit Case</span>
+                </button>
+              </div>
+              {accountantGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {accountantGameStatus.remaining_plays} / {accountantGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{accountantGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{accountantGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{accountantGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -358,13 +427,24 @@ const MyJobDetails: React.FC = () => {
           onClose={() => {
             setIsArchitectGameOpen(false);
             fetchArchitectGameStatus();
-            // Refresh user data to get updated XP and level
             window.location.reload();
           }}
-          onGameComplete={() => {
-            fetchArchitectGameStatus();
-          }}
+          onGameComplete={() => fetchArchitectGameStatus()}
           gameStatus={architectGameStatus}
+        />
+      )}
+
+      {/* Accountant Game Modal */}
+      {job.name?.toLowerCase().trim() === 'chartered accountant' && (
+        <AccountantGameModal
+          isOpen={isAccountantGameOpen}
+          onClose={() => {
+            setIsAccountantGameOpen(false);
+            fetchAccountantGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => fetchAccountantGameStatus()}
+          gameStatus={accountantGameStatus}
         />
       )}
     </div>
