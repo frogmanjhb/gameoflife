@@ -7,6 +7,7 @@ import AnnouncementsPanel from './AnnouncementsPanel';
 import TownInfo from './TownInfo';
 import MyJobCard from './MyJobCard';
 import MyPropertyCard from './MyPropertyCard';
+import MyInsuranceCard from './MyInsuranceCard';
 import MyTendersCard from './MyTendersCard';
 import { Grid } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -167,6 +168,7 @@ const StudentDashboard: React.FC = () => {
         <AnnouncementsPanel announcements={announcements} />
         {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/jobs') && user && <MyJobCard user={user} />}
         {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/land') && <MyPropertyCard />}
+        {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/insurance') && <MyInsuranceCard />}
       </div>
 
       {/* My Tenders (only when Tenders plugin enabled and student can access plugins) */}

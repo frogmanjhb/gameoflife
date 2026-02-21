@@ -42,6 +42,7 @@ import landRoutes from './routes/land';
 import tenderRoutes from './routes/tenders';
 import townRulesRoutes from './routes/town-rules';
 import winkelRoutes from './routes/winkel';
+import insuranceRoutes from './routes/insurance';
 import pizzaTimeRoutes from './routes/pizza-time';
 import leaderboardRoutes from './routes/leaderboard';
 import suggestionsBugsRoutes from './routes/suggestions-bugs';
@@ -205,6 +206,7 @@ app.use('/api/land', landRoutes);
 app.use('/api/tenders', tenderRoutes);
 app.use('/api/town-rules', townRulesRoutes);
 app.use('/api/winkel', winkelRoutes);
+app.use('/api/insurance', insuranceRoutes);
 app.use('/api/pizza-time', pizzaTimeRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/suggestions-bugs', suggestionsBugsRoutes);
@@ -821,6 +823,30 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Business proposals migration may have already been applied:', migrationError);
+    }
+
+    // Insurance plugin and insurance_purchases table
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '060_add_insurance_plugin.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Insurance plugin migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Insurance plugin migration may have already been applied:', migrationError);
+    }
+
+    // Allow 'insurance' transaction_type in transactions table
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '061_add_insurance_transaction_type.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Insurance transaction type migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Insurance transaction type migration may have already been applied:', migrationError);
     }
 
     // Add paid status to shop purchases (Winkel pending/paid tracking)

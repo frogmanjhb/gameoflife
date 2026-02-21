@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   User, Briefcase, Home, CreditCard, TrendingUp, TrendingDown, DollarSign,
   ArrowLeft, MapPin, Gamepad2, Pizza, ShoppingBag, FileText, Calendar,
-  Clock, CheckCircle, XCircle, AlertCircle, Loader, Building2
+  Clock, CheckCircle, XCircle, AlertCircle, Loader, Building2, Shield
 } from 'lucide-react';
 import api from '../services/api';
 import { getDisplayJobTitle } from '../utils/jobDisplay';
@@ -116,10 +116,20 @@ interface Stats {
   total_math_earnings: number;
   pizza_contributions_total: number;
   shop_purchases_total: number;
+  insurance_purchases_total?: number;
   land_parcels_owned: number;
   land_value_total: number;
   active_loans: number;
   total_loan_debt: number;
+}
+
+interface InsurancePurchase {
+  id: number;
+  insurance_type: string;
+  weeks: number;
+  total_cost: number;
+  week_start_date: string;
+  created_at: string;
 }
 
 interface StudentDetailData {
@@ -137,6 +147,7 @@ interface StudentDetailData {
   mathGameSessions: MathGameSession[];
   pizzaContributions: any[];
   shopPurchases: any[];
+  insurancePurchases?: InsurancePurchase[];
   jobApplications: JobApplication[];
   suggestions: SuggestionItem[];
   bugReports: BugReportItem[];
@@ -302,7 +313,7 @@ const StudentDetailView: React.FC = () => {
     );
   }
 
-  const { account, student, transactions, loans, landParcels, mathGameSessions, pizzaContributions, shopPurchases, jobApplications, suggestions, bugReports, stats } = data;
+  const { account, student, transactions, loans, landParcels, mathGameSessions, pizzaContributions, shopPurchases, insurancePurchases = [], jobApplications, suggestions, bugReports, stats } = data;
   
   // Handle orphaned accounts (account without student)
   const displayStudent = student || (account ? {
@@ -403,7 +414,7 @@ const StudentDetailView: React.FC = () => {
               <span className="text-xs font-medium">Total Spent</span>
             </div>
             <p className="text-2xl font-bold text-red-600">
-              {formatCurrency(stats.total_withdrawals + stats.shop_purchases_total + stats.pizza_contributions_total)}
+              {formatCurrency(stats.total_withdrawals + stats.shop_purchases_total + stats.pizza_contributions_total + (stats.insurance_purchases_total ?? 0))}
             </p>
           </div>
 
@@ -840,6 +851,31 @@ const StudentDetailView: React.FC = () => {
                           <div className="text-right">
                             <p className="text-sm font-semibold text-blue-600">{formatCurrency(purchase.amount)}</p>
                             <p className="text-xs text-gray-500">{formatShortDate(purchase.created_at)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Insurance Purchases */}
+                {insurancePurchases.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Insurance</h3>
+                      <p className="text-lg font-bold text-teal-600">{formatCurrency(stats.insurance_purchases_total ?? 0)}</p>
+                    </div>
+                    <div className="space-y-2">
+                      {insurancePurchases.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between p-3 bg-teal-50 rounded-lg">
+                          <div className="flex items-center space-x-2">
+                            <Shield className="h-4 w-4 text-teal-600" />
+                            <span className="text-sm text-gray-700 capitalize">{p.insurance_type}</span>
+                            <span className="text-xs text-gray-500">{p.weeks} week(s)</span>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-teal-600">{formatCurrency(Number(p.total_cost))}</p>
+                            <p className="text-xs text-gray-500">{formatShortDate(p.week_start_date)}</p>
                           </div>
                         </div>
                       ))}

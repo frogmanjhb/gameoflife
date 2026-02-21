@@ -484,6 +484,7 @@ router.get('/account/:accountNumber/details', authenticateToken, requireTenant, 
         mathGameSessions: [],
         pizzaContributions: [],
         shopPurchases: [],
+        insurancePurchases: [],
         jobApplications: [],
         suggestions: [],
         bugReports: [],
@@ -497,6 +498,7 @@ router.get('/account/:accountNumber/details', authenticateToken, requireTenant, 
           total_math_earnings: 0,
           pizza_contributions_total: 0,
           shop_purchases_total: 0,
+          insurance_purchases_total: 0,
           land_parcels_owned: 0,
           land_value_total: 0,
           active_loans: 0,
@@ -569,6 +571,14 @@ router.get('/account/:accountNumber/details', authenticateToken, requireTenant, 
       ORDER BY t.created_at DESC
     `, [account.user_id]);
 
+    // Get insurance purchases
+    const insurancePurchases = await database.query(`
+      SELECT id, insurance_type, weeks, total_cost, week_start_date, created_at
+      FROM insurance_purchases
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `, [account.user_id]);
+
     // Get job applications
     const jobApplications = await database.query(`
       SELECT * FROM job_applications
@@ -626,6 +636,7 @@ router.get('/account/:accountNumber/details', authenticateToken, requireTenant, 
       total_math_earnings: mathGameSessions.reduce((sum: number, s: any) => sum + parseFloat(s.earnings), 0),
       pizza_contributions_total: pizzaContributions.reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0),
       shop_purchases_total: shopPurchases.reduce((sum: number, s: any) => sum + parseFloat(s.amount), 0),
+      insurance_purchases_total: insurancePurchases.reduce((sum: number, p: any) => sum + parseFloat(p.total_cost), 0),
       land_parcels_owned: landParcels.length,
       land_value_total: landParcels.reduce((sum: number, l: any) => sum + parseFloat(l.value), 0),
       active_loans: loans.filter((l: any) => l.status === 'active').length,
@@ -665,6 +676,7 @@ router.get('/account/:accountNumber/details', authenticateToken, requireTenant, 
       mathGameSessions,
       pizzaContributions,
       shopPurchases,
+      insurancePurchases,
       jobApplications,
       suggestions,
       bugReports,
@@ -810,6 +822,14 @@ router.get('/:username/details', authenticateToken, requireTenant, requireRole([
       ORDER BY t.created_at DESC
     `, [student.id]);
 
+    // Get insurance purchases
+    const insurancePurchases = await database.query(`
+      SELECT id, insurance_type, weeks, total_cost, week_start_date, created_at
+      FROM insurance_purchases
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `, [student.id]);
+
     // Get job application history
     const jobApplications = await database.query(`
       SELECT 
@@ -880,6 +900,7 @@ router.get('/:username/details', authenticateToken, requireTenant, requireRole([
       total_math_earnings: mathGameSessions.reduce((sum, s) => sum + parseFloat(s.earnings), 0),
       pizza_contributions_total: pizzaContributions.reduce((sum, p) => sum + parseFloat(p.amount), 0),
       shop_purchases_total: shopPurchases.reduce((sum, s) => sum + parseFloat(s.amount), 0),
+      insurance_purchases_total: insurancePurchases.reduce((sum, p) => sum + parseFloat(p.total_cost), 0),
       land_parcels_owned: landParcels.length,
       land_value_total: landParcels.reduce((sum, l) => sum + parseFloat(l.value), 0),
       active_loans: loans.filter(l => l.status === 'active').length,
@@ -894,6 +915,7 @@ router.get('/:username/details', authenticateToken, requireTenant, requireRole([
       mathGameSessions,
       pizzaContributions,
       shopPurchases,
+      insurancePurchases,
       jobApplications,
       suggestions,
       bugReports,

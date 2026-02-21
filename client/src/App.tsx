@@ -21,6 +21,7 @@ import PizzaTimePlugin from './components/plugins/PizzaTimePlugin';
 import LeaderboardPlugin from './components/plugins/LeaderboardPlugin';
 import SuggestionsBugsPlugin from './components/plugins/SuggestionsBugsPlugin';
 import DisastersPlugin from './components/plugins/DisastersPlugin';
+import InsurancePlugin from './components/plugins/InsurancePlugin';
 import ChoresPlugin from './components/plugins/ChoresPlugin';
 import DoublesDayPlugin from './components/plugins/DoublesDayPlugin';
 import AnalyticsPlugin from './components/plugins/AnalyticsPlugin';
@@ -305,6 +306,20 @@ const AppContent: React.FC = () => {
                   <TownProvider>
                     <RequireRulesAgreed>
                       <DisastersPlugin />
+                    </RequireRulesAgreed>
+                  </TownProvider>
+                </PluginProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/insurance"
+            element={
+              <ProtectedRoute>
+                <PluginProvider>
+                  <TownProvider>
+                    <RequireRulesAgreed>
+                      <InsurancePlugin />
                     </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
