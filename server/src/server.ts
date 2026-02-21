@@ -13,6 +13,7 @@ import loanRoutes from './routes/loans';
 import studentRoutes from './routes/students';
 import exportRoutes from './routes/export';
 import mathGameRoutes from './routes/math-game';
+import architectGameRoutes from './routes/jobchallenges/architect-game';
 import pluginRoutes from './routes/plugins';
 import announcementRoutes from './routes/announcements';
 import townRoutes from './routes/town';
@@ -155,6 +156,7 @@ app.use('/api/loans', loanRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/math-game', mathGameRoutes);
+app.use('/api/architect-game', architectGameRoutes);
 app.use('/api/plugins', pluginRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/town', townRoutes);
@@ -491,6 +493,30 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Multi-tenant schools migration may have already been applied:', migrationError);
+    }
+
+    // Run Job Wages Restructuring migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '034_restructure_job_wages.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Job wages restructuring migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Job wages restructuring migration may have already been applied:', migrationError);
+    }
+
+    // Run Architect Game Tables Migration
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '035_add_architect_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Architect game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Architect game tables migration may have already been applied:', migrationError);
     }
 
     // Add paid status to shop purchases (Winkel pending/paid tracking)

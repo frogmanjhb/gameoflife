@@ -11,6 +11,7 @@ import StudentDetailView from './components/StudentDetailView';
 import BankPlugin from './components/plugins/BankPlugin';
 import LandPlugin from './components/plugins/LandPlugin';
 import JobsPlugin from './components/plugins/JobsPlugin';
+import MyJobDetails from './components/MyJobDetails';
 import NewsPlugin from './components/plugins/NewsPlugin';
 import GovernmentPlugin from './components/plugins/GovernmentPlugin';
 import TendersPlugin from './components/plugins/TendersPlugin';
@@ -164,6 +165,20 @@ const AppContent: React.FC = () => {
                   <TownProvider>
                     <RequireRulesAgreed>
                       <JobsPlugin />
+                    </RequireRulesAgreed>
+                  </TownProvider>
+                </PluginProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-job/:jobId"
+            element={
+              <ProtectedRoute>
+                <PluginProvider>
+                  <TownProvider>
+                    <RequireRulesAgreed>
+                      <MyJobDetails />
                     </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>

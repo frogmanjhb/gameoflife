@@ -1,7 +1,46 @@
 -- Add Disasters plugin
-INSERT INTO plugins (name, enabled, route_path, icon, description)
-VALUES ('Disasters', true, '/disasters', '🌪️', 'View and manage disasters affecting all students')
-ON CONFLICT (route_path) DO NOTHING;
+-- Check if plugin already exists before inserting (handles both pre-033 and post-033 schema)
+DO $$
+DECLARE
+  has_school_id_col BOOLEAN;
+  plugin_exists BOOLEAN;
+BEGIN
+  -- Check if school_id column exists
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'plugins' AND column_name = 'school_id'
+  ) INTO has_school_id_col;
+  
+  -- Check if plugin already exists
+  IF has_school_id_col THEN
+    -- After migration 033: check for global plugin (school_id IS NULL)
+    SELECT EXISTS (
+      SELECT 1 FROM plugins 
+      WHERE route_path = '/disasters' AND school_id IS NULL
+    ) INTO plugin_exists;
+  ELSE
+    -- Before migration 033: just check route_path
+    SELECT EXISTS (
+      SELECT 1 FROM plugins 
+      WHERE route_path = '/disasters'
+    ) INTO plugin_exists;
+  END IF;
+  
+  -- Insert plugin if it doesn't exist
+  IF NOT plugin_exists THEN
+    IF has_school_id_col THEN
+      INSERT INTO plugins (name, enabled, route_path, icon, description, school_id)
+      VALUES ('Disasters', true, '/disasters', '🌪️', 'View and manage disasters affecting all students', NULL);
+    ELSE
+      INSERT INTO plugins (name, enabled, route_path, icon, description)
+      VALUES ('Disasters', true, '/disasters', '🌪️', 'View and manage disasters affecting all students');
+    END IF;
+  END IF;
+EXCEPTION
+  WHEN others THEN
+    -- If insert fails for any reason (e.g., constraint violation), ignore it
+    NULL;
+END $$;
 
 -- Create disasters table for storing disaster types
 CREATE TABLE IF NOT EXISTS disasters (

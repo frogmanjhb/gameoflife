@@ -26,7 +26,8 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
       setEditFormData({
         name: job.name,
         description: job.description ?? '',
-        salary: job.salary,
+        base_salary: baseSalary,
+        is_contractual: job.is_contractual ?? false,
         company_name: job.company_name ?? '',
         location: job.location ?? '',
         requirements: job.requirements ?? '',
@@ -50,7 +51,7 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
   const handleStartEdit = () => setIsEditing(true);
   const handleCancelEdit = () => setIsEditing(false);
   const handleSaveEdit = async () => {
-    if (!onSaveJob || !editFormData.name || editFormData.salary == null) return;
+    if (!onSaveJob || !editFormData.name || editFormData.base_salary == null) return;
     setSaving(true);
     setEditError(null);
     try {
@@ -71,6 +72,16 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
       maximumFractionDigits: 0,
     }).format(salary);
   };
+
+  // Normalize base_salary: if it's 4000 (old default), use 2000 instead
+  const getBaseSalary = () => {
+    if (!job) return 2000;
+    const baseSalary = job.base_salary || 2000;
+    // If somehow base_salary is still 4000, normalize it to 2000
+    return baseSalary === 4000 ? 2000 : baseSalary;
+  };
+
+  const baseSalary = getBaseSalary();
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -148,16 +159,29 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Salary (ZAR) *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Base Salary (ZAR) *</label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
-                  value={editFormData.salary ?? ''}
-                  onChange={(e) => setEditFormData({ ...editFormData, salary: parseFloat(e.target.value) || 0 })}
+                  value={editFormData.base_salary ?? 2000}
+                  onChange={(e) => setEditFormData({ ...editFormData, base_salary: parseFloat(e.target.value) || 2000 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   required
                 />
+                <p className="text-xs text-gray-500 mt-1">Starting salary. Increases with job level progression.</p>
+              </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="is_contractual"
+                  checked={editFormData.is_contractual ?? false}
+                  onChange={(e) => setEditFormData({ ...editFormData, is_contractual: e.target.checked })}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label htmlFor="is_contractual" className="ml-2 block text-sm text-gray-700">
+                  Contractual Job (earns 1.5x more)
+                </label>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -182,7 +206,7 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
               <div className="flex space-x-3 pt-2">
                 <button
                   onClick={handleSaveEdit}
-                  disabled={saving || !editFormData.name || editFormData.salary == null}
+                  disabled={saving || !editFormData.name || editFormData.base_salary == null}
                   className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
                 >
                   <Save className="h-4 w-4" />
@@ -208,11 +232,20 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
                 <span className="text-lg font-medium">{job.company_name}</span>
               </div>
             )}
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-6 flex-wrap gap-4">
               <div className="flex items-center text-primary-600">
                 <DollarSign className="h-5 w-5 mr-2" />
-                <span className="text-xl font-bold">{formatSalary(job.salary)}</span>
-                <span className="text-sm text-gray-600 ml-2">per period</span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl font-bold">{formatSalary(baseSalary)}</span>
+                    {job.is_contractual && (
+                      <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs font-semibold">
+                        CONTRACTUAL
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-sm text-gray-600">starts at • grows with level</span>
+                </div>
               </div>
               {job.location && (
                 <div className="flex items-center text-gray-600">
@@ -220,6 +253,28 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
                   <span>{job.location}</span>
                 </div>
               )}
+            </div>
+            
+            {/* Salary Progression Table */}
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Salary Progression</h4>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => {
+                  const baseSalaryValue = baseSalary;
+                  const levelMultiplier = 1 + (level - 1) * 0.7222;
+                  const contractualMultiplier = job.is_contractual ? 1.5 : 1.0;
+                  const salary = baseSalaryValue * levelMultiplier * contractualMultiplier;
+                  return (
+                    <div key={level} className="bg-white rounded p-2 border border-gray-200">
+                      <div className="font-semibold text-gray-700">L{level}</div>
+                      <div className="text-primary-600 font-medium">{formatSalary(salary)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-gray-500 mt-3">
+                Salary increases progressively to R15,000 at Level 10. {job.is_contractual && 'Contractual jobs earn 1.5x more (Level 10: R22,500).'}
+              </p>
             </div>
           </div>
 

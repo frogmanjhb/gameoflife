@@ -136,6 +136,48 @@ export interface MathGameSubmitRequest {
   answer_sequence: boolean[];
 }
 
+export interface ArchitectGameSession {
+  id: number;
+  user_id: number;
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  experience_points: number;
+  earnings: number;
+  played_at: string;
+}
+
+export interface ArchitectGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: {
+    easy: number;
+    medium: number;
+    hard: number;
+    extreme: number;
+  };
+  recent_sessions: ArchitectGameSession[];
+}
+
+export interface ArchitectQuestion {
+  question: string;
+  answer: number;
+  explanation?: string;
+}
+
+export interface ArchitectGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface ArchitectGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
 export interface Plugin {
   id: number;
   name: string;
@@ -176,7 +218,9 @@ export interface Job {
   id: number;
   name: string;
   description?: string;
-  salary: number;
+  salary: number; // Calculated salary (for backward compatibility)
+  base_salary?: number; // Base salary (default R2000)
+  is_contractual?: boolean; // Contractual jobs earn 1.5x more
   requirements?: string;
   company_name?: string;
   location?: string;

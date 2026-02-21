@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import { Search, School } from 'lucide-react';
 
@@ -21,14 +21,30 @@ const SchoolPicker: React.FC<SchoolPickerProps> = ({ value, onChange, required =
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchSchools = async () => {
       try {
+        setLoading(true);
         const response = await api.get('/auth/schools');
-        setSchools(response.data);
-      } catch (error) {
-        console.error('Failed to fetch schools:', error);
+        console.log('Schools API response:', response);
+        console.log('Schools data:', response.data);
+        // Handle both array response and object with data property
+        const schoolsData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+        console.log(`✅ Loaded ${schoolsData.length} schools`);
+        setSchools(schoolsData);
+      } catch (error: any) {
+        console.error('❌ Failed to fetch schools:', error);
+        console.error('Error response:', error.response);
+        console.error('Error details:', error.response?.data);
+        
+        // Check if it's a connection error
+        if (error.code === 'ERR_NETWORK' || error.message?.includes('ERR_CONNECTION_REFUSED')) {
+          console.warn('⚠️ Backend server appears to be offline. Please ensure the server is running on port 5000.');
+        }
+        
+        setSchools([]);
       } finally {
         setLoading(false);
       }
@@ -36,6 +52,23 @@ const SchoolPicker: React.FC<SchoolPickerProps> = ({ value, onChange, required =
 
     fetchSchools();
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   const filteredSchools = schools.filter(school =>
     school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -45,7 +78,7 @@ const SchoolPicker: React.FC<SchoolPickerProps> = ({ value, onChange, required =
   const selectedSchool = schools.find(s => s.id === value);
 
   return (
-    <div className="relative">
+    <div className="relative" ref={dropdownRef}>
       <label className="label">
         <School className="h-4 w-4 inline mr-1" />
         School {!required && <span className="text-gray-500 text-xs">(optional)</span>}
@@ -72,12 +105,23 @@ const SchoolPicker: React.FC<SchoolPickerProps> = ({ value, onChange, required =
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+          <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
             {loading ? (
               <div className="p-4 text-center text-gray-500">Loading schools...</div>
+            ) : schools.length === 0 ? (
+              <div className="p-4 text-center text-gray-500">
+                {loading ? 'Loading schools...' : (
+                  <div>
+                    <div className="mb-2">No schools available</div>
+                    <div className="text-xs text-gray-400">
+                      {process.env.NODE_ENV === 'development' && 'Make sure the backend server is running'}
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <>
-                <div className="p-2 border-b border-gray-200 sticky top-0 bg-white">
+                <div className="p-2 border-b border-gray-200 sticky top-0 bg-white z-10">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input
@@ -92,7 +136,7 @@ const SchoolPicker: React.FC<SchoolPickerProps> = ({ value, onChange, required =
                 </div>
                 <div className="py-1">
                   {filteredSchools.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500">No schools found</div>
+                    <div className="p-4 text-center text-gray-500">No schools found matching "{searchTerm}"</div>
                   ) : (
                     filteredSchools.map((school) => (
                       <button

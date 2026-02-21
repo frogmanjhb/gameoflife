@@ -15,7 +15,9 @@ router.get('/schools', async (req: Request, res: Response) => {
     const schools = await database.query(
       'SELECT id, name, code FROM schools WHERE archived = false ORDER BY name'
     );
-    res.json(schools);
+    console.log(`📚 Fetched ${schools.length} schools for login page`);
+    // Ensure we return an array even if empty
+    res.json(Array.isArray(schools) ? schools : []);
   } catch (error) {
     console.error('Failed to fetch schools:', error);
     res.status(500).json({ error: 'Failed to fetch schools' });
@@ -379,15 +381,21 @@ router.get('/profile', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // Get user with full job information
+    // Get user with full job information (including new wage system fields)
     const userWithJob = await database.get(
       `SELECT u.*, 
               j.name as job_name, 
-              j.description as job_description, 
-              j.salary as job_salary,
+              j.description as job_description,
               j.requirements as job_requirements,
               j.company_name as job_company_name,
-              j.location as job_location
+              j.location as job_location,
+              COALESCE(j.base_salary, 2000.00) as job_base_salary,
+              COALESCE(j.is_contractual, false) as job_is_contractual,
+              -- Calculate dynamic salary: base * (1 + (level-1) * 0.7222) * (contractual ? 1.5 : 1.0)
+              -- Level 1: 100% of base, Level 10: 750% of base (R15,000)
+              (COALESCE(j.base_salary, 2000.00) * 
+               (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * 
+               CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary
        FROM users u
        LEFT JOIN jobs j ON u.job_id = j.id
        WHERE u.id = $1`,

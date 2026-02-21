@@ -123,6 +123,55 @@ const JobsPlugin: React.FC = () => {
         </div>
       </div>
 
+      {/* How Jobs Work - Instructions */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm mb-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+          <Briefcase className="h-5 w-5 mr-2 text-primary-600" />
+          How Jobs & Salaries Work
+        </h2>
+        <div className="space-y-4 text-sm text-gray-700">
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2">💰 Starting Salaries</h3>
+            <p className="mb-2">All jobs start at <strong className="text-primary-600">R2,000 per period</strong> when you're first assigned (Level 1).</p>
+          </div>
+          
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2">📈 Salary Progression</h3>
+            <p className="mb-2">As you improve in your job and gain experience, your salary increases:</p>
+            <ul className="list-disc list-inside ml-2 space-y-1 text-gray-600">
+              <li><strong>Level 1:</strong> R2,000 (starting salary)</li>
+              <li><strong>Level 2:</strong> ~R3,444</li>
+              <li><strong>Level 3:</strong> ~R4,889</li>
+              <li><strong>Level 4-9:</strong> Progressive increases</li>
+              <li><strong>Level 10:</strong> R15,000 (maximum level)</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2">⭐ Job Levels</h3>
+            <p className="mb-2">You start at <strong>Level 1</strong> when assigned to a job. Your level increases based on:</p>
+            <ul className="list-disc list-inside ml-2 space-y-1 text-gray-600">
+              <li>Job performance and quality of work</li>
+              <li>Experience points earned through completing job tasks</li>
+              <li>Consistency and reliability</li>
+            </ul>
+            <p className="mt-2 text-gray-600">Levels range from <strong>1 to 10</strong>, with Level 10 being the highest achievement.</p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2">📋 Contractual Jobs</h3>
+            <p className="mb-2">Some jobs are marked as <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs font-semibold inline-block">CONTRACTUAL</span>. These jobs earn <strong>1.5x more</strong> than regular jobs at the same level.</p>
+            <p className="text-gray-600">For example, a Level 10 contractual job pays <strong>R22,500</strong> (R15,000 × 1.5).</p>
+          </div>
+
+          <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 mt-4">
+            <p className="text-primary-800 font-medium">
+              💡 <strong>Tip:</strong> Focus on doing your job well! The better you perform, the faster you'll level up and earn more money.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Pin Board */}
       <div className="pin-board rounded-2xl p-8 min-h-[600px] relative overflow-hidden">
         {loading ? (

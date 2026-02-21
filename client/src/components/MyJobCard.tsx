@@ -1,12 +1,15 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User } from '../types';
-import { Briefcase, DollarSign, MapPin, Building2, ClipboardList, Award } from 'lucide-react';
+import { Briefcase, DollarSign, MapPin, Building2, ClipboardList, Award, ArrowRight } from 'lucide-react';
+import { getXPProgress } from '../utils/jobProgression';
 
 interface MyJobCardProps {
   user: User;
 }
 
 const MyJobCard: React.FC<MyJobCardProps> = ({ user }) => {
+  const navigate = useNavigate();
   const hasJob = user.job_id && user.job_name;
 
   if (!hasJob) {
@@ -27,9 +30,9 @@ const MyJobCard: React.FC<MyJobCardProps> = ({ user }) => {
 
   // Format salary as currency
   const formatSalary = (salary: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-ZA', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'ZAR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(salary);
@@ -38,11 +41,48 @@ const MyJobCard: React.FC<MyJobCardProps> = ({ user }) => {
   // Parse requirements/responsibilities if they exist
   const responsibilities = user.job_description?.split('\n').filter(line => line.trim()) || [];
 
+  // Calculate correct salary based on job level and contractual status
+  const getCurrentSalary = () => {
+    const baseSalary = (user as any).job_base_salary || 2000; // Use base_salary from user or default
+    const jobLevel = (user as any).job_level || 1;
+    const isContractual = (user as any).job_is_contractual || false;
+    const levelMultiplier = 1 + (jobLevel - 1) * 0.7222;
+    const contractualMultiplier = isContractual ? 1.5 : 1.0;
+    const calculatedSalary = baseSalary * levelMultiplier * contractualMultiplier;
+    
+    // If job_salary exists and seems reasonable (within 10% of calculated), use it
+    // Otherwise use calculated value (handles old data or incorrect values)
+    if (user.job_salary) {
+      const diff = Math.abs(user.job_salary - calculatedSalary);
+      if (diff / calculatedSalary < 0.1) {
+        return user.job_salary;
+      }
+    }
+    return calculatedSalary;
+  };
+
+  const currentSalary = getCurrentSalary();
+  const jobLevel = (user as any).job_level || 1;
+  const baseSalary = (user as any).job_base_salary || 2000;
+  const isContractual = (user as any).job_is_contractual || false;
+
+  const handleCardClick = () => {
+    if (user.job_id) {
+      navigate(`/my-job/${user.job_id}`);
+    }
+  };
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center space-x-2 mb-4">
-        <Briefcase className="h-5 w-5 text-amber-600" />
-        <h2 className="text-lg font-semibold text-gray-900">My Job</h2>
+    <div 
+      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-shadow"
+      onClick={handleCardClick}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center space-x-2">
+          <Briefcase className="h-5 w-5 text-amber-600" />
+          <h2 className="text-lg font-semibold text-gray-900">My Job</h2>
+        </div>
+        <ArrowRight className="h-5 w-5 text-gray-400" />
       </div>
 
       {/* Job Title & Company */}
@@ -69,15 +109,62 @@ const MyJobCard: React.FC<MyJobCardProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Weekly Salary */}
-      <div className="flex items-center justify-between bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 mb-4 border border-green-200">
-        <div className="flex items-center">
-          <DollarSign className="h-5 w-5 text-green-600 mr-2" />
-          <span className="text-sm font-medium text-gray-700">Weekly Salary</span>
+      {/* Job Level & Salary */}
+      <div className="space-y-3 mb-4">
+        {/* Job Level */}
+        {(user as any).job_level && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center">
+                <Award className="h-4 w-4 text-blue-600 mr-2" />
+                <span className="text-sm font-medium text-gray-700">Job Level</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-lg font-bold text-blue-700">Level {(user as any).job_level}</span>
+                {(user as any).job_experience_points !== undefined && (
+                  <span className="text-xs text-gray-500">
+                    ({(user as any).job_experience_points} XP)
+                  </span>
+                )}
+              </div>
+            </div>
+            {jobLevel < 10 && (() => {
+              const progress = getXPProgress(jobLevel, (user as any).job_experience_points || 0);
+              return (
+                <div>
+                  <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                    <span>Progress to Level {jobLevel + 1}</span>
+                    <span>{progress.current} / {progress.needed} XP</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all"
+                      style={{ width: `${progress.percentage}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+        
+        {/* Weekly Salary */}
+        <div className="flex items-center justify-between bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+          <div className="flex items-center">
+            <DollarSign className="h-5 w-5 text-green-600 mr-2" />
+            <span className="text-sm font-medium text-gray-700">Salary per Period</span>
+          </div>
+          <div className="text-right">
+            <span className="text-xl font-bold text-green-700">
+              {currentSalary ? formatSalary(currentSalary) : 'N/A'}
+            </span>
+            {jobLevel < 10 && (
+              <div className="text-xs text-gray-500 mt-1">
+                Max: {formatSalary(baseSalary * 7.5 * (isContractual ? 1.5 : 1.0))} at Level 10
+              </div>
+            )}
+          </div>
         </div>
-        <span className="text-xl font-bold text-green-700">
-          {user.job_salary ? formatSalary(user.job_salary) : 'N/A'}
-        </span>
       </div>
 
       {/* Responsibilities */}

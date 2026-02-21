@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, CheckCircle, XCircle, UserPlus, UserMinus, Clock, Users, ToggleLeft, ToggleRight, Edit2, X, Save } from 'lucide-react';
+import { Briefcase, CheckCircle, XCircle, UserPlus, UserMinus, Clock, Users, ToggleLeft, ToggleRight, Edit2, X, Save, Award, Plus } from 'lucide-react';
 import { jobsApi } from '../../services/api';
 import api from '../../services/api';
 import { Job, JobApplication } from '../../types';
 import { useTown } from '../../contexts/TownContext';
+import { getXPProgress } from '../../utils/jobProgression';
 
 interface Student {
   id: number;
@@ -13,6 +14,8 @@ interface Student {
   class?: string;
   job_id?: number;
   job_name?: string;
+  job_level?: number;
+  job_experience_points?: number;
 }
 
 interface JobWithAssignments extends Job {
@@ -24,6 +27,7 @@ const JobManagement: React.FC = () => {
   const { currentTownClass, allTowns, currentTown, refreshTown } = useTown();
   const [activeTab, setActiveTab] = useState<'jobs' | 'applications'>('jobs');
   const [selectedClass, setSelectedClass] = useState<string>(currentTownClass || 'all');
+  const [selectedJobAssignmentsClass, setSelectedJobAssignmentsClass] = useState<string>('6A');
   const [jobs, setJobs] = useState<JobWithAssignments[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [applications, setApplications] = useState<JobApplication[]>([]);
@@ -34,10 +38,12 @@ const JobManagement: React.FC = () => {
   const [editingJob, setEditingJob] = useState<JobWithAssignments | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<Job>>({});
   const [savingJob, setSavingJob] = useState(false);
+  const [awardingXP, setAwardingXP] = useState<number | null>(null);
+  const [xpAmount, setXpAmount] = useState<string>('10');
 
   useEffect(() => {
     fetchData();
-  }, [selectedClass, activeTab]);
+  }, [selectedClass, activeTab, selectedJobAssignmentsClass]);
 
   const fetchData = async () => {
     try {
@@ -45,8 +51,8 @@ const JobManagement: React.FC = () => {
       setError(null);
 
       if (activeTab === 'jobs') {
-        const className = selectedClass === 'all' ? undefined : selectedClass;
-        const response = await jobsApi.getJobAssignmentsOverview(className);
+        // Always fetch all students and jobs for job assignments tab
+        const response = await jobsApi.getJobAssignmentsOverview();
         setJobs(response.data.jobs);
         setStudents(response.data.students);
       } else {
@@ -99,6 +105,25 @@ const JobManagement: React.FC = () => {
     }
   };
 
+  const handleAwardXP = async (userId: number) => {
+    const xp = parseInt(xpAmount);
+    if (isNaN(xp) || xp <= 0) {
+      setError('Please enter a valid XP amount');
+      return;
+    }
+    try {
+      setError(null);
+      const response = await jobsApi.awardXP(userId, xp);
+      setSuccess(response.data.message);
+      setAwardingXP(null);
+      setXpAmount('10');
+      fetchData();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to award XP');
+    }
+  };
+
   const handleApproveApplication = async (applicationId: number) => {
     try {
       setError(null);
@@ -112,9 +137,6 @@ const JobManagement: React.FC = () => {
   };
 
   const handleDenyApplication = async (applicationId: number) => {
-    if (!confirm('Are you sure you want to deny this application?')) {
-      return;
-    }
     try {
       setError(null);
       await jobsApi.updateApplicationStatus(applicationId, 'denied');
@@ -150,7 +172,8 @@ const JobManagement: React.FC = () => {
     setEditFormData({
       name: job.name,
       description: job.description || '',
-      salary: job.salary,
+      base_salary: getBaseSalary(job),
+      is_contractual: (job as any).is_contractual || false,
       company_name: job.company_name || '',
       location: job.location || '',
       requirements: job.requirements || ''
@@ -191,6 +214,13 @@ const JobManagement: React.FC = () => {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(salary);
+  };
+
+  // Normalize base_salary: if it's 4000 (old default), use 2000 instead
+  const getBaseSalary = (job: any) => {
+    const baseSalary = job?.base_salary || 2000;
+    // If somehow base_salary is still 4000, normalize it to 2000
+    return baseSalary === 4000 ? 2000 : baseSalary;
   };
 
   const getPositionsAvailable = (requirements?: string) => {
@@ -240,35 +270,37 @@ const JobManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Class Selector */}
-      <div className="flex items-center space-x-4">
-        <label className="text-sm font-medium text-gray-700">Filter by Class:</label>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setSelectedClass('all')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              selectedClass === 'all'
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            All Classes
-          </button>
-          {allTowns.map((town) => (
+      {/* Class Selector - Only show for Applications tab */}
+      {activeTab === 'applications' && (
+        <div className="flex items-center space-x-4">
+          <label className="text-sm font-medium text-gray-700">Filter by Class:</label>
+          <div className="flex gap-2">
             <button
-              key={town.class}
-              onClick={() => setSelectedClass(town.class)}
+              onClick={() => setSelectedClass('all')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                selectedClass === town.class
+                selectedClass === 'all'
                   ? 'bg-primary-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              {town.class}
+              All Classes
             </button>
-          ))}
+            {allTowns.map((town) => (
+              <button
+                key={town.class}
+                onClick={() => setSelectedClass(town.class)}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  selectedClass === town.class
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {town.class}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -318,134 +350,229 @@ const JobManagement: React.FC = () => {
 
       {/* Jobs Tab */}
       {activeTab === 'jobs' && (
-        <div className="space-y-4">
-          {jobs.map((job) => {
-            const assignedStudents = getStudentsForJob(job.id);
-            const positionsAvailable = getPositionsAvailable(job.requirements);
-            const isFullyAssigned = positionsAvailable ? assignedStudents.length >= positionsAvailable : false;
+        <div className="space-y-6">
+          {/* Class Tabs for Job Assignments */}
+          <div className="border-b border-gray-200">
+            <nav className="flex space-x-4">
+              {['6A', '6B', '6C'].map((className) => {
+                const classStudents = students.filter(s => s.class === className);
+                return (
+                  <button
+                    key={className}
+                    onClick={() => setSelectedJobAssignmentsClass(className)}
+                    className={`py-3 px-4 border-b-2 font-medium text-sm transition-colors ${
+                      selectedJobAssignmentsClass === className
+                        ? 'border-primary-500 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {className} ({classStudents.length} students)
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
-            return (
-              <div key={job.id} className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">{job.name}</h3>
-                      {job.company_name && (
-                        <span className="text-sm text-gray-600">({job.company_name})</span>
+          {/* Jobs with Student Dropdowns */}
+          <div className="space-y-4">
+            {jobs.map((job) => {
+              const classStudents = students.filter(s => s.class === selectedJobAssignmentsClass);
+              const assignedStudents = classStudents.filter(s => s.job_id === job.id);
+              const unassignedStudents = classStudents.filter(s => !s.job_id || s.job_id !== job.id);
+              const positionsAvailable = getPositionsAvailable(job.requirements);
+              const isFullyAssigned = positionsAvailable ? assignedStudents.length >= positionsAvailable : false;
+
+              return (
+                <div key={job.id} className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">{job.name}</h3>
+                        {job.company_name && (
+                          <span className="text-sm text-gray-600">({job.company_name})</span>
+                        )}
+                        <button
+                          onClick={() => handleEditJob(job)}
+                          className="text-gray-400 hover:text-primary-600 transition-colors"
+                          title="Edit job"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {job.location && (
+                        <p className="text-sm text-gray-600 mb-2">📍 {job.location}</p>
                       )}
-                      <button
-                        onClick={() => handleEditJob(job)}
-                        className="text-gray-400 hover:text-primary-600 transition-colors"
-                        title="Edit job"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
+                      <div className="mb-2">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-primary-600">
+                            {formatSalary(getBaseSalary(job))} starting
+                          </p>
+                          {(job as any).is_contractual && (
+                            <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs font-semibold">
+                              CONTRACTUAL
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500">Grows with job level</p>
+                      </div>
+                      {positionsAvailable && (
+                        <p className="text-sm text-gray-600">
+                          {positionsAvailable} position{positionsAvailable > 1 ? 's' : ''} available
+                          {assignedStudents.length > 0 && (
+                            <span className="ml-2">
+                              ({assignedStudents.length} assigned in {selectedJobAssignmentsClass})
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </div>
-                    {job.location && (
-                      <p className="text-sm text-gray-600 mb-2">📍 {job.location}</p>
-                    )}
-                    <p className="text-sm font-medium text-primary-600 mb-2">
-                      {formatSalary(job.salary)} per period
-                    </p>
-                    {positionsAvailable && (
-                      <p className="text-sm text-gray-600">
-                        {positionsAvailable} position{positionsAvailable > 1 ? 's' : ''} available
-                      </p>
-                    )}
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-600">
-                      {selectedClass === 'all' ? (
-                        <>
-                          <div>Total: {job.total_assigned || 0} assigned</div>
-                          <div className="text-xs text-gray-500">Across all classes</div>
-                        </>
-                      ) : (
-                        <>
-                          <div>Class: {job.class_assigned || 0} assigned</div>
-                          <div className="text-xs text-gray-500">In {selectedClass}</div>
-                        </>
-                      )}
+
+                  {/* Assigned Students */}
+                  {assignedStudents.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">Assigned Students:</h4>
+                      <div className="space-y-3">
+                        {assignedStudents.map((student) => {
+                          const level = student.job_level || 1;
+                          const xp = student.job_experience_points || 0;
+                          const progress = getXPProgress(level, xp);
+                          const isAwarding = awardingXP === student.id;
+                          
+                          return (
+                            <div
+                              key={student.id}
+                              className="bg-gray-50 rounded-lg p-3 space-y-2"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2">
+                                    <span className="font-medium text-gray-900">
+                                      {student.first_name} {student.last_name}
+                                    </span>
+                                    <span className="text-sm text-gray-600">
+                                      ({student.username})
+                                    </span>
+                                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-semibold">
+                                      Level {level}
+                                    </span>
+                                    <span className="text-xs text-gray-500">
+                                      {xp} XP
+                                    </span>
+                                  </div>
+                                  {level < 10 && (
+                                    <div className="mt-2">
+                                      <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                                        <span>Progress to Level {level + 1}</span>
+                                        <span>{progress.current} / {progress.needed} XP</span>
+                                      </div>
+                                      <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div
+                                          className="bg-blue-600 h-2 rounded-full transition-all"
+                                          style={{ width: `${progress.percentage}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center space-x-2 ml-4">
+                                  {!isAwarding ? (
+                                    <>
+                                      <button
+                                        onClick={() => setAwardingXP(student.id)}
+                                        className="text-primary-600 hover:text-primary-700 flex items-center space-x-1 text-sm"
+                                        title="Award XP"
+                                      >
+                                        <Plus className="h-4 w-4" />
+                                        <span>Award XP</span>
+                                      </button>
+                                      <button
+                                        onClick={() => handleRemoveJob(student.id)}
+                                        className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm"
+                                      >
+                                        <UserMinus className="h-4 w-4" />
+                                        <span>Remove</span>
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <div className="flex items-center space-x-2">
+                                      <input
+                                        type="number"
+                                        value={xpAmount}
+                                        onChange={(e) => setXpAmount(e.target.value)}
+                                        min="1"
+                                        className="w-20 px-2 py-1 text-sm border border-gray-300 rounded"
+                                        placeholder="XP"
+                                        autoFocus
+                                      />
+                                      <button
+                                        onClick={() => handleAwardXP(student.id)}
+                                        className="bg-primary-600 text-white px-3 py-1 rounded text-sm hover:bg-primary-700"
+                                      >
+                                        Award
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setAwardingXP(null);
+                                          setXpAmount('10');
+                                        }}
+                                        className="text-gray-600 hover:text-gray-700 text-sm"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Assign Student Dropdown */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center space-x-3">
+                      <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                        Assign Student:
+                      </label>
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const studentId = e.target.value ? parseInt(e.target.value) : null;
+                          if (studentId) {
+                            handleAssignJob(studentId, job.id);
+                            e.target.value = ''; // Reset dropdown
+                          }
+                        }}
+                        disabled={isFullyAssigned || unassignedStudents.length === 0}
+                        className={`flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm ${
+                          isFullyAssigned || unassignedStudents.length === 0
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-white'
+                        }`}
+                      >
+                        <option value="">
+                          {isFullyAssigned
+                            ? 'All positions filled'
+                            : unassignedStudents.length === 0
+                            ? 'No unassigned students'
+                            : 'Select a student...'}
+                        </option>
+                        {unassignedStudents.map((student) => (
+                          <option key={student.id} value={student.id}>
+                            {student.first_name} {student.last_name} ({student.username})
+                            {student.job_name && ` - Currently: ${student.job_name}`}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
-
-                {/* Assigned Students */}
-                {assignedStudents.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Assigned Students:</h4>
-                    <div className="space-y-2">
-                      {assignedStudents.map((student) => (
-                        <div
-                          key={student.id}
-                          className="flex items-center justify-between bg-gray-50 rounded-lg p-3"
-                        >
-                          <div>
-                            <span className="font-medium text-gray-900">
-                              {student.first_name} {student.last_name}
-                            </span>
-                            <span className="text-sm text-gray-600 ml-2">
-                              ({student.username}) - {student.class}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => handleRemoveJob(student.id)}
-                            className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm"
-                          >
-                            <UserMinus className="h-4 w-4" />
-                            <span>Remove</span>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Unassigned Students (for this class) */}
-                {selectedClass !== 'all' && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Assign to Student:</h4>
-                    <div className="space-y-2">
-                      {students
-                        .filter(s => s.class === selectedClass && (!s.job_id || s.job_id !== job.id))
-                        .map((student) => (
-                          <div
-                            key={student.id}
-                            className="flex items-center justify-between bg-gray-50 rounded-lg p-3"
-                          >
-                            <div>
-                              <span className="font-medium text-gray-900">
-                                {student.first_name} {student.last_name}
-                              </span>
-                              <span className="text-sm text-gray-600 ml-2">
-                                ({student.username})
-                              </span>
-                              {student.job_name && (
-                                <span className="text-xs text-orange-600 ml-2">
-                                  Currently: {student.job_name}
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => handleAssignJob(student.id, job.id)}
-                              disabled={isFullyAssigned}
-                              className={`flex items-center space-x-1 text-sm ${
-                                isFullyAssigned
-                                  ? 'text-gray-400 cursor-not-allowed'
-                                  : 'text-primary-600 hover:text-primary-700'
-                              }`}
-                            >
-                              <UserPlus className="h-4 w-4" />
-                              <span>Assign</span>
-                            </button>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -584,17 +711,30 @@ const JobManagement: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Salary (ZAR) *
+                  Base Salary (ZAR) *
                 </label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
-                  value={editFormData.salary || ''}
-                  onChange={(e) => setEditFormData({ ...editFormData, salary: parseFloat(e.target.value) || 0 })}
+                  value={editFormData.base_salary || 2000}
+                  onChange={(e) => setEditFormData({ ...editFormData, base_salary: parseFloat(e.target.value) || 2000 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   required
                 />
+                <p className="text-xs text-gray-500 mt-1">Starting salary. Increases with job level progression.</p>
+              </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="is_contractual"
+                  checked={editFormData.is_contractual || false}
+                  onChange={(e) => setEditFormData({ ...editFormData, is_contractual: e.target.checked })}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label htmlFor="is_contractual" className="ml-2 block text-sm text-gray-700">
+                  Contractual Job (earns 1.5x more)
+                </label>
               </div>
 
               <div>
@@ -626,7 +766,7 @@ const JobManagement: React.FC = () => {
               <div className="flex space-x-3 pt-4">
                 <button
                   onClick={handleSaveJob}
-                  disabled={savingJob || !editFormData.name || !editFormData.salary}
+                  disabled={savingJob || !editFormData.name || !editFormData.base_salary}
                   className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
                 >
                   <Save className="h-4 w-4" />

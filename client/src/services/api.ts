@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { 
   MathGameStatus, MathGameStartRequest, MathGameSubmitRequest, 
+  ArchitectGameStatus, ArchitectGameStartRequest, ArchitectGameSubmitRequest,
   Job, JobApplication, LandParcel, LandPurchaseRequest, 
   LandStats, MyPropertiesResponse, BiomeConfig, BiomeType,
   TaxBracket, TreasuryInfo, TaxReport, SalaryPaymentResult, TownSettings,
@@ -82,6 +83,31 @@ export const mathGameApi = {
   }
 };
 
+// Architect Game API methods
+export const architectGameApi = {
+  // Get architect game status (remaining plays, high scores, recent sessions)
+  getStatus: (): Promise<{ data: ArchitectGameStatus }> => {
+    return api.get('/architect-game/status');
+  },
+
+  // Start a new architect game session
+  startGame: (data: ArchitectGameStartRequest): Promise<{ data: { session: any } }> => {
+    return api.post('/architect-game/start', data);
+  },
+
+  // Submit architect game results
+  submitGame: (data: ArchitectGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> => {
+    return api.post('/architect-game/submit', data);
+  },
+
+  // Get a random architect question (for client-side generation if needed)
+  getQuestion: (difficulty: 'easy' | 'medium' | 'hard' | 'extreme'): Promise<{ data: ArchitectQuestion }> => {
+    // Note: This would need to be implemented on backend, or we generate client-side
+    // For now, we'll generate questions client-side from the question bank
+    return Promise.resolve({ data: { question: '', answer: 0 } });
+  }
+};
+
 // Jobs API methods
 export const jobsApi = {
   // Get all jobs
@@ -150,6 +176,11 @@ export const jobsApi = {
   // Get student's application count (students only)
   getMyApplicationCount: (): Promise<{ data: { count: number; maxApplications: number; canApply: boolean } }> => {
     return api.get('/jobs/my-applications/count');
+  },
+
+  // Award experience points to student (teachers only)
+  awardXP: (userId: number, xpAmount: number): Promise<{ data: { message: string; user: any } }> => {
+    return api.post('/jobs/award-xp', { user_id: userId, xp_amount: xpAmount });
   }
 };
 

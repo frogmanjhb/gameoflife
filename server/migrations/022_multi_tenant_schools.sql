@@ -40,9 +40,17 @@ ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id) ON DELETE CASC
 ALTER TABLE town_settings 
 DROP CONSTRAINT IF EXISTS town_settings_class_key;
 
--- Add composite unique constraint on school_id + class
-ALTER TABLE town_settings 
-ADD CONSTRAINT town_settings_school_class_unique UNIQUE (school_id, class);
+-- Add composite unique constraint on school_id + class (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'town_settings_school_class_unique'
+  ) THEN
+    ALTER TABLE town_settings 
+    ADD CONSTRAINT town_settings_school_class_unique UNIQUE (school_id, class);
+  END IF;
+END $$;
 
 -- Add school_id to announcements table
 ALTER TABLE announcements 
@@ -60,9 +68,17 @@ ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id) ON DELETE CASC
 ALTER TABLE jobs 
 DROP CONSTRAINT IF EXISTS jobs_name_key;
 
--- Add composite unique constraint on school_id + name
-ALTER TABLE jobs 
-ADD CONSTRAINT jobs_school_name_unique UNIQUE (school_id, name);
+-- Add composite unique constraint on school_id + name (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'jobs_school_name_unique'
+  ) THEN
+    ALTER TABLE jobs 
+    ADD CONSTRAINT jobs_school_name_unique UNIQUE (school_id, name);
+  END IF;
+END $$;
 
 -- Add school_id to land_parcels table
 ALTER TABLE land_parcels 
@@ -76,9 +92,17 @@ ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id) ON DELETE CASC
 ALTER TABLE plugins 
 DROP CONSTRAINT IF EXISTS plugins_name_key;
 
--- Add composite unique constraint on school_id + name (NULL school_id = global plugin)
-ALTER TABLE plugins 
-ADD CONSTRAINT plugins_school_name_unique UNIQUE (school_id, name);
+-- Add composite unique constraint on school_id + name (NULL school_id = global plugin) (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'plugins_school_name_unique'
+  ) THEN
+    ALTER TABLE plugins 
+    ADD CONSTRAINT plugins_school_name_unique UNIQUE (school_id, name);
+  END IF;
+END $$;
 
 -- Add school_id to tax_transactions table
 ALTER TABLE tax_transactions 

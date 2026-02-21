@@ -83,6 +83,15 @@ const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0, isFulfill
     }).format(salary);
   };
 
+  // Normalize base_salary: if it's 4000 (old default), use 2000 instead
+  const getBaseSalary = () => {
+    const baseSalary = job.base_salary || 2000;
+    // If somehow base_salary is still 4000, normalize it to 2000
+    return baseSalary === 4000 ? 2000 : baseSalary;
+  };
+
+  const baseSalary = getBaseSalary();
+
   // Check if this is in the top row to position tooltip correctly
   const cardRef = useRef<HTMLDivElement>(null);
   
@@ -135,8 +144,17 @@ const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0, isFulfill
         <div className="flex items-start justify-between mb-2">
           <Briefcase className="h-6 w-6 text-gray-700 flex-shrink-0" />
           <div className="text-right">
-            <div className="text-lg font-bold text-gray-900">{formatSalary(job.salary)}</div>
-            <div className="text-xs text-gray-600">per period</div>
+            <div className="text-lg font-bold text-gray-900">
+              {formatSalary(baseSalary)}
+            </div>
+            <div className="text-xs text-gray-600">
+              {job.is_contractual && (
+                <span className="inline-block bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-semibold mb-1">
+                  CONTRACTUAL
+                </span>
+              )}
+              <div className="mt-0.5">starts at • grows with level</div>
+            </div>
           </div>
         </div>
 
@@ -156,6 +174,22 @@ const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0, isFulfill
           </p>
         )}
 
+        {/* Salary Progression Info */}
+        <div className="mt-2 pt-2 border-t border-gray-200 border-opacity-50">
+          <div className="text-[10px] text-gray-500 space-y-0.5">
+            <div className="font-semibold text-gray-600">Salary Progression:</div>
+            <div>Level 1: {formatSalary(baseSalary)}</div>
+            {job.is_contractual && (
+              <div className="text-purple-600 font-medium">
+                Level 10: {formatSalary(baseSalary * 7.5 * 1.5)} (contractual)
+              </div>
+            )}
+            {!job.is_contractual && (
+              <div>Level 10: {formatSalary(baseSalary * 7.5)}</div>
+            )}
+          </div>
+        </div>
+
         {job.location && (
           <div className="mt-2 text-xs text-gray-500">
             📍 {job.location}
@@ -168,9 +202,15 @@ const JobCard: React.FC<JobCardProps> = ({ job, onClick, rotation = 0, isFulfill
             isTopRow ? 'top-full mt-2' : '-top-24'
           }`}>
             <div className="font-semibold">{job.name}</div>
-            <div className="text-gray-300">{formatSalary(job.salary)}</div>
+            <div className="text-gray-300">
+              Starts: {formatSalary(baseSalary)}
+              {job.is_contractual && <span className="text-purple-300 ml-1">(Contractual)</span>}
+            </div>
+            <div className="text-gray-400 text-[10px] mt-1">
+              Grows with performance level
+            </div>
             {positionsAvailable && (
-              <div className="text-gray-400 mt-1 text-center">
+              <div className="text-gray-400 mt-1 text-center border-t border-gray-700 pt-1">
                 {positionsAvailable} position{positionsAvailable > 1 ? 's' : ''} available
               </div>
             )}
