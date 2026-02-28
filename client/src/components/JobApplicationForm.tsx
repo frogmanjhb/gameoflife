@@ -26,23 +26,16 @@ const STANDARD_QUESTIONS: ApplicationQuestion[] = [
     required: true,
   },
   {
-    id: 'availability',
-    type: 'yes_no',
-    label: 'Are you available to work during school hours?',
-    required: true,
-  },
-  {
     id: 'skills',
     type: 'short_answer',
     label: 'What skills make you a good fit?',
     required: true,
   },
   {
-    id: 'hours',
-    type: 'multiple_choice',
-    label: 'How many hours per week can you commit?',
+    id: 'cv_submitted',
+    type: 'yes_no',
+    label: 'Have you submitted your CV through Google classroom?',
     required: true,
-    options: ['1-5 hours', '6-10 hours', '11-15 hours', '16+ hours'],
   },
 ];
 
