@@ -226,12 +226,12 @@ router.post('/guess', authenticateToken, async (req: AuthenticatedRequest, res: 
   }
 });
 
-// Base earnings by guesses used (6 = R5, 5 = R6, ... 1 = R10). Cap and apply Doubles Day.
+// Base earnings by guesses used (1 = R500, scaling down; 6 = R50). Cap and apply Doubles Day.
 const EARNINGS_BY_GUESSES: Record<number, number> = {
-  1: 10, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5
+  1: 500, 2: 400, 3: 300, 4: 200, 5: 100, 6: 50
 };
 const WORDLE_XP_WIN = 10;
-const MAX_WORDLE_EARNINGS = 20;
+const MAX_WORDLE_EARNINGS = 500;
 
 // POST /complete
 router.post('/complete', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
@@ -273,7 +273,7 @@ router.post('/complete', authenticateToken, async (req: AuthenticatedRequest, re
 
     if (session.status === 'won') {
       const guessesUsed = parseInt(session.guesses_count || '6');
-      totalEarnings = EARNINGS_BY_GUESSES[guessesUsed] ?? 5;
+      totalEarnings = EARNINGS_BY_GUESSES[guessesUsed] ?? 50;
       if (totalEarnings > MAX_WORDLE_EARNINGS) totalEarnings = MAX_WORDLE_EARNINGS;
       if (await isDoublesDayEnabled()) totalEarnings = totalEarnings * 2;
 

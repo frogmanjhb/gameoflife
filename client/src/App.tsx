@@ -28,6 +28,7 @@ import AnalyticsPlugin from './components/plugins/AnalyticsPlugin';
 import SuperAdminDashboard from './components/admin/SuperAdminDashboard';
 import RequireRulesAgreed from './components/RequireRulesAgreed';
 import ShowcasePage from './components/ShowcasePage';
+import ShowcasePage2 from './components/ShowcasePage2';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -79,6 +80,7 @@ const AppContent: React.FC = () => {
   return (
     <Routes>
       <Route path="/showcase" element={<ShowcasePage />} />
+      <Route path="/showcase2" element={<ShowcasePage2 />} />
       <Route path="/login" element={<LoginForm />} />
       <Route
         path="/admin"
