@@ -39,10 +39,27 @@ function loadWordList(): string[] {
     const path = join(dir, 'valid-wordle-words.txt');
     if (existsSync(path)) {
       const content = readFileSync(path, 'utf-8');
-      const words = content
+
+      // Support both "one word per line" and the grouped "Wordle Words List Starting With X" format
+      const normalized = content
         .split(/\r?\n/)
-        .map((w) => w.trim().toLowerCase())
-        .filter((w) => w.length === 5);
+        .map((line) => line.trim())
+        .filter(
+          (line) =>
+            line.length > 0 &&
+            !/^wordle words list starting with/i.test(line),
+        )
+        .join(' ');
+
+      const words = Array.from(
+        new Set(
+          normalized
+            .split(/\s+/)
+            .map((w) => w.trim().toLowerCase())
+            .filter((w) => w.length === 5 && /^[a-z]+$/.test(w)),
+        ),
+      );
+
       if (words.length > 0) return words;
     }
   } catch (_) {
