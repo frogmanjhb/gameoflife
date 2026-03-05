@@ -1,4 +1,6 @@
-// Word list for Wordle chore game. Loaded from valid-wordle-words.txt (used as both target words and valid guesses).
+// Word lists for Wordle chore game.
+// - Answer words come from valid-wordle-words.txt
+// - Additional allowed guesses (never used as answers) come from wordle_guess_list.txt
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -32,7 +34,7 @@ const FALLBACK_WORDS = [
   'write', 'wrong', 'young', 'youth'
 ];
 
-function loadWordList(): string[] {
+function loadAnswerWords(): string[] {
   try {
     // At runtime we're in dist/games/, so look for valid-wordle-words.txt next to this file
     const dir = __dirname;
@@ -68,7 +70,43 @@ function loadWordList(): string[] {
   return FALLBACK_WORDS;
 }
 
-export const WORDLE_WORDS: string[] = loadWordList();
+function loadGuessList(): string[] {
+  try {
+    const dir = __dirname;
+    const path = join(dir, 'wordle_guess_list.txt');
+    if (existsSync(path)) {
+      const content = readFileSync(path, 'utf-8');
+
+      const words = Array.from(
+        new Set(
+          content
+            .split(/\r?\n/)
+            .map((w) => w.trim().toLowerCase())
+            .filter((w) => w.length === 5 && /^[a-z]+$/.test(w)),
+        ),
+      );
+
+      if (words.length > 0) return words;
+    }
+  } catch (_) {
+    // ignore
+  }
+  return [];
+}
+
+const ANSWER_WORDS_RAW = loadAnswerWords();
+const GUESS_LIST_WORDS = loadGuessList();
+const GUESS_LIST_SET = new Set(GUESS_LIST_WORDS);
+
+// Public answer list: never includes any word that appears in the guess-only list
+export const WORDLE_WORDS: string[] = ANSWER_WORDS_RAW.filter(
+  (w) => !GUESS_LIST_SET.has(w),
+);
+
+// All words that are allowed as guesses (answers + guess-only words)
+export const WORDLE_GUESS_WORDS: string[] = Array.from(
+  new Set([...WORDLE_WORDS, ...GUESS_LIST_WORDS]),
+);
 
 // Normalize for comparison: lowercase, trim
 export function normalizeWord(w: string): string {
@@ -82,5 +120,5 @@ export function getRandomWord(): string {
 
 export function isValidWord(word: string): boolean {
   const n = normalizeWord(word);
-  return n.length === 5 && WORDLE_WORDS.includes(n);
+  return n.length === 5 && WORDLE_GUESS_WORDS.includes(n);
 }
