@@ -43,11 +43,8 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
   // Check if position is already fulfilled
   const isPositionFulfilled = job.is_fulfilled;
   
-  // Check if user has reached application limit
-  const hasReachedLimit = applicationCount !== null && !applicationCount.canApply;
-  
   // Determine if user can apply
-  const canApply = !userHasJob && !isPositionFulfilled && applicationsEnabled && !hasReachedLimit;
+  const canApply = !userHasJob && !isPositionFulfilled && applicationsEnabled;
 
   const handleStartEdit = () => setIsEditing(true);
   const handleCancelEdit = () => setIsEditing(false);
@@ -343,27 +340,13 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
             </div>
           )}
 
-          {hasReachedLimit && applicationsEnabled && (
-            <div className="flex items-center space-x-3 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-              <AlertCircle className="h-6 w-6 text-orange-600 flex-shrink-0" />
-              <div>
-                <p className="font-semibold text-orange-800">Application Limit Reached</p>
-                <p className="text-sm text-orange-600">
-                  You have reached the maximum of {applicationCount?.maxApplications || 2} job applications. 
-                  Please wait for a response on your existing applications before applying to more jobs.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {applicationCount && applicationCount.count > 0 && !hasReachedLimit && (
+          {applicationCount && applicationCount.count > 0 && (
             <div className="flex items-center space-x-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <AlertCircle className="h-6 w-6 text-blue-600 flex-shrink-0" />
               <div>
                 <p className="font-semibold text-blue-800">Application Status</p>
                 <p className="text-sm text-blue-600">
-                  You have {applicationCount.count} active application{applicationCount.count !== 1 ? 's' : ''} 
-                  ({applicationCount.maxApplications - applicationCount.count} remaining)
+                  You have {applicationCount.count} active application{applicationCount.count !== 1 ? 's' : ''}
                 </p>
               </div>
             </div>
@@ -385,11 +368,9 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
               >
                 {!applicationsEnabled 
                   ? 'Applications Disabled' 
-                  : hasReachedLimit 
-                    ? `Application Limit Reached (${applicationCount?.count || 0}/${applicationCount?.maxApplications || 2})`
-                    : isPositionFulfilled 
-                      ? 'Position Filled' 
-                      : 'Cannot Apply'}
+                  : isPositionFulfilled 
+                    ? 'Position Filled' 
+                    : 'Cannot Apply'}
               </button>
             )}
             <button

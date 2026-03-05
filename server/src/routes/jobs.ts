@@ -106,7 +106,7 @@ router.get('/my-applications/count', authenticateToken, requireRole(['student'])
     );
 
     const count = parseInt(result?.count || '0');
-    res.json({ count, maxApplications: 2, canApply: count < 2 });
+    res.json({ count, maxApplications: null, canApply: true });
   } catch (error) {
     console.error('Failed to fetch application count:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -567,21 +567,6 @@ router.post('/:id/apply',
 
       if (existingApplication) {
         return res.status(400).json({ error: 'You have already applied to this job' });
-      }
-
-      // Check if user has reached the maximum of 2 applications (pending or approved only)
-      const applicationCount = await database.get(
-        `SELECT COUNT(*) as count 
-         FROM job_applications 
-         WHERE user_id = $1 AND status IN ('pending', 'approved')`,
-        [req.user.id]
-      );
-
-      const count = parseInt(applicationCount?.count || '0');
-      if (count >= 2) {
-        return res.status(400).json({ 
-          error: 'You have reached the maximum of 2 job applications. Please wait for a response on your existing applications before applying to more jobs.' 
-        });
       }
 
       // Create application
