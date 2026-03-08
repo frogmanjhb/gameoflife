@@ -72,14 +72,15 @@ class Database {
   }
 
   async query(sql: string, params: any[] = []): Promise<any[]> {
+    const verbose = process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1';
     let retries = 3;
     while (retries > 0) {
       try {
-        console.log(`🔍 DB Query: ${sql.substring(0, 50)}...`);
+        if (verbose) console.log(`🔍 DB Query: ${sql.substring(0, 50)}...`);
         const client = await this._pool.connect();
         try {
         const result = await client.query(sql, params);
-        console.log(`✅ DB Query successful, returned ${result.rows?.length || 0} rows`);
+        if (verbose) console.log(`✅ DB Query successful, returned ${result.rows?.length || 0} rows`);
         return result.rows || [];
         } finally {
           client.release();
@@ -96,14 +97,15 @@ class Database {
   }
 
   async run(sql: string, params: any[] = []): Promise<{ lastID: number; changes: number }> {
+    const verbose = process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1';
     let retries = 3;
     while (retries > 0) {
       try {
-        console.log(`🔍 DB Run: ${sql.substring(0, 50)}...`);
+        if (verbose) console.log(`🔍 DB Run: ${sql.substring(0, 50)}...`);
         const client = await this._pool.connect();
         try {
         const result = await client.query(sql, params);
-        console.log(`✅ DB Run successful, ${result.rowCount || 0} rows affected`);
+        if (verbose) console.log(`✅ DB Run successful, ${result.rowCount || 0} rows affected`);
         return { lastID: result.rows?.[0]?.id || 0, changes: result.rowCount || 0 };
         } finally {
           client.release();
@@ -120,14 +122,15 @@ class Database {
   }
 
   async get(sql: string, params: any[] = []): Promise<any> {
+    const verbose = process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1';
     let retries = 3;
     while (retries > 0) {
       try {
-        console.log(`🔍 DB Get: ${sql.substring(0, 50)}...`);
+        if (verbose) console.log(`🔍 DB Get: ${sql.substring(0, 50)}...`);
         const client = await this._pool.connect();
         try {
         const result = await client.query(sql, params);
-        console.log(`✅ DB Get successful, ${result.rows?.length || 0} rows returned`);
+        if (verbose) console.log(`✅ DB Get successful, ${result.rows?.length || 0} rows returned`);
         return result.rows?.[0] || null;
         } finally {
           client.release();

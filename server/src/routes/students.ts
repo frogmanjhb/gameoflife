@@ -137,7 +137,7 @@ router.get('/transfer-recipients', authenticateToken, async (req: AuthenticatedR
 // Get all students with their account balances (teachers only)
 router.get('/', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log('🔍 Getting students for teacher:', req.user?.username, 'school:', req.schoolId);
+    if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1') console.log('🔍 Getting students for teacher:', req.user?.username, 'school:', req.schoolId);
     
     const students = await database.query(`
       SELECT 
@@ -164,7 +164,7 @@ router.get('/', authenticateToken, requireTenant, requireRole(['teacher']), asyn
       ORDER BY u.class, u.last_name, u.first_name
     `, [req.schoolId]);
 
-    console.log('📊 Found students:', students.length);
+    if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1') console.log('📊 Found students:', students.length);
     res.json(students);
   } catch (error) {
     console.error('Get students error:', error);
@@ -175,7 +175,7 @@ router.get('/', authenticateToken, requireTenant, requireRole(['teacher']), asyn
 // Get pending students (teachers only)
 router.get('/pending', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log('🔍 Getting pending students for teacher:', req.user?.username, 'school:', req.schoolId);
+    if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1') console.log('🔍 Getting pending students for teacher:', req.user?.username, 'school:', req.schoolId);
     
     const pendingStudents = await database.query(`
       SELECT 
@@ -195,7 +195,7 @@ router.get('/pending', authenticateToken, requireTenant, requireRole(['teacher']
       ORDER BY u.created_at ASC
     `, [req.schoolId]);
 
-    console.log('📊 Found pending students:', pendingStudents.length);
+    if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1') console.log('📊 Found pending students:', pendingStudents.length);
     res.json(pendingStudents);
   } catch (error) {
     console.error('Get pending students error:', error);

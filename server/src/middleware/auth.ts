@@ -16,40 +16,39 @@ export interface JWTPayload {
   role: 'student' | 'teacher' | 'super_admin';
 }
 
+const verboseAuth = process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1';
+
 export const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  console.log('🔐 Auth attempt - Header:', authHeader ? 'Present' : 'Missing', 'Token:', token ? 'Present' : 'Missing');
+  if (verboseAuth) console.log('🔐 Auth attempt - Header:', authHeader ? 'Present' : 'Missing', 'Token:', token ? 'Present' : 'Missing');
 
   if (!token) {
-    console.log('❌ No token provided');
     return res.status(401).json({ error: 'Access token required' });
   }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
-    console.log('🔍 Token decoded, userId:', decoded.userId, 'schoolId:', decoded.schoolId);
-    
+    if (verboseAuth) console.log('🔍 Token decoded, userId:', decoded.userId, 'schoolId:', decoded.schoolId);
+
     const user = await database.get('SELECT * FROM users WHERE id = $1', [decoded.userId]);
-    
+
     if (!user) {
-      console.log('❌ User not found for userId:', decoded.userId);
       return res.status(401).json({ error: 'Invalid token' });
     }
 
     // Verify school_id matches (unless super_admin)
     if (user.role !== 'super_admin' && user.school_id !== decoded.schoolId) {
-      console.log('❌ School ID mismatch');
       return res.status(403).json({ error: 'Invalid token - school context mismatch' });
     }
 
-    console.log('✅ User authenticated:', user.username, 'Role:', user.role, 'School:', user.school_id);
+    if (verboseAuth) console.log('✅ User authenticated:', user.username, 'Role:', user.role, 'School:', user.school_id);
     req.user = user;
     req.schoolId = user.school_id || null;
     next();
   } catch (error) {
-    console.log('❌ Token verification failed:', error);
+    if (verboseAuth) console.log('❌ Token verification failed:', error);
     return res.status(403).json({ error: 'Invalid or expired token' });
   }
 };

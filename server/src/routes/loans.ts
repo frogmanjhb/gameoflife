@@ -94,7 +94,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
       `, [req.user.id]);
     }
 
-    console.log('📊 Loan statuses:', loans.map(l => ({ id: l.id, status: l.status, borrower: l.borrower_username })));
+    if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1') console.log('📊 Loan statuses:', loans.map(l => ({ id: l.id, status: l.status, borrower: l.borrower_username })));
     res.json(loans);
   } catch (error) {
     console.error('Get loans error:', error);

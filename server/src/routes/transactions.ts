@@ -480,7 +480,7 @@ router.post('/bulk-payment', [
       return res.status(404).json({ error: `No students found in class ${class_name}` });
     }
 
-    console.log('📊 Found students in class:', students.length);
+    if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1') console.log('📊 Found students in class:', students.length);
 
     // Count students with accounts for treasury check
     const studentsWithAccounts = students.filter((s: any) => s.account_id).length;
@@ -590,7 +590,7 @@ router.post('/bulk-removal', [
       return res.status(404).json({ error: `No students found in class ${class_name} with sufficient balance` });
     }
 
-    console.log('📊 Found students with sufficient balance:', students.length);
+    if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1') console.log('📊 Found students with sufficient balance:', students.length);
 
     let updatedCount = 0;
 
