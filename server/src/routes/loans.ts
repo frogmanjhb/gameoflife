@@ -56,7 +56,12 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
     let loans: LoanWithDetails[] = [];
 
     if (req.user.role === 'teacher') {
-      // Teachers can see all loans
+      // Teachers can only see loans for students in their school
+      const schoolId = req.user.school_id ?? req.schoolId ?? null;
+      const schoolFilter = schoolId !== null
+        ? 'AND u.school_id = $1'
+        : 'AND u.school_id IS NULL';
+      const loanParams = schoolId !== null ? [schoolId] : [];
       loans = await database.query(`
         SELECT 
           l.*,
@@ -70,9 +75,10 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
         FROM loans l
         JOIN users u ON l.borrower_id = u.id
         LEFT JOIN loan_payments lp ON l.id = lp.loan_id
+        WHERE 1=1 ${schoolFilter}
         GROUP BY l.id, u.username
         ORDER BY l.created_at DESC
-      `);
+      `, loanParams);
     } else {
       // Students can only see their own loans
       loans = await database.query(`

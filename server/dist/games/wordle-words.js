@@ -1,7 +1,7 @@
 "use strict";
-// Word list for Wordle chore game. Loaded from valid-wordle-words.txt (used as both target words and valid guesses).
+// Word lists for Wordle chore game. Answers from valid-wordle-words.txt; allowed guesses = answers + wordle_guess_list.txt
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WORDLE_WORDS = void 0;
+exports.WORDLE_WORDS = exports.WORDLE_GUESS_WORDS = void 0;
 exports.normalizeWord = normalizeWord;
 exports.getRandomWord = getRandomWord;
 exports.isValidWord = isValidWord;
@@ -35,28 +35,50 @@ const FALLBACK_WORDS = [
     'water', 'wheel', 'where', 'which', 'while', 'white', 'whole', 'woman', 'world', 'would',
     'write', 'wrong', 'young', 'youth'
 ];
-function loadWordList() {
+function loadAnswerWords() {
     try {
-        // At runtime we're in dist/games/, so look for valid-wordle-words.txt next to this file
         const dir = __dirname;
-        const path = (0, path_1.join)(dir, 'valid-wordle-words.txt');
-        if ((0, fs_1.existsSync)(path)) {
-            const content = (0, fs_1.readFileSync)(path, 'utf-8');
-            const words = content
+        const filePath = (0, path_1.join)(dir, 'valid-wordle-words.txt');
+        if ((0, fs_1.existsSync)(filePath)) {
+            const content = (0, fs_1.readFileSync)(filePath, 'utf-8');
+            const normalized = content
                 .split(/\r?\n/)
+                .map((line) => line.trim())
+                .filter((line) => line.length > 0 && !/^wordle words list starting with/i.test(line))
+                .join(' ');
+            const words = Array.from(new Set(normalized
+                .split(/\s+/)
                 .map((w) => w.trim().toLowerCase())
-                .filter((w) => w.length === 5);
+                .filter((w) => w.length === 5 && /^[a-z]+$/.test(w))));
             if (words.length > 0)
                 return words;
         }
     }
-    catch (_) {
-        // ignore
-    }
+    catch (_) { }
     return FALLBACK_WORDS;
 }
-exports.WORDLE_WORDS = loadWordList();
-// Normalize for comparison: lowercase, trim
+function loadGuessList() {
+    try {
+        const dir = __dirname;
+        const filePath = (0, path_1.join)(dir, 'wordle_guess_list.txt');
+        if ((0, fs_1.existsSync)(filePath)) {
+            const content = (0, fs_1.readFileSync)(filePath, 'utf-8');
+            const words = Array.from(new Set(content
+                .split(/\r?\n/)
+                .map((w) => w.trim().toLowerCase())
+                .filter((w) => w.length === 5 && /^[a-z]+$/.test(w))));
+            if (words.length > 0)
+                return words;
+        }
+    }
+    catch (_) { }
+    return [];
+}
+const ANSWER_WORDS_RAW = loadAnswerWords();
+const GUESS_LIST_WORDS = loadGuessList();
+const GUESS_LIST_SET = new Set(GUESS_LIST_WORDS);
+exports.WORDLE_WORDS = ANSWER_WORDS_RAW.filter((w) => !GUESS_LIST_SET.has(w));
+exports.WORDLE_GUESS_WORDS = Array.from(new Set([...exports.WORDLE_WORDS, ...GUESS_LIST_WORDS]));
 function normalizeWord(w) {
     return w.trim().toLowerCase();
 }
@@ -66,6 +88,6 @@ function getRandomWord() {
 }
 function isValidWord(word) {
     const n = normalizeWord(word);
-    return n.length === 5 && exports.WORDLE_WORDS.includes(n);
+    return n.length === 5 && exports.WORDLE_GUESS_WORDS.includes(n);
 }
 //# sourceMappingURL=wordle-words.js.map

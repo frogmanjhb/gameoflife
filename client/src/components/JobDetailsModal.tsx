@@ -40,12 +40,10 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
 
   if (!isOpen || !job) return null;
 
-  // Check if position is already fulfilled
-  const isPositionFulfilled = job.is_fulfilled;
-  // Check if user has reached application limit
+  // Check if user has reached application limit (no limit on students per job)
   const hasReachedLimit = applicationCount !== null && !applicationCount.canApply;
   // Determine if user can apply
-  const canApply = !userHasJob && !isPositionFulfilled && applicationsEnabled && !hasReachedLimit;
+  const canApply = !userHasJob && applicationsEnabled && !hasReachedLimit;
 
   const handleStartEdit = () => setIsEditing(true);
   const handleCancelEdit = () => setIsEditing(false);
@@ -357,11 +355,9 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
               >
                 {!applicationsEnabled
                   ? 'Applications Disabled'
-                  : isPositionFulfilled
-                    ? 'Position Filled'
-                    : hasReachedLimit
-                      ? `Application Limit Reached (${applicationCount?.count || 0}/${applicationCount?.maxApplications || 2})`
-                      : 'Cannot Apply'}
+                  : hasReachedLimit
+                    ? `Application Limit Reached (${applicationCount?.count || 0}/${applicationCount?.maxApplications || 2})`
+                    : 'Cannot Apply'}
               </button>
             )}
             <button

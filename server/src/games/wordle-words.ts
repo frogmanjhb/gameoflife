@@ -34,13 +34,22 @@ const FALLBACK_WORDS = [
   'write', 'wrong', 'young', 'youth'
 ];
 
+// Resolve directory containing word list files: same folder as this file (dist/games when compiled),
+// or dist/games when running from source (e.g. tsx src/server.ts → __dirname is src/games).
+function getWordListDir(): string {
+  const sameDir = __dirname;
+  if (existsSync(join(sameDir, 'valid-wordle-words.txt'))) return sameDir;
+  const distGames = join(__dirname, '..', '..', 'dist', 'games');
+  if (existsSync(join(distGames, 'valid-wordle-words.txt'))) return distGames;
+  return sameDir;
+}
+
 function loadAnswerWords(): string[] {
   try {
-    // At runtime we're in dist/games/, so look for valid-wordle-words.txt next to this file
-    const dir = __dirname;
-    const path = join(dir, 'valid-wordle-words.txt');
-    if (existsSync(path)) {
-      const content = readFileSync(path, 'utf-8');
+    const dir = getWordListDir();
+    const filePath = join(dir, 'valid-wordle-words.txt');
+    if (existsSync(filePath)) {
+      const content = readFileSync(filePath, 'utf-8');
 
       // Support both "one word per line" and the grouped "Wordle Words List Starting With X" format
       const normalized = content
@@ -72,10 +81,10 @@ function loadAnswerWords(): string[] {
 
 function loadGuessList(): string[] {
   try {
-    const dir = __dirname;
-    const path = join(dir, 'wordle_guess_list.txt');
-    if (existsSync(path)) {
-      const content = readFileSync(path, 'utf-8');
+    const dir = getWordListDir();
+    const filePath = join(dir, 'wordle_guess_list.txt');
+    if (existsSync(filePath)) {
+      const content = readFileSync(filePath, 'utf-8');
 
       const words = Array.from(
         new Set(
@@ -114,6 +123,11 @@ export function normalizeWord(w: string): string {
 }
 
 export function getRandomWord(): string {
+  if (WORDLE_WORDS.length === 0) {
+    return WORDLE_GUESS_WORDS.length > 0
+      ? WORDLE_GUESS_WORDS[Math.floor(Math.random() * WORDLE_GUESS_WORDS.length)]
+      : FALLBACK_WORDS[Math.floor(Math.random() * FALLBACK_WORDS.length)];
+  }
   const idx = Math.floor(Math.random() * WORDLE_WORDS.length);
   return WORDLE_WORDS[idx];
 }

@@ -6,30 +6,30 @@ import { requireTenant } from '../middleware/tenant';
 const router = Router();
 
 /**
- * Helper: Calculate start date based on time range
+ * Helper: Calculate start date based on time range (UTC for consistent DB comparison)
  */
 function getStartDate(timeRange: 'day' | 'week' | 'month' | 'year'): Date {
   const now = new Date();
   const start = new Date(now);
-  
+
   switch (timeRange) {
     case 'day':
-      start.setHours(0, 0, 0, 0);
+      start.setUTCHours(0, 0, 0, 0);
       break;
     case 'week':
-      start.setDate(now.getDate() - 7);
-      start.setHours(0, 0, 0, 0);
+      start.setUTCDate(now.getUTCDate() - 7);
+      start.setUTCHours(0, 0, 0, 0);
       break;
     case 'month':
-      start.setMonth(now.getMonth() - 1);
-      start.setHours(0, 0, 0, 0);
+      start.setUTCMonth(now.getUTCMonth() - 1);
+      start.setUTCHours(0, 0, 0, 0);
       break;
     case 'year':
-      start.setFullYear(now.getFullYear() - 1);
-      start.setHours(0, 0, 0, 0);
+      start.setUTCFullYear(now.getUTCFullYear() - 1);
+      start.setUTCHours(0, 0, 0, 0);
       break;
   }
-  
+
   return start;
 }
 
@@ -69,6 +69,7 @@ router.get('/engagement',
       const className = req.query.class as string | undefined;
 
       const startDate = getStartDate(timeRange);
+      const startDateIso = startDate.toISOString();
       const dateInterval = getDateInterval(timeRange);
 
       // Check if login_events table exists, if not return empty data
@@ -123,7 +124,7 @@ router.get('/engagement',
         timeSeriesQuery = `
           WITH date_buckets AS (
             SELECT generate_series(
-              DATE_TRUNC($1, $2::timestamp),
+              DATE_TRUNC($1, $2::timestamptz),
               DATE_TRUNC($1, CURRENT_TIMESTAMP),
               $4::interval
             ) AS bucket
@@ -135,7 +136,7 @@ router.get('/engagement',
             FROM login_events le
             JOIN users u ON le.user_id = u.id
             WHERE le.school_id = $3 
-              AND le.login_at >= $2
+              AND le.login_at >= $2::timestamptz
               AND u.role = 'student'
             GROUP BY DATE_TRUNC($1, le.login_at)
           ),
@@ -144,7 +145,7 @@ router.get('/engagement',
         timeSeriesQuery = `
           WITH date_buckets AS (
             SELECT generate_series(
-              DATE_TRUNC($1, $2::timestamp),
+              DATE_TRUNC($1, $2::timestamptz),
               DATE_TRUNC($1, CURRENT_TIMESTAMP),
               $4::interval
             ) AS bucket
@@ -164,7 +165,7 @@ router.get('/engagement',
           FROM math_game_sessions mgs
           JOIN users u ON mgs.user_id = u.id
           WHERE u.school_id = $3 
-            AND mgs.played_at >= $2
+            AND mgs.played_at >= $2::timestamptz
             AND u.role = 'student'
           GROUP BY DATE_TRUNC($1, mgs.played_at)
         ),
@@ -178,7 +179,7 @@ router.get('/engagement',
           JOIN users u ON a.user_id = u.id
           WHERE u.school_id = $3 
             AND t.transaction_type = 'transfer'
-            AND t.created_at >= $2
+            AND t.created_at >= $2::timestamptz
             AND u.role = 'student'
           GROUP BY DATE_TRUNC($1, t.created_at)
         ),
@@ -190,7 +191,7 @@ router.get('/engagement',
           FROM shop_purchases sp
           JOIN users u ON sp.user_id = u.id
           WHERE u.school_id = $3 
-            AND sp.purchase_date >= $2
+            AND sp.purchase_date >= $2::timestamptz
             AND u.role = 'student'
           GROUP BY DATE_TRUNC($1, sp.purchase_date)
         )
@@ -209,11 +210,14 @@ router.get('/engagement',
         LEFT JOIN transfers_by_time tr ON db.bucket = tr.time_bucket
         LEFT JOIN purchases_by_time p ON db.bucket = p.time_bucket
         ORDER BY db.bucket ASC
-      `, [dateInterval, startDate, req.schoolId, intervalExpr]);
+      `, [dateInterval, startDateIso, req.schoolId, intervalExpr]);
 
-      // Students with few or no logins in the period (for "not logging in regularly" view)
-      let lowLoginStudents: Array<{ id: number; username: string; first_name?: string; last_name?: string; class?: string; logins: number; last_login: string | null }> = [];
+      // Students with few or no logins in the period (approved students only; pending have no access yet)
+      let lowLoginStudents: Array<{ id: number; username: string; first_name?: string; last_name?: string; class?: string; town_name?: string; logins: number; last_login: string | null }> = [];
       if (loginEventsExists) {
+        const tsJoin = req.schoolId !== null
+          ? 'LEFT JOIN town_settings ts ON ts.class = u.class AND ts.school_id = u.school_id'
+          : 'LEFT JOIN town_settings ts ON ts.class = u.class AND ts.school_id IS NULL AND u.school_id IS NULL';
         const lowLoginRows = await database.query(`
           WITH student_logins AS (
             SELECT 
@@ -222,129 +226,155 @@ router.get('/engagement',
               u.first_name,
               u.last_name,
               u.class,
-              COUNT(le.id) FILTER (WHERE le.login_at >= $1)::int as logins_in_period,
+              COALESCE(ts.town_name, u.class) AS town_name,
+              COUNT(le.id) FILTER (WHERE le.login_at >= $1::timestamptz)::int as logins_in_period,
               MAX(le.login_at) as last_login
             FROM users u
+            ${tsJoin}
             LEFT JOIN login_events le ON le.user_id = u.id AND le.school_id = $2
             WHERE u.school_id = $2 
               AND u.role = 'student'
               AND u.class IN ('6A', '6B', '6C')
-            GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
+              AND (u.status IS NULL OR u.status = 'approved')
+            GROUP BY u.id, u.username, u.first_name, u.last_name, u.class, ts.town_name
           )
-          SELECT id, username, first_name, last_name, class, logins_in_period as logins, last_login
+          SELECT id, username, first_name, last_name, class, town_name, logins_in_period as logins, last_login
           FROM student_logins
           WHERE logins_in_period <= 1
           ORDER BY last_login ASC NULLS FIRST, logins_in_period ASC
-        `, [startDate, req.schoolId]);
-        lowLoginStudents = lowLoginRows.map((r: any) => ({
+        `, [startDateIso, req.schoolId]);
+      lowLoginStudents = lowLoginRows.map((r: any) => ({
           id: r.id,
           username: r.username,
           first_name: r.first_name,
           last_name: r.last_name,
           class: r.class,
+          town_name: r.town_name,
           logins: r.logins,
           last_login: r.last_login ? new Date(r.last_login).toISOString() : null
         }));
       }
 
-      // By class breakdown
+      // By class breakdown: only this school's towns (from town_settings), with town_name for labels
       const classLoginJoin = loginEventsExists 
-        ? 'LEFT JOIN login_events le ON le.user_id = u.id AND le.login_at >= $1 AND le.school_id = $2'
+        ? 'LEFT JOIN login_events le ON le.user_id = u.id AND le.login_at >= $1::timestamptz AND le.school_id = $2'
         : '';
       const classLoginCount = loginEventsExists 
         ? 'COUNT(DISTINCT le.user_id)::int'
         : '0::int';
-      
+      const townsCondition = req.schoolId !== null
+        ? 'WHERE ts.school_id = $2'
+        : 'WHERE ts.school_id IS NULL';
       const byClass = await database.query(`
+        WITH towns AS (
+          SELECT ts.class, COALESCE(ts.town_name, ts.class) AS town_name
+          FROM town_settings ts
+          ${townsCondition}
+          ORDER BY ts.class
+        ),
+        activity AS (
+          SELECT 
+            u.class,
+            ${classLoginCount} as logins,
+            COUNT(DISTINCT mgs.user_id)::int as chores_users,
+            COUNT(mgs.id)::int as chores_sessions,
+            COUNT(DISTINCT CASE WHEN t.transaction_type = 'transfer' THEN t.from_account_id END)::int as transfers_users,
+            COUNT(DISTINCT CASE WHEN t.transaction_type = 'transfer' THEN t.id END)::int as transfers_count,
+            COUNT(DISTINCT sp.user_id)::int as purchases_users,
+            COUNT(sp.id)::int as purchases_count
+          FROM users u
+          ${classLoginJoin}
+          LEFT JOIN math_game_sessions mgs ON mgs.user_id = u.id AND mgs.played_at >= $1::timestamptz
+          LEFT JOIN accounts a ON a.user_id = u.id
+          LEFT JOIN transactions t ON t.from_account_id = a.id 
+            AND t.transaction_type = 'transfer' AND t.created_at >= $1::timestamptz
+          LEFT JOIN shop_purchases sp ON sp.user_id = u.id AND sp.purchase_date >= $1::timestamptz
+          WHERE u.school_id = $2 
+            AND u.role = 'student'
+            AND u.class IN ('6A', '6B', '6C')
+          GROUP BY u.class
+        )
         SELECT 
-          u.class,
-          ${classLoginCount} as logins,
-          COUNT(DISTINCT mgs.user_id)::int as chores_users,
-          COUNT(mgs.id)::int as chores_sessions,
-          COUNT(DISTINCT CASE WHEN t.transaction_type = 'transfer' THEN t.from_account_id END)::int as transfers_users,
-          COUNT(DISTINCT CASE WHEN t.transaction_type = 'transfer' THEN t.id END)::int as transfers_count,
-          COUNT(DISTINCT sp.user_id)::int as purchases_users,
-          COUNT(sp.id)::int as purchases_count
-        FROM users u
-        ${classLoginJoin}
-        LEFT JOIN math_game_sessions mgs ON mgs.user_id = u.id AND mgs.played_at >= $1
-        LEFT JOIN accounts a ON a.user_id = u.id
-        LEFT JOIN transactions t ON t.from_account_id = a.id 
-          AND t.transaction_type = 'transfer' AND t.created_at >= $1
-        LEFT JOIN shop_purchases sp ON sp.user_id = u.id AND sp.purchase_date >= $1
-        WHERE u.school_id = $2 
-          AND u.role = 'student'
-          AND u.class IN ('6A', '6B', '6C')
-        GROUP BY u.class
-        ORDER BY u.class
-      `, [startDate, req.schoolId]);
+          t.class,
+          t.town_name,
+          COALESCE(a.logins, 0)::int as logins,
+          COALESCE(a.chores_users, 0)::int as chores_users,
+          COALESCE(a.chores_sessions, 0)::int as chores_sessions,
+          COALESCE(a.transfers_users, 0)::int as transfers_users,
+          COALESCE(a.transfers_count, 0)::int as transfers_count,
+          COALESCE(a.purchases_users, 0)::int as purchases_users,
+          COALESCE(a.purchases_count, 0)::int as purchases_count
+        FROM towns t
+        LEFT JOIN activity a ON t.class = a.class
+        ORDER BY t.class
+      `, [startDateIso, req.schoolId]);
 
-      // Top students (if scope is students)
+      // Top students (if scope is students) - use subquery so ORDER BY can reference column aliases
       let topStudents: any[] = [];
       if (scope === 'students') {
         try {
           const studentLoginJoin = loginEventsExists 
-            ? 'LEFT JOIN login_events le ON le.user_id = u.id AND le.login_at >= $1 AND le.school_id = $2'
+            ? 'LEFT JOIN login_events le ON le.user_id = u.id AND le.login_at >= $1::timestamptz AND le.school_id = $2'
             : '';
           const studentLoginCount = loginEventsExists ? 'COUNT(DISTINCT le.id)::int' : '0::int';
-          const studentOrderBy = loginEventsExists 
-            ? '(logins + chores_sessions + transfers_count + purchases_count)'
-            : '(chores_sessions + transfers_count + purchases_count)';
-          
           const studentQuery = className
             ? `
-              SELECT 
-                u.id,
-                u.username,
-                u.first_name,
-                u.last_name,
-                u.class,
-                ${studentLoginCount} as logins,
-                COUNT(DISTINCT mgs.id)::int as chores_sessions,
-                COUNT(DISTINCT CASE WHEN t.transaction_type = 'transfer' THEN t.id END)::int as transfers_count,
-                COUNT(DISTINCT sp.id)::int as purchases_count
-              FROM users u
-              ${studentLoginJoin}
-              LEFT JOIN math_game_sessions mgs ON mgs.user_id = u.id AND mgs.played_at >= $1
-              LEFT JOIN accounts a ON a.user_id = u.id
-              LEFT JOIN transactions t ON t.from_account_id = a.id 
-                AND t.transaction_type = 'transfer' AND t.created_at >= $1
-              LEFT JOIN shop_purchases sp ON sp.user_id = u.id AND sp.purchase_date >= $1
-              WHERE u.school_id = $2 
-                AND u.role = 'student'
-                AND u.class = $3
-              GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
-              ORDER BY ${studentOrderBy} DESC
+              SELECT * FROM (
+                SELECT 
+                  u.id,
+                  u.username,
+                  u.first_name,
+                  u.last_name,
+                  u.class,
+                  ${studentLoginCount} as logins,
+                  COUNT(DISTINCT mgs.id)::int as chores_sessions,
+                  COUNT(DISTINCT CASE WHEN t.transaction_type = 'transfer' THEN t.id END)::int as transfers_count,
+                  COUNT(DISTINCT sp.id)::int as purchases_count
+                FROM users u
+                ${studentLoginJoin}
+                LEFT JOIN math_game_sessions mgs ON mgs.user_id = u.id AND mgs.played_at >= $1::timestamptz
+                LEFT JOIN accounts a ON a.user_id = u.id
+                LEFT JOIN transactions t ON t.from_account_id = a.id 
+                  AND t.transaction_type = 'transfer' AND t.created_at >= $1::timestamptz
+                LEFT JOIN shop_purchases sp ON sp.user_id = u.id AND sp.purchase_date >= $1::timestamptz
+                WHERE u.school_id = $2 
+                  AND u.role = 'student'
+                  AND u.class = $3
+                GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
+              ) sub
+              ORDER BY (sub.logins + sub.chores_sessions + sub.transfers_count + sub.purchases_count) DESC
               LIMIT 50
             `
             : `
-              SELECT 
-                u.id,
-                u.username,
-                u.first_name,
-                u.last_name,
-                u.class,
-                ${studentLoginCount} as logins,
-                COUNT(DISTINCT mgs.id)::int as chores_sessions,
-                COUNT(DISTINCT CASE WHEN t.transaction_type = 'transfer' THEN t.id END)::int as transfers_count,
-                COUNT(DISTINCT sp.id)::int as purchases_count
-              FROM users u
-              ${studentLoginJoin}
-              LEFT JOIN math_game_sessions mgs ON mgs.user_id = u.id AND mgs.played_at >= $1
-              LEFT JOIN accounts a ON a.user_id = u.id
-              LEFT JOIN transactions t ON t.from_account_id = a.id 
-                AND t.transaction_type = 'transfer' AND t.created_at >= $1
-              LEFT JOIN shop_purchases sp ON sp.user_id = u.id AND sp.purchase_date >= $1
-              WHERE u.school_id = $2 
-                AND u.role = 'student'
-              GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
-              ORDER BY ${studentOrderBy} DESC
+              SELECT * FROM (
+                SELECT 
+                  u.id,
+                  u.username,
+                  u.first_name,
+                  u.last_name,
+                  u.class,
+                  ${studentLoginCount} as logins,
+                  COUNT(DISTINCT mgs.id)::int as chores_sessions,
+                  COUNT(DISTINCT CASE WHEN t.transaction_type = 'transfer' THEN t.id END)::int as transfers_count,
+                  COUNT(DISTINCT sp.id)::int as purchases_count
+                FROM users u
+                ${studentLoginJoin}
+                LEFT JOIN math_game_sessions mgs ON mgs.user_id = u.id AND mgs.played_at >= $1::timestamptz
+                LEFT JOIN accounts a ON a.user_id = u.id
+                LEFT JOIN transactions t ON t.from_account_id = a.id 
+                  AND t.transaction_type = 'transfer' AND t.created_at >= $1::timestamptz
+                LEFT JOIN shop_purchases sp ON sp.user_id = u.id AND sp.purchase_date >= $1::timestamptz
+                WHERE u.school_id = $2 
+                  AND u.role = 'student'
+                GROUP BY u.id, u.username, u.first_name, u.last_name, u.class
+              ) sub
+              ORDER BY (sub.logins + sub.chores_sessions + sub.transfers_count + sub.purchases_count) DESC
               LIMIT 50
             `;
           
           topStudents = await database.query(
             studentQuery,
-            className ? [startDate, req.schoolId, className] : [startDate, req.schoolId]
+            className ? [startDateIso, req.schoolId, className] : [startDateIso, req.schoolId]
           );
         } catch (err) {
           console.error('Error fetching top students:', err);
@@ -362,7 +392,7 @@ router.get('/engagement',
           FROM login_events le
           JOIN users u ON le.user_id = u.id
           WHERE le.school_id = $2 
-            AND le.login_at >= $1
+            AND le.login_at >= $1::timestamptz
             AND u.role = 'student'
         `;
       } else {
@@ -387,7 +417,7 @@ router.get('/engagement',
           FROM math_game_sessions mgs
           JOIN users u ON mgs.user_id = u.id
           WHERE u.school_id = $2 
-            AND mgs.played_at >= $1
+            AND mgs.played_at >= $1::timestamptz
             AND u.role = 'student'
         ) chore_stats
         CROSS JOIN (
@@ -399,7 +429,7 @@ router.get('/engagement',
           JOIN users u ON a.user_id = u.id
           WHERE u.school_id = $2 
             AND t.transaction_type = 'transfer'
-            AND t.created_at >= $1
+            AND t.created_at >= $1::timestamptz
             AND u.role = 'student'
         ) transfer_stats
         CROSS JOIN (
@@ -409,10 +439,10 @@ router.get('/engagement',
           FROM shop_purchases sp
           JOIN users u ON sp.user_id = u.id
           WHERE u.school_id = $2 
-            AND sp.purchase_date >= $1
+            AND sp.purchase_date >= $1::timestamptz
             AND u.role = 'student'
         ) purchase_stats
-      `, [startDate, req.schoolId]);
+      `, [startDateIso, req.schoolId]);
 
       res.json({
         time_range: timeRange,
@@ -436,6 +466,77 @@ router.get('/engagement',
     } catch (error) {
       console.error('Failed to fetch engagement analytics:', error);
       res.status(500).json({ error: 'Failed to fetch engagement analytics' });
+    }
+  }
+);
+
+/**
+ * GET /api/teacher-analytics/student-logins
+ * All students in teacher's school with total logins in the selected period.
+ * Own time filter: week | month | year. School-scoped.
+ */
+router.get('/student-logins',
+  authenticateToken,
+  requireTenant,
+  requireRole(['teacher']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user || !req.schoolId) {
+        return res.status(403).json({ error: 'School context required' });
+      }
+
+      const timeRange = (req.query.time_range as 'week' | 'month' | 'year') || 'week';
+      const startDate = getStartDate(timeRange);
+      const startDateIso = startDate.toISOString();
+
+      let loginEventsExists = false;
+      try {
+        await database.query('SELECT 1 FROM login_events LIMIT 1');
+        loginEventsExists = true;
+      } catch {
+        return res.json({ time_range: timeRange, start_date: startDate.toISOString(), students: [] });
+      }
+
+      const tsJoin = req.schoolId !== null
+        ? 'LEFT JOIN town_settings ts ON ts.class = u.class AND ts.school_id = u.school_id'
+        : 'LEFT JOIN town_settings ts ON ts.class = u.class AND ts.school_id IS NULL AND u.school_id IS NULL';
+
+      const rows = await database.query(`
+        SELECT 
+          u.id,
+          u.username,
+          u.first_name,
+          u.last_name,
+          u.class,
+          COALESCE(ts.town_name, u.class) AS town_name,
+          COUNT(le.id) FILTER (WHERE le.login_at >= $1::timestamptz)::int as logins,
+          MAX(le.login_at) as last_login
+        FROM users u
+        ${tsJoin}
+        LEFT JOIN login_events le ON le.user_id = u.id AND le.school_id = $2
+        WHERE u.school_id = $2 
+          AND u.role = 'student'
+          AND u.class IN ('6A', '6B', '6C')
+          AND (u.status IS NULL OR u.status = 'approved')
+        GROUP BY u.id, u.username, u.first_name, u.last_name, u.class, ts.town_name
+        ORDER BY logins DESC, last_login DESC NULLS LAST
+      `, [startDateIso, req.schoolId]);
+
+      const students = rows.map((r: any) => ({
+        id: r.id,
+        username: r.username,
+        first_name: r.first_name,
+        last_name: r.last_name,
+        class: r.class,
+        town_name: r.town_name,
+        logins: r.logins,
+        last_login: r.last_login ? new Date(r.last_login).toISOString() : null
+      }));
+
+      res.json({ time_range: timeRange, start_date: startDate.toISOString(), students });
+    } catch (error) {
+      console.error('Failed to fetch student logins:', error);
+      res.status(500).json({ error: 'Failed to fetch student logins' });
     }
   }
 );

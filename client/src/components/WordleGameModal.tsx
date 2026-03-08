@@ -6,6 +6,8 @@ interface WordleGameModalProps {
   isOpen: boolean;
   onClose: () => void;
   onGameComplete: () => void;
+  /** When true, teacher is testing: no points or money recorded. */
+  testMode?: boolean;
 }
 
 const WORD_LENGTH = 5;
@@ -16,7 +18,8 @@ type FeedbackState = 0 | 1 | 2; // 0 = absent, 1 = wrong place, 2 = correct
 const WordleGameModal: React.FC<WordleGameModalProps> = ({
   isOpen,
   onClose,
-  onGameComplete
+  onGameComplete,
+  testMode = false
 }) => {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [currentGuess, setCurrentGuess] = useState('');
@@ -52,7 +55,7 @@ const WordleGameModal: React.FC<WordleGameModalProps> = ({
     let cancelled = false;
     setStarting(true);
     setError(null);
-    wordleGameApi.startGame()
+    wordleGameApi.startGame(testMode ? { test: true } : undefined)
       .then((res) => {
         if (cancelled) return;
         setSessionId(res.data.session_id);
@@ -65,7 +68,7 @@ const WordleGameModal: React.FC<WordleGameModalProps> = ({
         if (!cancelled) setStarting(false);
       });
     return () => { cancelled = true; };
-  }, [isOpen, resetModal]);
+  }, [isOpen, resetModal, testMode]);
 
   const submitGuess = useCallback(async () => {
     if (!sessionId || currentGuess.length !== WORD_LENGTH || loading || gameOver) return;
@@ -73,13 +76,13 @@ const WordleGameModal: React.FC<WordleGameModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const res = await wordleGameApi.guess(sessionId, guess);
+      const res = await wordleGameApi.guess(sessionId, guess, testMode);
       setRows(prev => [...prev, { word: guess, feedback: res.data.feedback as FeedbackState[] }]);
       setCurrentGuess('');
       if (res.data.game_over) {
         setGameOver(true);
         setWon(res.data.won);
-        const completeRes = await wordleGameApi.complete(sessionId);
+        const completeRes = await wordleGameApi.complete(sessionId, testMode);
         setEarnings(completeRes.data.earnings);
         setExperiencePoints(completeRes.data.experience_points);
         setNewLevel(completeRes.data.new_level);
@@ -90,7 +93,7 @@ const WordleGameModal: React.FC<WordleGameModalProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [sessionId, currentGuess, loading, gameOver, onGameComplete]);
+  }, [sessionId, currentGuess, loading, gameOver, onGameComplete, testMode]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -134,7 +137,7 @@ const WordleGameModal: React.FC<WordleGameModalProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">Wordle Chores</h2>
+          <h2 className="text-xl font-bold text-white">Wordle Chores{testMode ? ' (Test)' : ''}</h2>
           <button
             onClick={handleClose}
             className="text-gray-400 hover:text-white transition-colors"

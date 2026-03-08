@@ -1,22 +1,30 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlugins } from '../../contexts/PluginContext';
 import { Navigate } from 'react-router-dom';
-import { BarChart3, TrendingUp, PieChart, Users, Calendar, Filter } from 'lucide-react';
+import { BarChart3, TrendingUp, PieChart, Users, Calendar } from 'lucide-react';
 import { teacherAnalyticsApi } from '../../services/api';
-import { EngagementAnalytics, EngagementTimeSeries, EngagementByClass, EngagementByStudent, LowLoginStudent } from '../../types';
+import { EngagementAnalytics, EngagementTimeSeries, EngagementByClass, EngagementByStudent, StudentLoginRow } from '../../types';
 
 const AnalyticsPlugin: React.FC = () => {
   const { user } = useAuth();
   const { plugins, loading: pluginsLoading } = usePlugins();
   const analyticsPlugin = plugins.find(p => p.route_path === '/analytics');
 
+  type TabId = 'overview' | 'engagement' | 'byclass' | 'bystudent' | 'logins';
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month' | 'year'>('week');
-  const [scope, setScope] = useState<'school' | 'classes' | 'students'>('school');
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [analytics, setAnalytics] = useState<EngagementAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const [studentLogins, setStudentLogins] = useState<StudentLoginRow[]>([]);
+  const [studentLoginsLoading, setStudentLoginsLoading] = useState(false);
+  const [studentLoginsError, setStudentLoginsError] = useState('');
+
+  // Scope for engagement API: only 'students' when on By student tab, else 'school'
+  const scope = activeTab === 'bystudent' ? 'students' : 'school';
 
   useEffect(() => {
     if (user?.role === 'teacher' && analyticsPlugin?.enabled) {
@@ -24,14 +32,36 @@ const AnalyticsPlugin: React.FC = () => {
     }
   }, [timeRange, scope, selectedClass, user?.role, analyticsPlugin?.enabled]);
 
+  useEffect(() => {
+    if (user?.role === 'teacher' && analyticsPlugin?.enabled) {
+      fetchStudentLogins();
+    }
+  }, [timeRange, user?.role, analyticsPlugin?.enabled]);
+
+  const fetchStudentLogins = async () => {
+    try {
+      setStudentLoginsLoading(true);
+      setStudentLoginsError('');
+      const period = timeRange === 'day' ? 'week' : timeRange;
+      const response = await teacherAnalyticsApi.getStudentLogins({ time_range: period });
+      setStudentLogins(response.data.students);
+    } catch (err: any) {
+      console.error('Failed to fetch student logins:', err);
+      setStudentLoginsError(err.response?.data?.error || 'Failed to load student logins');
+      setStudentLogins([]);
+    } finally {
+      setStudentLoginsLoading(false);
+    }
+  };
+
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
       setError('');
       const response = await teacherAnalyticsApi.getEngagement({
         time_range: timeRange,
-        scope: scope,
-        class: selectedClass || undefined
+        scope,
+        class: activeTab === 'bystudent' ? selectedClass || undefined : undefined
       });
       setAnalytics(response.data);
     } catch (err: any) {
@@ -115,7 +145,7 @@ const AnalyticsPlugin: React.FC = () => {
     );
   };
 
-  // Simple Bar Chart Component
+  // Simple Bar Chart Component — use town_name for by-class data so labels match town data
   const BarChart: React.FC<{ 
     data: EngagementByClass[] | EngagementByStudent[]; 
     metric: keyof EngagementByClass | keyof EngagementByStudent;
@@ -155,7 +185,12 @@ const AnalyticsPlugin: React.FC = () => {
           const barHeight = (value / maxValue) * chartHeight;
           const x = padding.left + i * (barWidth + barSpacing) + barSpacing / 2;
           const y = padding.top + chartHeight - barHeight;
-          const label = String(d[labelKey as keyof typeof d] || '');
+          const rawLabel = d[labelKey as keyof typeof d];
+          const label = String(
+            labelKey === 'class' && (d as EngagementByClass).town_name
+              ? (d as EngagementByClass).town_name
+              : rawLabel ?? ''
+          );
           
           return (
             <g key={i}>
@@ -202,8 +237,8 @@ const AnalyticsPlugin: React.FC = () => {
     );
   };
 
-  // Simple Pie Chart Component
-  const PieChart: React.FC<{ 
+  // Simple pie chart (renamed so lucide PieChart icon can be used for headings)
+  const ActivityPieChart: React.FC<{ 
     data: { label: string; value: number; color: string }[];
   }> = ({ data }) => {
     if (!data || data.length === 0) return <div className="text-gray-500 text-center py-8">No data available</div>;
@@ -305,6 +340,14 @@ const AnalyticsPlugin: React.FC = () => {
     { label: 'Purchases', value: analytics.summary.total_purchases, color: '#ef4444' }
   ].filter(d => d.value > 0) : [];
 
+  const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
+    { id: 'overview', label: 'Overview', icon: <BarChart3 className="h-4 w-4" /> },
+    { id: 'engagement', label: 'Engagement over time', icon: <TrendingUp className="h-4 w-4" /> },
+    { id: 'byclass', label: 'By class', icon: <BarChart3 className="h-4 w-4" /> },
+    { id: 'bystudent', label: 'By student', icon: <Users className="h-4 w-4" /> },
+    { id: 'logins', label: 'Student total logins', icon: <Users className="h-4 w-4" /> }
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -318,15 +361,15 @@ const AnalyticsPlugin: React.FC = () => {
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Single filter bar - applies to all tabs */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-6">
           <div className="flex items-center space-x-2">
             <Calendar className="h-5 w-5 text-gray-500" />
-            <label className="text-sm font-medium text-gray-700">Time Range:</label>
+            <label className="text-sm font-medium text-gray-700">Time range:</label>
             <select
               value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value as any)}
+              onChange={(e) => setTimeRange(e.target.value as 'day' | 'week' | 'month' | 'year')}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="day">Day</option>
@@ -336,54 +379,66 @@ const AnalyticsPlugin: React.FC = () => {
             </select>
           </div>
           <div className="flex items-center space-x-2">
-            <Filter className="h-5 w-5 text-gray-500" />
-            <label className="text-sm font-medium text-gray-700">View:</label>
+            <Users className="h-5 w-5 text-gray-500" />
+            <label className="text-sm font-medium text-gray-700">Class:</label>
             <select
-              value={scope}
-              onChange={(e) => {
-                setScope(e.target.value as any);
-                setSelectedClass('');
-              }}
+              value={selectedClass}
+              onChange={(e) => setSelectedClass(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="school">Entire School</option>
-              <option value="classes">By Class</option>
-              <option value="students">By Student</option>
+              <option value="">All classes</option>
+              <option value="6A">6A</option>
+              <option value="6B">6B</option>
+              <option value="6C">6C</option>
             </select>
           </div>
-          {scope === 'students' && (
-            <div className="flex items-center space-x-2">
-              <Users className="h-5 w-5 text-gray-500" />
-              <label className="text-sm font-medium text-gray-700">Class:</label>
-              <select
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">All Classes</option>
-                <option value="6A">6A</option>
-                <option value="6B">6B</option>
-                <option value="6C">6C</option>
-              </select>
-            </div>
+          {analytics?.start_date && (
+            <p className="text-xs text-gray-500 w-full mt-1">
+              Data from {new Date(analytics.start_date).toLocaleDateString()} to now
+            </p>
           )}
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
+      {/* Tabs */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="border-b border-gray-200">
+          <nav className="flex flex-wrap gap-0" aria-label="Tabs">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-5 py-4 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </nav>
         </div>
-      )}
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-        </div>
-      ) : analytics ? (
-        <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="p-6">
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
+          {loading && activeTab !== 'logins' ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
+            </div>
+          ) : (
+            <>
+              {/* Tab: Overview */}
+              {activeTab === 'overview' && analytics && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
               <div className="flex items-center space-x-2 text-gray-500 mb-1">
                 <Users className="h-4 w-4" />
@@ -416,163 +471,182 @@ const AnalyticsPlugin: React.FC = () => {
               <p className="text-2xl font-bold text-red-600">{analytics.summary.total_purchases}</p>
               <p className="text-xs text-gray-500">{analytics.summary.total_purchases_users} users</p>
             </div>
-          </div>
-
-          {/* Logins by town (bar chart) - visible at school level */}
-          {scope === 'school' && analytics.by_class && analytics.by_class.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <BarChart3 className="h-5 w-5 mr-2 text-indigo-600" />
-                Logins by town
-              </h2>
-              <p className="text-sm text-gray-600 mb-4">
-                Total logins per class (6A, 6B, 6C) in the selected period. Compare engagement across towns.
-              </p>
-              <BarChart data={analytics.by_class} metric="logins" labelKey="class" />
-            </div>
-          )}
-
-          {/* Line Chart - Time Series */}
-          {(scope === 'school' || scope === 'classes') && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <TrendingUp className="h-5 w-5 mr-2 text-indigo-600" />
-                Engagement Over Time
-              </h2>
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Logins</h3>
-                  <LineChart data={analytics.time_series} metric="logins" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Chores Sessions</h3>
-                  <LineChart data={analytics.time_series} metric="chores_sessions" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Transfers</h3>
-                  <LineChart data={analytics.time_series} metric="transfers_count" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Purchases</h3>
-                  <LineChart data={analytics.time_series} metric="purchases_count" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Bar Chart - By Class */}
-          {scope === 'classes' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <BarChart3 className="h-5 w-5 mr-2 text-indigo-600" />
-                Engagement by Class
-              </h2>
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Logins</h3>
-                  <BarChart data={analytics.by_class} metric="logins" labelKey="class" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Chores Sessions</h3>
-                  <BarChart data={analytics.by_class} metric="chores_sessions" labelKey="class" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Transfers</h3>
-                  <BarChart data={analytics.by_class} metric="transfers_count" labelKey="class" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Purchases</h3>
-                  <BarChart data={analytics.by_class} metric="purchases_count" labelKey="class" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Bar Chart - By Student */}
-          {scope === 'students' && analytics.top_students.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Users className="h-5 w-5 mr-2 text-indigo-600" />
-                Top Students by Engagement
-              </h2>
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Logins</h3>
-                  <BarChart data={analytics.top_students} metric="logins" labelKey="username" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Chores Sessions</h3>
-                  <BarChart data={analytics.top_students} metric="chores_sessions" labelKey="username" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Transfers</h3>
-                  <BarChart data={analytics.top_students} metric="transfers_count" labelKey="username" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Purchases</h3>
-                  <BarChart data={analytics.top_students} metric="purchases_count" labelKey="username" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Students with few or no logins - who to follow up with */}
-          {analytics.low_login_students !== undefined && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Users className="h-5 w-5 mr-2 text-amber-600" />
-                Students with few or no logins
-              </h2>
-              <p className="text-sm text-gray-600 mb-4">
-                Students with 0 or 1 login in the selected period. Last login is when they were last active (any time). Use this to see who may need a nudge to log in regularly.
-              </p>
-              {analytics.low_login_students.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 border border-dashed border-gray-300 rounded-lg">
-                  All students have logged in at least twice in this period.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Student</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Class</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-700 uppercase">Logins (period)</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Last login</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {analytics.low_login_students.map((s: LowLoginStudent) => (
-                        <tr key={s.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 text-sm text-gray-900">
-                            {s.first_name && s.last_name ? `${s.first_name} ${s.last_name}` : s.username}
-                          </td>
-                          <td className="px-4 py-2 text-sm text-gray-600">{s.class ?? '—'}</td>
-                          <td className="px-4 py-2 text-sm text-right text-gray-600">{s.logins}</td>
-                          <td className="px-4 py-2 text-sm text-gray-600">
-                            {s.last_login ? formatLastLogin(s.last_login) : 'Never'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  </div>
+                  {analytics.by_class && analytics.by_class.length > 0 && (
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <BarChart3 className="h-5 w-5 mr-2 text-indigo-600" />
+                        Logins by town
+                      </h2>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Total logins per town in the selected period. Compare engagement across your school&apos;s towns.
+                      </p>
+                      <BarChart data={analytics.by_class} metric="logins" labelKey="class" />
+                    </div>
+                  )}
+                  {pieData.length > 0 && (
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <PieChart className="h-5 w-5 mr-2 text-indigo-600" />
+                        Activity Composition
+                      </h2>
+                      <ActivityPieChart data={pieData} />
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Pie Chart - Activity Composition */}
-          {pieData.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <PieChart className="h-5 w-5 mr-2 text-indigo-600" />
-                Activity Composition
-              </h2>
-              <PieChart data={pieData} />
-            </div>
+              {/* Tab: Engagement over time */}
+              {activeTab === 'engagement' && analytics && (
+                <div className="space-y-6">
+                  <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <TrendingUp className="h-5 w-5 mr-2 text-indigo-600" />
+                    Engagement Over Time
+                  </h2>
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Logins</h3>
+                      <LineChart data={analytics.time_series} metric="logins" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Chores Sessions</h3>
+                      <LineChart data={analytics.time_series} metric="chores_sessions" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Transfers</h3>
+                      <LineChart data={analytics.time_series} metric="transfers_count" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Purchases</h3>
+                      <LineChart data={analytics.time_series} metric="purchases_count" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab: By class */}
+              {activeTab === 'byclass' && analytics && (
+                <div className="space-y-6">
+                  <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <BarChart3 className="h-5 w-5 mr-2 text-indigo-600" />
+                    Engagement by Class
+                  </h2>
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Logins</h3>
+                      <BarChart data={analytics.by_class} metric="logins" labelKey="class" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Chores Sessions</h3>
+                      <BarChart data={analytics.by_class} metric="chores_sessions" labelKey="class" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Transfers</h3>
+                      <BarChart data={analytics.by_class} metric="transfers_count" labelKey="class" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Purchases</h3>
+                      <BarChart data={analytics.by_class} metric="purchases_count" labelKey="class" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab: By student */}
+              {activeTab === 'bystudent' && analytics && (
+                <div className="space-y-6">
+                  <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <Users className="h-5 w-5 mr-2 text-indigo-600" />
+                    Top Students by Engagement
+                  </h2>
+                  <p className="text-sm text-gray-600">
+                    Use the Class filter above to limit to one town. Showing top 50 students ranked by combined activity in the selected time range.
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    <strong>What counts as engagement:</strong> the ranking is the sum of <strong>Logins</strong> + <strong>Chores sessions</strong> (math/chore games) + <strong>Transfers</strong> (bank transfers) + <strong>Purchases</strong> (shop) in the period. Higher total = higher rank.
+                  </p>
+                  {analytics.top_students.length > 0 ? (
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-700 mb-2">Logins</h3>
+                        <BarChart data={analytics.top_students} metric="logins" labelKey="username" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-700 mb-2">Chores Sessions</h3>
+                        <BarChart data={analytics.top_students} metric="chores_sessions" labelKey="username" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-700 mb-2">Transfers</h3>
+                        <BarChart data={analytics.top_students} metric="transfers_count" labelKey="username" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-700 mb-2">Purchases</h3>
+                        <BarChart data={analytics.top_students} metric="purchases_count" labelKey="username" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 border border-dashed border-gray-300 rounded-lg">
+                      No student engagement data for this period.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab: Student total logins */}
+              {activeTab === 'logins' && (
+                <div className="space-y-4">
+                  <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <Users className="h-5 w-5 mr-2 text-indigo-600" />
+                    Student Total logins
+                  </h2>
+                  <p className="text-sm text-gray-600">
+                    Total logins per student in the selected time range (above). Last login is when they were last active (any time).
+                  </p>
+                  {studentLoginsError && (
+                    <div className="text-sm text-red-600">{studentLoginsError}</div>
+                  )}
+                  {studentLoginsLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
+                    </div>
+                  ) : studentLogins.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500 border border-dashed border-gray-300 rounded-lg">
+                      No student login data for this period.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Student</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Town</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-700 uppercase">Total logins</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Last login</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {studentLogins.map((s) => (
+                            <tr key={s.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm text-gray-900">
+                                {s.first_name && s.last_name ? `${s.first_name} ${s.last_name}` : s.username}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-gray-600">{s.town_name ?? s.class ?? '—'}</td>
+                              <td className="px-4 py-2 text-sm text-right text-gray-600">{s.logins}</td>
+                              <td className="px-4 py-2 text-sm text-gray-600">
+                                {s.last_login ? formatLastLogin(s.last_login) : 'Never'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
-        </>
-      ) : null}
+        </div>
+      </div>
     </div>
   );
 };

@@ -7,6 +7,10 @@ import { getRandomWord, isValidWord, normalizeWord } from '../games/wordle-words
 
 const router = Router();
 
+// In-memory store for teacher test sessions (session_id -> { targetWord, guessesCount }). No persistence, no payouts.
+const wordleTestSessions = new Map<number, { targetWord: string; guessesCount: number }>();
+let wordleTestSessionIdCounter = -1;
+
 const WORD_LENGTH = 5;
 const MAX_GUESSES = 6;
 
@@ -131,15 +135,26 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
 // POST /start
 router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'student') {
+    const isTest = req.body?.test === true && req.user?.role === 'teacher';
+    if (!isTest && (!req.user || req.user.role !== 'student')) {
       return res.status(403).json({ error: 'Only students can start Wordle games' });
+    }
+
+    if (isTest) {
+      const testSessionId = wordleTestSessionIdCounter--;
+      let targetWord = getRandomWord();
+      if (!targetWord || typeof targetWord !== 'string') {
+        targetWord = 'blend'; // fallback if word lists failed to load
+      }
+      wordleTestSessions.set(testSessionId, { targetWord: targetWord.toLowerCase(), guessesCount: 0 });
+      return res.json({ session_id: testSessionId });
     }
 
     if (!(await getWordleChoresEnabled())) {
       return res.status(403).json({ error: 'Wordle chores are currently disabled.' });
     }
 
-    const userId = req.user.id;
+    const userId = req.user!.id;
     const dailyLimit = await getWordleDailyLimit();
 
     const todayCount = await database.query(`
@@ -168,12 +183,13 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
 // POST /guess
 router.post('/guess', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'student') {
+    const isTest = req.body?.test === true && req.user?.role === 'teacher';
+    if (!isTest && (!req.user || req.user.role !== 'student')) {
       return res.status(403).json({ error: 'Only students can submit guesses' });
     }
 
     const { session_id, guess } = req.body;
-    if (!session_id || typeof guess !== 'string') {
+    if (session_id === undefined || session_id === null || typeof guess !== 'string') {
       return res.status(400).json({ error: 'session_id and guess are required' });
     }
 
@@ -185,7 +201,38 @@ router.post('/guess', authenticateToken, async (req: AuthenticatedRequest, res: 
       return res.status(400).json({ error: 'Not a valid word' });
     }
 
-    const userId = req.user.id;
+    if (isTest) {
+      const testSession = wordleTestSessions.get(session_id);
+      if (!testSession) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+      if (testSession.guessesCount >= MAX_GUESSES) {
+        return res.status(400).json({ error: 'No guesses remaining' });
+      }
+      const targetWord = testSession.targetWord;
+      if (!targetWord || typeof targetWord !== 'string') {
+        wordleTestSessions.delete(session_id);
+        return res.status(500).json({ error: 'Invalid test session. Please start a new game.' });
+      }
+      const target = targetWord.toLowerCase();
+      const feedback = computeFeedback(normalized, target);
+      const won = normalized === target;
+      const newCount = testSession.guessesCount + 1;
+      const lost = !won && newCount >= MAX_GUESSES;
+      if (won || lost) {
+        wordleTestSessions.delete(session_id);
+      } else {
+        testSession.guessesCount = newCount;
+      }
+      return res.json({
+        feedback,
+        game_over: won || lost,
+        won,
+        guesses_count: newCount
+      });
+    }
+
+    const userId = req.user!.id;
     const session = await database.get(`
       SELECT * FROM wordle_sessions WHERE id = $1 AND user_id = $2
     `, [session_id, userId]);
@@ -236,16 +283,21 @@ const MAX_WORDLE_EARNINGS = 500;
 // POST /complete
 router.post('/complete', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'student') {
+    const isTest = req.body?.test === true && req.user?.role === 'teacher';
+    if (!isTest && (!req.user || req.user.role !== 'student')) {
       return res.status(403).json({ error: 'Only students can complete Wordle games' });
     }
 
     const { session_id } = req.body;
-    if (!session_id) {
+    if (session_id === undefined || session_id === null) {
       return res.status(400).json({ error: 'session_id is required' });
     }
 
-    const userId = req.user.id;
+    if (isTest) {
+      return res.json({ success: true, earnings: 0, experience_points: 0, new_level: null });
+    }
+
+    const userId = req.user!.id;
     const session = await database.get(`
       SELECT * FROM wordle_sessions WHERE id = $1 AND user_id = $2
     `, [session_id, userId]);

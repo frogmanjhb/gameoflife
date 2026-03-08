@@ -8,6 +8,8 @@ interface ChoresGameModalProps {
   onClose: () => void;
   onGameComplete: () => void;
   gameStatus: MathGameStatus | null;
+  /** When true, teacher is testing: no points or money recorded. */
+  testMode?: boolean;
 }
 
 type GameState = 'difficulty' | 'playing' | 'results';
@@ -41,7 +43,8 @@ const ChoresGameModal: React.FC<ChoresGameModalProps> = ({
   isOpen,
   onClose,
   onGameComplete,
-  gameStatus
+  gameStatus,
+  testMode = false
 }) => {
   const [gameState, setGameState] = useState<GameState>('difficulty');
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
@@ -140,7 +143,7 @@ const ChoresGameModal: React.FC<ChoresGameModalProps> = ({
   const startGame = async (diff: Difficulty) => {
     try {
       setDifficulty(diff);
-      const response = await mathGameApi.startGame({ difficulty: diff });
+      const response = await mathGameApi.startGame({ difficulty: diff, ...(testMode ? { test: true } : {}) });
       setSessionId(response.data.session.id);
       setGameState('playing');
       setTimeLeft(60);
@@ -219,7 +222,8 @@ const ChoresGameModal: React.FC<ChoresGameModalProps> = ({
         score,
         correct_answers: score,
         total_problems: answerSequence.length,
-        answer_sequence: answerSequence
+        answer_sequence: answerSequence,
+        ...(testMode ? { test: true } : {})
       });
 
       setGameResults({
@@ -287,7 +291,7 @@ const ChoresGameModal: React.FC<ChoresGameModalProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">Chores Game</h2>
+          <h2 className="text-xl font-bold text-white">Chores Game{testMode ? ' (Test)' : ''}</h2>
           <button
             onClick={handleClose}
             className="text-gray-400 hover:text-white transition-colors"
@@ -505,7 +509,7 @@ const ChoresGameModal: React.FC<ChoresGameModalProps> = ({
               <div className="space-y-3">
                 <button
                   onClick={() => {
-                    if (gameStatus && gameStatus.remaining_plays > 0) {
+                    if (testMode || (gameStatus && gameStatus.remaining_plays > 0)) {
                       resetModal();
                       setGameState('difficulty');
                     } else {
@@ -514,7 +518,7 @@ const ChoresGameModal: React.FC<ChoresGameModalProps> = ({
                   }}
                   className="w-full bg-pink-600 text-white py-3 rounded-lg font-semibold hover:bg-pink-700 transition-colors"
                 >
-                  {gameStatus && gameStatus.remaining_plays > 0 ? 'Play Again' : 'Close'}
+                  {(testMode || (gameStatus && gameStatus.remaining_plays > 0)) ? 'Play Again' : 'Close'}
                 </button>
                 <button
                   onClick={handleClose}

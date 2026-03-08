@@ -74,7 +74,12 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
       
       console.log('📊 Found transactions for student:', transactions.length);
     } else {
-      // Teacher can see all transactions
+      // Teacher: only transactions where both parties are in the teacher's school
+      const schoolId = req.user.school_id ?? req.schoolId ?? null;
+      const schoolCondition = schoolId !== null
+        ? '(fa.user_id IS NULL OR fu.school_id = $1) AND (ta.user_id IS NULL OR tu.school_id = $1)'
+        : '(fa.user_id IS NULL OR fu.school_id IS NULL) AND (ta.user_id IS NULL OR tu.school_id IS NULL)';
+      const params = schoolId !== null ? [schoolId] : [];
       transactions = await database.query(`
         SELECT 
           t.*,
@@ -85,8 +90,9 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
         LEFT JOIN users fu ON fa.user_id = fu.id
         LEFT JOIN accounts ta ON t.to_account_id = ta.id
         LEFT JOIN users tu ON ta.user_id = tu.id
+        WHERE ${schoolCondition}
         ORDER BY t.created_at DESC
-      `);
+      `, params);
     }
 
     res.json(transactions);

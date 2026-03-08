@@ -92,13 +92,13 @@ export const mathGameApi = {
     return api.get('/math-game/status');
   },
 
-  // Start a new math game session
-  startGame: (data: MathGameStartRequest): Promise<{ data: { session: any } }> => {
+  // Start a new math game session (pass test: true for teacher test mode – no points/money recorded)
+  startGame: (data: MathGameStartRequest & { test?: boolean }): Promise<{ data: { session: any } }> => {
     return api.post('/math-game/start', data);
   },
 
-  // Submit math game results
-  submitGame: (data: MathGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; isNewHighScore: boolean } }> => {
+  // Submit math game results (pass test: true for teacher test mode)
+  submitGame: (data: MathGameSubmitRequest & { test?: boolean }): Promise<{ data: { success: boolean; earnings: number; isNewHighScore: boolean } }> => {
     return api.post('/math-game/submit', data);
   }
 };
@@ -108,14 +108,14 @@ export const wordleGameApi = {
   getStatus: (): Promise<{ data: WordleGameStatus }> => {
     return api.get('/wordle-game/status');
   },
-  startGame: (): Promise<{ data: { session_id: number } }> => {
-    return api.post('/wordle-game/start', {});
+  startGame: (options?: { test?: boolean }): Promise<{ data: { session_id: number } }> => {
+    return api.post('/wordle-game/start', options ?? {});
   },
-  guess: (sessionId: number, guess: string): Promise<{ data: WordleGuessResponse }> => {
-    return api.post('/wordle-game/guess', { session_id: sessionId, guess });
+  guess: (sessionId: number, guess: string, test?: boolean): Promise<{ data: WordleGuessResponse }> => {
+    return api.post('/wordle-game/guess', { session_id: sessionId, guess, ...(test ? { test: true } : {}) });
   },
-  complete: (sessionId: number): Promise<{ data: WordleCompleteResponse }> => {
-    return api.post('/wordle-game/complete', { session_id: sessionId });
+  complete: (sessionId: number, test?: boolean): Promise<{ data: WordleCompleteResponse }> => {
+    return api.post('/wordle-game/complete', { session_id: sessionId, ...(test ? { test: true } : {}) });
   }
 };
 
@@ -338,6 +338,11 @@ export const jobsApi = {
   getJobAssignmentsOverview: (className?: string): Promise<{ data: { jobs: any[]; students: any[] } }> => {
     const params = className ? `?class=${className}` : '';
     return api.get(`/jobs/assignments/overview${params}`);
+  },
+
+  // Get job assignments for current student's class (students only): job name + assigned students
+  getClassJobAssignments: (): Promise<{ data: { jobs: { id: number; name: string; assigned_students: { first_name: string; last_name: string; username: string }[] }[] } }> => {
+    return api.get('/jobs/assignments/class-view');
   },
 
   // Assign job to student (teachers only)
@@ -639,11 +644,20 @@ export const teacherAnalyticsApi = {
     class?: string;
   }): Promise<{ data: import('../types').EngagementAnalytics }> => {
     const queryParams = new URLSearchParams();
-    if (params?.time_range) queryParams.append('time_range', params.time_range);
-    if (params?.scope) queryParams.append('scope', params.scope);
-    if (params?.class) queryParams.append('class', params.class);
+    if (params?.time_range != null) queryParams.append('time_range', params.time_range);
+    if (params?.scope != null) queryParams.append('scope', params.scope);
+    if (params?.class != null) queryParams.append('class', params.class);
     const queryString = queryParams.toString();
     return api.get(`/teacher-analytics/engagement${queryString ? `?${queryString}` : ''}`);
+  },
+  // Get all students with total logins for the Student Total logins section (own time filter)
+  getStudentLogins: (params?: { time_range?: 'week' | 'month' | 'year' }): Promise<{
+    data: { time_range: string; start_date: string; students: import('../types').StudentLoginRow[] };
+  }> => {
+    const queryParams = new URLSearchParams();
+    if (params?.time_range) queryParams.append('time_range', params.time_range);
+    const queryString = queryParams.toString();
+    return api.get(`/teacher-analytics/student-logins${queryString ? `?${queryString}` : ''}`);
   }
 };
 

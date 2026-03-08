@@ -78,14 +78,16 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
 
 router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'student') {
+    const isTest = req.body?.test === true && req.user?.role === 'teacher';
+    if (!isTest && (!req.user || req.user.role !== 'student')) {
       return res.status(403).json({ error: 'Only students can start HR director games' });
     }
     const { difficulty } = req.body;
     if (!difficulty || !['easy', 'medium', 'hard', 'extreme'].includes(difficulty)) {
       return res.status(400).json({ error: 'Invalid difficulty level' });
     }
-    const userId = req.user.id;
+    if (isTest) return res.json({ session: { id: 0 } });
+    const userId = req.user!.id;
     const user = await database.get(`
       SELECT u.*, j.name as job_name FROM users u LEFT JOIN jobs j ON u.job_id = j.id WHERE u.id = $1
     `, [userId]);
@@ -133,9 +135,11 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
 
 router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'student') {
+    const isTest = req.body?.test === true && req.user?.role === 'teacher';
+    if (!isTest && (!req.user || req.user.role !== 'student')) {
       return res.status(403).json({ error: 'Only students can submit HR director games' });
     }
+    if (isTest) return res.json({ success: true, earnings: 0, experience_points: 0, new_level: null, isNewHighScore: false });
     const { session_id, score, correct_answers, total_problems, answer_sequence } = req.body;
     if (!session_id || score < 0 || correct_answers < 0 || total_problems < 0) {
       return res.status(400).json({ error: 'Invalid game data' });

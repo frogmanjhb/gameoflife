@@ -9,6 +9,7 @@ interface PrincipalGameModalProps {
   onClose: () => void;
   onGameComplete: () => void;
   gameStatus: PrincipalGameStatus | null;
+  testMode?: boolean;
 }
 
 type GameState = 'difficulty' | 'playing' | 'results';
@@ -18,7 +19,8 @@ const PrincipalGameModal: React.FC<PrincipalGameModalProps> = ({
   isOpen,
   onClose,
   onGameComplete,
-  gameStatus
+  gameStatus,
+  testMode = false
 }) => {
   const [gameState, setGameState] = useState<GameState>('difficulty');
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
@@ -48,7 +50,7 @@ const PrincipalGameModal: React.FC<PrincipalGameModalProps> = ({
   const startGame = async (diff: Difficulty) => {
     try {
       setDifficulty(diff);
-      const response = await principalGameApi.startGame({ difficulty: diff });
+      const response = await principalGameApi.startGame({ difficulty: diff, ...(testMode ? { test: true } : {}) });
       setSessionId(response.data.session.id);
       setGameState('playing');
       setTimeLeft(60);
@@ -118,7 +120,8 @@ const PrincipalGameModal: React.FC<PrincipalGameModalProps> = ({
         score,
         correct_answers: score,
         total_problems: answerSequence.length,
-        answer_sequence: answerSequence
+        answer_sequence: answerSequence,
+        ...(testMode ? { test: true } : {}),
       });
       setGameResults({
         score,
@@ -200,7 +203,7 @@ const PrincipalGameModal: React.FC<PrincipalGameModalProps> = ({
             <div className="text-center mb-6">
               <p className="text-gray-300 mb-2">Complete school review cycles (5 problems each) to earn XP and money</p>
               <p className="text-sm text-gray-400">
-                {gameStatus?.remaining_plays ?? 0} / {gameStatus?.daily_limit ?? 3} school review cycles remaining today
+                {testMode ? 'Test mode – no limit' : `${gameStatus?.remaining_plays ?? 0} / ${gameStatus?.daily_limit ?? 3} school review cycles remaining today`}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -208,9 +211,9 @@ const PrincipalGameModal: React.FC<PrincipalGameModalProps> = ({
                 <button
                   key={diff}
                   onClick={() => startGame(diff)}
-                  disabled={!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0}
+                  disabled={!testMode && (!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0)}
                   className={`p-4 rounded-lg border-2 transition-all ${
-                    !gameStatus || (gameStatus.remaining_plays ?? 0) <= 0
+                    !testMode && (!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0)
                       ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
                       : 'border-violet-500 bg-gray-800 text-white hover:bg-violet-600 hover:border-violet-400'
                   }`}
@@ -226,7 +229,7 @@ const PrincipalGameModal: React.FC<PrincipalGameModalProps> = ({
                 </button>
               ))}
             </div>
-            {gameStatus && (gameStatus.remaining_plays ?? 0) <= 0 && (
+            {!testMode && gameStatus && (gameStatus.remaining_plays ?? 0) <= 0 && (
               <div className="text-center text-gray-400 text-sm mt-4">
                 No school review cycles remaining today. Try again tomorrow!
               </div>

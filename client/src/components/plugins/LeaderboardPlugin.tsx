@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePlugins } from '../../contexts/PluginContext';
 import { Navigate } from 'react-router-dom';
-import { Trophy, Users, Star, TrendingUp } from 'lucide-react';
+import { Trophy, Users, Star, TrendingUp, BookOpen, DollarSign } from 'lucide-react';
 import api from '../../services/api';
 
 interface LeaderboardEntry {
@@ -19,18 +19,41 @@ interface LeaderboardEntry {
   rank: number;
 }
 
+interface WordleLeaderboardEntry {
+  user_id: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  class?: string;
+  total_earnings: number;
+  games_played: number;
+  wins: number;
+  best_guesses: number | null;
+  rank: number;
+}
+
 interface ClassLeaderboards {
   '6A': LeaderboardEntry[];
   '6B': LeaderboardEntry[];
   '6C': LeaderboardEntry[];
 }
 
+interface ClassWordleLeaderboards {
+  '6A': WordleLeaderboardEntry[];
+  '6B': WordleLeaderboardEntry[];
+  '6C': WordleLeaderboardEntry[];
+}
+
 const LeaderboardPlugin: React.FC = () => {
   const { plugins, loading: pluginsLoading } = usePlugins();
   const leaderboardPlugin = plugins.find(p => p.route_path === '/leaderboard');
-  
+
+  type GameType = 'math' | 'wordle';
+  const [gameType, setGameType] = useState<GameType>('math');
   const [overallLeaderboard, setOverallLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [classLeaderboards, setClassLeaderboards] = useState<ClassLeaderboards>({ '6A': [], '6B': [], '6C': [] });
+  const [overallWordleLeaderboard, setOverallWordleLeaderboard] = useState<WordleLeaderboardEntry[]>([]);
+  const [classWordleLeaderboards, setClassWordleLeaderboards] = useState<ClassWordleLeaderboards>({ '6A': [], '6B': [], '6C': [] });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overall' | '6A' | '6B' | '6C'>('overall');
 
@@ -65,13 +88,17 @@ const LeaderboardPlugin: React.FC = () => {
   const fetchLeaderboards = async () => {
     try {
       setLoading(true);
-      const [overallRes, classesRes] = await Promise.all([
+      const [mathOverallRes, mathClassesRes, wordleOverallRes, wordleClassesRes] = await Promise.all([
         api.get('/leaderboard/overall'),
-        api.get('/leaderboard/all-classes')
+        api.get('/leaderboard/all-classes'),
+        api.get('/wordle-leaderboard/overall'),
+        api.get('/wordle-leaderboard/all-classes')
       ]);
 
-      setOverallLeaderboard(overallRes.data.leaderboard || []);
-      setClassLeaderboards(classesRes.data || { '6A': [], '6B': [], '6C': [] });
+      setOverallLeaderboard(mathOverallRes.data.leaderboard || []);
+      setClassLeaderboards(mathClassesRes.data || { '6A': [], '6B': [], '6C': [] });
+      setOverallWordleLeaderboard(wordleOverallRes.data.leaderboard || []);
+      setClassWordleLeaderboards(wordleClassesRes.data || { '6A': [], '6B': [], '6C': [] });
     } catch (error) {
       console.error('Failed to fetch leaderboards:', error);
     } finally {
@@ -79,7 +106,7 @@ const LeaderboardPlugin: React.FC = () => {
     }
   };
 
-  const getDisplayName = (entry: LeaderboardEntry) => {
+  const getDisplayName = (entry: LeaderboardEntry | WordleLeaderboardEntry) => {
     if (entry.first_name && entry.last_name) {
       return `${entry.first_name} ${entry.last_name}`;
     }
@@ -152,6 +179,56 @@ const LeaderboardPlugin: React.FC = () => {
     );
   };
 
+  const renderWordleLeaderboardTable = (entries: WordleLeaderboardEntry[]) => {
+    if (entries.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <Trophy className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+          <p className="text-gray-500">No Wordle games played yet. Be the first to compete!</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {entries.map((entry) => (
+          <div
+            key={entry.user_id}
+            className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all hover:scale-[1.02] ${getRankColor(entry.rank)}`}
+          >
+            <div className="flex-shrink-0 text-center w-16">
+              <div className="text-4xl mb-1">{getRankEmoji(entry.rank)}</div>
+              <div className="text-lg font-bold">#{entry.rank}</div>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-lg truncate">{getDisplayName(entry)}</div>
+              <div className="text-sm opacity-75">
+                {entry.class && <span className="mr-3">Class {entry.class}</span>}
+                <span>{entry.wins} win{entry.wins !== 1 ? 's' : ''} · {entry.games_played} game{entry.games_played !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <div className="flex items-center gap-1 justify-end mb-1">
+                <DollarSign className="h-5 w-5" />
+                <span className="text-2xl font-bold">R{Number(entry.total_earnings).toLocaleString()}</span>
+              </div>
+              <div className="text-xs opacity-75">Total earnings</div>
+            </div>
+
+            <div className="hidden md:flex flex-col gap-1 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-20 opacity-75">Best guess:</span>
+                <span className="font-semibold">{entry.best_guesses != null ? entry.best_guesses + ' try' + (entry.best_guesses !== 1 ? 's' : '') : '—'}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   // Wait for plugins to load before checking
   if (pluginsLoading) {
     return (
@@ -172,9 +249,43 @@ const LeaderboardPlugin: React.FC = () => {
         <div className="flex items-center space-x-3">
           <div className="text-4xl">🏆</div>
           <div>
-            <h1 className="text-2xl font-bold">Chores Game Leaderboard</h1>
-            <p className="text-yellow-100">Top performers across all classes</p>
+            <h1 className="text-2xl font-bold">Chores Leaderboard</h1>
+            <p className="text-yellow-100">
+              {gameType === 'math' ? 'Math game rankings' : 'Wordle chore rankings'} · Top performers across all classes
+            </p>
           </div>
+        </div>
+      </div>
+
+      {/* Game type selector */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
+        <div className="flex flex-wrap gap-2 mb-2">
+          <button
+            onClick={() => setGameType('math')}
+            className={`flex-1 min-w-[140px] px-4 py-3 rounded-lg font-semibold transition-all ${
+              gameType === 'math'
+                ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2">
+              <BookOpen className="h-4 w-4" />
+              <span>Math Game</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setGameType('wordle')}
+            className={`flex-1 min-w-[140px] px-4 py-3 rounded-lg font-semibold transition-all ${
+              gameType === 'wordle'
+                ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-md'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-lg">📝</span>
+              <span>Wordle Chores</span>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -250,7 +361,9 @@ const LeaderboardPlugin: React.FC = () => {
                   <Trophy className="h-6 w-6 text-yellow-500" />
                   Overall Top 5 Champions
                 </h2>
-                {renderLeaderboardTable(overallLeaderboard)}
+                {gameType === 'math'
+                  ? renderLeaderboardTable(overallLeaderboard)
+                  : renderWordleLeaderboardTable(overallWordleLeaderboard)}
               </div>
             )}
 
@@ -260,7 +373,9 @@ const LeaderboardPlugin: React.FC = () => {
                   <Users className="h-6 w-6 text-blue-500" />
                   Class 6A Top 5
                 </h2>
-                {renderLeaderboardTable(classLeaderboards['6A'])}
+                {gameType === 'math'
+                  ? renderLeaderboardTable(classLeaderboards['6A'])
+                  : renderWordleLeaderboardTable(classWordleLeaderboards['6A'])}
               </div>
             )}
 
@@ -270,7 +385,9 @@ const LeaderboardPlugin: React.FC = () => {
                   <Users className="h-6 w-6 text-green-500" />
                   Class 6B Top 5
                 </h2>
-                {renderLeaderboardTable(classLeaderboards['6B'])}
+                {gameType === 'math'
+                  ? renderLeaderboardTable(classLeaderboards['6B'])
+                  : renderWordleLeaderboardTable(classWordleLeaderboards['6B'])}
               </div>
             )}
 
@@ -280,7 +397,9 @@ const LeaderboardPlugin: React.FC = () => {
                   <Users className="h-6 w-6 text-purple-500" />
                   Class 6C Top 5
                 </h2>
-                {renderLeaderboardTable(classLeaderboards['6C'])}
+                {gameType === 'math'
+                  ? renderLeaderboardTable(classLeaderboards['6C'])
+                  : renderWordleLeaderboardTable(classWordleLeaderboards['6C'])}
               </div>
             )}
           </>
@@ -293,12 +412,21 @@ const LeaderboardPlugin: React.FC = () => {
           <div className="text-3xl">ℹ️</div>
           <div>
             <h3 className="font-semibold text-blue-900 mb-2">How Rankings Work</h3>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Rankings are based on <strong>total points</strong> earned across all math games</li>
-              <li>• Points are awarded based on difficulty level and answer streaks</li>
-              <li>• The leaderboard updates in real-time as students play</li>
-              <li>• Each class has its own Top 5, plus an Overall Top 5 across all classes</li>
-            </ul>
+            {gameType === 'math' ? (
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>• Rankings are based on <strong>total points</strong> earned across all math games</li>
+                <li>• Points are awarded based on difficulty level and answer streaks</li>
+                <li>• The leaderboard updates as students play</li>
+                <li>• Each class has its own Top 5, plus an Overall Top 5 across all classes</li>
+              </ul>
+            ) : (
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>• Rankings are based on <strong>total earnings</strong> from Wordle chore games (earn more by solving in fewer guesses)</li>
+                <li>• Wins and best guess (fewest tries to solve) are shown</li>
+                <li>• The leaderboard updates as students play Wordle chores</li>
+                <li>• Each class has its own Top 5, plus an Overall Top 5 across all classes</li>
+              </ul>
+            )}
           </div>
         </div>
       </div>

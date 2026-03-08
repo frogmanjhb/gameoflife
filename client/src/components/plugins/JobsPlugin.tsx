@@ -3,13 +3,34 @@ import { usePlugins } from '../../contexts/PluginContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTown } from '../../contexts/TownContext';
 import { Navigate } from 'react-router-dom';
-import { Briefcase, Loader2, AlertCircle } from 'lucide-react';
+import { Briefcase, Loader2, AlertCircle, FlaskConical } from 'lucide-react';
 import { Job } from '../../types';
 import { jobsApi } from '../../services/api';
 import JobCard from '../JobCard';
 import JobDetailsModal from '../JobDetailsModal';
 import JobApplicationForm from '../JobApplicationForm';
-import { EMPLOYMENT_BOARD_SECTIONS, getDisplayJobTitle } from '../../utils/jobDisplay';
+import { EMPLOYMENT_BOARD_SECTIONS, getDisplayJobTitle, getJobEmoji } from '../../utils/jobDisplay';
+import { JOB_GAME_TEST_LIST, type JobGameTestKey } from '../../utils/jobGameTests';
+import ArchitectGameModal from '../jobchallenges/ArchitectGameModal';
+import AccountantGameModal from '../jobchallenges/AccountantGameModal';
+import SoftwareEngineerGameModal from '../jobchallenges/SoftwareEngineerGameModal';
+import MarketingManagerGameModal from '../jobchallenges/MarketingManagerGameModal';
+import GraphicDesignerGameModal from '../jobchallenges/GraphicDesignerGameModal';
+import JournalistGameModal from '../jobchallenges/JournalistGameModal';
+import EventPlannerGameModal from '../jobchallenges/EventPlannerGameModal';
+import FinancialManagerGameModal from '../jobchallenges/FinancialManagerGameModal';
+import HRDirectorGameModal from '../jobchallenges/HRDirectorGameModal';
+import PoliceLieutenantGameModal from '../jobchallenges/PoliceLieutenantGameModal';
+import LawyerGameModal from '../jobchallenges/LawyerGameModal';
+import TownPlannerGameModal from '../jobchallenges/TownPlannerGameModal';
+import ElectricalEngineerGameModal from '../jobchallenges/ElectricalEngineerGameModal';
+import CivilEngineerGameModal from '../jobchallenges/CivilEngineerGameModal';
+import PrincipalGameModal from '../jobchallenges/PrincipalGameModal';
+import TeacherGameModal from '../jobchallenges/TeacherGameModal';
+import NurseGameModal from '../jobchallenges/NurseGameModal';
+import DoctorGameModal from '../jobchallenges/DoctorGameModal';
+import RetailManagerGameModal from '../jobchallenges/RetailManagerGameModal';
+import EntrepreneurGameModal from '../jobchallenges/EntrepreneurGameModal';
 
 const JobsPlugin: React.FC = () => {
   const { plugins, loading: pluginsLoading } = usePlugins();
@@ -24,7 +45,9 @@ const JobsPlugin: React.FC = () => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isApplicationFormOpen, setIsApplicationFormOpen] = useState(false);
   const [applicationCount, setApplicationCount] = useState<{ count: number; maxApplications: number; canApply: boolean } | null>(null);
-  
+  const [classJobAssignments, setClassJobAssignments] = useState<{ id: number; name: string; assigned_students: { first_name: string; last_name: string; username: string }[] }[] | null>(null);
+  const [testGameKey, setTestGameKey] = useState<JobGameTestKey | null>(null);
+
   // Check if current user already has a job
   const userHasJob = user?.job_id !== null && user?.job_id !== undefined;
   
@@ -39,8 +62,9 @@ const JobsPlugin: React.FC = () => {
   useEffect(() => {
     if (jobsPlugin && jobsPlugin.enabled) {
       fetchJobs();
-      if (user?.role === 'student' && !userHasJob) {
-        fetchApplicationCount();
+      if (user?.role === 'student') {
+        if (!userHasJob) fetchApplicationCount();
+        fetchClassJobAssignments();
       }
     }
   }, [jobsPlugin, user]);
@@ -63,6 +87,15 @@ const JobsPlugin: React.FC = () => {
       setApplicationCount(response.data);
     } catch (error) {
       console.error('Failed to fetch application count:', error);
+    }
+  };
+
+  const fetchClassJobAssignments = async () => {
+    try {
+      const response = await jobsApi.getClassJobAssignments();
+      setClassJobAssignments(response.data.jobs);
+    } catch (error) {
+      console.error('Failed to fetch class job assignments:', error);
     }
   };
 
@@ -129,6 +162,43 @@ const JobsPlugin: React.FC = () => {
         </div>
       </div>
 
+      {/* Who's in each role (students only) */}
+      {user?.role === 'student' && classJobAssignments && classJobAssignments.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+            <Briefcase className="h-5 w-5 mr-2 text-primary-600" />
+            Who&apos;s in each role
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">Jobs and students assigned in your class.</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {classJobAssignments.map((item) => (
+              <div
+                key={item.id}
+                className="bg-gray-50 rounded-lg border border-gray-200 p-3 flex flex-col min-h-[80px]"
+              >
+                <span className="text-2xl mb-1" aria-hidden>
+                  {getJobEmoji(item.name)}
+                </span>
+                <h3 className="font-semibold text-gray-900 text-xs line-clamp-2 mb-1">
+                  {item.name}
+                </h3>
+                <div className="text-xs text-gray-600 mt-auto">
+                  {item.assigned_students.length === 0 ? (
+                    <span className="text-gray-400">No one assigned</span>
+                  ) : (
+                    item.assigned_students.map((s) => (
+                      <div key={s.username} className="truncate" title={`${s.first_name} ${s.last_name} (${s.username})`}>
+                        {s.first_name} {s.last_name}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* How Jobs Work - Instructions */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm mb-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
@@ -178,6 +248,32 @@ const JobsPlugin: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Test job games (teachers only) */}
+      {user?.role === 'teacher' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2 flex items-center">
+            <FlaskConical className="h-5 w-5 mr-2 text-primary-600" />
+            Test job games
+          </h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Try each job challenge game as students will see it. No points or money are recorded.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {JOB_GAME_TEST_LIST.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTestGameKey(key)}
+                className="inline-flex items-center px-3 py-2 rounded-lg font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors text-sm"
+              >
+                <FlaskConical className="h-4 w-4 mr-1.5" />
+                Test {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Pin Board */}
       <div className="pin-board rounded-2xl p-8 min-h-[600px] relative overflow-hidden">
@@ -273,6 +369,32 @@ const JobsPlugin: React.FC = () => {
           jobName={selectedJob.name}
           onSuccess={handleApplicationSuccess}
         />
+      )}
+
+      {/* Test job game modals (teacher only) */}
+      {user?.role === 'teacher' && (
+        <>
+          <ArchitectGameModal isOpen={testGameKey === 'architect'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <AccountantGameModal isOpen={testGameKey === 'accountant'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <SoftwareEngineerGameModal isOpen={testGameKey === 'softwareEngineer'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <MarketingManagerGameModal isOpen={testGameKey === 'marketingManager'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <GraphicDesignerGameModal isOpen={testGameKey === 'graphicDesigner'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <JournalistGameModal isOpen={testGameKey === 'journalist'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <EventPlannerGameModal isOpen={testGameKey === 'eventPlanner'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <FinancialManagerGameModal isOpen={testGameKey === 'financialManager'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <HRDirectorGameModal isOpen={testGameKey === 'hrDirector'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <PoliceLieutenantGameModal isOpen={testGameKey === 'policeLieutenant'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <LawyerGameModal isOpen={testGameKey === 'lawyer'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <TownPlannerGameModal isOpen={testGameKey === 'townPlanner'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <ElectricalEngineerGameModal isOpen={testGameKey === 'electricalEngineer'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <CivilEngineerGameModal isOpen={testGameKey === 'civilEngineer'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <PrincipalGameModal isOpen={testGameKey === 'principal'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <TeacherGameModal isOpen={testGameKey === 'teacher'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <NurseGameModal isOpen={testGameKey === 'nurse'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <DoctorGameModal isOpen={testGameKey === 'doctor'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <RetailManagerGameModal isOpen={testGameKey === 'retailManager'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <EntrepreneurGameModal isOpen={testGameKey === 'entrepreneur'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+        </>
       )}
     </div>
   );

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePlugins } from '../../contexts/PluginContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { Clock, Trophy, Play, Loader2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Clock, Trophy, Play, Loader2, ToggleLeft, ToggleRight, FlaskConical } from 'lucide-react';
 import api, { mathGameApi, wordleGameApi } from '../../services/api';
 import { MathGameStatus, WordleGameStatus } from '../../types';
 import ChoresGameModal from '../ChoresGameModal';
@@ -18,6 +18,8 @@ const ChoresPlugin: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isGameOpen, setIsGameOpen] = useState(false);
   const [isWordleOpen, setIsWordleOpen] = useState(false);
+  const [isTestMathOpen, setIsTestMathOpen] = useState(false);
+  const [isTestWordleOpen, setIsTestWordleOpen] = useState(false);
 
   // Teacher: bank settings for chore toggles
   const [bankSettings, setBankSettings] = useState<Record<string, string>>({});
@@ -150,7 +152,44 @@ const ChoresPlugin: React.FC = () => {
               </div>
             </div>
           )}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Test games</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Try the math and Wordle chores as students will see them. No points or money are recorded.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => setIsTestMathOpen(true)}
+                className="inline-flex items-center px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors"
+              >
+                <FlaskConical className="h-4 w-4 mr-2" />
+                Test Math Game
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsTestWordleOpen(true)}
+                className="inline-flex items-center px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors"
+              >
+                <FlaskConical className="h-4 w-4 mr-2" />
+                Test Wordle Game
+              </button>
+            </div>
+          </div>
         </div>
+        <ChoresGameModal
+          isOpen={isTestMathOpen}
+          onClose={() => setIsTestMathOpen(false)}
+          onGameComplete={() => {}}
+          gameStatus={null}
+          testMode
+        />
+        <WordleGameModal
+          isOpen={isTestWordleOpen}
+          onClose={() => setIsTestWordleOpen(false)}
+          onGameComplete={() => {}}
+          testMode
+        />
       </div>
     );
   }

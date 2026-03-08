@@ -116,7 +116,8 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
 // Start a new architect game session
 router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'student') {
+    const isTest = req.body?.test === true && req.user?.role === 'teacher';
+    if (!isTest && (!req.user || req.user.role !== 'student')) {
       return res.status(403).json({ error: 'Only students can start architect games' });
     }
 
@@ -126,7 +127,11 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
       return res.status(400).json({ error: 'Invalid difficulty level' });
     }
 
-    const userId = req.user.id;
+    if (isTest) {
+      return res.json({ session: { id: 0 } });
+    }
+
+    const userId = req.user!.id;
     
     // Check if user has Architect job
     const user = await database.get(`
@@ -196,8 +201,12 @@ router.post('/start', authenticateToken, async (req: AuthenticatedRequest, res: 
 // Submit architect game results
 router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'student') {
+    const isTest = req.body?.test === true && req.user?.role === 'teacher';
+    if (!isTest && (!req.user || req.user.role !== 'student')) {
       return res.status(403).json({ error: 'Only students can submit architect games' });
+    }
+    if (isTest) {
+      return res.json({ success: true, earnings: 0, experience_points: 0, new_level: null, isNewHighScore: false });
     }
 
     const { session_id, score, correct_answers, total_problems, answer_sequence } = req.body;

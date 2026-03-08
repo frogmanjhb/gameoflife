@@ -9,6 +9,7 @@ interface RetailManagerGameModalProps {
   onClose: () => void;
   onGameComplete: () => void;
   gameStatus: RetailManagerGameStatus | null;
+  testMode?: boolean;
 }
 
 type GameState = 'difficulty' | 'playing' | 'results';
@@ -18,7 +19,8 @@ const RetailManagerGameModal: React.FC<RetailManagerGameModalProps> = ({
   isOpen,
   onClose,
   onGameComplete,
-  gameStatus
+  gameStatus,
+  testMode = false
 }) => {
   const [gameState, setGameState] = useState<GameState>('difficulty');
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
@@ -48,7 +50,7 @@ const RetailManagerGameModal: React.FC<RetailManagerGameModalProps> = ({
   const startGame = async (diff: Difficulty) => {
     try {
       setDifficulty(diff);
-      const response = await retailManagerGameApi.startGame({ difficulty: diff });
+      const response = await retailManagerGameApi.startGame({ difficulty: diff, ...(testMode ? { test: true } : {}) });
       setSessionId(response.data.session.id);
       setGameState('playing');
       setTimeLeft(60);
@@ -118,7 +120,8 @@ const RetailManagerGameModal: React.FC<RetailManagerGameModalProps> = ({
         score,
         correct_answers: score,
         total_problems: answerSequence.length,
-        answer_sequence: answerSequence
+        answer_sequence: answerSequence,
+        ...(testMode ? { test: true } : {}),
       });
       setGameResults({
         score,
@@ -207,7 +210,7 @@ const RetailManagerGameModal: React.FC<RetailManagerGameModalProps> = ({
             <div className="text-center mb-6">
               <p className="text-gray-300 mb-2">Complete trading day reviews (5 problems each) to earn XP and money</p>
               <p className="text-sm text-gray-400">
-                {gameStatus?.remaining_plays ?? 0} / {gameStatus?.daily_limit ?? 3} trading day reviews remaining today
+                {testMode ? 'Test mode – no limit' : `${gameStatus?.remaining_plays ?? 0} / ${gameStatus?.daily_limit ?? 3} trading day reviews remaining today`}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -215,9 +218,9 @@ const RetailManagerGameModal: React.FC<RetailManagerGameModalProps> = ({
                 <button
                   key={diff}
                   onClick={() => startGame(diff)}
-                  disabled={!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0}
+                  disabled={!testMode && (!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0)}
                   className={`p-4 rounded-lg border-2 transition-all ${
-                    !gameStatus || (gameStatus.remaining_plays ?? 0) <= 0
+                    !testMode && (!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0)
                       ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
                       : 'border-orange-500 bg-gray-800 text-white hover:bg-orange-600 hover:border-orange-400'
                   }`}
@@ -228,7 +231,7 @@ const RetailManagerGameModal: React.FC<RetailManagerGameModalProps> = ({
                 </button>
               ))}
             </div>
-            {gameStatus && (gameStatus.remaining_plays ?? 0) <= 0 && (
+            {!testMode && gameStatus && (gameStatus.remaining_plays ?? 0) <= 0 && (
               <div className="text-center text-gray-400 text-sm mt-4">
                 No trading day reviews remaining today. Try again tomorrow!
               </div>

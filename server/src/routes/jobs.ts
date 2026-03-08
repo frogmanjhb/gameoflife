@@ -388,6 +388,74 @@ router.get('/assignments/overview', authenticateToken, requireTenant, requireRol
   }
 });
 
+// Get job assignments for the current student's class (students only) — job name + assigned students in class
+router.get('/assignments/class-view', authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userClass = req.user?.class;
+    const schoolId = req.user?.school_id ?? null;
+    if (!userClass || !['6A', '6B', '6C'].includes(userClass)) {
+      return res.status(400).json({ error: 'Invalid class' });
+    }
+
+    const jobsQuery = schoolId !== null
+      ? `
+      WITH preferred AS (
+        SELECT DISTINCT ON (name) id
+        FROM jobs
+        WHERE school_id IS NULL OR school_id = $1
+        ORDER BY name, (school_id = $1) DESC NULLS LAST, id
+      )
+      SELECT j.id, j.name
+      FROM jobs j
+      JOIN preferred p ON j.id = p.id
+      ORDER BY j.name
+    `
+      : `
+      SELECT id, name FROM jobs ORDER BY name
+    `;
+    const jobsParams = schoolId !== null ? [schoolId] : [];
+    const jobs = await database.query(jobsQuery, jobsParams);
+
+    const assignedQuery = schoolId !== null
+      ? `
+      SELECT u.job_id, u.first_name, u.last_name, u.username
+      FROM users u
+      WHERE u.role = 'student' AND u.school_id = $1 AND u.class = $2 AND u.job_id IS NOT NULL
+      ORDER BY u.last_name, u.first_name
+    `
+      : `
+      SELECT u.job_id, u.first_name, u.last_name, u.username
+      FROM users u
+      WHERE u.role = 'student' AND u.class = $1 AND u.job_id IS NOT NULL
+      ORDER BY u.last_name, u.first_name
+    `;
+    const assignedParams = schoolId !== null ? [schoolId, userClass] : [userClass];
+    const assignedRows = await database.query(assignedQuery, assignedParams);
+
+    const byJobId: Record<number, { first_name: string; last_name: string; username: string }[]> = {};
+    for (const row of assignedRows) {
+      const jid = row.job_id;
+      if (!byJobId[jid]) byJobId[jid] = [];
+      byJobId[jid].push({
+        first_name: row.first_name || '',
+        last_name: row.last_name || '',
+        username: row.username || '',
+      });
+    }
+
+    const jobsWithAssigned = jobs.map((j: { id: number; name: string }) => ({
+      id: j.id,
+      name: j.name,
+      assigned_students: byJobId[j.id] || [],
+    }));
+
+    res.json({ jobs: jobsWithAssigned });
+  } catch (error) {
+    console.error('Failed to fetch class job assignments:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Setup routes (must come BEFORE /:id so "setup" is not treated as job id)
 // Add Assistant Software Engineer job (one-time setup - teachers only). Use canonical name to avoid duplicate with seed.
 router.get('/setup/software-engineer',

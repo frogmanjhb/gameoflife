@@ -1128,6 +1128,8 @@ export interface EngagementTimeSeries {
 
 export interface EngagementByClass {
   class: string;
+  /** Display name from town_settings (town_name); use for charts to match town data */
+  town_name?: string;
   logins: number;
   chores_users: number;
   chores_sessions: number;
@@ -1155,6 +1157,20 @@ export interface LowLoginStudent {
   first_name?: string;
   last_name?: string;
   class?: string;
+  /** Town display name from town_settings; use for table to match town data */
+  town_name?: string;
+  logins: number;
+  last_login: string | null;
+}
+
+/** Student with total logins in a period (Student Total logins section) */
+export interface StudentLoginRow {
+  id: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  class?: string;
+  town_name?: string;
   logins: number;
   last_login: string | null;
 }

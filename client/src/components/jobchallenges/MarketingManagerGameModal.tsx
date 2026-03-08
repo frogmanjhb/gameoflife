@@ -9,6 +9,7 @@ interface MarketingManagerGameModalProps {
   onClose: () => void;
   onGameComplete: () => void;
   gameStatus: MarketingManagerGameStatus | null;
+  testMode?: boolean;
 }
 
 type GameState = 'difficulty' | 'playing' | 'results';
@@ -18,7 +19,8 @@ const MarketingManagerGameModal: React.FC<MarketingManagerGameModalProps> = ({
   isOpen,
   onClose,
   onGameComplete,
-  gameStatus
+  gameStatus,
+  testMode = false
 }) => {
   const [gameState, setGameState] = useState<GameState>('difficulty');
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
@@ -48,7 +50,7 @@ const MarketingManagerGameModal: React.FC<MarketingManagerGameModalProps> = ({
   const startGame = async (diff: Difficulty) => {
     try {
       setDifficulty(diff);
-      const response = await marketingManagerGameApi.startGame({ difficulty: diff });
+      const response = await marketingManagerGameApi.startGame({ difficulty: diff, ...(testMode ? { test: true } : {}) });
       setSessionId(response.data.session.id);
       setGameState('playing');
       setTimeLeft(60);
@@ -117,7 +119,8 @@ const MarketingManagerGameModal: React.FC<MarketingManagerGameModalProps> = ({
         score,
         correct_answers: score,
         total_problems: answerSequence.length,
-        answer_sequence: answerSequence
+        answer_sequence: answerSequence,
+        ...(testMode ? { test: true } : {})
       });
       setGameResults({
         score,
@@ -199,7 +202,7 @@ const MarketingManagerGameModal: React.FC<MarketingManagerGameModalProps> = ({
             <div className="text-center mb-6">
               <p className="text-gray-300 mb-2">Answer campaign maths to run successful campaigns</p>
               <p className="text-sm text-gray-400">
-                {gameStatus?.remaining_plays ?? 0} / {gameStatus?.daily_limit ?? 3} campaigns remaining today
+                {testMode ? 'Test mode – no limit' : `${gameStatus?.remaining_plays ?? 0} / ${gameStatus?.daily_limit ?? 3} campaigns remaining today`}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -207,9 +210,9 @@ const MarketingManagerGameModal: React.FC<MarketingManagerGameModalProps> = ({
                 <button
                   key={diff}
                   onClick={() => startGame(diff)}
-                  disabled={!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0}
+                  disabled={!testMode && (!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0)}
                   className={`p-4 rounded-lg border-2 transition-all ${
-                    !gameStatus || (gameStatus.remaining_plays ?? 0) <= 0
+                    !testMode && (!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0)
                       ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
                       : 'border-rose-500 bg-gray-800 text-white hover:bg-rose-600 hover:border-rose-400'
                   }`}
@@ -225,7 +228,7 @@ const MarketingManagerGameModal: React.FC<MarketingManagerGameModalProps> = ({
                 </button>
               ))}
             </div>
-            {gameStatus && (gameStatus.remaining_plays ?? 0) <= 0 && (
+            {!testMode && gameStatus && (gameStatus.remaining_plays ?? 0) <= 0 && (
               <div className="text-center text-gray-400 text-sm mt-4">
                 No campaigns remaining today. Try again tomorrow!
               </div>

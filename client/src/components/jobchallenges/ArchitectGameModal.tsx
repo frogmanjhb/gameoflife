@@ -9,6 +9,8 @@ interface ArchitectGameModalProps {
   onClose: () => void;
   onGameComplete: () => void;
   gameStatus: ArchitectGameStatus | null;
+  /** When true, teacher is testing: no points or XP recorded. */
+  testMode?: boolean;
 }
 
 type GameState = 'difficulty' | 'playing' | 'results';
@@ -18,7 +20,8 @@ const ArchitectGameModal: React.FC<ArchitectGameModalProps> = ({
   isOpen, 
   onClose, 
   onGameComplete, 
-  gameStatus 
+  gameStatus,
+  testMode = false
 }) => {
   const [gameState, setGameState] = useState<GameState>('difficulty');
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
@@ -56,7 +59,7 @@ const ArchitectGameModal: React.FC<ArchitectGameModalProps> = ({
   const startGame = async (diff: Difficulty) => {
     try {
       setDifficulty(diff);
-      const response = await architectGameApi.startGame({ difficulty: diff });
+      const response = await architectGameApi.startGame({ difficulty: diff, ...(testMode ? { test: true } : {}) });
       setSessionId(response.data.session.id);
       setGameState('playing');
       setTimeLeft(60);
@@ -161,7 +164,8 @@ const ArchitectGameModal: React.FC<ArchitectGameModalProps> = ({
         score,
         correct_answers: score,
         total_problems: answerSequence.length,
-        answer_sequence: answerSequence
+        answer_sequence: answerSequence,
+        ...(testMode ? { test: true } : {})
       });
 
       setGameResults({
@@ -258,7 +262,7 @@ const ArchitectGameModal: React.FC<ArchitectGameModalProps> = ({
             <div className="text-center mb-6">
               <p className="text-gray-300 mb-2">Review building designs and solve calculations</p>
               <p className="text-sm text-gray-400">
-                {gameStatus?.remaining_plays ?? 0} / {gameStatus?.daily_limit ?? 3} reviews remaining today
+                {testMode ? 'Test mode – no limit' : `${gameStatus?.remaining_plays ?? 0} / ${gameStatus?.daily_limit ?? 3} reviews remaining today`}
               </p>
             </div>
 
@@ -267,9 +271,9 @@ const ArchitectGameModal: React.FC<ArchitectGameModalProps> = ({
                 <button
                   key={diff}
                   onClick={() => startGame(diff)}
-                  disabled={!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0}
+                  disabled={!testMode && (!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0)}
                   className={`p-4 rounded-lg border-2 transition-all ${
-                    !gameStatus || (gameStatus.remaining_plays ?? 0) <= 0
+                    !testMode && (!gameStatus || (gameStatus.remaining_plays ?? 0) <= 0)
                       ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
                       : 'border-amber-500 bg-gray-800 text-white hover:bg-amber-600 hover:border-amber-400'
                   }`}
@@ -288,7 +292,7 @@ const ArchitectGameModal: React.FC<ArchitectGameModalProps> = ({
               ))}
             </div>
 
-            {gameStatus && (gameStatus.remaining_plays ?? 0) <= 0 && (
+            {!testMode && gameStatus && (gameStatus.remaining_plays ?? 0) <= 0 && (
               <div className="text-center text-gray-400 text-sm mt-4">
                 No reviews remaining today. Try again tomorrow!
               </div>
