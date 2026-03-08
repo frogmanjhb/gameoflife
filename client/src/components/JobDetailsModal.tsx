@@ -39,12 +39,13 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
   }, [job, isEditing]);
 
   if (!isOpen || !job) return null;
-  
+
   // Check if position is already fulfilled
   const isPositionFulfilled = job.is_fulfilled;
-  
+  // Check if user has reached application limit
+  const hasReachedLimit = applicationCount !== null && !applicationCount.canApply;
   // Determine if user can apply
-  const canApply = !userHasJob && !isPositionFulfilled && applicationsEnabled;
+  const canApply = !userHasJob && !isPositionFulfilled && applicationsEnabled && !hasReachedLimit;
 
   const handleStartEdit = () => setIsEditing(true);
   const handleCancelEdit = () => setIsEditing(false);
@@ -308,19 +309,7 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
           </div>
 
           {/* Status Messages */}
-          {isPositionFulfilled && (
-            <div className="flex items-center space-x-3 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0" />
-              <div>
-                <p className="font-semibold text-green-800">Position Fulfilled</p>
-                <p className="text-sm text-green-600">
-                  This position has been filled{job.assigned_to_name ? ` by ${job.assigned_to_name}` : ''}.
-                </p>
-              </div>
-            </div>
-          )}
-          
-          {userHasJob && !isPositionFulfilled && (
+          {userHasJob && (
             <div className="flex items-center space-x-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
               <AlertCircle className="h-6 w-6 text-amber-600 flex-shrink-0" />
               <div>
@@ -366,11 +355,13 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
                 disabled
                 className="flex-1 bg-gray-300 text-gray-500 font-semibold py-3 px-6 rounded-lg cursor-not-allowed"
               >
-                {!applicationsEnabled 
-                  ? 'Applications Disabled' 
-                  : isPositionFulfilled 
-                    ? 'Position Filled' 
-                    : 'Cannot Apply'}
+                {!applicationsEnabled
+                  ? 'Applications Disabled'
+                  : isPositionFulfilled
+                    ? 'Position Filled'
+                    : hasReachedLimit
+                      ? `Application Limit Reached (${applicationCount?.count || 0}/${applicationCount?.maxApplications || 2})`
+                      : 'Cannot Apply'}
               </button>
             )}
             <button

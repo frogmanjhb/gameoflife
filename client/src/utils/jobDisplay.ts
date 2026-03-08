@@ -43,6 +43,38 @@ export const EMPLOYMENT_BOARD_SECTIONS: { title: string; emoji: string; jobNames
   { title: 'Media & Tech', emoji: '🎨', jobNames: ['Marketing Manager', 'Assistant Marketing Manager', 'Graphic Designer', 'Assistant Graphic Designer', 'Journalist', 'Assistant Journalist', 'Software Engineer', 'Assistant Software Engineer'] },
 ];
 
+/** Unique emoji per job for cards and lists. Unknown jobs get 💼. */
+export const JOB_NAME_TO_EMOJI: Record<string, string> = {
+  'Mayor': '👑',
+  'Assistant Town Planner': '🗺️',
+  'Junior Lawyer': '⚖️',
+  'Junior Police Lieutenant': '👮',
+  'Assistant HR Director': '👥',
+  'Junior Chartered Accountant': '📊',
+  'Assistant Financial Manager': '💰',
+  'Assistant Risk & Insurance Manager': '🛡️',
+  'Assistant Civil Engineer': '🌉',
+  'Assistant Electrical Engineer': '⚡',
+  'Assistant Architect': '📐',
+  'Assistant Principal': '🎓',
+  'Assistant Teacher': '📚',
+  'Junior Doctor': '🩺',
+  'Assistant Nurse': '💉',
+  'Assistant Retail Manager': '🛒',
+  'Assistant Event Planner': '📅',
+  'Entrepreneur – Town Business Founder': '🚀',
+  'Assistant Marketing Manager': '📢',
+  'Assistant Graphic Designer': '🎨',
+  'Assistant Journalist': '📰',
+  'Assistant Software Engineer': '💻',
+};
+
+export function getJobEmoji(jobName: string | null | undefined): string {
+  if (!jobName || !jobName.trim()) return '💼';
+  const trimmed = jobName.trim();
+  return JOB_NAME_TO_EMOJI[trimmed] ?? '💼';
+}
+
 /** Display name for employment board (use new title even when API still returns old name). */
 export function getJobDisplayNameForBoard(jobName: string | null | undefined): string {
   if (!jobName || !jobName.trim()) return '';

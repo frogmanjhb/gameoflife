@@ -7,7 +7,7 @@ import {
   Users, User, Search, Plus, Minus, CheckCircle, XCircle, Filter, CreditCard, FileText,
   ArrowUpRight, ArrowDownLeft, Banknote, ToggleLeft, ToggleRight, Briefcase, Settings, Clock
 } from 'lucide-react';
-import api from '../../services/api';
+import api, { treasuryApi } from '../../services/api';
 import { Transaction, Loan, Student } from '../../types';
 import TransferForm from '../TransferForm';
 import LoanForm from '../LoanForm';
@@ -113,7 +113,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
       const newValue = bankSettings.basic_salary_enabled === 'true' ? 'false' : 'true';
       await api.put('/transactions/bank-settings/basic_salary_enabled', { value: newValue });
       setBankSettings({ ...bankSettings, basic_salary_enabled: newValue });
-      setSuccess(`Auto basic salary ${newValue === 'true' ? 'enabled' : 'disabled'}`);
+      setSuccess(`Unemployment fund auto-pay ${newValue === 'true' ? 'enabled' : 'disabled'}`);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update setting');
     } finally {
@@ -126,11 +126,40 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
     setError(''); setSuccess('');
     try {
       const response = await api.post('/transactions/pay-basic-salary', {});
-      setSuccess(`Paid basic salary to ${response.data.updated_count} unemployed students (R${response.data.amount} each)`);
+      setSuccess(`Paid unemployment fund to ${response.data.updated_count} students (R${response.data.amount} each)`);
       fetchData();
       fetchBankSettings();
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to pay basic salary');
+      setError(err.response?.data?.error || 'Failed to pay unemployment fund');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const payEmployedSalaries = async () => {
+    setActionLoading(true);
+    setError(''); setSuccess('');
+    try {
+      const townClasses = ['6A', '6B', '6C'];
+      const classesToPay = selectedClass === 'all'
+        ? townClasses.filter((c) => (studentsByClass.grouped[c] || []).some((s) => s.job_id))
+        : [selectedClass];
+      if (classesToPay.length === 0) {
+        setError('No employed students to pay');
+        return;
+      }
+      let totalNet = 0;
+      let totalCount = 0;
+      for (const townClass of classesToPay) {
+        const result = await treasuryApi.paySalaries(townClass);
+        totalNet += result.data.total_net ?? 0;
+        totalCount += result.data.paid_count ?? 0;
+      }
+      setSuccess(`Paid salaries to ${totalCount} employed students (R${totalNet.toFixed(2)} total)`);
+      fetchData();
+      fetchBankSettings();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to pay employed salaries');
     } finally {
       setActionLoading(false);
     }
@@ -153,6 +182,11 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
 
     return { grouped, sortedClasses };
   }, [students]);
+
+  const employedCount = useMemo(() => {
+    const relevant = selectedClass === 'all' ? students : (studentsByClass.grouped[selectedClass] || []);
+    return relevant.filter((s) => s.job_id).length;
+  }, [students, selectedClass, studentsByClass]);
 
   const filteredStudents = useMemo(() => {
     let filtered = selectedClass === 'all' ? students : (studentsByClass.grouped[selectedClass] || []);
@@ -542,15 +576,15 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
           {/* Payments Tab */}
           {activeTab === 'payments' && (
             <div className="space-y-6">
-              {/* Basic Salary Settings */}
+              {/* Group Payment options */}
               <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-200">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <Settings className="h-6 w-6 text-purple-600" />
                     <div>
-                      <h3 className="font-semibold text-gray-900">Basic Salary Settings</h3>
+                      <h3 className="font-semibold text-gray-900">Group Payment options</h3>
                       <p className="text-sm text-gray-600">
-                        Unemployed students receive R1,500/week on Mondays at 07:00
+                        Unemployment fund: R{bankSettings.basic_salary_amount || '1,500'}/week on Mondays at 07:00 when auto-pay is on
                       </p>
                     </div>
                   </div>
@@ -571,28 +605,54 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                     <span>{bankSettings.basic_salary_enabled === 'true' ? 'Auto Pay ON' : 'Auto Pay OFF'}</span>
                   </button>
                 </div>
-                
-                <div className="flex items-center justify-between bg-white rounded-lg p-3 border border-purple-100">
+
+                {/* Unemployment fund */}
+                <div className="flex items-center justify-between bg-white rounded-lg p-3 border border-purple-100 mb-3">
                   <div className="flex items-center space-x-3">
                     <Briefcase className="h-5 w-5 text-gray-400" />
                     <div>
-                      <p className="font-medium text-gray-900">{unemployedCount} Unemployed Students</p>
-                      <p className="text-sm text-gray-500">Will receive basic salary when paid</p>
+                      <p className="font-medium text-gray-900">Unemployment fund</p>
+                      <p className="text-sm text-gray-500">
+                        Pay unemployed students (R{bankSettings.basic_salary_amount || '1,500'} each).{' '}
+                        <span className="font-medium text-gray-700">{unemployedCount} students</span> will be paid if you click Pay now.
+                      </p>
                     </div>
                   </div>
                   <button
                     onClick={payBasicSalary}
                     disabled={actionLoading || unemployedCount === 0}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center space-x-2 shrink-0"
                   >
                     <Banknote className="h-4 w-4" />
-                    <span>{actionLoading ? 'Paying...' : 'Pay Basic Salary Now'}</span>
+                    <span>{actionLoading ? 'Paying...' : 'Pay now'}</span>
                   </button>
                 </div>
-                
+
+                {/* Employed salaries (level 1–10) */}
+                <div className="flex items-center justify-between bg-white rounded-lg p-3 border border-purple-100">
+                  <div className="flex items-center space-x-3">
+                    <DollarSign className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="font-medium text-gray-900">Employed salaries (level 1–10)</p>
+                      <p className="text-sm text-gray-500">
+                        Pay all employed students their unique level 1–10 salary.{' '}
+                        <span className="font-medium text-gray-700">{employedCount} students</span> will be paid if you click Pay now.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={payEmployedSalaries}
+                    disabled={actionLoading || employedCount === 0}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center space-x-2 shrink-0"
+                  >
+                    <Banknote className="h-4 w-4" />
+                    <span>{actionLoading ? 'Paying...' : 'Pay now'}</span>
+                  </button>
+                </div>
+
                 {bankSettings.last_basic_salary_run && (
                   <p className="text-xs text-gray-500 mt-2">
-                    Last auto-payment: {new Date(bankSettings.last_basic_salary_run).toLocaleString()}
+                    Last unemployment auto-payment: {new Date(bankSettings.last_basic_salary_run).toLocaleString()}
                   </p>
                 )}
               </div>

@@ -294,10 +294,16 @@ router.get('/assignments/overview', authenticateToken, requireTenant, requireRol
     const { class: className } = req.query;
     const schoolId = req.schoolId ?? req.user?.school_id ?? null;
 
-    // Jobs: only global or for this school; count only students from this school
+    // Jobs: only global or for this school; one row per job name (prefer per-school over global)
     // Include base_salary and is_contractual for dynamic salary calculation
     const jobsQuery = schoolId !== null
       ? `
+      WITH preferred AS (
+        SELECT DISTINCT ON (name) id
+        FROM jobs
+        WHERE school_id IS NULL OR school_id = $1
+        ORDER BY name, (school_id = $1) DESC NULLS LAST, id
+      )
       SELECT 
         j.id,
         j.name,
@@ -311,8 +317,8 @@ router.get('/assignments/overview', authenticateToken, requireTenant, requireRol
         COUNT(CASE WHEN u.role = 'student' AND u.school_id = $1 THEN u.id END) as total_assigned,
         COUNT(CASE WHEN u.role = 'student' AND u.school_id = $1 AND u.class = $2 THEN u.id END) as class_assigned
       FROM jobs j
+      JOIN preferred p ON j.id = p.id
       LEFT JOIN users u ON j.id = u.job_id AND u.role = 'student' AND u.school_id = $1
-      WHERE j.school_id IS NULL OR j.school_id = $1
       GROUP BY j.id, j.name, j.description, j.base_salary, j.is_contractual, j.company_name, j.location, j.requirements
       ORDER BY j.name
     `

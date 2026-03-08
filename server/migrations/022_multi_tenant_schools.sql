@@ -216,10 +216,16 @@ SET school_id = COALESCE(
 )
 WHERE t.school_id IS NULL;
 
--- Backfill town_settings
-UPDATE town_settings 
-SET school_id = (SELECT id FROM schools WHERE code = 'stpeters' LIMIT 1) 
-WHERE school_id IS NULL;
+-- Backfill town_settings (idempotent: skip if (school_id, class) already exists; update one row per class if duplicates)
+UPDATE town_settings t
+SET school_id = s.id
+FROM schools s
+WHERE s.code = 'stpeters'
+AND t.school_id IS NULL
+AND NOT EXISTS (SELECT 1 FROM town_settings t2 WHERE t2.school_id = s.id AND t2.class = t.class)
+AND t.id IN (
+  SELECT DISTINCT ON (class) id FROM town_settings WHERE school_id IS NULL ORDER BY class, id
+);
 
 -- Backfill announcements
 UPDATE announcements 
@@ -231,10 +237,16 @@ UPDATE tenders
 SET school_id = (SELECT id FROM schools WHERE code = 'stpeters' LIMIT 1) 
 WHERE school_id IS NULL;
 
--- Backfill jobs
-UPDATE jobs 
-SET school_id = (SELECT id FROM schools WHERE code = 'stpeters' LIMIT 1) 
-WHERE school_id IS NULL;
+-- Backfill jobs (idempotent: skip if (school_id, name) already exists; update one row per name to avoid duplicate)
+UPDATE jobs j
+SET school_id = s.id
+FROM schools s
+WHERE s.code = 'stpeters'
+AND j.school_id IS NULL
+AND NOT EXISTS (SELECT 1 FROM jobs j2 WHERE j2.school_id = s.id AND j2.name = j.name)
+AND j.id IN (
+  SELECT DISTINCT ON (name) id FROM jobs WHERE school_id IS NULL ORDER BY name, id
+);
 
 -- Backfill land_parcels
 UPDATE land_parcels 

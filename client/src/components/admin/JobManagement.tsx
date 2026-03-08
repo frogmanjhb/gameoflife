@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, CheckCircle, XCircle, UserPlus, UserMinus, Clock, Users, ToggleLeft, ToggleRight, Edit2, X, Save, Award, Plus } from 'lucide-react';
+import { Briefcase, CheckCircle, XCircle, UserMinus, Clock, Users, ToggleLeft, ToggleRight, Edit2, X, Save, Award, Plus, Search } from 'lucide-react';
 import { jobsApi, businessProposalsApi } from '../../services/api';
 import api from '../../services/api';
 import { Job, JobApplication, BusinessProposal } from '../../types';
 import { useTown } from '../../contexts/TownContext';
 import { getXPProgress } from '../../utils/jobProgression';
+import { getJobEmoji } from '../../utils/jobDisplay';
 
 interface Student {
   id: number;
@@ -25,12 +26,13 @@ interface JobWithAssignments extends Job {
 
 const JobManagement: React.FC = () => {
   const { currentTownClass, allTowns, currentTown, refreshTown } = useTown();
-  const [activeTab, setActiveTab] = useState<'jobs' | 'applications' | 'business-proposals'>('jobs');
+  const [activeTab, setActiveTab] = useState<'jobs' | 'applications' | 'denied-applications' | 'business-proposals'>('jobs');
   const [selectedClass, setSelectedClass] = useState<string>(currentTownClass || 'all');
   const [selectedJobAssignmentsClass, setSelectedJobAssignmentsClass] = useState<string>('6A');
   const [jobs, setJobs] = useState<JobWithAssignments[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [applications, setApplications] = useState<JobApplication[]>([]);
+  const [pendingApplicationCount, setPendingApplicationCount] = useState<number>(0);
   const [businessProposals, setBusinessProposals] = useState<BusinessProposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +44,10 @@ const JobManagement: React.FC = () => {
   const [savingJob, setSavingJob] = useState(false);
   const [awardingXP, setAwardingXP] = useState<number | null>(null);
   const [xpAmount, setXpAmount] = useState<string>('10');
+  const [studentSearchQuery, setStudentSearchQuery] = useState<string>('');
+  const [applicationSearchQuery, setApplicationSearchQuery] = useState<string>('');
+  const [expandedJobId, setExpandedJobId] = useState<number | null>(null);
+  const [jobAssignmentsFilter, setJobAssignmentsFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
 
   useEffect(() => {
     fetchData();
@@ -60,21 +66,20 @@ const JobManagement: React.FC = () => {
       } else if (activeTab === 'business-proposals') {
         const response = await businessProposalsApi.list();
         setBusinessProposals(response.data || []);
-      } else {
+      } else if (activeTab === 'applications' || activeTab === 'denied-applications') {
         const className = selectedClass === 'all' ? undefined : selectedClass;
-        const filters: any = { status: 'pending' };
-        if (className) {
-          // We'll filter by class on the frontend since backend doesn't support it yet
-        }
-        const response = await jobsApi.getApplications(filters);
+        const status = activeTab === 'applications' ? 'pending' : 'denied';
+        const response = await jobsApi.getApplications({ status });
         let filtered = response.data;
         if (className && className !== 'all') {
-          // Filter by student class (we need to get students first)
           const studentsRes = await jobsApi.getJobAssignmentsOverview(className);
           const studentIds = studentsRes.data.students.map((s: Student) => s.id);
           filtered = filtered.filter((app: JobApplication) => studentIds.includes(app.user_id));
         }
         setApplications(filtered);
+        if (activeTab === 'applications') {
+          setPendingApplicationCount(filtered.length);
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load data');
@@ -254,6 +259,16 @@ const JobManagement: React.FC = () => {
     return students.filter(s => s.job_id === jobId);
   };
 
+  const matchesStudentSearch = (s: Student, q: string) => {
+    if (!q.trim()) return true;
+    const term = q.trim().toLowerCase();
+    const first = (s.first_name || '').toLowerCase();
+    const last = (s.last_name || '').toLowerCase();
+    const username = (s.username || '').toLowerCase();
+    const full = `${first} ${last}`.trim();
+    return first.includes(term) || last.includes(term) || username.includes(term) || full.includes(term);
+  };
+
   const formatSalary = (salary: number) => {
     return new Intl.NumberFormat('en-ZA', {
       style: 'currency',
@@ -268,12 +283,6 @@ const JobManagement: React.FC = () => {
     const baseSalary = job?.base_salary || 2000;
     // If somehow base_salary is still 4000, normalize it to 2000
     return baseSalary === 4000 ? 2000 : baseSalary;
-  };
-
-  const getPositionsAvailable = (requirements?: string) => {
-    if (!requirements) return null;
-    const match = requirements.match(/(\d+)\s+positions?/i);
-    return match ? parseInt(match[1]) : null;
   };
 
   if (loading && jobs.length === 0 && applications.length === 0 && (activeTab !== 'business-proposals' || businessProposals.length === 0)) {
@@ -348,8 +357,8 @@ const JobManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Class Selector - Only show for Applications tab */}
-      {activeTab === 'applications' && (
+      {/* Class Selector - show for Pending and Denied Applications tabs */}
+      {(activeTab === 'applications' || activeTab === 'denied-applications') && (
         <div className="flex items-center space-x-4">
           <label className="text-sm font-medium text-gray-700">Filter by Class:</label>
           <div className="flex gap-2">
@@ -404,8 +413,24 @@ const JobManagement: React.FC = () => {
           >
             <Clock className="h-4 w-4" />
             <span>Pending Applications</span>
-            {applications.length > 0 && (
+            {(activeTab === 'applications' ? applications.length : pendingApplicationCount) > 0 && (
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                {activeTab === 'applications' ? applications.length : pendingApplicationCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('denied-applications')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+              activeTab === 'denied-applications'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <XCircle className="h-4 w-4" />
+            <span>Denied Applications</span>
+            {activeTab === 'denied-applications' && applications.length > 0 && (
+              <span className="bg-gray-500 text-white text-xs px-2 py-0.5 rounded-full">
                 {applications.length}
               </span>
             )}
@@ -445,6 +470,39 @@ const JobManagement: React.FC = () => {
       {/* Jobs Tab */}
       {activeTab === 'jobs' && (
         <div className="space-y-6">
+          {/* Search and filter */}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 flex-1 min-w-0 max-w-md">
+              <Search className="h-5 w-5 text-gray-400 flex-shrink-0" />
+              <input
+                type="text"
+                value={studentSearchQuery}
+                onChange={(e) => setStudentSearchQuery(e.target.value)}
+                placeholder="Search students by name or username..."
+                className="input-field flex-1 min-w-0"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Show jobs:</span>
+              <div className="flex rounded-lg border border-gray-300 overflow-hidden">
+                {(['all', 'assigned', 'unassigned'] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setJobAssignmentsFilter(value)}
+                    className={`px-3 py-2 text-sm font-medium transition-colors ${
+                      jobAssignmentsFilter === value
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {value === 'all' ? 'All' : value === 'assigned' ? 'Assigned' : 'Unassigned'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Class Tabs for Job Assignments */}
           <div className="border-b border-gray-200">
             <nav className="flex space-x-4">
@@ -467,62 +525,102 @@ const JobManagement: React.FC = () => {
             </nav>
           </div>
 
-          {/* Jobs with Student Dropdowns */}
-          <div className="space-y-4">
-            {jobs.map((job) => {
+          {/* Jobs: compact square cards; click to expand */}
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+            {jobs
+              .filter((job) => {
+                const assignedInClass = students.filter(
+                  (s) => s.class === selectedJobAssignmentsClass && s.job_id === job.id
+                ).length;
+                if (jobAssignmentsFilter === 'all') return true;
+                if (jobAssignmentsFilter === 'assigned') return assignedInClass > 0;
+                return assignedInClass === 0;
+              })
+              .map((job) => {
               const classStudents = students.filter(s => s.class === selectedJobAssignmentsClass);
-              const assignedStudents = classStudents.filter(s => s.job_id === job.id);
-              const unassignedStudents = classStudents.filter(s => !s.job_id || s.job_id !== job.id);
-              const positionsAvailable = getPositionsAvailable(job.requirements);
-              const isFullyAssigned = positionsAvailable ? assignedStudents.length >= positionsAvailable : false;
+              const classStudentsFiltered = classStudents.filter(s => matchesStudentSearch(s, studentSearchQuery));
+              const assignedStudents = classStudentsFiltered.filter(s => s.job_id === job.id);
+              const unassignedStudents = classStudentsFiltered.filter(s => !s.job_id || s.job_id !== job.id);
+              const isExpanded = expandedJobId === job.id;
 
               return (
-                <div key={job.id} className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">{job.name}</h3>
-                        {job.company_name && (
-                          <span className="text-sm text-gray-600">({job.company_name})</span>
-                        )}
-                        <button
-                          onClick={() => handleEditJob(job)}
-                          className="text-gray-400 hover:text-primary-600 transition-colors"
-                          title="Edit job"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                      {job.location && (
-                        <p className="text-sm text-gray-600 mb-2">📍 {job.location}</p>
-                      )}
-                      <div className="mb-2">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-primary-600">
-                            {formatSalary(getBaseSalary(job))} starting
-                          </p>
-                          {(job as any).is_contractual && (
-                            <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs font-semibold">
-                              CONTRACTUAL
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500">Grows with job level</p>
-                      </div>
-                      {positionsAvailable && (
-                        <p className="text-sm text-gray-600">
-                          {positionsAvailable} position{positionsAvailable > 1 ? 's' : ''} available
-                          {assignedStudents.length > 0 && (
-                            <span className="ml-2">
-                              ({assignedStudents.length} assigned in {selectedJobAssignmentsClass})
-                            </span>
-                          )}
-                        </p>
-                      )}
-                    </div>
+                <div
+                  key={job.id}
+                  className={`bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden ${
+                    isExpanded ? 'col-span-3 sm:col-span-4 md:col-span-5 lg:col-span-6' : ''
+                  }`}
+                >
+                  {/* Compact card (always visible) — click to expand/collapse */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setExpandedJobId((id) => (id === job.id ? null : job.id))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setExpandedJobId((id) => (id === job.id ? null : job.id));
+                      }
+                    }}
+                    className={`flex flex-col justify-center items-center text-center cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-100 ${
+                      isExpanded ? 'p-4 border-b border-gray-200' : 'aspect-square min-h-[90px] p-3'
+                    }`}
+                  >
+                    <span className="text-2xl mb-1" aria-hidden>{getJobEmoji(job.name)}</span>
+                    <h3 className="font-semibold text-gray-900 text-xs line-clamp-2 mb-0.5">
+                      {job.name}
+                    </h3>
+                    <p className="text-xs text-gray-600">
+                      {assignedStudents.length} assigned in {selectedJobAssignmentsClass}
+                    </p>
+                    {isExpanded && (
+                      <span className="text-xs text-gray-500 mt-1">Click to collapse</span>
+                    )}
                   </div>
 
-                  {/* Assigned Students */}
+                  {/* Expanded details */}
+                  {isExpanded && (
+                    <div className="p-6" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <span className="text-xl" aria-hidden>{getJobEmoji(job.name)}</span>
+                            <h3 className="text-lg font-semibold text-gray-900">{job.name}</h3>
+                            {job.company_name && (
+                              <span className="text-sm text-gray-600">({job.company_name})</span>
+                            )}
+                            <button
+                              onClick={() => handleEditJob(job)}
+                              className="text-gray-400 hover:text-primary-600 transition-colors"
+                              title="Edit job"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                          {job.location && (
+                            <p className="text-sm text-gray-600 mb-2">📍 {job.location}</p>
+                          )}
+                          <div className="mb-2">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-primary-600">
+                                {formatSalary(getBaseSalary(job))} starting
+                              </p>
+                              {(job as any).is_contractual && (
+                                <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs font-semibold">
+                                  CONTRACTUAL
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500">Grows with job level</p>
+                          </div>
+                          {assignedStudents.length > 0 && (
+                            <p className="text-sm text-gray-600">
+                              {assignedStudents.length} assigned in {selectedJobAssignmentsClass}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Assigned Students */}
                   {assignedStudents.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-gray-200">
                       <h4 className="text-sm font-medium text-gray-700 mb-3">Assigned Students:</h4>
@@ -625,11 +723,11 @@ const JobManagement: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Assign Student Dropdown */}
+                  {/* Assign student (dropdown) — use repeatedly to add multiple students */}
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <div className="flex items-center space-x-3">
                       <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
-                        Assign Student:
+                        Assign student:
                       </label>
                       <select
                         value=""
@@ -637,22 +735,16 @@ const JobManagement: React.FC = () => {
                           const studentId = e.target.value ? parseInt(e.target.value) : null;
                           if (studentId) {
                             handleAssignJob(studentId, job.id);
-                            e.target.value = ''; // Reset dropdown
+                            e.target.value = '';
                           }
                         }}
-                        disabled={isFullyAssigned || unassignedStudents.length === 0}
+                        disabled={unassignedStudents.length === 0}
                         className={`flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm ${
-                          isFullyAssigned || unassignedStudents.length === 0
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-white'
+                          unassignedStudents.length === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'
                         }`}
                       >
                         <option value="">
-                          {isFullyAssigned
-                            ? 'All positions filled'
-                            : unassignedStudents.length === 0
-                            ? 'No unassigned students'
-                            : 'Select a student...'}
+                          {unassignedStudents.length === 0 ? 'No unassigned students' : 'Select a student...'}
                         </option>
                         {unassignedStudents.map((student) => (
                           <option key={student.id} value={student.id}>
@@ -662,7 +754,12 @@ const JobManagement: React.FC = () => {
                         ))}
                       </select>
                     </div>
+                    {unassignedStudents.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">Select a student to assign; use the dropdown again to add more.</p>
+                    )}
                   </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -673,13 +770,35 @@ const JobManagement: React.FC = () => {
       {/* Applications Tab */}
       {activeTab === 'applications' && (
         <div className="space-y-4">
-          {applications.length === 0 ? (
+          <div className="flex items-center gap-2">
+            <Search className="h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              value={applicationSearchQuery}
+              onChange={(e) => setApplicationSearchQuery(e.target.value)}
+              placeholder="Search applicants by name or username..."
+              className="input-field flex-1 max-w-md"
+            />
+          </div>
+          {(() => {
+            const filteredApplications = applicationSearchQuery.trim()
+              ? applications.filter((app) => {
+                  const term = applicationSearchQuery.trim().toLowerCase();
+                  const first = (app.applicant_first_name || '').toLowerCase();
+                  const last = (app.applicant_last_name || '').toLowerCase();
+                  const username = (app.applicant_username || '').toLowerCase();
+                  return first.includes(term) || last.includes(term) || username.includes(term) || `${first} ${last}`.trim().includes(term);
+                })
+              : applications;
+            return filteredApplications.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
               <Clock className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-gray-600">No pending applications</p>
+              <p className="text-gray-600">
+                {applications.length === 0 ? 'No pending applications' : 'No applicants match your search'}
+              </p>
             </div>
           ) : (
-            applications.map((application) => (
+            filteredApplications.map((application) => (
               <div key={application.id} className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
@@ -729,9 +848,8 @@ const JobManagement: React.FC = () => {
                       const questionLabels: Record<string, string> = {
                         interest: 'Why are you interested in this position?',
                         experience: 'What relevant experience do you have?',
-                        availability: 'Are you available to work during school hours?',
                         skills: 'What skills make you a good fit?',
-                        hours: 'How many hours per week can you commit?'
+                        cv_submitted: 'Have you submitted your CV through Google classroom?',
                       };
                       const questionLabel = questionLabels[questionId] || questionId;
                       return (
@@ -747,11 +865,108 @@ const JobManagement: React.FC = () => {
                 </div>
               </div>
             ))
-          )}
+          );
+          })()}
+        </div>
+      )}
+
+      {/* Denied Applications Tab */}
+      {activeTab === 'denied-applications' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Search className="h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              value={applicationSearchQuery}
+              onChange={(e) => setApplicationSearchQuery(e.target.value)}
+              placeholder="Search applicants by name or username..."
+              className="input-field flex-1 max-w-md"
+            />
+          </div>
+          {(() => {
+            const filteredApplications = applicationSearchQuery.trim()
+              ? applications.filter((app) => {
+                  const term = applicationSearchQuery.trim().toLowerCase();
+                  const first = (app.applicant_first_name || '').toLowerCase();
+                  const last = (app.applicant_last_name || '').toLowerCase();
+                  const username = (app.applicant_username || '').toLowerCase();
+                  return first.includes(term) || last.includes(term) || username.includes(term) || `${first} ${last}`.trim().includes(term);
+                })
+              : applications;
+            return filteredApplications.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+                <XCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p className="text-gray-600">
+                  {applications.length === 0 ? 'No denied applications' : 'No denied applicants match your search'}
+                </p>
+              </div>
+            ) : (
+              filteredApplications.map((application) => (
+                <div key={application.id} className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">{application.job_name}</h3>
+                        <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded">
+                          Denied
+                        </span>
+                      </div>
+                      <div className="space-y-1 text-sm text-gray-600">
+                        <p>
+                          <strong>Applicant:</strong> {application.applicant_first_name}{' '}
+                          {application.applicant_last_name} ({application.applicant_username})
+                        </p>
+                        <p>
+                          <strong>Applied:</strong>{' '}
+                          {new Date(application.created_at).toLocaleDateString()}
+                        </p>
+                        {application.reviewed_at && (
+                          <p>
+                            <strong>Denied on:</strong>{' '}
+                            {new Date(application.reviewed_at).toLocaleDateString()}
+                          </p>
+                        )}
+                        {application.job_salary && (
+                          <p>
+                            <strong>Salary:</strong> {formatSalary(application.job_salary)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Application Answers */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Application Answers:</h4>
+                    <div className="space-y-3">
+                      {Object.entries(application.answers || {}).map(([questionId, answer]) => {
+                        const questionLabels: Record<string, string> = {
+                          interest: 'Why are you interested in this position?',
+                          experience: 'What relevant experience do you have?',
+                          skills: 'What skills make you a good fit?',
+                          cv_submitted: 'Have you submitted your CV through Google classroom?',
+                        };
+                        const questionLabel = questionLabels[questionId] || questionId;
+                        return (
+                          <div key={questionId} className="bg-gray-50 rounded-lg p-3">
+                            <p className="text-sm font-medium text-gray-700 mb-1">{questionLabel}</p>
+                            <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                              {Array.isArray(answer) ? answer.join(', ') : answer}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ))
+            );
+          })()}
         </div>
       )}
 
       {/* Business Proposals Tab */}
+
       {activeTab === 'business-proposals' && (
         <div className="space-y-4">
           {businessProposals.length === 0 ? (
