@@ -209,6 +209,10 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.json({ success: true, earnings: 0, experience_points: 0, new_level: null, isNewHighScore: false });
     }
 
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
     const { session_id, score, correct_answers, total_problems, answer_sequence } = req.body;
 
     console.log(`📝 Architect game submission from ${req.user.username}:`, {

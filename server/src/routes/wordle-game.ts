@@ -297,7 +297,11 @@ router.post('/complete', authenticateToken, async (req: AuthenticatedRequest, re
       return res.json({ success: true, earnings: 0, experience_points: 0, new_level: null });
     }
 
-    const userId = req.user!.id;
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const userId = req.user.id;
     const session = await database.get(`
       SELECT * FROM wordle_sessions WHERE id = $1 AND user_id = $2
     `, [session_id, userId]);

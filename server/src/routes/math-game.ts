@@ -202,6 +202,10 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.json({ success: true, earnings: 0, isNewHighScore: false });
     }
 
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
     if (!(await isMathChoresEnabled())) {
       return res.status(403).json({ error: 'Math chores are currently disabled.' });
     }
