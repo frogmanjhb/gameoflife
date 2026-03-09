@@ -9,7 +9,7 @@ import MyJobCard from './MyJobCard';
 import MyPropertyCard from './MyPropertyCard';
 import MyInsuranceCard from './MyInsuranceCard';
 import MyTendersCard from './MyTendersCard';
-import { Grid } from 'lucide-react';
+import { Grid, CalendarDays } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, X } from 'lucide-react';
 import { getDisplayJobTitle } from '../utils/jobDisplay';
@@ -55,6 +55,16 @@ const StudentDashboard: React.FC = () => {
 
   const jobName = user?.job_name ? getDisplayJobTitle(user.job_name, user.job_level) : 'No job assigned';
 
+  const daysPassed = useMemo(() => {
+    if (!user?.game_start_date) return null;
+    const start = new Date(user.game_start_date);
+    const now = new Date();
+    start.setHours(0, 0, 0, 0);
+    now.setHours(0, 0, 0, 0);
+    const diff = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    return diff >= 0 ? diff : null;
+  }, [user?.game_start_date]);
+
   // Show a very noticeable banner when a new tender announcement is posted
   const [dismissedTenderAnnouncementId, setDismissedTenderAnnouncementId] = useState<number>(() => {
     const stored = Number(localStorage.getItem('dismissed_tender_announcement_id') || '0');
@@ -87,11 +97,24 @@ const StudentDashboard: React.FC = () => {
     <div className="space-y-6">
       {/* Welcome Banner - color changes randomly each login */}
       <div className={`${headerTheme.gradient} rounded-2xl p-6`}>
-        <h1 className={`text-2xl font-bold mb-2 ${headerTheme.text}`}>Welcome, {displayName}! 🎓</h1>
-        <p className={headerTheme.subtext}>
-          {currentTown ? `Welcome to ${currentTown.town_name}!` : 'Welcome to Town Hub!'}
-          {jobName !== 'No job assigned' && ` • Your job: ${jobName}`}
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className={`text-2xl font-bold mb-2 ${headerTheme.text}`}>Welcome, {displayName}! 🎓</h1>
+            <p className={headerTheme.subtext}>
+              {currentTown ? `Welcome to ${currentTown.town_name}!` : 'Welcome to Town Hub!'}
+              {jobName !== 'No job assigned' && ` • Your job: ${jobName}`}
+            </p>
+          </div>
+          {daysPassed !== null && (
+            <div className="bg-white/20 rounded-xl px-4 py-2 text-right flex-shrink-0">
+              <div className="flex items-center gap-1.5 justify-end">
+                <CalendarDays className={`h-4 w-4 ${headerTheme.subtext}`} />
+                <p className={`text-xs font-medium ${headerTheme.subtext}`}>Game of Life</p>
+              </div>
+              <p className={`text-2xl font-bold ${headerTheme.text}`}>Day {daysPassed}</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* New Tender Alert (only when Tenders plugin enabled and student can access plugins) */}

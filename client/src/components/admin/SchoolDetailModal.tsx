@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Users, Activity, Settings, Archive, RefreshCw, Plus } from 'lucide-react';
+import { X, DollarSign, Users, Activity, Settings, Archive, RefreshCw, Plus, Calendar } from 'lucide-react';
 import api from '../../services/api';
 
 interface School {
@@ -36,10 +36,22 @@ const SchoolDetailModal: React.FC<SchoolDetailModalProps> = ({ school, onClose, 
     email: ''
   });
   const [creatingTeacher, setCreatingTeacher] = useState(false);
+  const [gameStartDate, setGameStartDate] = useState('');
+  const [savingStartDate, setSavingStartDate] = useState(false);
+  const [startDateSuccess, setStartDateSuccess] = useState('');
 
   useEffect(() => {
     fetchSchoolDetails();
   }, [school.id]);
+
+  useEffect(() => {
+    if (details?.school?.settings) {
+      const settings = typeof details.school.settings === 'string'
+        ? JSON.parse(details.school.settings)
+        : details.school.settings;
+      setGameStartDate(settings.game_start_date || '');
+    }
+  }, [details?.school?.settings]);
 
   const fetchSchoolDetails = async () => {
     try {
@@ -80,6 +92,25 @@ const SchoolDetailModal: React.FC<SchoolDetailModalProps> = ({ school, onClose, 
       setError(err.response?.data?.error || 'Failed to create teacher');
     } finally {
       setCreatingTeacher(false);
+    }
+  };
+
+  const handleSaveStartDate = async () => {
+    setSavingStartDate(true);
+    setError('');
+    setStartDateSuccess('');
+    try {
+      const currentSettings = typeof details?.school?.settings === 'string'
+        ? JSON.parse(details.school.settings)
+        : (details?.school?.settings || {});
+      const updatedSettings = { ...currentSettings, game_start_date: gameStartDate || null };
+      await api.put(`/admin/schools/${school.id}`, { settings: updatedSettings });
+      setStartDateSuccess('Game start date saved successfully');
+      fetchSchoolDetails();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to save game start date');
+    } finally {
+      setSavingStartDate(false);
     }
   };
 
@@ -350,8 +381,44 @@ const SchoolDetailModal: React.FC<SchoolDetailModalProps> = ({ school, onClose, 
 
           {activeTab === 'settings' && details?.school && (
             <div className="space-y-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex items-center space-x-2 mb-3">
+                  <Calendar className="h-5 w-5 text-primary-600" />
+                  <p className="text-sm font-medium text-gray-700">Game of Life Start Date</p>
+                </div>
+                <p className="text-xs text-gray-500 mb-3">
+                  Set the date the Game of Life started for this school. A "days passed" counter will be shown on teacher and student dashboards.
+                </p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="date"
+                    value={gameStartDate}
+                    onChange={(e) => { setGameStartDate(e.target.value); setStartDateSuccess(''); }}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                  <button
+                    onClick={handleSaveStartDate}
+                    disabled={savingStartDate}
+                    className="btn-primary text-sm disabled:opacity-50"
+                  >
+                    {savingStartDate ? 'Saving...' : 'Save'}
+                  </button>
+                  {gameStartDate && (
+                    <button
+                      onClick={() => { setGameStartDate(''); setStartDateSuccess(''); }}
+                      className="text-sm text-red-600 hover:text-red-700 hover:underline"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {startDateSuccess && (
+                  <p className="text-sm text-green-600 mt-2">{startDateSuccess}</p>
+                )}
+              </div>
+
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">School Settings</p>
+                <p className="text-sm font-medium text-gray-700 mb-2">All School Settings</p>
                 <pre className="bg-gray-50 p-4 rounded-lg text-xs overflow-auto">
                   {JSON.stringify(details.school.settings || {}, null, 2)}
                 </pre>

@@ -15,7 +15,7 @@ import StudentManagement from './StudentManagement';
 import PendingStudents from './PendingStudents';
 import { 
   Grid, Settings, Briefcase, Building2, Users, Wallet, 
-  TrendingUp, CreditCard, Megaphone, MapPin, Landmark, Clock, ShoppingBag, GripVertical
+  TrendingUp, CreditCard, Megaphone, MapPin, Landmark, Clock, ShoppingBag, GripVertical, CalendarDays
 } from 'lucide-react';
 import api from '../services/api';
 import { Student, Loan, Transaction } from '../types';
@@ -131,6 +131,16 @@ const TeacherDashboard: React.FC = () => {
     ? `${user.first_name} ${user.last_name}`
     : user?.username || 'Teacher';
 
+  const daysPassed = useMemo(() => {
+    if (!user?.game_start_date) return null;
+    const start = new Date(user.game_start_date);
+    const now = new Date();
+    start.setHours(0, 0, 0, 0);
+    now.setHours(0, 0, 0, 0);
+    const diff = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    return diff >= 0 ? diff : null;
+  }, [user?.game_start_date]);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -209,9 +219,20 @@ const TeacherDashboard: React.FC = () => {
             <h1 className="text-2xl font-bold mb-2">Welcome, {displayName}! 👨‍🏫</h1>
             <p className="text-primary-100">Town Hub Control Center</p>
           </div>
-          <div className="text-right">
-            <p className="text-primary-100 text-sm">Managing</p>
-            <p className="text-xl font-bold">{allTowns.length} Towns</p>
+          <div className="flex items-center gap-6">
+            {daysPassed !== null && (
+              <div className="text-right bg-white/15 rounded-xl px-4 py-2">
+                <div className="flex items-center gap-1.5 justify-end">
+                  <CalendarDays className="h-4 w-4 text-primary-200" />
+                  <p className="text-primary-200 text-xs font-medium">Game of Life</p>
+                </div>
+                <p className="text-2xl font-bold">Day {daysPassed}</p>
+              </div>
+            )}
+            <div className="text-right">
+              <p className="text-primary-100 text-sm">Managing</p>
+              <p className="text-xl font-bold">{allTowns.length} Towns</p>
+            </div>
           </div>
         </div>
       </div>

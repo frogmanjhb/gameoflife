@@ -18,6 +18,7 @@ export interface User {
   profile_emoji?: string;
   rules_agreed_at?: string | null;
   account_frozen?: boolean;
+  game_start_date?: string | null;
   created_at: string;
   updated_at: string;
 }
