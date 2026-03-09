@@ -40,15 +40,15 @@ CREATE TABLE IF NOT EXISTS treasury_transactions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert default progressive tax brackets (South African-inspired but simplified for classroom)
--- These create a fair progressive tax system
+-- Insert default progressive tax brackets aligned to job levels (base R2,000)
+-- L1: 2%, L2: 4%, L3: 8%, L4: 16%, L5-7: 20%, L8-10: 25%
 INSERT INTO tax_brackets (min_salary, max_salary, tax_rate) VALUES
-    (0, 500, 0),           -- R0-R500: 0% tax (poverty threshold)
-    (500.01, 1500, 5),     -- R500-R1500: 5% tax (basic income)
-    (1500.01, 3000, 10),   -- R1500-R3000: 10% tax (moderate income)
-    (3000.01, 5000, 15),   -- R3000-R5000: 15% tax (above average)
-    (5000.01, 10000, 20),  -- R5000-R10000: 20% tax (high income)
-    (10000.01, NULL, 25)   -- R10000+: 25% tax (very high income)
+    (0, 2700, 2),              -- L1 salary R2,000
+    (2700.01, 4150, 4),        -- L2 salary R3,444
+    (4150.01, 5600, 8),        -- L3 salary R4,889
+    (5600.01, 7050, 16),       -- L4 salary R6,333
+    (7050.01, 11400, 20),      -- L5-L7 salary R7,778 – R10,667
+    (11400.01, NULL, 25)       -- L8-L10 salary R12,111 – R15,000
 ON CONFLICT DO NOTHING;
 
 -- Create indexes for better performance
