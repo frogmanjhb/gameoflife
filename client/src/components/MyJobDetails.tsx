@@ -90,43 +90,43 @@ const MyJobDetails: React.FC = () => {
   }, [jobId]);
 
   useEffect(() => {
-    if (user && job?.name?.toLowerCase() === 'assistant architect') {
+    if (user && (job?.name || '').toLowerCase().trim().includes('architect')) {
       fetchArchitectGameStatus();
     }
   }, [user, job]);
 
   useEffect(() => {
-    if (user && job?.name?.toLowerCase().trim() === 'junior chartered accountant') {
+    if (user && (job?.name || '').toLowerCase().trim().includes('accountant')) {
       fetchAccountantGameStatus();
     }
   }, [user, job]);
 
   useEffect(() => {
-    if (user && job?.name?.toLowerCase().trim() === 'assistant software engineer') {
+    if (user && (job?.name || '').toLowerCase().trim().includes('software engineer')) {
       fetchSoftwareEngineerGameStatus();
     }
   }, [user, job]);
 
   useEffect(() => {
-    if (user && job?.name?.toLowerCase().trim() === 'assistant marketing manager') {
+    if (user && (job?.name || '').toLowerCase().trim().includes('marketing manager')) {
       fetchMarketingManagerGameStatus();
     }
   }, [user, job]);
 
   useEffect(() => {
-    if (user && job?.name?.toLowerCase().trim() === 'assistant graphic designer') {
+    if (user && (job?.name || '').toLowerCase().trim().includes('graphic designer')) {
       fetchGraphicDesignerGameStatus();
     }
   }, [user, job]);
 
   useEffect(() => {
-    if (user && job?.name?.toLowerCase().trim() === 'assistant journalist') {
+    if (user && (job?.name || '').toLowerCase().trim().includes('journalist')) {
       fetchJournalistGameStatus();
     }
   }, [user, job]);
 
   useEffect(() => {
-    if (user && job?.name?.toLowerCase().trim() === 'assistant event planner') {
+    if (user && (job?.name || '').toLowerCase().trim().includes('event planner')) {
       fetchEventPlannerGameStatus();
     }
   }, [user, job]);
@@ -772,7 +772,7 @@ const MyJobDetails: React.FC = () => {
         )}
 
         {/* Software Engineer – Logic & Systems Challenge */}
-        {job.name?.toLowerCase().trim() === 'assistant software engineer' && (
+        {(job?.name || '').toLowerCase().trim().includes('software engineer') && (
           <div className="pt-6 border-t border-gray-200">
             <div className="bg-gradient-to-r from-blue-50 to-violet-50 rounded-lg p-6 border border-blue-200">
               <div className="flex items-center justify-between mb-4">
@@ -821,7 +821,7 @@ const MyJobDetails: React.FC = () => {
         )}
 
         {/* Marketing Manager – Campaign Strategy Challenge */}
-        {job.name?.toLowerCase().trim() === 'assistant marketing manager' && (
+        {(job?.name || '').toLowerCase().trim().includes('marketing manager') && (
           <div className="pt-6 border-t border-gray-200">
             <div className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg p-6 border border-rose-200">
               <div className="flex items-center justify-between mb-4">
@@ -870,7 +870,7 @@ const MyJobDetails: React.FC = () => {
         )}
 
         {/* Graphic Designer – Design Precision Challenge */}
-        {job.name?.toLowerCase().trim() === 'assistant graphic designer' && (
+        {(job?.name || '').toLowerCase().trim().includes('graphic designer') && (
           <div className="pt-6 border-t border-gray-200">
             <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-lg p-6 border border-teal-200">
               <div className="flex items-center justify-between mb-4">
@@ -919,7 +919,7 @@ const MyJobDetails: React.FC = () => {
         )}
 
         {/* Journalist – Data & Reporting Challenge */}
-        {job.name?.toLowerCase().trim() === 'assistant journalist' && (
+        {(job?.name || '').toLowerCase().trim().includes('journalist') && (
           <div className="pt-6 border-t border-gray-200">
             <div className="bg-gradient-to-r from-indigo-50 to-slate-50 rounded-lg p-6 border border-indigo-200">
               <div className="flex items-center justify-between mb-4">
@@ -968,7 +968,7 @@ const MyJobDetails: React.FC = () => {
         )}
 
         {/* Event Planner – Event Budget Challenge */}
-        {job.name?.toLowerCase().trim() === 'assistant event planner' && (
+        {(job?.name || '').toLowerCase().trim().includes('event planner') && (
           <div className="pt-6 border-t border-gray-200">
             <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg p-6 border border-amber-200">
               <div className="flex items-center justify-between mb-4">
@@ -1625,7 +1625,7 @@ const MyJobDetails: React.FC = () => {
         )}
 
         {/* Chartered Accountant – Financial Audit Challenges */}
-        {job.name?.toLowerCase().trim() === 'junior chartered accountant' && (
+        {(job?.name || '').toLowerCase().trim().includes('accountant') && (
           <div className="pt-6 border-t border-gray-200">
             <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-6 border border-emerald-200">
               <div className="flex items-center justify-between mb-4">
@@ -1674,7 +1674,7 @@ const MyJobDetails: React.FC = () => {
         )}
 
         {/* Architect Game Section */}
-        {job.name?.toLowerCase() === 'assistant architect' && (
+        {(job?.name || '').toLowerCase().trim().includes('architect') && (
           <div className="pt-6 border-t border-gray-200">
             <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-6 border border-amber-200">
               <div className="flex items-center justify-between mb-4">
@@ -1730,7 +1730,7 @@ const MyJobDetails: React.FC = () => {
       </div>
 
       {/* Architect Game Modal */}
-      {job.name?.toLowerCase() === 'assistant architect' && (
+      {(job?.name || '').toLowerCase().trim().includes('architect') && (
         <ArchitectGameModal
           isOpen={isArchitectGameOpen}
           onClose={() => {
@@ -1744,7 +1744,7 @@ const MyJobDetails: React.FC = () => {
       )}
 
       {/* Accountant Game Modal */}
-      {job.name?.toLowerCase().trim() === 'junior chartered accountant' && (
+      {(job?.name || '').toLowerCase().trim().includes('accountant') && (
         <AccountantGameModal
           isOpen={isAccountantGameOpen}
           onClose={() => {
@@ -1758,7 +1758,7 @@ const MyJobDetails: React.FC = () => {
       )}
 
       {/* Software Engineer Game Modal */}
-      {job.name?.toLowerCase().trim() === 'assistant software engineer' && (
+      {(job?.name || '').toLowerCase().trim().includes('software engineer') && (
         <SoftwareEngineerGameModal
           isOpen={isSoftwareEngineerGameOpen}
           onClose={() => {
@@ -1772,7 +1772,7 @@ const MyJobDetails: React.FC = () => {
       )}
 
       {/* Marketing Manager Game Modal */}
-      {job.name?.toLowerCase().trim() === 'assistant marketing manager' && (
+      {(job?.name || '').toLowerCase().trim().includes('marketing manager') && (
         <MarketingManagerGameModal
           isOpen={isMarketingManagerGameOpen}
           onClose={() => {
@@ -1786,7 +1786,7 @@ const MyJobDetails: React.FC = () => {
       )}
 
       {/* Graphic Designer Game Modal */}
-      {job.name?.toLowerCase().trim() === 'assistant graphic designer' && (
+      {(job?.name || '').toLowerCase().trim().includes('graphic designer') && (
         <GraphicDesignerGameModal
           isOpen={isGraphicDesignerGameOpen}
           onClose={() => {
@@ -1800,7 +1800,7 @@ const MyJobDetails: React.FC = () => {
       )}
 
       {/* Journalist Game Modal */}
-      {job.name?.toLowerCase().trim() === 'assistant journalist' && (
+      {(job?.name || '').toLowerCase().trim().includes('journalist') && (
         <JournalistGameModal
           isOpen={isJournalistGameOpen}
           onClose={() => {
@@ -1814,7 +1814,7 @@ const MyJobDetails: React.FC = () => {
       )}
 
       {/* Event Planner Game Modal */}
-      {job.name?.toLowerCase().trim() === 'assistant event planner' && (
+      {(job?.name || '').toLowerCase().trim().includes('event planner') && (
         <EventPlannerGameModal
           isOpen={isEventPlannerGameOpen}
           onClose={() => {

@@ -7,10 +7,8 @@ import { JOB_CHALLENGES_DAILY_LIMIT } from './config';
 
 const router = Router();
 
-const LAWYER_JOB_NAME = 'assistant lawyer';
-
 function hasLawyerJob(jobName: string | null | undefined): boolean {
-  return (jobName || '').toLowerCase().trim() === LAWYER_JOB_NAME;
+  return (jobName || '').toLowerCase().trim().includes('lawyer');
 }
 
 router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {

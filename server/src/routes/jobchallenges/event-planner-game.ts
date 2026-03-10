@@ -7,10 +7,8 @@ import { JOB_CHALLENGES_DAILY_LIMIT } from './config';
 
 const router = Router();
 
-const EVENT_PLANNER_JOB_NAME = 'assistant event planner';
-
 function hasEventPlannerJob(jobName: string | null | undefined): boolean {
-  return (jobName || '').toLowerCase().trim() === EVENT_PLANNER_JOB_NAME;
+  return (jobName || '').toLowerCase().trim().includes('event planner');
 }
 
 router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {

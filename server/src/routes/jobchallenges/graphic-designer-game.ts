@@ -7,10 +7,8 @@ import { JOB_CHALLENGES_DAILY_LIMIT } from './config';
 
 const router = Router();
 
-const GRAPHIC_DESIGNER_JOB_NAME = 'assistant graphic designer';
-
 function hasGraphicDesignerJob(jobName: string | null | undefined): boolean {
-  return (jobName || '').toLowerCase().trim() === GRAPHIC_DESIGNER_JOB_NAME;
+  return (jobName || '').toLowerCase().trim().includes('graphic designer');
 }
 
 router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {

@@ -6,10 +6,8 @@ import { JOB_CHALLENGES_DAILY_LIMIT } from './config';
 
 const router = Router();
 
-const ACCOUNTANT_JOB_NAME = 'junior chartered accountant';
-
 function hasAccountantJob(jobName: string | null | undefined): boolean {
-  return (jobName || '').toLowerCase().trim() === ACCOUNTANT_JOB_NAME;
+  return (jobName || '').toLowerCase().trim().includes('accountant');
 }
 
 // Get accountant game status (remaining plays, high scores, recent sessions)

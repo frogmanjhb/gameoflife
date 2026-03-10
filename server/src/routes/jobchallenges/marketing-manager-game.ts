@@ -7,10 +7,8 @@ import { JOB_CHALLENGES_DAILY_LIMIT } from './config';
 
 const router = Router();
 
-const MARKETING_MANAGER_JOB_NAME = 'assistant marketing manager';
-
 function hasMarketingManagerJob(jobName: string | null | undefined): boolean {
-  return (jobName || '').toLowerCase().trim() === MARKETING_MANAGER_JOB_NAME;
+  return (jobName || '').toLowerCase().trim().includes('marketing manager');
 }
 
 router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {

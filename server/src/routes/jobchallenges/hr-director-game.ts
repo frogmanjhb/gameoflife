@@ -7,10 +7,8 @@ import { JOB_CHALLENGES_DAILY_LIMIT } from './config';
 
 const router = Router();
 
-const HR_DIRECTOR_JOB_NAME = 'assistant hr director';
-
 function hasHRDirectorJob(jobName: string | null | undefined): boolean {
-  return (jobName || '').toLowerCase().trim() === HR_DIRECTOR_JOB_NAME;
+  return (jobName || '').toLowerCase().trim().includes('hr director');
 }
 
 router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
