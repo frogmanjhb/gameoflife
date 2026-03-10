@@ -876,6 +876,36 @@ export interface BusinessProposal {
   applicant_class?: string;
 }
 
+export interface AccountantPendingTransfer {
+  id: number;
+  from_user_id: number;
+  to_user_id: number;
+  amount: number;
+  description: string;
+  status: 'pending' | 'approved' | 'denied';
+  created_at: string;
+  reviewed_by?: number | null;
+  reviewed_at?: string | null;
+  denial_reason?: string | null;
+  from_username: string;
+  from_first_name?: string;
+  from_last_name?: string;
+  from_class?: string;
+  to_username: string;
+  to_first_name?: string;
+  to_last_name?: string;
+  to_class?: string;
+  reviewed_by_username?: string;
+}
+
+export interface AccountantAssignmentStudent {
+  id: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  class?: string;
+}
+
 export type QuestionType = 'short_answer' | 'long_answer' | 'multiple_choice' | 'yes_no';
 
 export interface ApplicationQuestion {

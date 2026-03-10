@@ -25,7 +25,7 @@ import {
   Job, JobApplication, LandParcel, LandPurchaseRequest, 
   LandStats, MyPropertiesResponse, BiomeConfig, BiomeType,
   TaxBracket, TreasuryInfo, TaxReport, SalaryPaymentResult, TownSettings,
-  Tender, TenderApplication
+  Tender, TenderApplication, AccountantPendingTransfer, AccountantAssignmentStudent
 } from '../types';
 
 // Support for multiple deployment platforms
@@ -505,6 +505,25 @@ export const treasuryApi = {
   // Toggle tax for a town
   toggleTax: (townClass: string, enabled: boolean): Promise<{ data: { message: string; town: TownSettings } }> => {
     return api.post(`/town/toggle-tax/${townClass}`, { enabled });
+  }
+};
+
+// Transactions API methods
+export const transactionsApi = {
+  getHistory: (): Promise<{ data: import('../types').Transaction[] }> => {
+    return api.get('/transactions/history');
+  },
+  getAccountantAssignments: (): Promise<{ data: AccountantAssignmentStudent[] }> => {
+    return api.get('/transactions/my-approvals/assignments');
+  },
+  getAccountantApprovals: (): Promise<{ data: AccountantPendingTransfer[] }> => {
+    return api.get('/transactions/my-approvals');
+  },
+  approveAsAccountant: (id: number): Promise<{ data: { message: string; xp_awarded?: number; new_level?: number | null } }> => {
+    return api.post(`/transactions/my-approvals/${id}/approve`);
+  },
+  denyAsAccountant: (id: number, denialReason?: string): Promise<{ data: { message: string } }> => {
+    return api.post(`/transactions/my-approvals/${id}/deny`, denialReason ? { denial_reason: denialReason } : {});
   }
 };
 

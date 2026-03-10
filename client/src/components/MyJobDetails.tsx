@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
-  Award, FileText, TrendingUp, Loader2, AlertCircle, Play 
+  Award, FileText, TrendingUp, Loader2, AlertCircle, Play, CheckCircle, XCircle, Users 
 } from 'lucide-react';
-import { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi, entrepreneurGameApi } from '../services/api';
+import { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, RetailManagerGameStatus, EntrepreneurGameStatus } from '../types';
+import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, RetailManagerGameStatus, EntrepreneurGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
 import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../utils/jobDisplay';
 import ArchitectGameModal from './jobchallenges/ArchitectGameModal';
@@ -82,6 +82,13 @@ const MyJobDetails: React.FC = () => {
   const [entrepreneurProposals, setEntrepreneurProposals] = useState<import('../types').BusinessProposal[]>([]);
   const [entrepreneurProposalsLoading, setEntrepreneurProposalsLoading] = useState(false);
   const [isEntrepreneurProposalModalOpen, setIsEntrepreneurProposalModalOpen] = useState(false);
+  const [accountantAssignments, setAccountantAssignments] = useState<AccountantAssignmentStudent[] | null>(null);
+  const [accountantAssignmentsLoading, setAccountantAssignmentsLoading] = useState(false);
+  const [accountantAssignmentsError, setAccountantAssignmentsError] = useState<string | null>(null);
+  const [accountantApprovals, setAccountantApprovals] = useState<AccountantPendingTransfer[]>([]);
+  const [accountantApprovalsLoading, setAccountantApprovalsLoading] = useState(false);
+  const [accountantApprovalsError, setAccountantApprovalsError] = useState<string | null>(null);
+  const [isAccountantApprovalsOpen, setIsAccountantApprovalsOpen] = useState(false);
 
   useEffect(() => {
     if (jobId) {
@@ -98,6 +105,11 @@ const MyJobDetails: React.FC = () => {
   useEffect(() => {
     if (user && (job?.name || '').toLowerCase().trim().includes('accountant')) {
       fetchAccountantGameStatus();
+    }
+  }, [user, job]);
+  useEffect(() => {
+    if (user && (job?.name || '').toLowerCase().trim().includes('accountant')) {
+      fetchAccountantAssignments();
     }
   }, [user, job]);
 
@@ -242,6 +254,35 @@ const MyJobDetails: React.FC = () => {
       setAccountantGameStatus(response.data);
     } catch (err: any) {
       console.log('Accountant game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchAccountantAssignments = async () => {
+    try {
+      setAccountantAssignmentsLoading(true);
+      setAccountantAssignmentsError(null);
+      const response = await transactionsApi.getAccountantAssignments();
+      setAccountantAssignments(response.data || []);
+    } catch (err: any) {
+      console.log('Accountant assignments not available:', err.response?.data?.error);
+      setAccountantAssignments([]);
+      setAccountantAssignmentsError(err.response?.data?.error || 'Failed to load assigned students');
+    } finally {
+      setAccountantAssignmentsLoading(false);
+    }
+  };
+
+  const fetchAccountantApprovals = async () => {
+    try {
+      setAccountantApprovalsLoading(true);
+      setAccountantApprovalsError(null);
+      const response = await transactionsApi.getAccountantApprovals();
+      setAccountantApprovals(response.data || []);
+    } catch (err: any) {
+      setAccountantApprovals([]);
+      setAccountantApprovalsError(err.response?.data?.error || 'Failed to load approvals');
+    } finally {
+      setAccountantApprovalsLoading(false);
     }
   };
 
@@ -1670,6 +1711,69 @@ const MyJobDetails: React.FC = () => {
                 </div>
               )}
             </div>
+            <div className="mt-4 bg-white rounded-lg p-6 border border-emerald-100">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-emerald-600" />
+                  <div>
+                    <h3 className="text-md font-semibold text-gray-900">People You Are Responsible For</h3>
+                    <p className="text-xs text-gray-600">
+                      These students and one other accountant&apos;s transfers need your approval. Each approved transfer earns you 1 XP.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAccountantApprovalsOpen(true);
+                    fetchAccountantApprovals();
+                  }}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Open Approvals</span>
+                </button>
+              </div>
+              {accountantAssignmentsLoading && (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading assigned students...</span>
+                </div>
+              )}
+              {accountantAssignmentsError && !accountantAssignmentsLoading && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>{accountantAssignmentsError}</span>
+                </div>
+              )}
+              {!accountantAssignmentsLoading && !accountantAssignmentsError && (
+                <>
+                  {accountantAssignments && accountantAssignments.length > 0 ? (
+                    <ul className="mt-2 space-y-1 text-sm text-gray-800">
+                      {accountantAssignments.map((student) => (
+                        <li key={student.id} className="flex items-center gap-2">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span>
+                            {student.first_name && student.last_name
+                              ? `${student.first_name} ${student.last_name}`
+                              : student.username}
+                            {student.class ? (
+                              <span className="text-gray-500 text-xs ml-2">
+                                ({student.class})
+                              </span>
+                            ) : null}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-600">
+                      You don&apos;t currently have any assigned students for approvals.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         )}
 
@@ -1755,6 +1859,110 @@ const MyJobDetails: React.FC = () => {
           onGameComplete={() => fetchAccountantGameStatus()}
           gameStatus={accountantGameStatus}
         />
+      )}
+
+      {/* Chartered Accountant – Approvals Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('accountant') && isAccountantApprovalsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-emerald-600" />
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Transfer Approvals</h2>
+                  <p className="text-xs text-gray-600">
+                    Review and approve or deny transfers from the students assigned to you. Each approval gives you 1 XP.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAccountantApprovalsOpen(false)}
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                Close
+              </button>
+            </div>
+            <div className="px-6 py-4 flex-1 overflow-y-auto space-y-3">
+              {accountantApprovalsLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                </div>
+              )}
+              {accountantApprovalsError && !accountantApprovalsLoading && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center gap-2 text-sm text-red-700">
+                  <AlertCircle className="h-5 w-5" />
+                  <span>{accountantApprovalsError}</span>
+                </div>
+              )}
+              {!accountantApprovalsLoading && !accountantApprovalsError && accountantApprovals.length === 0 && (
+                <div className="text-center py-10 text-gray-500 text-sm">
+                  <p>No transfers are currently waiting for your approval.</p>
+                </div>
+              )}
+              {!accountantApprovalsLoading && accountantApprovals.length > 0 && (
+                <div className="space-y-3">
+                  {accountantApprovals.map((pt) => (
+                    <div
+                      key={pt.id}
+                      className="bg-gray-50 border border-gray-200 rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+                    >
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          {(pt.from_first_name && pt.from_last_name)
+                            ? `${pt.from_first_name} ${pt.from_last_name}`
+                            : pt.from_username}{' '}
+                          →{' '}
+                          {(pt.to_first_name && pt.to_last_name)
+                            ? `${pt.to_first_name} ${pt.to_last_name}`
+                            : pt.to_username}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          R{pt.amount.toFixed(2)} • {pt.description}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {new Date(pt.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await transactionsApi.approveAsAccountant(pt.id);
+                              setAccountantApprovals((prev) => prev.filter((x) => x.id !== pt.id));
+                            } catch (err: any) {
+                              setAccountantApprovalsError(err.response?.data?.error || 'Failed to approve transfer');
+                            }
+                          }}
+                          className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors flex items-center gap-1"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          <span>Approve</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await transactionsApi.denyAsAccountant(pt.id);
+                              setAccountantApprovals((prev) => prev.filter((x) => x.id !== pt.id));
+                            } catch (err: any) {
+                              setAccountantApprovalsError(err.response?.data?.error || 'Failed to deny transfer');
+                            }
+                          }}
+                          className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-1"
+                        >
+                          <XCircle className="h-4 w-4" />
+                          <span>Deny</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Software Engineer Game Modal */}
