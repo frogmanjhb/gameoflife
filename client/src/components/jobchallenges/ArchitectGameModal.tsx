@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Play, Trophy, Clock, Target, Zap, CheckCircle, XCircle, Award, Building2 } from 'lucide-react';
 import { architectGameApi } from '../../services/api';
 import { ArchitectQuestion, ArchitectGameStatus } from '../../types';
@@ -40,6 +40,7 @@ const ArchitectGameModal: React.FC<ArchitectGameModalProps> = ({
   const [spamMessage, setSpamMessage] = useState<string | null>(null);
   const [problemsCompleted, setProblemsCompleted] = useState(0);
   const MAX_PROBLEMS = 5; // 5 design problems per review
+  const hasSubmittedRef = useRef(false);
 
   // Funny messages for spam attempts
   const spamMessages = [
@@ -144,17 +145,14 @@ const ArchitectGameModal: React.FC<ArchitectGameModalProps> = ({
 
   // End game and submit results
   const endGame = useCallback(async () => {
-    if (!sessionId) {
+    if (hasSubmittedRef.current || !sessionId) {
       console.error('No session ID available');
       return;
     }
 
-    // Prevent multiple submissions
-    if (isSubmitting) {
-      console.log('Already submitting, skipping...');
-      return;
-    }
+    if (isSubmitting) return;
 
+    hasSubmittedRef.current = true;
     setIsSubmitting(true);
     setGameState('results');
     
@@ -229,6 +227,7 @@ const ArchitectGameModal: React.FC<ArchitectGameModalProps> = ({
     setIsSubmitting(false);
     setSpamMessage(null);
     setProblemsCompleted(0);
+    hasSubmittedRef.current = false;
   };
 
   // Close modal

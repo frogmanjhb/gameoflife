@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Play, Trophy, Clock, Target, Zap, CheckCircle, XCircle, Award, Building2 } from 'lucide-react';
 import { civilEngineerGameApi } from '../../services/api';
 import { CivilEngineerGameStatus } from '../../types';
@@ -39,6 +39,7 @@ const CivilEngineerGameModal: React.FC<CivilEngineerGameModalProps> = ({
   const [spamMessage, setSpamMessage] = useState<string | null>(null);
   const [problemsCompleted, setProblemsCompleted] = useState(0);
   const MAX_PROBLEMS = 5;
+  const hasSubmittedRef = useRef(false);
 
   const spamMessages = [
     "One answer per question!",
@@ -111,7 +112,8 @@ const CivilEngineerGameModal: React.FC<CivilEngineerGameModalProps> = ({
   };
 
   const endGame = useCallback(async () => {
-    if (!sessionId || isSubmitting) return;
+    if (hasSubmittedRef.current || !sessionId || isSubmitting) return;
+    hasSubmittedRef.current = true;
     setIsSubmitting(true);
     setGameState('results');
     try {
@@ -176,6 +178,7 @@ const CivilEngineerGameModal: React.FC<CivilEngineerGameModalProps> = ({
     setIsSubmitting(false);
     setSpamMessage(null);
     setProblemsCompleted(0);
+    hasSubmittedRef.current = false;
   };
 
   const handleClose = () => {

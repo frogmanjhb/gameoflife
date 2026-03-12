@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Play, Trophy, Clock, Target, Zap, CheckCircle, XCircle, Award, BookOpen } from 'lucide-react';
 import { teacherGameApi } from '../../services/api';
 import { TeacherGameStatus } from '../../types';
@@ -39,6 +39,7 @@ const TeacherGameModal: React.FC<TeacherGameModalProps> = ({
   const [spamMessage, setSpamMessage] = useState<string | null>(null);
   const [problemsCompleted, setProblemsCompleted] = useState(0);
   const MAX_PROBLEMS = 5;
+  const hasSubmittedRef = useRef(false);
 
   const spamMessages = [
     "One answer per question!",
@@ -111,7 +112,8 @@ const TeacherGameModal: React.FC<TeacherGameModalProps> = ({
   };
 
   const endGame = useCallback(async () => {
-    if (!sessionId || isSubmitting) return;
+    if (hasSubmittedRef.current || !sessionId || isSubmitting) return;
+    hasSubmittedRef.current = true;
     setIsSubmitting(true);
     setGameState('results');
     try {
@@ -176,6 +178,7 @@ const TeacherGameModal: React.FC<TeacherGameModalProps> = ({
     setIsSubmitting(false);
     setSpamMessage(null);
     setProblemsCompleted(0);
+    hasSubmittedRef.current = false;
   };
 
   const handleClose = () => {

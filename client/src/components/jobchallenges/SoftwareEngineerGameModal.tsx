@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Play, Trophy, Clock, Target, Zap, CheckCircle, XCircle, Award, Code } from 'lucide-react';
 import { softwareEngineerGameApi } from '../../services/api';
 import { SoftwareEngineerGameStatus } from '../../types';
@@ -39,6 +39,7 @@ const SoftwareEngineerGameModal: React.FC<SoftwareEngineerGameModalProps> = ({
   const [spamMessage, setSpamMessage] = useState<string | null>(null);
   const [problemsCompleted, setProblemsCompleted] = useState(0);
   const MAX_PROBLEMS = 5; // 5 problems per build sprint
+  const hasSubmittedRef = useRef(false);
 
   const spamMessages = [
     "One answer per question!",
@@ -110,7 +111,8 @@ const SoftwareEngineerGameModal: React.FC<SoftwareEngineerGameModalProps> = ({
   };
 
   const endGame = useCallback(async () => {
-    if (!sessionId || isSubmitting) return;
+    if (hasSubmittedRef.current || !sessionId || isSubmitting) return;
+    hasSubmittedRef.current = true;
     setIsSubmitting(true);
     setGameState('results');
     try {
@@ -175,6 +177,7 @@ const SoftwareEngineerGameModal: React.FC<SoftwareEngineerGameModalProps> = ({
     setIsSubmitting(false);
     setSpamMessage(null);
     setProblemsCompleted(0);
+    hasSubmittedRef.current = false;
   };
 
   const handleClose = () => {
