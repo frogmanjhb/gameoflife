@@ -40,3 +40,12 @@ alwaysApply: true
 
 - **Before coding:** Restate the requested change in one paragraph; identify existing files that will be touched and justify each one; confirm affected roles (student / teacher / admin); confirm tenant scope (school, town/class); confirm whether this is additive or a modification of existing behaviour.
 - **After coding:** List changed files; state what behaviour changed and what did not; provide manual test steps.
+
+**Database migrations**
+
+- Prefer idempotent `.sql` files in `server/migrations/` for schema/data fixes (e.g. jobs shared across schools).
+- When adding a raw SQL migration that must run against Railway Postgres, wire it through the existing Node runner: add an npm script in `server/package.json` that calls `node run-sql-migration.js migrations/<file>.sql`.
+- To execute such a migration, use the Railway CLI from the `server` directory so the correct `DATABASE_PUBLIC_URL` / `DATABASE_URL` is injected:
+  - `cd server`
+  - `railway run npm run <your-migrate-script>`
+- Do **not** require a local `psql` install for these migrations; always prefer `railway run` + the Node `pg` client so the workflow matches `migrate:global-jobs`.
