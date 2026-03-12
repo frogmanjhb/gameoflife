@@ -281,13 +281,30 @@ router.post('/apply', [
     const monthlyPayment = weeklyPayment * 4.33;
     const termMonths = Math.ceil(term_weeks / 4.33);
 
-    // Create loan application (use only base columns that exist in all database versions)
+    // Create loan application including weekly fields (term_weeks, weekly_payment)
     const result = await database.run(
       `INSERT INTO loans (
-        borrower_id, amount, term_months, interest_rate, status, 
-        outstanding_balance, monthly_payment
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [req.user.id, amount, termMonths, interestRate, 'pending', totalAmount, monthlyPayment]
+        borrower_id,
+        amount,
+        term_months,
+        term_weeks,
+        interest_rate,
+        status,
+        outstanding_balance,
+        monthly_payment,
+        weekly_payment
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        req.user.id,
+        amount,
+        termMonths,
+        term_weeks,
+        interestRate,
+        'pending',
+        totalAmount,
+        monthlyPayment,
+        weeklyPayment
+      ]
     );
 
     res.status(201).json({ 
