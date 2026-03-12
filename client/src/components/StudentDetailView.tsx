@@ -53,6 +53,7 @@ interface Loan {
   status: string;
   outstanding_balance: number;
   monthly_payment: number;
+  weekly_payment?: number;
   created_at: string;
   approved_at?: string;
   total_paid: number;
@@ -696,8 +697,10 @@ const StudentDetailView: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-3 gap-4 text-sm">
                           <div>
-                            <p className="text-gray-500">Monthly Payment</p>
-                            <p className="font-semibold text-gray-900">{formatCurrency(loan.monthly_payment)}</p>
+                            <p className="text-gray-500">Weekly Payment</p>
+                            <p className="font-semibold text-gray-900">
+                              {formatCurrency(loan.weekly_payment || loan.monthly_payment / 4.33)}
+                            </p>
                           </div>
                           <div>
                             <p className="text-gray-500">Total Paid</p>

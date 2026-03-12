@@ -887,13 +887,15 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                         </div>
                         
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                          <div>
+                      <div>
                             <p className="text-sm text-gray-500">Amount</p>
                             <p className="font-semibold">{formatCurrency(loan.amount)}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-500">Monthly Payment</p>
-                            <p className="font-semibold">{formatCurrency(loan.monthly_payment)}</p>
+                            <p className="text-sm text-gray-500">Weekly Payment</p>
+                            <p className="font-semibold">
+                              {formatCurrency(loan.weekly_payment || loan.monthly_payment / 4.33)}
+                            </p>
                           </div>
                           <div>
                             <p className="text-sm text-gray-500">Term</p>
@@ -959,8 +961,10 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                             <p className="font-semibold">{formatCurrency(loan.outstanding_balance)}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-500">Monthly Payment</p>
-                            <p className="font-semibold">{formatCurrency(loan.monthly_payment)}</p>
+                            <p className="text-sm text-gray-500">Weekly Payment</p>
+                            <p className="font-semibold">
+                              {formatCurrency(loan.weekly_payment || loan.monthly_payment / 4.33)}
+                            </p>
                           </div>
                           <div>
                             <p className="text-sm text-gray-500">Remaining</p>
