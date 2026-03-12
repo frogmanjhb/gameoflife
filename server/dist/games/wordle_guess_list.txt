@@ -102,7 +102,6 @@ acmes
 acmic
 acned
 acnes
-acock
 acoel
 acold
 acone
@@ -711,7 +710,6 @@ askoi
 askos
 aspen
 asper
-aspic
 aspie
 aspis
 aspro
@@ -931,7 +929,6 @@ bales
 balks
 balky
 ballo
-balls
 bally
 balms
 balmy
@@ -1305,7 +1302,6 @@ bises
 bisks
 bisom
 bison
-bitch
 biter
 bites
 bitey
@@ -1502,8 +1498,6 @@ bonza
 bonze
 booai
 booay
-boobs
-booby
 boody
 booed
 boofy
@@ -2050,7 +2044,6 @@ cease
 ceaze
 cebid
 cecal
-cecum
 cedar
 ceded
 ceder
@@ -2184,7 +2177,6 @@ chimp
 china
 chine
 ching
-chink
 chino
 chins
 chips
@@ -2407,8 +2399,6 @@ cobza
 cocas
 cocci
 cocco
-cocks
-cocky
 cocoa
 cocos
 cocus
@@ -2436,9 +2426,6 @@ coils
 coins
 coirs
 coits
-coked
-cokes
-cokey
 colas
 colby
 colds
@@ -2617,7 +2604,6 @@ cozey
 cozie
 craal
 crabs
-crack
 craft
 crags
 craic
@@ -2629,9 +2615,6 @@ crams
 crane
 crank
 crans
-crape
-craps
-crapy
 crare
 crash
 crass
@@ -2763,13 +2746,10 @@ culpa
 culti
 cults
 culty
-cumec
-cumin
 cundy
 cunei
 cunit
 cunny
-cunts
 cupel
 cupid
 cuppa
@@ -3070,7 +3050,6 @@ derro
 derry
 derth
 dervs
-desex
 deshi
 desis
 desks
@@ -3117,8 +3096,6 @@ dicer
 dices
 dicey
 dicht
-dicks
-dicky
 dicot
 dicta
 dicto
@@ -3566,9 +3543,6 @@ dwine
 dyads
 dyers
 dying
-dyked
-dykes
-dykey
 dykon
 dynel
 dynes
@@ -3788,7 +3762,6 @@ equid
 equip
 erase
 erbia
-erect
 erevs
 ergon
 ergos
@@ -3928,9 +3901,6 @@ faena
 faery
 faffs
 faffy
-faggy
-fagin
-fagot
 faiks
 fails
 faine
@@ -4474,7 +4444,6 @@ fryer
 fubar
 fubby
 fubsy
-fucks
 fucus
 fuddy
 fudge
@@ -5639,7 +5608,6 @@ horis
 horks
 horme
 horns
-horny
 horse
 horst
 horsy
@@ -5792,7 +5760,6 @@ ideas
 idees
 ident
 idiom
-idiot
 idled
 idler
 idles
@@ -7011,7 +6978,6 @@ locis
 locks
 locky
 locos
-locum
 locus
 loden
 lodes
@@ -7524,7 +7490,6 @@ mecca
 mecha
 mechs
 mecks
-mecum
 medal
 media
 medic
@@ -7623,10 +7588,6 @@ meteg
 metel
 meter
 metes
-methi
-metho
-meths
-methy
 metic
 metif
 metis
@@ -7955,7 +7916,6 @@ mormo
 morna
 morne
 morns
-moron
 moror
 morph
 morra
@@ -8217,7 +8177,6 @@ nairu
 naive
 najib
 nakas
-naked
 naker
 nakfa
 nalas
@@ -9302,7 +9261,6 @@ pened
 penes
 pengo
 penie
-penis
 penks
 penna
 penne
@@ -9530,7 +9488,6 @@ pisco
 pises
 pisky
 pisos
-pissy
 piste
 pitas
 pitch
@@ -9777,9 +9734,6 @@ porgy
 porin
 porks
 porky
-porno
-porns
-porny
 porta
 porte
 porth
@@ -9891,7 +9845,6 @@ preys
 prial
 prian
 price
-prick
 pricy
 pride
 pridy
@@ -10086,7 +10039,6 @@ purty
 puses
 pushy
 pusle
-pussy
 putas
 puter
 putid
@@ -11287,7 +11239,6 @@ scrae
 scrag
 scram
 scran
-scrap
 scrat
 scraw
 scray
@@ -11313,7 +11264,6 @@ sculk
 scull
 sculp
 sculs
-scums
 scups
 scurf
 scurs
@@ -11457,12 +11407,6 @@ sewel
 sewen
 sewer
 sewin
-sexed
-sexer
-sexes
-sexor
-sexto
-sexts
 seyen
 sezes
 shack
@@ -11552,8 +11496,6 @@ shirt
 shish
 shiso
 shist
-shite
-shits
 shiur
 shiva
 shive
@@ -11895,7 +11837,6 @@ slurp
 slurs
 sluse
 slush
-sluts
 slyer
 slyly
 slype
@@ -12211,18 +12152,12 @@ spelt
 spend
 spent
 speos
-sperm
 spesh
 spets
 speug
 spews
 spewy
 spial
-spica
-spice
-spick
-spics
-spicy
 spide
 spied
 spiel
@@ -12598,7 +12533,6 @@ swami
 swamp
 swamy
 swang
-swank
 swans
 swaps
 swapt
@@ -12892,7 +12826,6 @@ teaze
 techs
 techy
 tecta
-tecum
 teddy
 teels
 teems
@@ -13516,8 +13449,6 @@ twaes
 twain
 twals
 twang
-twank
-twats
 tways
 tweak
 tweed
@@ -13701,7 +13632,6 @@ unsay
 unsee
 unset
 unsew
-unsex
 unsod
 unsub
 untag
@@ -14137,8 +14067,6 @@ waned
 wanes
 waney
 wangs
-wanks
-wanky
 wanle
 wanly
 wanna
@@ -14313,7 +14241,6 @@ whoof
 whoop
 whoot
 whops
-whore
 whorl
 whort
 whose
