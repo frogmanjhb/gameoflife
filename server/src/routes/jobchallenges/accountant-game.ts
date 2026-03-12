@@ -233,9 +233,9 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     }
 
     const sessionPlayedAt = new Date(session.played_at).getTime();
-    const minGameDurationMs = 45000;
+    const minGameDurationMs = 15000; // 15 seconds – allow fast but non-instant runs
     if (Date.now() - sessionPlayedAt < minGameDurationMs) {
-      return res.status(400).json({ error: 'Game submitted too quickly. Each audit case must run for at least 60 seconds.' });
+      return res.status(400).json({ error: 'Game submitted too quickly. Each audit case must run for at least 15 seconds.' });
     }
 
     const recentCompletions = await database.query(`

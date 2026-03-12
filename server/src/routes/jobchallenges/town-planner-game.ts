@@ -170,8 +170,9 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.status(400).json({ error: 'Game session has already been submitted' });
     }
     const sessionPlayedAt = new Date(session.played_at).getTime();
-    if (Date.now() - sessionPlayedAt < 45000) {
-      return res.status(400).json({ error: 'Game submitted too quickly. Each planning proposal must run for at least 60 seconds.' });
+    const minGameDurationMs = 15000; // 15 seconds – allow fast but non-instant runs
+    if (Date.now() - sessionPlayedAt < minGameDurationMs) {
+      return res.status(400).json({ error: 'Game submitted too quickly. Each planning proposal must run for at least 15 seconds.' });
     }
     const recentCompletions = await database.query(`
       SELECT COUNT(*) as count FROM town_planner_game_sessions 

@@ -296,11 +296,11 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
 
     // SECURITY: Minimum game duration
     const sessionPlayedAt = new Date(session.played_at).getTime();
-    const minGameDurationMs = 45000; // 45 seconds
+    const minGameDurationMs = 15000; // 15 seconds – allow fast but non-instant runs
     if (Date.now() - sessionPlayedAt < minGameDurationMs) {
       const elapsedSec = Math.floor((Date.now() - sessionPlayedAt) / 1000);
       console.warn(`🚨 SECURITY: User ${req.user.username} submitted session ${session_id} after only ${elapsedSec}s`);
-      return res.status(400).json({ error: 'Game submitted too quickly. Each game must run for at least 60 seconds.' });
+      return res.status(400).json({ error: 'Game submitted too quickly. Each game must run for at least 15 seconds.' });
     }
 
     // SECURITY: Rate limit
