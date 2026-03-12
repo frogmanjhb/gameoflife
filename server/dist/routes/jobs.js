@@ -124,7 +124,7 @@ router.get('/applications', auth_1.authenticateToken, tenant_1.requireTenant, (0
              u.last_name as applicant_last_name,
              u.class as applicant_class,
              j.name as job_name,
-             j.salary as job_salary,
+             COALESCE(j.base_salary, 2000.00) as job_salary,
              reviewer.username as reviewer_username
       FROM job_applications ja
       JOIN users u ON ja.user_id = u.id
@@ -179,7 +179,7 @@ router.get('/applications/:id', auth_1.authenticateToken, tenant_1.requireTenant
               u.last_name as applicant_last_name,
               u.class as applicant_class,
               j.name as job_name,
-              j.salary as job_salary,
+              COALESCE(j.base_salary, 2000.00) as job_salary,
               j.description as job_description,
               j.requirements as job_requirements,
               reviewer.username as reviewer_username
@@ -233,7 +233,7 @@ router.put('/applications/:id', auth_1.authenticateToken, tenant_1.requireTenant
                 u.first_name as applicant_first_name,
                 u.last_name as applicant_last_name,
                 j.name as job_name,
-                j.salary as job_salary,
+                COALESCE(j.base_salary, 2000.00) as job_salary,
                 reviewer.username as reviewer_username
          FROM job_applications ja
          JOIN users u ON ja.user_id = u.id
@@ -252,10 +252,16 @@ router.get('/assignments/overview', auth_1.authenticateToken, tenant_1.requireTe
     try {
         const { class: className } = req.query;
         const schoolId = req.schoolId ?? req.user?.school_id ?? null;
-        // Jobs: only global or for this school; count only students from this school
+        // Jobs: only global or for this school; one row per job name (prefer per-school over global)
         // Include base_salary and is_contractual for dynamic salary calculation
         const jobsQuery = schoolId !== null
             ? `
+      WITH preferred AS (
+        SELECT DISTINCT ON (name) id
+        FROM jobs
+        WHERE school_id IS NULL OR school_id = $1
+        ORDER BY name, (school_id = $1) DESC NULLS LAST, id
+      )
       SELECT 
         j.id,
         j.name,
@@ -269,8 +275,8 @@ router.get('/assignments/overview', auth_1.authenticateToken, tenant_1.requireTe
         COUNT(CASE WHEN u.role = 'student' AND u.school_id = $1 THEN u.id END) as total_assigned,
         COUNT(CASE WHEN u.role = 'student' AND u.school_id = $1 AND u.class = $2 THEN u.id END) as class_assigned
       FROM jobs j
+      JOIN preferred p ON j.id = p.id
       LEFT JOIN users u ON j.id = u.job_id AND u.role = 'student' AND u.school_id = $1
-      WHERE j.school_id IS NULL OR j.school_id = $1
       GROUP BY j.id, j.name, j.description, j.base_salary, j.is_contractual, j.company_name, j.location, j.requirements
       ORDER BY j.name
     `
@@ -337,7 +343,152 @@ router.get('/assignments/overview', auth_1.authenticateToken, tenant_1.requireTe
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Get job by ID (must come AFTER static routes like /applications; teacher/student only see global or their school's job)
+// Get job assignments for the current student's class (students only) — job name + assigned students in class
+router.get('/assignments/class-view', auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
+    try {
+        const userClass = req.user?.class;
+        const schoolId = req.user?.school_id ?? null;
+        if (!userClass || !['6A', '6B', '6C'].includes(userClass)) {
+            return res.status(400).json({ error: 'Invalid class' });
+        }
+        const jobsQuery = schoolId !== null
+            ? `
+      WITH preferred AS (
+        SELECT DISTINCT ON (name) id
+        FROM jobs
+        WHERE school_id IS NULL OR school_id = $1
+        ORDER BY name, (school_id = $1) DESC NULLS LAST, id
+      )
+      SELECT j.id, j.name
+      FROM jobs j
+      JOIN preferred p ON j.id = p.id
+      ORDER BY j.name
+    `
+            : `
+      SELECT id, name FROM jobs ORDER BY name
+    `;
+        const jobsParams = schoolId !== null ? [schoolId] : [];
+        const jobs = await database_prod_1.default.query(jobsQuery, jobsParams);
+        const assignedQuery = schoolId !== null
+            ? `
+      SELECT u.job_id, u.first_name, u.last_name, u.username
+      FROM users u
+      WHERE u.role = 'student' AND u.school_id = $1 AND u.class = $2 AND u.job_id IS NOT NULL
+      ORDER BY u.last_name, u.first_name
+    `
+            : `
+      SELECT u.job_id, u.first_name, u.last_name, u.username
+      FROM users u
+      WHERE u.role = 'student' AND u.class = $1 AND u.job_id IS NOT NULL
+      ORDER BY u.last_name, u.first_name
+    `;
+        const assignedParams = schoolId !== null ? [schoolId, userClass] : [userClass];
+        const assignedRows = await database_prod_1.default.query(assignedQuery, assignedParams);
+        const byJobId = {};
+        for (const row of assignedRows) {
+            const jid = row.job_id;
+            if (!byJobId[jid])
+                byJobId[jid] = [];
+            byJobId[jid].push({
+                first_name: row.first_name || '',
+                last_name: row.last_name || '',
+                username: row.username || '',
+            });
+        }
+        const jobsWithAssigned = jobs.map((j) => ({
+            id: j.id,
+            name: j.name,
+            assigned_students: byJobId[j.id] || [],
+        }));
+        res.json({ jobs: jobsWithAssigned });
+    }
+    catch (error) {
+        console.error('Failed to fetch class job assignments:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Setup routes (must come BEFORE /:id so "setup" is not treated as job id)
+// Add Assistant Software Engineer job (one-time setup - teachers only). Use canonical name to avoid duplicate with seed.
+router.get('/setup/software-engineer', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const result = await database_prod_1.default.run(`INSERT INTO jobs (name, description, base_salary, company_name, location, requirements, is_contractual)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (school_id, name) DO UPDATE SET
+           description = EXCLUDED.description,
+           base_salary = EXCLUDED.base_salary,
+           company_name = EXCLUDED.company_name,
+           location = EXCLUDED.location,
+           requirements = EXCLUDED.requirements,
+           is_contractual = EXCLUDED.is_contractual
+         RETURNING id, name`, [
+            'Assistant Software Engineer',
+            'Daily: Check the Software Requests board (a list of problems learners want solved). Choose 1 task to work on or continue. Test the app with 1–2 users and capture feedback.\n\nWeekly: Bug hunt in CivicLab. Deliver one working micro-app or feature improvement. Publish it in the Town Hub as a "plugin" or tool link. Run a 2–3 minute demo to the class. Log: what problem it solves, how to use it, what changed after feedback.',
+            2000.00,
+            'Town Government / Tech Department',
+            'Development Lab',
+            null,
+            false
+        ]);
+        const job = await database_prod_1.default.get('SELECT * FROM jobs WHERE id = $1', [result.lastID]);
+        res.json({
+            success: true,
+            message: 'Assistant Software Engineer job added or updated (R2,000 starting).',
+            job
+        });
+    }
+    catch (error) {
+        console.error('Failed to add Assistant Software Engineer job:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Add Risk & Insurance Manager and Entrepreneur jobs (one-time setup - teachers only)
+router.get('/setup/risk-insurance-and-entrepreneur', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const jobsToAdd = [
+            {
+                name: 'Assistant Risk & Insurance Manager',
+                description: 'Daily: Review property insurance requests. Calculate premium based on risk. Approve or deny cover.\n\nWeekly: Assess biome risk levels. Update premium rates. Pay out claims after disasters. Report financial exposure to Finance.',
+                company_name: 'Town Finance',
+                location: 'Insurance Office',
+                requirements: null
+            },
+            {
+                name: 'Entrepreneur – Town Business Founder',
+                description: 'Daily: Check sales. Adjust pricing. Track expenses. Respond to customer demand.\n\nWeekly: Launch product or service. Apply for investment or loan. Present pitch. Review profit/loss. Decide to expand or pivot.',
+                company_name: 'Town Business',
+                location: 'Town Market',
+                requirements: 'Types of businesses they could start (keep it simple): Food stall; Tech service; Construction service; Tourism business; Transport service; Health products; Event service. Or linked to biome: Desert → solar company; Coastal → tourism; Grassland → agriculture; Forest → timber business.'
+            }
+        ];
+        const baseSalary = 2000.00;
+        const added = [];
+        for (const job of jobsToAdd) {
+            await database_prod_1.default.run(`INSERT INTO jobs (name, description, base_salary, company_name, location, requirements, is_contractual)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (school_id, name) DO UPDATE SET
+             description = EXCLUDED.description,
+             base_salary = EXCLUDED.base_salary,
+             company_name = EXCLUDED.company_name,
+             location = EXCLUDED.location,
+             requirements = EXCLUDED.requirements,
+             is_contractual = EXCLUDED.is_contractual
+           RETURNING id, name`, [job.name, job.description, baseSalary, job.company_name, job.location, job.requirements, false]);
+            const row = await database_prod_1.default.get('SELECT id, name FROM jobs WHERE name = $1 AND school_id IS NULL', [job.name]);
+            if (row)
+                added.push({ id: row.id, name: row.name });
+        }
+        res.json({
+            success: true,
+            message: 'Assistant Risk & Insurance Manager and Entrepreneur – Town Business Founder added (or updated). Refresh the Jobs board.',
+            jobs: added
+        });
+    }
+    catch (error) {
+        console.error('Failed to add Risk & Insurance and Entrepreneur jobs:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Get job by ID (must come AFTER static routes like /applications, /setup/*; teacher/student only see global or their school's job)
 router.get('/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const jobId = parseInt(req.params.id);
@@ -547,40 +698,6 @@ router.post('/award-xp', auth_1.authenticateToken, tenant_1.requireTenant, (0, a
     }
     catch (error) {
         console.error('Failed to award XP:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-// Add Software Engineer job (one-time setup endpoint - teachers only)
-// Can be accessed via GET request from browser
-router.get('/setup/software-engineer', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
-    try {
-        const result = await database_prod_1.default.run(`INSERT INTO jobs (name, description, base_salary, company_name, location, requirements, is_contractual)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (school_id, name) DO UPDATE SET
-           description = EXCLUDED.description,
-           base_salary = EXCLUDED.base_salary,
-           company_name = EXCLUDED.company_name,
-           location = EXCLUDED.location,
-           requirements = EXCLUDED.requirements,
-           is_contractual = EXCLUDED.is_contractual
-         RETURNING id, name`, [
-            'Software Engineer',
-            'Daily: Check the Software Requests board (a list of problems learners want solved). Choose 1 task to work on or continue. Test the app with 1–2 users and capture feedback.\n\nWeekly: Bug hunt in the Game of Life. Deliver one working micro-app or feature improvement. Publish it in the Town Hub as a "plugin" or tool link. Run a 2–3 minute demo to the class. Log: what problem it solves, how to use it, what changed after feedback.',
-            2000.00,
-            'Town Government / Tech Department',
-            'Development Lab',
-            null,
-            false
-        ]);
-        const job = await database_prod_1.default.get('SELECT * FROM jobs WHERE id = $1', [result.lastID]);
-        res.json({
-            success: true,
-            message: 'Software Engineer job added successfully!',
-            job
-        });
-    }
-    catch (error) {
-        console.error('Failed to add Software Engineer job:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

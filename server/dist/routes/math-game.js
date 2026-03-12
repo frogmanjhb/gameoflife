@@ -117,15 +117,19 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
 // Start a new math game session
 router.post('/start', auth_1.authenticateToken, async (req, res) => {
     try {
-        if (!req.user || req.user.role !== 'student') {
+        const isTest = req.body?.test === true && req.user?.role === 'teacher';
+        if (!isTest && (!req.user || req.user.role !== 'student')) {
             return res.status(403).json({ error: 'Only students can start math games' });
         }
-        if (!(await isMathChoresEnabled())) {
+        if (!isTest && !(await isMathChoresEnabled())) {
             return res.status(403).json({ error: 'Math chores are currently disabled.' });
         }
         const { difficulty } = req.body;
         if (!difficulty || !['easy', 'medium', 'hard', 'extreme'].includes(difficulty)) {
             return res.status(400).json({ error: 'Invalid difficulty level' });
+        }
+        if (isTest) {
+            return res.json({ session: { id: 0 } });
         }
         const userId = req.user.id;
         // Get daily limit from settings
@@ -169,8 +173,15 @@ router.post('/start', auth_1.authenticateToken, async (req, res) => {
 // Submit math game results
 router.post('/submit', auth_1.authenticateToken, async (req, res) => {
     try {
-        if (!req.user || req.user.role !== 'student') {
+        const isTest = req.body?.test === true && req.user?.role === 'teacher';
+        if (!isTest && (!req.user || req.user.role !== 'student')) {
             return res.status(403).json({ error: 'Only students can submit math games' });
+        }
+        if (isTest) {
+            return res.json({ success: true, earnings: 0, isNewHighScore: false });
+        }
+        if (!req.user) {
+            return res.status(401).json({ error: 'Authentication required' });
         }
         if (!(await isMathChoresEnabled())) {
             return res.status(403).json({ error: 'Math chores are currently disabled.' });

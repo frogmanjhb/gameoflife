@@ -34,13 +34,22 @@ const FALLBACK_WORDS = [
   'write', 'wrong', 'young', 'youth'
 ];
 
-// Resolve directory containing word list files: same folder as this file (dist/games when compiled),
-// or dist/games when running from source (e.g. tsx src/server.ts → __dirname is src/games).
+// Resolve directory containing word list files.
+// Supports both:
+// - Running from compiled code: __dirname === server/dist/games
+// - Running from source (e.g. ts-node/tsx): __dirname === server/src/games
 function getWordListDir(): string {
   const sameDir = __dirname;
   if (existsSync(join(sameDir, 'valid-wordle-words.txt'))) return sameDir;
+
+  // When running from source, word lists may live in dist/games (compiled assets)
   const distGames = join(__dirname, '..', '..', 'dist', 'games');
   if (existsSync(join(distGames, 'valid-wordle-words.txt'))) return distGames;
+
+  // When running from compiled code, word lists may live in src/games (checked-out source on server)
+  const srcGames = join(__dirname, '..', '..', 'src', 'games');
+  if (existsSync(join(srcGames, 'valid-wordle-words.txt'))) return srcGames;
+
   return sameDir;
 }
 

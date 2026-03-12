@@ -134,7 +134,8 @@ router.get('/transfer-recipients', auth_1.authenticateToken, async (req, res) =>
 // Get all students with their account balances (teachers only)
 router.get('/', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
-        console.log('🔍 Getting students for teacher:', req.user?.username, 'school:', req.schoolId);
+        if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1')
+            console.log('🔍 Getting students for teacher:', req.user?.username, 'school:', req.schoolId);
         const students = await database_prod_1.default.query(`
       SELECT 
         u.id,
@@ -144,6 +145,7 @@ router.get('/', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.req
         u.class,
         u.email,
         u.job_id,
+        u.job_level,
         u.status,
         u.account_frozen,
         u.created_at,
@@ -151,15 +153,15 @@ router.get('/', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.req
         a.balance,
         a.updated_at as last_activity,
         j.name as job_name,
-        j.salary as job_salary
+        (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
       LEFT JOIN jobs j ON u.job_id = j.id
       WHERE u.role = 'student' AND u.school_id = $1
       ORDER BY u.class, u.last_name, u.first_name
     `, [req.schoolId]);
-        console.log('📊 Found students:', students.length);
-        console.log('📊 Student data:', JSON.stringify(students, null, 2));
+        if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1')
+            console.log('📊 Found students:', students.length);
         res.json(students);
     }
     catch (error) {
@@ -170,7 +172,8 @@ router.get('/', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.req
 // Get pending students (teachers only)
 router.get('/pending', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
-        console.log('🔍 Getting pending students for teacher:', req.user?.username, 'school:', req.schoolId);
+        if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1')
+            console.log('🔍 Getting pending students for teacher:', req.user?.username, 'school:', req.schoolId);
         const pendingStudents = await database_prod_1.default.query(`
       SELECT 
         u.id,
@@ -188,7 +191,8 @@ router.get('/pending', auth_1.authenticateToken, tenant_1.requireTenant, (0, aut
       WHERE u.role = 'student' AND u.status = 'pending' AND u.school_id = $1
       ORDER BY u.created_at ASC
     `, [req.schoolId]);
-        console.log('📊 Found pending students:', pendingStudents.length);
+        if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1')
+            console.log('📊 Found pending students:', pendingStudents.length);
         res.json(pendingStudents);
     }
     catch (error) {
@@ -385,10 +389,11 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
         u.created_at as user_created_at,
         u.updated_at as user_updated_at,
         u.job_id,
+        u.job_level,
         u.school_id as user_school_id,
         j.name as job_name,
         j.description as job_description,
-        j.salary as job_salary,
+        (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary,
         j.company_name as job_company_name
       FROM accounts a
       LEFT JOIN users u ON a.user_id = u.id
@@ -419,6 +424,7 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
                 mathGameSessions: [],
                 pizzaContributions: [],
                 shopPurchases: [],
+                insurancePurchases: [],
                 jobApplications: [],
                 suggestions: [],
                 bugReports: [],
@@ -432,6 +438,7 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
                     total_math_earnings: 0,
                     pizza_contributions_total: 0,
                     shop_purchases_total: 0,
+                    insurance_purchases_total: 0,
                     land_parcels_owned: 0,
                     land_value_total: 0,
                     active_loans: 0,
@@ -497,6 +504,13 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
       WHERE a.user_id = $1 AND t.description LIKE '%Winkel%'
       ORDER BY t.created_at DESC
     `, [account.user_id]);
+        // Get insurance purchases
+        const insurancePurchases = await database_prod_1.default.query(`
+      SELECT id, insurance_type, weeks, total_cost, week_start_date, created_at
+      FROM insurance_purchases
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `, [account.user_id]);
         // Get job applications
         const jobApplications = await database_prod_1.default.query(`
       SELECT * FROM job_applications
@@ -543,6 +557,7 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
             total_math_earnings: mathGameSessions.reduce((sum, s) => sum + parseFloat(s.earnings), 0),
             pizza_contributions_total: pizzaContributions.reduce((sum, p) => sum + parseFloat(p.amount), 0),
             shop_purchases_total: shopPurchases.reduce((sum, s) => sum + parseFloat(s.amount), 0),
+            insurance_purchases_total: insurancePurchases.reduce((sum, p) => sum + parseFloat(p.total_cost), 0),
             land_parcels_owned: landParcels.length,
             land_value_total: landParcels.reduce((sum, l) => sum + parseFloat(l.value), 0),
             active_loans: loans.filter((l) => l.status === 'active').length,
@@ -566,6 +581,7 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
                 created_at: account.user_created_at,
                 updated_at: account.user_updated_at,
                 job_id: account.job_id,
+                job_level: account.job_level,
                 job_name: account.job_name,
                 job_description: account.job_description,
                 job_salary: account.job_salary,
@@ -580,6 +596,7 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
             mathGameSessions,
             pizzaContributions,
             shopPurchases,
+            insurancePurchases,
             jobApplications,
             suggestions,
             bugReports,
@@ -611,9 +628,10 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
         u.created_at,
         u.updated_at,
         u.job_id,
+        u.job_level,
         j.name as job_name,
         j.description as job_description,
-        j.salary as job_salary,
+        (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary,
         j.company_name as job_company_name,
         a.account_number,
         a.balance,
@@ -713,6 +731,13 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
       WHERE a.user_id = $1 AND t.description LIKE '%Winkel%'
       ORDER BY t.created_at DESC
     `, [student.id]);
+        // Get insurance purchases
+        const insurancePurchases = await database_prod_1.default.query(`
+      SELECT id, insurance_type, weeks, total_cost, week_start_date, created_at
+      FROM insurance_purchases
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `, [student.id]);
         // Get job application history
         const jobApplications = await database_prod_1.default.query(`
       SELECT 
@@ -721,7 +746,7 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
         ja.created_at,
         ja.reviewed_at,
         j.name as job_name,
-        j.salary as job_salary
+        COALESCE(j.base_salary, 2000.00) as job_salary
       FROM job_applications ja
       JOIN jobs j ON ja.job_id = j.id
       WHERE ja.user_id = $1
@@ -766,6 +791,7 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
             total_math_earnings: mathGameSessions.reduce((sum, s) => sum + parseFloat(s.earnings), 0),
             pizza_contributions_total: pizzaContributions.reduce((sum, p) => sum + parseFloat(p.amount), 0),
             shop_purchases_total: shopPurchases.reduce((sum, s) => sum + parseFloat(s.amount), 0),
+            insurance_purchases_total: insurancePurchases.reduce((sum, p) => sum + parseFloat(p.total_cost), 0),
             land_parcels_owned: landParcels.length,
             land_value_total: landParcels.reduce((sum, l) => sum + parseFloat(l.value), 0),
             active_loans: loans.filter(l => l.status === 'active').length,
@@ -779,6 +805,7 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
             mathGameSessions,
             pizzaContributions,
             shopPurchases,
+            insurancePurchases,
             jobApplications,
             suggestions,
             bugReports,

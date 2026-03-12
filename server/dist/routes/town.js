@@ -68,7 +68,8 @@ router.put('/settings/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['
     (0, express_validator_1.body)('tax_rate').optional().isFloat({ min: 0, max: 100 }).withMessage('Tax rate must be between 0 and 100'),
     (0, express_validator_1.body)('tax_enabled').optional().isBoolean().withMessage('Tax enabled must be a boolean'),
     (0, express_validator_1.body)('job_applications_enabled').optional().isBoolean().withMessage('Job applications enabled must be a boolean'),
-    (0, express_validator_1.body)('job_game_daily_limit').optional().isInt({ min: 0, max: 50 }).withMessage('Job game daily limit must be between 0 and 50')
+    (0, express_validator_1.body)('job_game_daily_limit').optional().isInt({ min: 0, max: 50 }).withMessage('Job game daily limit must be between 0 and 50'),
+    (0, express_validator_1.body)('show_mayor_job_card').optional().isBoolean().withMessage('Show mayor job card must be a boolean')
 ], async (req, res) => {
     try {
         const errors = (0, express_validator_1.validationResult)(req);
@@ -87,7 +88,7 @@ router.put('/settings/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['
         if (town.school_id !== teacherSchoolId) {
             return res.status(403).json({ error: 'You can only update towns in your school' });
         }
-        const { town_name, mayor_name, tax_rate, tax_enabled, job_applications_enabled, job_game_daily_limit } = req.body;
+        const { town_name, mayor_name, tax_rate, tax_enabled, job_applications_enabled, job_game_daily_limit, show_mayor_job_card } = req.body;
         const updates = [];
         const params = [];
         let paramIndex = 1;
@@ -114,6 +115,10 @@ router.put('/settings/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['
         if (job_game_daily_limit !== undefined) {
             updates.push(`job_game_daily_limit = $${paramIndex++}`);
             params.push(job_game_daily_limit);
+        }
+        if (show_mayor_job_card !== undefined) {
+            updates.push(`show_mayor_job_card = $${paramIndex++}`);
+            params.push(show_mayor_job_card);
         }
         if (updates.length === 0) {
             return res.status(400).json({ error: 'No fields to update' });
@@ -361,7 +366,7 @@ router.post('/pay-salaries/:class', auth_1.authenticateToken, (0, auth_1.require
             return res.status(404).json({ error: 'Town not found' });
         }
         // Get all employed students in this class with their salaries
-        // Calculate salary dynamically: base_salary * (1 + (job_level - 1) * 0.1) * (is_contractual ? 1.5 : 1.0)
+        // Level-based: base_salary * (1 + (job_level - 1) * 0.7222) * (is_contractual ? 1.5 : 1.0); Level 1 = R2,000, Level 10 = R15,000
         const students = await database_prod_1.default.query(`SELECT u.id, u.username, u.first_name, u.last_name, u.class, 
                 u.job_level,
                 COALESCE(j.base_salary, 2000.00) as base_salary,

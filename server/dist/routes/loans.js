@@ -49,7 +49,12 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
         }
         let loans = [];
         if (req.user.role === 'teacher') {
-            // Teachers can see all loans
+            // Teachers can only see loans for students in their school
+            const schoolId = req.user.school_id ?? req.schoolId ?? null;
+            const schoolFilter = schoolId !== null
+                ? 'AND u.school_id = $1'
+                : 'AND u.school_id IS NULL';
+            const loanParams = schoolId !== null ? [schoolId] : [];
             loans = await database_prod_1.default.query(`
         SELECT 
           l.*,
@@ -63,9 +68,10 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
         FROM loans l
         JOIN users u ON l.borrower_id = u.id
         LEFT JOIN loan_payments lp ON l.id = lp.loan_id
+        WHERE 1=1 ${schoolFilter}
         GROUP BY l.id, u.username
         ORDER BY l.created_at DESC
-      `);
+      `, loanParams);
         }
         else {
             // Students can only see their own loans
@@ -87,7 +93,8 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
         ORDER BY l.created_at DESC
       `, [req.user.id]);
         }
-        console.log('📊 Loan statuses:', loans.map(l => ({ id: l.id, status: l.status, borrower: l.borrower_username })));
+        if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1')
+            console.log('📊 Loan statuses:', loans.map(l => ({ id: l.id, status: l.status, borrower: l.borrower_username })));
         res.json(loans);
     }
     catch (error) {
@@ -101,8 +108,9 @@ router.get('/eligibility', auth_1.authenticateToken, (0, auth_1.requireRole)(['s
         if (!req.user) {
             return res.status(401).json({ error: 'User not found' });
         }
-        // Get user's job information
-        const user = await database_prod_1.default.get(`SELECT u.id, u.job_id, j.name as job_name, j.salary as job_salary
+        // Get user's job information (level-based calculated salary for loan eligibility)
+        const user = await database_prod_1.default.get(`SELECT u.id, u.job_id, u.job_level, j.name as job_name,
+              (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary
        FROM users u
        LEFT JOIN jobs j ON u.job_id = j.id
        WHERE u.id = $1`, [req.user.id]);
@@ -185,8 +193,9 @@ router.post('/apply', [
         if (!req.user) {
             return res.status(401).json({ error: 'User not found' });
         }
-        // Get user's job information
-        const user = await database_prod_1.default.get(`SELECT u.id, u.job_id, j.name as job_name, j.salary as job_salary
+        // Get user's job information (level-based calculated salary)
+        const user = await database_prod_1.default.get(`SELECT u.id, u.job_id, u.job_level, j.name as job_name,
+              (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary
        FROM users u
        LEFT JOIN jobs j ON u.job_id = j.id
        WHERE u.id = $1`, [req.user.id]);

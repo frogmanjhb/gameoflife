@@ -337,13 +337,13 @@ router.get('/profile', auth_1.authenticateToken, async (req, res) => {
               j.location as job_location,
               COALESCE(j.base_salary, 2000.00) as job_base_salary,
               COALESCE(j.is_contractual, false) as job_is_contractual,
-              -- Calculate dynamic salary: base * (1 + (level-1) * 0.7222) * (contractual ? 1.5 : 1.0)
-              -- Level 1: 100% of base, Level 10: 750% of base (R15,000)
               (COALESCE(j.base_salary, 2000.00) * 
                (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * 
-               CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary
+               CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary,
+              s.settings->>'game_start_date' as game_start_date
        FROM users u
        LEFT JOIN jobs j ON u.job_id = j.id
+       LEFT JOIN schools s ON u.school_id = s.id
        WHERE u.id = $1`, [req.user.id]);
         // Get account data for students
         let account = null;

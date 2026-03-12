@@ -10,6 +10,9 @@ const jobs_1 = require("./jobs");
 const doubles_day_1 = require("../helpers/doubles-day");
 const wordle_words_1 = require("../games/wordle-words");
 const router = (0, express_1.Router)();
+// In-memory store for teacher test sessions (session_id -> { targetWord, guessesCount }). No persistence, no payouts.
+const wordleTestSessions = new Map();
+let wordleTestSessionIdCounter = -1;
 const WORD_LENGTH = 5;
 const MAX_GUESSES = 6;
 // 0 = not in word, 1 = wrong position, 2 = correct position
@@ -123,8 +126,18 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
 // POST /start
 router.post('/start', auth_1.authenticateToken, async (req, res) => {
     try {
-        if (!req.user || req.user.role !== 'student') {
+        const isTest = req.body?.test === true && req.user?.role === 'teacher';
+        if (!isTest && (!req.user || req.user.role !== 'student')) {
             return res.status(403).json({ error: 'Only students can start Wordle games' });
+        }
+        if (isTest) {
+            const testSessionId = wordleTestSessionIdCounter--;
+            let targetWord = (0, wordle_words_1.getRandomWord)();
+            if (!targetWord || typeof targetWord !== 'string') {
+                targetWord = 'blend'; // fallback if word lists failed to load
+            }
+            wordleTestSessions.set(testSessionId, { targetWord: targetWord.toLowerCase(), guessesCount: 0 });
+            return res.json({ session_id: testSessionId });
         }
         if (!(await getWordleChoresEnabled())) {
             return res.status(403).json({ error: 'Wordle chores are currently disabled.' });
@@ -155,11 +168,12 @@ router.post('/start', auth_1.authenticateToken, async (req, res) => {
 // POST /guess
 router.post('/guess', auth_1.authenticateToken, async (req, res) => {
     try {
-        if (!req.user || req.user.role !== 'student') {
+        const isTest = req.body?.test === true && req.user?.role === 'teacher';
+        if (!isTest && (!req.user || req.user.role !== 'student')) {
             return res.status(403).json({ error: 'Only students can submit guesses' });
         }
         const { session_id, guess } = req.body;
-        if (!session_id || typeof guess !== 'string') {
+        if (session_id === undefined || session_id === null || typeof guess !== 'string') {
             return res.status(400).json({ error: 'session_id and guess are required' });
         }
         const normalized = (0, wordle_words_1.normalizeWord)(guess);
@@ -168,6 +182,37 @@ router.post('/guess', auth_1.authenticateToken, async (req, res) => {
         }
         if (!(0, wordle_words_1.isValidWord)(normalized)) {
             return res.status(400).json({ error: 'Not a valid word' });
+        }
+        if (isTest) {
+            const testSession = wordleTestSessions.get(session_id);
+            if (!testSession) {
+                return res.status(404).json({ error: 'Session not found' });
+            }
+            if (testSession.guessesCount >= MAX_GUESSES) {
+                return res.status(400).json({ error: 'No guesses remaining' });
+            }
+            const targetWord = testSession.targetWord;
+            if (!targetWord || typeof targetWord !== 'string') {
+                wordleTestSessions.delete(session_id);
+                return res.status(500).json({ error: 'Invalid test session. Please start a new game.' });
+            }
+            const target = targetWord.toLowerCase();
+            const feedback = computeFeedback(normalized, target);
+            const won = normalized === target;
+            const newCount = testSession.guessesCount + 1;
+            const lost = !won && newCount >= MAX_GUESSES;
+            if (won || lost) {
+                wordleTestSessions.delete(session_id);
+            }
+            else {
+                testSession.guessesCount = newCount;
+            }
+            return res.json({
+                feedback,
+                game_over: won || lost,
+                won,
+                guesses_count: newCount
+            });
         }
         const userId = req.user.id;
         const session = await database_prod_1.default.get(`
@@ -206,21 +251,28 @@ router.post('/guess', auth_1.authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Base earnings by guesses used (6 = R5, 5 = R6, ... 1 = R10). Cap and apply Doubles Day.
+// Base earnings by guesses used (1 = R500, scaling down; 6 = R50). Cap and apply Doubles Day.
 const EARNINGS_BY_GUESSES = {
-    1: 10, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5
+    1: 500, 2: 400, 3: 300, 4: 200, 5: 100, 6: 50
 };
 const WORDLE_XP_WIN = 10;
-const MAX_WORDLE_EARNINGS = 20;
+const MAX_WORDLE_EARNINGS = 500;
 // POST /complete
 router.post('/complete', auth_1.authenticateToken, async (req, res) => {
     try {
-        if (!req.user || req.user.role !== 'student') {
+        const isTest = req.body?.test === true && req.user?.role === 'teacher';
+        if (!isTest && (!req.user || req.user.role !== 'student')) {
             return res.status(403).json({ error: 'Only students can complete Wordle games' });
         }
         const { session_id } = req.body;
-        if (!session_id) {
+        if (session_id === undefined || session_id === null) {
             return res.status(400).json({ error: 'session_id is required' });
+        }
+        if (isTest) {
+            return res.json({ success: true, earnings: 0, experience_points: 0, new_level: null });
+        }
+        if (!req.user) {
+            return res.status(401).json({ error: 'Authentication required' });
         }
         const userId = req.user.id;
         const session = await database_prod_1.default.get(`
@@ -246,7 +298,7 @@ router.post('/complete', auth_1.authenticateToken, async (req, res) => {
         let newLevel = null;
         if (session.status === 'won') {
             const guessesUsed = parseInt(session.guesses_count || '6');
-            totalEarnings = EARNINGS_BY_GUESSES[guessesUsed] ?? 5;
+            totalEarnings = EARNINGS_BY_GUESSES[guessesUsed] ?? 50;
             if (totalEarnings > MAX_WORDLE_EARNINGS)
                 totalEarnings = MAX_WORDLE_EARNINGS;
             if (await (0, doubles_day_1.isDoublesDayEnabled)())

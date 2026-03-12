@@ -24,7 +24,7 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
       LEFT JOIN jobs j ON u.job_id = j.id 
       WHERE u.id = $1
     `, [userId]);
-        if (!user || user.job_name?.toLowerCase() !== 'architect') {
+        if (!user || !(user.job_name || '').toLowerCase().trim().includes('architect')) {
             return res.status(403).json({ error: 'Only Architects can access this game' });
         }
         // Per-town job game daily limit (teacher-configurable in town settings)
@@ -108,12 +108,16 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
 // Start a new architect game session
 router.post('/start', auth_1.authenticateToken, async (req, res) => {
     try {
-        if (!req.user || req.user.role !== 'student') {
+        const isTest = req.body?.test === true && req.user?.role === 'teacher';
+        if (!isTest && (!req.user || req.user.role !== 'student')) {
             return res.status(403).json({ error: 'Only students can start architect games' });
         }
         const { difficulty } = req.body;
         if (!difficulty || !['easy', 'medium', 'hard', 'extreme'].includes(difficulty)) {
             return res.status(400).json({ error: 'Invalid difficulty level' });
+        }
+        if (isTest) {
+            return res.json({ session: { id: 0 } });
         }
         const userId = req.user.id;
         // Check if user has Architect job
@@ -123,7 +127,7 @@ router.post('/start', auth_1.authenticateToken, async (req, res) => {
       LEFT JOIN jobs j ON u.job_id = j.id 
       WHERE u.id = $1
     `, [userId]);
-        if (!user || user.job_name?.toLowerCase() !== 'architect') {
+        if (!user || !(user.job_name || '').toLowerCase().trim().includes('architect')) {
             return res.status(403).json({ error: 'Only Architects can play this game' });
         }
         // Per-town job game daily limit (teacher-configurable in town settings)
@@ -179,8 +183,15 @@ router.post('/start', auth_1.authenticateToken, async (req, res) => {
 // Submit architect game results
 router.post('/submit', auth_1.authenticateToken, async (req, res) => {
     try {
-        if (!req.user || req.user.role !== 'student') {
+        const isTest = req.body?.test === true && req.user?.role === 'teacher';
+        if (!isTest && (!req.user || req.user.role !== 'student')) {
             return res.status(403).json({ error: 'Only students can submit architect games' });
+        }
+        if (isTest) {
+            return res.json({ success: true, earnings: 0, experience_points: 0, new_level: null, isNewHighScore: false });
+        }
+        if (!req.user) {
+            return res.status(401).json({ error: 'Authentication required' });
         }
         const { session_id, score, correct_answers, total_problems, answer_sequence } = req.body;
         console.log(`📝 Architect game submission from ${req.user.username}:`, {
@@ -250,11 +261,11 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
         }
         // SECURITY: Minimum game duration
         const sessionPlayedAt = new Date(session.played_at).getTime();
-        const minGameDurationMs = 45000; // 45 seconds
+        const minGameDurationMs = 15000; // 15 seconds – allow fast but non-instant runs
         if (Date.now() - sessionPlayedAt < minGameDurationMs) {
             const elapsedSec = Math.floor((Date.now() - sessionPlayedAt) / 1000);
             console.warn(`🚨 SECURITY: User ${req.user.username} submitted session ${session_id} after only ${elapsedSec}s`);
-            return res.status(400).json({ error: 'Game submitted too quickly. Each game must run for at least 60 seconds.' });
+            return res.status(400).json({ error: 'Game submitted too quickly. Each game must run for at least 15 seconds.' });
         }
         // SECURITY: Rate limit
         const recentCompletions = await database_prod_1.default.query(`
