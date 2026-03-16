@@ -255,8 +255,11 @@ const JobManagement: React.FC = () => {
     }
   };
 
-  const getStudentsForJob = (jobId: number) => {
-    return students.filter(s => s.job_id === jobId);
+  // Note: some older job assignments may point at a "global" job row while
+  // newer jobs use a per-school row with the same name but a different ID.
+  // To avoid hiding valid assignments, we match students to jobs by name.
+  const getStudentsForJob = (jobName: string) => {
+    return students.filter(s => s.job_name === jobName);
   };
 
   const matchesStudentSearch = (s: Student, q: string) => {
@@ -530,7 +533,7 @@ const JobManagement: React.FC = () => {
             {jobs
               .filter((job) => {
                 const assignedInClass = students.filter(
-                  (s) => s.class === selectedJobAssignmentsClass && s.job_id === job.id
+                  (s) => s.class === selectedJobAssignmentsClass && s.job_name === job.name
                 ).length;
                 if (jobAssignmentsFilter === 'all') return true;
                 if (jobAssignmentsFilter === 'assigned') return assignedInClass > 0;
@@ -539,8 +542,8 @@ const JobManagement: React.FC = () => {
               .map((job) => {
               const classStudents = students.filter(s => s.class === selectedJobAssignmentsClass);
               const classStudentsFiltered = classStudents.filter(s => matchesStudentSearch(s, studentSearchQuery));
-              const assignedStudents = classStudentsFiltered.filter(s => s.job_id === job.id);
-              const unassignedStudents = classStudentsFiltered.filter(s => !s.job_id || s.job_id !== job.id);
+              const assignedStudents = classStudentsFiltered.filter(s => s.job_name === job.name);
+              const unassignedStudents = classStudentsFiltered.filter(s => s.job_name !== job.name);
               const isExpanded = expandedJobId === job.id;
 
               return (

@@ -1215,6 +1215,11 @@ export interface EngagementSummary {
   total_transfers: number;
   total_purchases_users: number;
   total_purchases: number;
+  total_wordle_games: number;
+  total_wordle_earnings: number;
+  total_wordle_xp: number;
+  total_job_challenge_sessions: number;
+  total_job_challenge_xp: number;
 }
 
 export interface EngagementAnalytics {

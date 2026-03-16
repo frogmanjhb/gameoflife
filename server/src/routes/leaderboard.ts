@@ -30,8 +30,10 @@ router.get('/overall', authenticateToken, async (req: AuthenticatedRequest, res:
     }
 
     const schoolId = req.user?.school_id ?? null;
+    const includeHidden = req.query.include_hidden === 'true';
     const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
     const params = schoolId !== null ? [schoolId] : [];
+    const hiddenFilter = includeHidden ? '' : 'AND COALESCE(u.hide_from_leaderboards, FALSE) = FALSE';
 
     const leaderboard = await database.query(`
       WITH session_totals AS (
@@ -55,7 +57,7 @@ router.get('/overall', authenticateToken, async (req: AuthenticatedRequest, res:
         FROM users u
         LEFT JOIN session_totals st ON u.id = st.user_id
         LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id
-        WHERE u.role = 'student' ${schoolFilter}
+        WHERE u.role = 'student' ${schoolFilter} ${hiddenFilter}
         GROUP BY u.id, u.username, u.first_name, u.last_name, u.class, st.total_points, st.games_played
         HAVING COALESCE(st.games_played, 0) > 0
       )
@@ -79,6 +81,7 @@ router.get('/class/:className', authenticateToken, async (req: AuthenticatedRequ
   try {
     const className = req.params.className;
     const schoolId = req.user?.school_id ?? null;
+    const includeHidden = req.query.include_hidden === 'true';
 
     // Validate class name
     if (!['6A', '6B', '6C'].includes(className)) {
@@ -93,6 +96,7 @@ router.get('/class/:className', authenticateToken, async (req: AuthenticatedRequ
     }
 
     const schoolFilter = schoolId !== null ? 'AND u.school_id = $2' : '';
+    const hiddenFilter = includeHidden ? '' : 'AND COALESCE(u.hide_from_leaderboards, FALSE) = FALSE';
     const params = schoolId !== null ? [className, schoolId] : [className];
 
     const leaderboard = await database.query(`
@@ -117,7 +121,7 @@ router.get('/class/:className', authenticateToken, async (req: AuthenticatedRequ
         FROM users u
         LEFT JOIN session_totals st ON u.id = st.user_id
         LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id
-        WHERE u.role = 'student' AND u.class = $1 ${schoolFilter}
+        WHERE u.role = 'student' AND u.class = $1 ${schoolFilter} ${hiddenFilter}
         GROUP BY u.id, u.username, u.first_name, u.last_name, u.class, st.total_points, st.games_played
         HAVING COALESCE(st.games_played, 0) > 0
       )
@@ -151,7 +155,9 @@ router.get('/all-classes', authenticateToken, async (req: AuthenticatedRequest, 
     }
 
     const schoolId = req.user?.school_id ?? null;
+    const includeHidden = req.query.include_hidden === 'true';
     const schoolFilter = schoolId !== null ? 'AND u.school_id = $2' : '';
+    const hiddenFilter = includeHidden ? '' : 'AND COALESCE(u.hide_from_leaderboards, FALSE) = FALSE';
     const classes = ['6A', '6B', '6C'];
     const allLeaderboards: Record<string, LeaderboardEntry[]> = {};
 
@@ -179,7 +185,7 @@ router.get('/all-classes', authenticateToken, async (req: AuthenticatedRequest, 
           FROM users u
           LEFT JOIN session_totals st ON u.id = st.user_id
           LEFT JOIN math_game_high_scores mgh ON u.id = mgh.user_id
-          WHERE u.role = 'student' AND u.class = $1 ${schoolFilter}
+          WHERE u.role = 'student' AND u.class = $1 ${schoolFilter} ${hiddenFilter}
           GROUP BY u.id, u.username, u.first_name, u.last_name, u.class, st.total_points, st.games_played
           HAVING COALESCE(st.games_played, 0) > 0
         )

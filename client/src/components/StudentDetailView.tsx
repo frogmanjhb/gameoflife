@@ -24,6 +24,7 @@ interface StudentDetail {
   job_description?: string;
   job_salary?: number;
   job_company_name?: string;
+  job_experience_points?: number;
   account_number: string;
   balance: number;
   last_activity?: string;
@@ -122,6 +123,11 @@ interface Stats {
   land_value_total: number;
   active_loans: number;
   total_loan_debt: number;
+   total_wordle_games?: number;
+   total_wordle_earnings?: number;
+   total_wordle_xp?: number;
+   total_job_challenge_sessions?: number;
+   total_job_challenge_xp?: number;
 }
 
 interface InsurancePurchase {
@@ -469,6 +475,15 @@ const StudentDetailView: React.FC = () => {
                 <p className="text-sm text-gray-500">Salary</p>
                 <p className="text-lg font-semibold text-green-600">{formatCurrency(displayStudent.job_salary || 0)}</p>
               </div>
+              <div>
+                <p className="text-sm text-gray-500">Level &amp; XP</p>
+                <p className="text-lg font-semibold text-indigo-700">
+                  Level {student.job_level ?? 1}
+                  <span className="text-sm text-gray-500 ml-2">
+                    ({student.job_experience_points ?? 0} XP)
+                  </span>
+                </p>
+              </div>
               {displayStudent.job_description && (
                 <div className="md:col-span-2">
                   <p className="text-sm text-gray-500">Description</p>
@@ -534,6 +549,28 @@ const StudentDetailView: React.FC = () => {
                       <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <span className="text-sm text-gray-600">Shop Purchases</span>
                         <span className="font-semibold text-blue-600">{formatCurrency(stats.shop_purchases_total)}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <span className="text-sm text-gray-600">Wordle Games Played</span>
+                        <span className="font-semibold text-gray-900">{stats.total_wordle_games ?? 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <span className="text-sm text-gray-600">Wordle Earnings</span>
+                        <span className="font-semibold text-green-600">
+                          {formatCurrency(stats.total_wordle_earnings ?? 0)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <span className="text-sm text-gray-600">Wordle Job XP</span>
+                        <span className="font-semibold text-indigo-600">{stats.total_wordle_xp ?? 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <span className="text-sm text-gray-600">Job Challenges Played</span>
+                        <span className="font-semibold text-gray-900">{stats.total_job_challenge_sessions ?? 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <span className="text-sm text-gray-600">Job Challenge XP</span>
+                        <span className="font-semibold text-purple-600">{stats.total_job_challenge_xp ?? 0}</span>
                       </div>
                     </div>
                   </div>

@@ -472,6 +472,42 @@ const AnalyticsPlugin: React.FC = () => {
               <p className="text-xs text-gray-500">{analytics.summary.total_purchases_users} users</p>
             </div>
                   </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                      <div className="flex items-center space-x-2 text-gray-500 mb-1">
+                        <TrendingUp className="h-4 w-4" />
+                        <span className="text-xs font-medium">Wordle games</span>
+                      </div>
+                      <p className="text-2xl font-bold text-amber-600">{analytics.summary.total_wordle_games}</p>
+                      <p className="text-xs text-gray-500">
+                        R{Number(analytics.summary.total_wordle_earnings || 0).toFixed(2)} earned
+                      </p>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                      <div className="flex items-center space-x-2 text-gray-500 mb-1">
+                        <BarChart3 className="h-4 w-4" />
+                        <span className="text-xs font-medium">Wordle XP</span>
+                      </div>
+                      <p className="text-2xl font-bold text-indigo-600">{analytics.summary.total_wordle_xp}</p>
+                      <p className="text-xs text-gray-500">Total XP from Wordle wins</p>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                      <div className="flex items-center space-x-2 text-gray-500 mb-1">
+                        <TrendingUp className="h-4 w-4" />
+                        <span className="text-xs font-medium">Job challenges</span>
+                      </div>
+                      <p className="text-2xl font-bold text-green-700">{analytics.summary.total_job_challenge_sessions}</p>
+                      <p className="text-xs text-gray-500">All job challenge sessions</p>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                      <div className="flex items-center space-x-2 text-gray-500 mb-1">
+                        <BarChart3 className="h-4 w-4" />
+                        <span className="text-xs font-medium">Job challenge XP</span>
+                      </div>
+                      <p className="text-2xl font-bold text-purple-600">{analytics.summary.total_job_challenge_xp}</p>
+                      <p className="text-xs text-gray-500">XP earned from job challenges</p>
+                    </div>
+                  </div>
                   {analytics.by_class && analytics.by_class.length > 0 && (
                     <div>
                       <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">

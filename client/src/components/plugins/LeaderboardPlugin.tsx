@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { usePlugins } from '../../contexts/PluginContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { Trophy, Users, Star, TrendingUp, BookOpen, DollarSign } from 'lucide-react';
 import api from '../../services/api';
@@ -17,6 +18,7 @@ interface LeaderboardEntry {
   high_score_hard: number;
   high_score_extreme?: number;
   rank: number;
+  hide_from_leaderboards?: boolean;
 }
 
 interface WordleLeaderboardEntry {
@@ -30,6 +32,7 @@ interface WordleLeaderboardEntry {
   wins: number;
   best_guesses: number | null;
   rank: number;
+  hide_from_leaderboards?: boolean;
 }
 
 interface ClassLeaderboards {
@@ -47,6 +50,7 @@ interface ClassWordleLeaderboards {
 const LeaderboardPlugin: React.FC = () => {
   const { plugins, loading: pluginsLoading } = usePlugins();
   const leaderboardPlugin = plugins.find(p => p.route_path === '/leaderboard');
+  const { user } = useAuth();
 
   type GameType = 'math' | 'wordle';
   const [gameType, setGameType] = useState<GameType>('math');
@@ -88,11 +92,13 @@ const LeaderboardPlugin: React.FC = () => {
   const fetchLeaderboards = async () => {
     try {
       setLoading(true);
+      const includeHidden = user?.role === 'teacher';
+      const query = includeHidden ? '?include_hidden=true' : '';
       const [mathOverallRes, mathClassesRes, wordleOverallRes, wordleClassesRes] = await Promise.all([
-        api.get('/leaderboard/overall'),
-        api.get('/leaderboard/all-classes'),
-        api.get('/wordle-leaderboard/overall'),
-        api.get('/wordle-leaderboard/all-classes')
+        api.get(`/leaderboard/overall${query}`),
+        api.get(`/leaderboard/all-classes${query}`),
+        api.get(`/wordle-leaderboard/overall${query}`),
+        api.get(`/wordle-leaderboard/all-classes${query}`)
       ]);
 
       setOverallLeaderboard(mathOverallRes.data.leaderboard || []);
@@ -173,6 +179,35 @@ const LeaderboardPlugin: React.FC = () => {
                 <span className="font-semibold">{entry.high_score_extreme ?? 0}</span>
               </div>
             </div>
+
+            {/* Teacher controls */}
+            {user?.role === 'teacher' && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const newHidden = !entry.hide_from_leaderboards;
+                    await api.post(`/students/${encodeURIComponent(entry.username)}/leaderboard-visibility`, { hidden: newHidden });
+                    setOverallLeaderboard(prev => prev.map(e => e.user_id === entry.user_id ? { ...e, hide_from_leaderboards: newHidden } : e));
+                    setClassLeaderboards(prev => ({
+                      '6A': prev['6A'].map(e => e.user_id === entry.user_id ? { ...e, hide_from_leaderboards: newHidden } : e),
+                      '6B': prev['6B'].map(e => e.user_id === entry.user_id ? { ...e, hide_from_leaderboards: newHidden } : e),
+                      '6C': prev['6C'].map(e => e.user_id === entry.user_id ? { ...e, hide_from_leaderboards: newHidden } : e),
+                    }));
+                  } catch (err) {
+                    console.error('Failed to toggle leaderboard visibility', err);
+                    alert('Failed to update leaderboard visibility for this student.');
+                  }
+                }}
+                className={`ml-2 px-3 py-1 rounded-full text-xs font-medium border ${
+                  entry.hide_from_leaderboards
+                    ? 'bg-gray-200 border-gray-400 text-gray-700'
+                    : 'bg-white border-gray-300 text-gray-600'
+                }`}
+              >
+                {entry.hide_from_leaderboards ? 'Hidden' : 'Hide'}
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -223,6 +258,35 @@ const LeaderboardPlugin: React.FC = () => {
                 <span className="font-semibold">{entry.best_guesses != null ? entry.best_guesses + ' try' + (entry.best_guesses !== 1 ? 's' : '') : '—'}</span>
               </div>
             </div>
+
+            {/* Teacher controls */}
+            {user?.role === 'teacher' && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const newHidden = !entry.hide_from_leaderboards;
+                    await api.post(`/students/${encodeURIComponent(entry.username)}/leaderboard-visibility`, { hidden: newHidden });
+                    setOverallWordleLeaderboard(prev => prev.map(e => e.user_id === entry.user_id ? { ...e, hide_from_leaderboards: newHidden } : e));
+                    setClassWordleLeaderboards(prev => ({
+                      '6A': prev['6A'].map(e => e.user_id === entry.user_id ? { ...e, hide_from_leaderboards: newHidden } : e),
+                      '6B': prev['6B'].map(e => e.user_id === entry.user_id ? { ...e, hide_from_leaderboards: newHidden } : e),
+                      '6C': prev['6C'].map(e => e.user_id === entry.user_id ? { ...e, hide_from_leaderboards: newHidden } : e),
+                    }));
+                  } catch (err) {
+                    console.error('Failed to toggle leaderboard visibility', err);
+                    alert('Failed to update leaderboard visibility for this student.');
+                  }
+                }}
+                className={`ml-2 px-3 py-1 rounded-full text-xs font-medium border ${
+                  entry.hide_from_leaderboards
+                    ? 'bg-gray-200 border-gray-400 text-gray-700'
+                    : 'bg-white border-gray-300 text-gray-600'
+                }`}
+              >
+                {entry.hide_from_leaderboards ? 'Hidden' : 'Hide'}
+              </button>
+            )}
           </div>
         ))}
       </div>

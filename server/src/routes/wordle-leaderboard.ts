@@ -27,8 +27,10 @@ router.get('/overall', authenticateToken, async (req: AuthenticatedRequest, res:
     }
 
     const schoolId = req.user?.school_id ?? null;
+    const includeHidden = req.query.include_hidden === 'true';
     const schoolFilter = schoolId !== null ? 'AND u.school_id = $1' : '';
     const params = schoolId !== null ? [schoolId] : [];
+    const hiddenFilter = includeHidden ? '' : 'AND COALESCE(u.hide_from_leaderboards, FALSE) = FALSE';
 
     const leaderboard = await database.query(`
       WITH completed AS (
@@ -54,7 +56,7 @@ router.get('/overall', authenticateToken, async (req: AuthenticatedRequest, res:
         ROW_NUMBER() OVER (ORDER BY COALESCE(c.total_earnings, 0) DESC, COALESCE(c.wins, 0) DESC) AS rank
       FROM users u
       INNER JOIN completed c ON u.id = c.user_id
-      WHERE u.role = 'student' ${schoolFilter}
+      WHERE u.role = 'student' ${schoolFilter} ${hiddenFilter}
       ORDER BY total_earnings DESC, wins DESC
       LIMIT 5
     `, params);
@@ -76,12 +78,14 @@ router.get('/all-classes', authenticateToken, async (req: AuthenticatedRequest, 
     }
 
     const schoolId = req.user?.school_id ?? null;
+    const includeHidden = req.query.include_hidden === 'true';
     const schoolFilter = schoolId !== null ? 'AND u.school_id = $2' : '';
     const classes = ['6A', '6B', '6C'];
     const allLeaderboards: Record<string, WordleLeaderboardEntry[]> = {};
 
     for (const className of classes) {
       const params = schoolId !== null ? [className, schoolId] : [className];
+      const hiddenFilter = includeHidden ? '' : 'AND COALESCE(u.hide_from_leaderboards, FALSE) = FALSE';
       const leaderboard = await database.query(`
         WITH completed AS (
           SELECT user_id,
@@ -106,7 +110,7 @@ router.get('/all-classes', authenticateToken, async (req: AuthenticatedRequest, 
           ROW_NUMBER() OVER (ORDER BY COALESCE(c.total_earnings, 0) DESC, COALESCE(c.wins, 0) DESC) AS rank
         FROM users u
         INNER JOIN completed c ON u.id = c.user_id
-        WHERE u.role = 'student' AND u.class = $1 ${schoolFilter}
+        WHERE u.role = 'student' AND u.class = $1 ${schoolFilter} ${hiddenFilter}
         ORDER BY total_earnings DESC, wins DESC
         LIMIT 5
       `, params);

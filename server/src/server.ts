@@ -282,7 +282,8 @@ async function initializeDatabase() {
         ADD COLUMN IF NOT EXISTS last_name VARCHAR(255),
         ADD COLUMN IF NOT EXISTS class VARCHAR(10),
         ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE,
-        ADD COLUMN IF NOT EXISTS job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL
+        ADD COLUMN IF NOT EXISTS job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS hide_from_leaderboards BOOLEAN DEFAULT FALSE
       `);
       console.log('✅ Database migration completed');
     } catch (migrationError) {
