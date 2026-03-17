@@ -4,7 +4,7 @@ import {
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
   Award, FileText, TrendingUp, Loader2, AlertCircle, Play, CheckCircle, XCircle, Users 
 } from 'lucide-react';
-import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi } from '../services/api';
+import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi, policeFinesBonusesApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, RetailManagerGameStatus, EntrepreneurGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
@@ -101,6 +101,8 @@ const MyJobDetails: React.FC = () => {
   const [policeStudents, setPoliceStudents] = useState<{ id: number; username: string; first_name: string | null; last_name: string | null; class: string | null }[]>([]);
   const [policeStudentsLoading, setPoliceStudentsLoading] = useState(false);
   const [policeSelectedUsername, setPoliceSelectedUsername] = useState('');
+  const [policeHistory, setPoliceHistory] = useState<import('../services/api').PoliceFineBonus[]>([]);
+  const [policeHistoryLoading, setPoliceHistoryLoading] = useState(false);
 
   const isPoliceJob = (job?.name || '').toLowerCase().trim().includes('police lieutenant');
 
@@ -118,6 +120,22 @@ const MyJobDetails: React.FC = () => {
       }
     };
     load();
+  }, [isPoliceJob]);
+
+  useEffect(() => {
+    if (!isPoliceJob) return;
+    const loadHistory = async () => {
+      try {
+        setPoliceHistoryLoading(true);
+        const res = await policeFinesBonusesApi.getMyHistory();
+        setPoliceHistory(res.data || []);
+      } catch {
+        setPoliceHistory([]);
+      } finally {
+        setPoliceHistoryLoading(false);
+      }
+    };
+    loadHistory();
   }, [isPoliceJob]);
 
   useEffect(() => {
@@ -761,6 +779,74 @@ const MyJobDetails: React.FC = () => {
               </p>
             </div>
           </div>
+
+          {/* Police – Fines & Bonuses History */}
+          {isPoliceJob && (
+            <div className="mt-5">
+              <h4 className="text-md font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-gray-500" />
+                Fines &amp; Bonuses History
+              </h4>
+              {policeHistoryLoading ? (
+                <div className="flex items-center gap-2 text-gray-500 text-sm py-4">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading history...</span>
+                </div>
+              ) : policeHistory.length === 0 ? (
+                <p className="text-sm text-gray-400 italic py-2">No fines or bonuses submitted yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {policeHistory.map((h) => (
+                    <div
+                      key={h.id}
+                      className={`flex items-start justify-between rounded-lg px-4 py-3 border text-sm ${
+                        h.type === 'fine'
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-green-50 border-green-200'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full ${
+                              h.type === 'fine'
+                                ? 'bg-red-200 text-red-800'
+                                : 'bg-green-200 text-green-800'
+                            }`}
+                          >
+                            {h.type}
+                          </span>
+                          <span className="font-medium text-gray-900">
+                            {h.target_first_name && h.target_last_name
+                              ? `${h.target_first_name} ${h.target_last_name}`
+                              : h.target_username}
+                          </span>
+                          <span className="font-semibold text-gray-800">R{Number(h.amount).toFixed(2)}</span>
+                        </div>
+                        {h.description && (
+                          <p className="text-gray-600 mt-0.5 truncate">{h.description}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(h.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <span
+                        className={`ml-3 shrink-0 text-xs font-semibold px-2 py-1 rounded-full ${
+                          h.status === 'approved'
+                            ? 'bg-green-200 text-green-800'
+                            : h.status === 'denied'
+                            ? 'bg-red-200 text-red-800'
+                            : 'bg-amber-200 text-amber-800'
+                        }`}
+                      >
+                        {h.status.toUpperCase()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Police – Fines / Bonuses modal */}
@@ -891,7 +977,37 @@ const MyJobDetails: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    disabled={policeSubmitting || !policeTeacherInitials.trim() || !policeSelectedStudentId || !policeAmount}
+                    disabled={policeSubmitting || !policeTeacherInitials.trim() || !policeSelectedUsername || !policeAmount}
+                    onClick={async () => {
+                      setPoliceSubmitting(true);
+                      setPoliceError(null);
+                      setPoliceSuccess(null);
+                      try {
+                        await policeFinesBonusesApi.submit({
+                          type: policeFineBonusType,
+                          target_username: policeSelectedUsername,
+                          description: policeDescription,
+                          amount: parseFloat(policeAmount),
+                          teacher_initials: policeTeacherInitials.trim(),
+                        });
+                        setPoliceSuccess(
+                          policeFineBonusType === 'fine'
+                            ? 'Fine request sent — awaiting teacher approval in the Bank plugin.'
+                            : 'Bonus request sent — awaiting teacher approval in the Bank plugin.'
+                        );
+                        setPoliceSelectedStudentId('');
+                        setPoliceSelectedUsername('');
+                        setPoliceAmount('');
+                        setPoliceDescription('');
+                        setPoliceTeacherInitials('');
+                        // Refresh history
+                        policeFinesBonusesApi.getMyHistory().then((r) => setPoliceHistory(r.data || [])).catch(() => {});
+                      } catch (err: any) {
+                        setPoliceError(err.response?.data?.error || 'Failed to submit request');
+                      } finally {
+                        setPoliceSubmitting(false);
+                      }
+                    }}
                     className={`px-5 py-2 text-sm font-semibold rounded-lg text-white ${
                       policeFineBonusType === 'fine'
                         ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-300'

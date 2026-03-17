@@ -49,6 +49,7 @@ import leaderboardRoutes from './routes/leaderboard';
 import wordleLeaderboardRoutes from './routes/wordle-leaderboard';
 import suggestionsBugsRoutes from './routes/suggestions-bugs';
 import disastersRoutes from './routes/disasters';
+import policeFinesBonusesRoutes from './routes/police-fines-bonuses';
 import adminRoutes from './routes/admin';
 import superAdminRoutes from './routes/super-admin';
 import teacherAnalyticsRoutes from './routes/teacher-analytics';
@@ -215,6 +216,7 @@ app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/wordle-leaderboard', wordleLeaderboardRoutes);
 app.use('/api/suggestions-bugs', suggestionsBugsRoutes);
 app.use('/api/disasters', disastersRoutes);
+app.use('/api/police-fines-bonuses', policeFinesBonusesRoutes);
 app.use('/api/teacher-analytics', teacherAnalyticsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin', superAdminRoutes);
@@ -1011,6 +1013,18 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Wordle and chore toggles migration may have already been applied:', migrationError);
+    }
+
+    // Police fines/bonuses requests table
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '065_police_fine_bonus_requests.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Police fine/bonus requests table migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Police fine/bonus requests migration may have already been applied:', migrationError);
     }
 
     // Sync default plugins (ensures all known plugins exist - no manual script needed)

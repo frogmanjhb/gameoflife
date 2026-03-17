@@ -527,6 +527,54 @@ export const transactionsApi = {
   }
 };
 
+export interface PoliceFineBonus {
+  id: number;
+  submitted_by_id: number;
+  submitted_by_username: string;
+  submitted_by_first_name: string | null;
+  submitted_by_last_name: string | null;
+  submitted_by_class: string | null;
+  target_user_id: number;
+  target_username: string;
+  target_first_name: string | null;
+  target_last_name: string | null;
+  target_class: string | null;
+  type: 'fine' | 'bonus';
+  amount: number;
+  description: string | null;
+  teacher_initials: string;
+  status: 'pending' | 'approved' | 'denied';
+  reviewed_by_username: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export const policeFinesBonusesApi = {
+  submit: (data: {
+    type: 'fine' | 'bonus';
+    target_username: string;
+    description: string;
+    amount: number;
+    teacher_initials: string;
+  }): Promise<{ data: { message: string } }> =>
+    api.post('/police-fines-bonuses', data),
+
+  getPending: (): Promise<{ data: PoliceFineBonus[] }> =>
+    api.get('/police-fines-bonuses?status=pending'),
+
+  getAll: (): Promise<{ data: PoliceFineBonus[] }> =>
+    api.get('/police-fines-bonuses?status=all'),
+
+  getMyHistory: (): Promise<{ data: PoliceFineBonus[] }> =>
+    api.get('/police-fines-bonuses/my-history'),
+
+  approve: (id: number): Promise<{ data: { message: string } }> =>
+    api.post(`/police-fines-bonuses/${id}/approve`),
+
+  deny: (id: number): Promise<{ data: { message: string } }> =>
+    api.post(`/police-fines-bonuses/${id}/deny`),
+};
+
 // Shop Item type for Winkel management
 export interface ShopItem {
   id: number;

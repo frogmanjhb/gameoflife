@@ -7,7 +7,7 @@ import {
   Users, User, Search, Plus, Minus, CheckCircle, XCircle, Filter, CreditCard, FileText,
   ArrowUpRight, ArrowDownLeft, Banknote, ToggleLeft, ToggleRight, Briefcase, Settings, Clock
 } from 'lucide-react';
-import api, { treasuryApi } from '../../services/api';
+import api, { treasuryApi, policeFinesBonusesApi, PoliceFineBonus } from '../../services/api';
 import { Transaction, Loan, Student } from '../../types';
 import TransferForm from '../TransferForm';
 import LoanForm from '../LoanForm';
@@ -36,11 +36,12 @@ interface PendingTransfer {
 }
 
 const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
-  const [activeTab, setActiveTab] = useState<'payments' | 'loans' | 'transfers' | 'activity'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'loans' | 'transfers' | 'fines-bonuses' | 'activity'>('payments');
   const [students, setStudents] = useState<Student[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pendingTransfers, setPendingTransfers] = useState<PendingTransfer[]>([]);
+  const [pendingFinesBonuses, setPendingFinesBonuses] = useState<PoliceFineBonus[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Filters
@@ -76,16 +77,18 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
 
   const fetchData = async () => {
     try {
-      const [studentsRes, loansRes, transactionsRes, pendingTransfersRes] = await Promise.all([
+      const [studentsRes, loansRes, transactionsRes, pendingTransfersRes, pfbRes] = await Promise.all([
         api.get('/students'),
         api.get('/loans'),
         api.get('/transactions/history'),
-        api.get('/transactions/pending-transfers')
+        api.get('/transactions/pending-transfers'),
+        policeFinesBonusesApi.getPending().catch(() => ({ data: [] })),
       ]);
       setStudents(studentsRes.data);
       setLoans(loansRes.data);
       setTransactions(transactionsRes.data);
       setPendingTransfers(pendingTransfersRes.data);
+      setPendingFinesBonuses(pfbRes.data);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -238,13 +241,14 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
     const pendingLoans = filteredLoans.filter(l => l.status === 'pending').length;
     const activeLoans = filteredLoans.filter(l => l.status === 'active').length;
     const pendingTransfersCount = pendingTransfers.filter(pt => pt.status === 'pending').length;
+    const pendingFinesBonusesCount = pendingFinesBonuses.length;
     const recentTransactions = filteredTransactions.filter(t => {
       const date = new Date(t.created_at);
       const now = new Date();
       return (now.getTime() - date.getTime()) < 7 * 24 * 60 * 60 * 1000; // Last 7 days
     }).length;
-    return { totalBalance, pendingLoans, activeLoans, pendingTransfersCount, recentTransactions, studentCount: relevantStudents.length };
-  }, [students, filteredLoans, filteredTransactions, selectedClass, studentsByClass, pendingTransfers]);
+    return { totalBalance, pendingLoans, activeLoans, pendingTransfersCount, pendingFinesBonusesCount, recentTransactions, studentCount: relevantStudents.length };
+  }, [students, filteredLoans, filteredTransactions, selectedClass, studentsByClass, pendingTransfers, pendingFinesBonuses]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount);
@@ -549,6 +553,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
               { id: 'payments', label: 'Payments', icon: Banknote },
               { id: 'loans', label: 'Loans', icon: CreditCard },
               { id: 'transfers', label: 'Pending Transfers', icon: Send, badge: stats.pendingTransfersCount },
+              { id: 'fines-bonuses', label: 'Fines & Bonuses', icon: AlertCircle, badge: stats.pendingFinesBonusesCount },
               { id: 'activity', label: 'Activity', icon: History }
             ].map(({ id, label, icon: Icon, badge }) => (
               <button
@@ -813,6 +818,123 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                             try {
                               await api.post(`/transactions/pending-transfers/${pt.id}/deny`);
                               setSuccess('Transfer denied');
+                              fetchData();
+                            } catch (err: any) {
+                              setError(err.response?.data?.error || 'Failed to deny');
+                            } finally {
+                              setActionLoading(false);
+                            }
+                          }}
+                          disabled={actionLoading}
+                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                        >
+                          <XCircle className="h-4 w-4" />
+                          <span>Deny</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Fines & Bonuses Tab */}
+          {activeTab === 'fines-bonuses' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Pending Fines & Bonuses</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Submitted by the Police Lieutenant. Approve to move money, or deny to cancel.
+                </p>
+              </div>
+              {pendingFinesBonuses.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
+                  <AlertCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No pending fines or bonuses</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pendingFinesBonuses.map((pfb) => (
+                    <div
+                      key={pfb.id}
+                      className={`rounded-xl p-4 border ${
+                        pfb.type === 'fine'
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-green-50 border-green-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span
+                              className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full ${
+                                pfb.type === 'fine'
+                                  ? 'bg-red-200 text-red-800'
+                                  : 'bg-green-200 text-green-800'
+                              }`}
+                            >
+                              {pfb.type}
+                            </span>
+                            <span className="font-semibold text-gray-900">
+                              {pfb.target_first_name && pfb.target_last_name
+                                ? `${pfb.target_first_name} ${pfb.target_last_name}`
+                                : pfb.target_username}
+                              {pfb.target_class ? ` (${pfb.target_class})` : ''}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium">Amount:</span> R{Number(pfb.amount).toFixed(2)}
+                          </p>
+                          {pfb.description && (
+                            <p className="text-sm text-gray-700">
+                              <span className="font-medium">Reason:</span> {pfb.description}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            Submitted by{' '}
+                            {pfb.submitted_by_first_name && pfb.submitted_by_last_name
+                              ? `${pfb.submitted_by_first_name} ${pfb.submitted_by_last_name}`
+                              : pfb.submitted_by_username}
+                            {pfb.submitted_by_class ? ` (${pfb.submitted_by_class})` : ''}
+                            {' · '}Teacher initials: <strong>{pfb.teacher_initials}</strong>
+                            {' · '}{new Date(pfb.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-200 text-amber-800 shrink-0 ml-3">
+                          PENDING
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            setError(''); setSuccess(''); setActionLoading(true);
+                            try {
+                              await policeFinesBonusesApi.approve(pfb.id);
+                              setSuccess(
+                                pfb.type === 'fine'
+                                  ? `Fine of R${Number(pfb.amount).toFixed(2)} applied to ${pfb.target_username}`
+                                  : `Bonus of R${Number(pfb.amount).toFixed(2)} awarded to ${pfb.target_username}`
+                              );
+                              fetchData();
+                            } catch (err: any) {
+                              setError(err.response?.data?.error || 'Failed to approve');
+                            } finally {
+                              setActionLoading(false);
+                            }
+                          }}
+                          disabled={actionLoading}
+                          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          <span>Approve</span>
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setError(''); setSuccess(''); setActionLoading(true);
+                            try {
+                              await policeFinesBonusesApi.deny(pfb.id);
+                              setSuccess('Request denied');
                               fetchData();
                             } catch (err: any) {
                               setError(err.response?.data?.error || 'Failed to deny');

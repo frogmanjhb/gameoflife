@@ -273,6 +273,18 @@ const StudentDetailView: React.FC = () => {
     return student.username || student.account_number || 'Unknown';
   };
 
+  // For police fine/bonus descriptions formatted as "Police fine | reason | Approved by Name (XX)"
+  // extract just the human-readable reason part for the subtitle.
+  const getTransactionSubtitle = (tx: Transaction) => {
+    if (!tx.description) return tx.transaction_type;
+    const parts = tx.description.split('|').map((p) => p.trim());
+    if (parts.length >= 2 && (parts[0].toLowerCase().startsWith('police fine') || parts[0].toLowerCase().startsWith('police bonus'))) {
+      // "reason | Approved by …" — return reason if present, otherwise "Approved by …"
+      return parts.length >= 3 ? parts[1] : parts[1];
+    }
+    return tx.description;
+  };
+
   const getTransactionLabel = (tx: Transaction, currentUsername: string) => {
     if (tx.from_username === currentUsername && tx.to_username === currentUsername) {
       return 'Internal';
@@ -280,14 +292,30 @@ const StudentDetailView: React.FC = () => {
     if (tx.from_username === currentUsername) {
       const toName = tx.to_first_name && tx.to_last_name 
         ? `${tx.to_first_name} ${tx.to_last_name}` 
-        : tx.to_username || 'Unknown';
-      return `To ${toName}`;
+        : tx.to_username || null;
+      if (toName) return `To ${toName}`;
+      // No counterpart account — derive from description (e.g. police fine)
+      if (tx.transaction_type === 'fine') {
+        const approvedBy = tx.description?.match(/Approved by ([^(]+)/)?.[1]?.trim();
+        return approvedBy ? `Police fine — approved by ${approvedBy}` : 'Police fine';
+      }
+      return tx.transaction_type;
     }
     if (tx.to_username === currentUsername) {
       const fromName = tx.from_first_name && tx.from_last_name 
         ? `${tx.from_first_name} ${tx.from_last_name}` 
-        : tx.from_username || 'Unknown';
-      return `From ${fromName}`;
+        : tx.from_username || null;
+      if (fromName) return `From ${fromName}`;
+      // No counterpart account — derive from description (e.g. police bonus)
+      if (tx.description?.toLowerCase().startsWith('police bonus')) {
+        const approvedBy = tx.description?.match(/Approved by ([^(]+)/)?.[1]?.trim();
+        return approvedBy ? `Police bonus — approved by ${approvedBy}` : 'Police bonus';
+      }
+      if (tx.transaction_type === 'deposit') {
+        const approvedBy = tx.description?.match(/Approved by ([^(]+)/)?.[1]?.trim();
+        return approvedBy ? `Bonus — approved by ${approvedBy}` : 'Bonus';
+      }
+      return tx.transaction_type;
     }
     return tx.transaction_type;
   };
@@ -623,7 +651,7 @@ const StudentDetailView: React.FC = () => {
                             </div>
                             <div>
                               <p className="text-sm font-medium text-gray-900">{getTransactionLabel(tx, displayStudent.username || displayStudent.account_number || '')}</p>
-                              <p className="text-xs text-gray-500">{tx.description || tx.transaction_type}</p>
+                              <p className="text-xs text-gray-500">{getTransactionSubtitle(tx)}</p>
                             </div>
                           </div>
                           <div className="text-right">
@@ -674,7 +702,7 @@ const StudentDetailView: React.FC = () => {
                                   </span>
                                 </div>
                                 {tx.description && (
-                                  <p className="text-sm text-gray-600 mb-1">{tx.description}</p>
+                                  <p className="text-sm text-gray-600 mb-1">{getTransactionSubtitle(tx)}</p>
                                 )}
                                 <p className="text-xs text-gray-500">{formatDate(tx.created_at)}</p>
                               </div>
