@@ -4,7 +4,7 @@ import {
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
   Award, FileText, TrendingUp, Loader2, AlertCircle, Play, CheckCircle, XCircle, Users 
 } from 'lucide-react';
-import { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi } from '../services/api';
+import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, RetailManagerGameStatus, EntrepreneurGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
@@ -89,6 +89,36 @@ const MyJobDetails: React.FC = () => {
   const [accountantApprovalsLoading, setAccountantApprovalsLoading] = useState(false);
   const [accountantApprovalsError, setAccountantApprovalsError] = useState<string | null>(null);
   const [isAccountantApprovalsOpen, setIsAccountantApprovalsOpen] = useState(false);
+  const [isPoliceFineBonusOpen, setIsPoliceFineBonusOpen] = useState(false);
+  const [policeFineBonusType, setPoliceFineBonusType] = useState<'fine' | 'bonus'>('fine');
+  const [policeSelectedStudentId, setPoliceSelectedStudentId] = useState<number | ''>('');
+  const [policeAmount, setPoliceAmount] = useState('');
+  const [policeDescription, setPoliceDescription] = useState('');
+  const [policeSubmitting, setPoliceSubmitting] = useState(false);
+  const [policeError, setPoliceError] = useState<string | null>(null);
+  const [policeSuccess, setPoliceSuccess] = useState<string | null>(null);
+  const [policeTeacherInitials, setPoliceTeacherInitials] = useState('');
+  const [policeStudents, setPoliceStudents] = useState<{ id: number; username: string; first_name: string | null; last_name: string | null; class: string | null }[]>([]);
+  const [policeStudentsLoading, setPoliceStudentsLoading] = useState(false);
+  const [policeSelectedUsername, setPoliceSelectedUsername] = useState('');
+
+  const isPoliceJob = (job?.name || '').toLowerCase().trim().includes('police lieutenant');
+
+  useEffect(() => {
+    if (!isPoliceJob) return;
+    const load = async () => {
+      try {
+        setPoliceStudentsLoading(true);
+        const res = await api.get('/students/transfer-recipients');
+        setPoliceStudents(res.data || []);
+      } catch {
+        setPoliceStudents([]);
+      } finally {
+        setPoliceStudentsLoading(false);
+      }
+    };
+    load();
+  }, [isPoliceJob]);
 
   useEffect(() => {
     if (jobId) {
@@ -667,6 +697,217 @@ const MyJobDetails: React.FC = () => {
               <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
                 {job.description}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Daily & Weekly Duties */}
+        <div className="mb-6">
+          <div className="flex items-center space-x-2 mb-3">
+            <ClipboardList className="h-5 w-5 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Your Duties</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Daily Duties */}
+            <div className="bg-white border border-dashed border-gray-300 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-md font-semibold text-gray-900">Daily Duties</h4>
+                {isPoliceJob && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPoliceFineBonusType('fine');
+                        setIsPoliceFineBonusOpen(true);
+                        setPoliceError(null);
+                        setPoliceSuccess(null);
+                      }}
+                      className="px-4 py-2 rounded-lg font-semibold text-sm bg-red-600 hover:bg-red-700 text-white shadow-sm"
+                    >
+                      Fines
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPoliceFineBonusType('bonus');
+                        setIsPoliceFineBonusOpen(true);
+                        setPoliceError(null);
+                        setPoliceSuccess(null);
+                      }}
+                      className="px-4 py-2 rounded-lg font-semibold text-sm bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                    >
+                      Bonuses
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p className="text-sm text-gray-600 mb-3">
+                Daily duties for this job will appear here. Teachers can customise these duties for each job.
+              </p>
+              {isPoliceJob && (
+                <div className="mt-3 border-t border-gray-200 pt-3">
+                  <p className="text-xs text-gray-500">
+                    The Fines and Bonuses tools are for real-life teachers to record approved actions in the Bank plugin.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Weekly Duties */}
+            <div className="bg-white border border-dashed border-gray-300 rounded-lg p-4">
+              <h4 className="text-md font-semibold text-gray-900 mb-2">Weekly Duties</h4>
+              <p className="text-sm text-gray-600">
+                Weekly duties for this job will appear here. Teachers can customise these duties for each job.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Police – Fines / Bonuses modal */}
+        {isPoliceJob && isPoliceFineBonusOpen && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {policeFineBonusType === 'fine' ? 'Issue Fine' : 'Award Bonus'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPoliceFineBonusOpen(false);
+                    setPoliceSelectedStudentId('');
+                    setPoliceSelectedUsername('');
+                    setPoliceTeacherInitials('');
+                    setPoliceAmount('');
+                    setPoliceDescription('');
+                    setPoliceError(null);
+                    setPoliceSuccess(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ×
+                </button>
+              </div>
+
+              <p className="text-sm text-gray-600 mb-4">
+                This tool is for teachers only. Select a student, describe the reason, and enter an amount.
+                The request will appear in the Bank plugin for approval.
+              </p>
+
+              {policeError && (
+                <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {policeError}
+                </div>
+              )}
+              {policeSuccess && (
+                <div className="mb-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                  {policeSuccess}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Teacher Initials</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 uppercase"
+                    value={policeTeacherInitials}
+                    onChange={(e) => setPoliceTeacherInitials(e.target.value.toUpperCase())}
+                    placeholder="e.g. JVN"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Enter your initials to confirm you authorise this action.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Student</label>
+                  {policeStudentsLoading ? (
+                    <div className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-500 text-sm">
+                      Loading students...
+                    </div>
+                  ) : (
+                    <select
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      value={policeSelectedUsername}
+                      onChange={(e) => {
+                        setPoliceSelectedUsername(e.target.value);
+                        const s = policeStudents.find((st) => st.username === e.target.value);
+                        setPoliceSelectedStudentId(s ? s.id : '');
+                      }}
+                    >
+                      <option value="">Select a student</option>
+                      {policeStudents.map((s) => (
+                        <option key={s.id} value={s.username}>
+                          {s.first_name && s.last_name
+                            ? `${s.first_name} ${s.last_name} (${s.class || '?'}) – ${s.username}`
+                            : `${s.username} (${s.class || '?'})`}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {!policeStudentsLoading && policeStudents.length === 0 && (
+                    <p className="mt-1 text-xs text-gray-500">No students found.</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <textarea
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                    rows={3}
+                    value={policeDescription}
+                    onChange={(e) => setPoliceDescription(e.target.value)}
+                    placeholder={policeFineBonusType === 'fine' ? 'Reason for fine...' : 'Reason for bonus...'}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount (R)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    value={policeAmount}
+                    onChange={(e) => setPoliceAmount(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPoliceFineBonusOpen(false);
+                      setPoliceSelectedStudentId('');
+                      setPoliceSelectedUsername('');
+                      setPoliceTeacherInitials('');
+                      setPoliceAmount('');
+                      setPoliceDescription('');
+                      setPoliceError(null);
+                      setPoliceSuccess(null);
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={policeSubmitting || !policeTeacherInitials.trim() || !policeSelectedStudentId || !policeAmount}
+                    className={`px-5 py-2 text-sm font-semibold rounded-lg text-white ${
+                      policeFineBonusType === 'fine'
+                        ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-300'
+                        : 'bg-green-600 hover:bg-green-700 disabled:bg-green-300'
+                    }`}
+                  >
+                    {policeSubmitting
+                      ? policeFineBonusType === 'fine'
+                        ? 'Sending fine...'
+                        : 'Sending bonus...'
+                      : policeFineBonusType === 'fine'
+                        ? 'Send Fine Request'
+                        : 'Send Bonus Request'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

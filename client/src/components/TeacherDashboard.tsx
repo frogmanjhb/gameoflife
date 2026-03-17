@@ -11,6 +11,7 @@ import TownSettings from './admin/TownSettings';
 import JobManagement from './admin/JobManagement';
 import TreasuryManagement from './admin/TreasuryManagement';
 import WinkelManagement from './admin/WinkelManagement';
+import TeacherJobTestingTab from './admin/TeacherJobTestingTab';
 import StudentManagement from './StudentManagement';
 import PendingStudents from './PendingStudents';
 import { 
@@ -46,6 +47,7 @@ const TeacherDashboard: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [jobsSubTab, setJobsSubTab] = useState<'manage' | 'testing'>('manage');
 
   // Load saved tile order when user and plugins are available
   useEffect(() => {
@@ -506,7 +508,32 @@ const TeacherDashboard: React.FC = () => {
 
           {/* Jobs Tab */}
           {activeTab === 'jobs' && (
-            <JobManagement />
+            <div className="space-y-6">
+              <div className="border-b border-gray-200">
+                <nav className="flex space-x-6">
+                  {[
+                    { id: 'manage' as const, label: 'Job management' },
+                    { id: 'testing' as const, label: 'Job testing' },
+                  ].map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setJobsSubTab(id)}
+                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                        jobsSubTab === id
+                          ? 'border-primary-500 text-primary-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+
+              {jobsSubTab === 'manage' && <JobManagement />}
+              {jobsSubTab === 'testing' && <TeacherJobTestingTab />}
+            </div>
           )}
 
           {/* Shop Tab */}
