@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Minus, DollarSign, User, Search, Users, Trash2, AlertTriangle, ChevronDown, ChevronUp, Copy, RefreshCw, Eye } from 'lucide-react';
-import api from '../services/api';
+import api, { jobsApi } from '../services/api';
 import { Student } from '../types';
 
 interface StudentManagementProps {
@@ -31,6 +31,9 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const [studentPasswords, setStudentPasswords] = useState<Record<number, string>>({});
   const [resettingPassword, setResettingPassword] = useState<number | null>(null);
   const [freezingStudentId, setFreezingStudentId] = useState<number | null>(null);
+  const [showAddXpForm, setShowAddXpForm] = useState(false);
+  const [showRemoveXpForm, setShowRemoveXpForm] = useState(false);
+  const [xpFormData, setXpFormData] = useState({ amount: '' });
 
   // Group students by class
   const studentsByClass = useMemo(() => {
@@ -145,6 +148,62 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
       onUpdate();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Withdrawal failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddXp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+
+    const xpAmount = parseInt(xpFormData.amount, 10);
+    if (!Number.isFinite(xpAmount) || xpAmount < 1) {
+      setError('XP amount must be a positive integer');
+      setSuccess('');
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      const response = await jobsApi.awardXP(selectedStudent.id, xpAmount);
+      setSuccess(response.data.message || `Added ${xpAmount} XP successfully!`);
+      setXpFormData({ amount: '' });
+      setShowAddXpForm(false);
+      onUpdate();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to add XP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveXp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+
+    const xpAmount = parseInt(xpFormData.amount, 10);
+    if (!Number.isFinite(xpAmount) || xpAmount < 1) {
+      setError('XP amount must be a positive integer');
+      setSuccess('');
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      const response = await jobsApi.removeXP(selectedStudent.id, xpAmount);
+      setSuccess(response.data.message || `Removed ${xpAmount} XP successfully!`);
+      setXpFormData({ amount: '' });
+      setShowRemoveXpForm(false);
+      onUpdate();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to remove XP');
     } finally {
       setLoading(false);
     }
@@ -540,7 +599,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                 )}
               </div>
 
-              <div className="flex space-x-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -582,10 +641,40 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    setSelectedStudent(student);
+                    setShowAddXpForm(true);
+                    setShowRemoveXpForm(false);
+                    setShowDepositForm(false);
+                    setShowWithdrawForm(false);
+                    setXpFormData({ amount: '' });
+                  }}
+                  className="flex-1 btn-success text-sm"
+                >
+                  <Plus className="h-4 w-4 inline mr-1" />
+                  Add XP
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedStudent(student);
+                    setShowRemoveXpForm(true);
+                    setShowAddXpForm(false);
+                    setShowDepositForm(false);
+                    setShowWithdrawForm(false);
+                    setXpFormData({ amount: '' });
+                  }}
+                  className="flex-1 btn-warning text-sm"
+                >
+                  <Minus className="h-4 w-4 inline mr-1" />
+                  Remove XP
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setStudentToDelete(student);
                     setShowDeleteConfirm(true);
                   }}
-                  className="px-3 py-2 bg-red-100 text-red-600 hover:bg-red-200 rounded-lg transition-colors text-sm"
+                  className="flex-1 px-3 py-2 bg-red-100 text-red-600 hover:bg-red-200 rounded-lg transition-colors text-sm flex items-center justify-center"
                   title="Delete Student"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -700,6 +789,90 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                 <button
                   type="button"
                   onClick={() => setShowWithdrawForm(false)}
+                  className="flex-1 btn-secondary"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add XP Modal */}
+      {showAddXpForm && selectedStudent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Add XP to {selectedStudent.username}
+            </h3>
+            <form onSubmit={handleAddXp} className="space-y-4">
+              <div>
+                <label className="label">XP Amount</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  required
+                  className="input-field"
+                  placeholder="e.g., 50"
+                  value={xpFormData.amount}
+                  onChange={(e) => setXpFormData({ amount: e.target.value })}
+                />
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 btn-success disabled:opacity-50"
+                >
+                  {loading ? 'Adding...' : 'Add XP'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddXpForm(false)}
+                  className="flex-1 btn-secondary"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Remove XP Modal */}
+      {showRemoveXpForm && selectedStudent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Remove XP from {selectedStudent.username}
+            </h3>
+            <form onSubmit={handleRemoveXp} className="space-y-4">
+              <div>
+                <label className="label">XP Amount</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  required
+                  className="input-field"
+                  placeholder="e.g., 25"
+                  value={xpFormData.amount}
+                  onChange={(e) => setXpFormData({ amount: e.target.value })}
+                />
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 btn-warning disabled:opacity-50"
+                >
+                  {loading ? 'Removing...' : 'Remove XP'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRemoveXpForm(false)}
                   className="flex-1 btn-secondary"
                 >
                   Cancel

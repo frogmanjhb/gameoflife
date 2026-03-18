@@ -375,6 +375,11 @@ export const jobsApi = {
   // Award experience points to student (teachers only)
   awardXP: (userId: number, xpAmount: number): Promise<{ data: { message: string; user: any } }> => {
     return api.post('/jobs/award-xp', { user_id: userId, xp_amount: xpAmount });
+  },
+
+  // Remove experience points from student (teachers only)
+  removeXP: (userId: number, xpAmount: number): Promise<{ data: { message: string; user: any } }> => {
+    return api.post('/jobs/remove-xp', { user_id: userId, xp_amount: xpAmount });
   }
 };
 

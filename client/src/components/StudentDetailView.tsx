@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  User, Briefcase, Home, CreditCard, TrendingUp, TrendingDown, DollarSign,
+  User, Briefcase, Home, CreditCard, TrendingUp, TrendingDown, DollarSign, Plus, Minus,
   ArrowLeft, MapPin, Gamepad2, Pizza, ShoppingBag, FileText, Calendar,
   Clock, CheckCircle, XCircle, AlertCircle, Loader, Building2, Shield
 } from 'lucide-react';
-import api from '../services/api';
+import api, { jobsApi } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import { getDisplayJobTitle } from '../utils/jobDisplay';
 
 interface StudentDetail {
@@ -170,6 +171,19 @@ const StudentDetailView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'loans' | 'property' | 'activities'>('overview');
+  const { user } = useAuth();
+  const isTeacher = user?.role === 'teacher';
+
+  // Teacher add/remove actions (shown under "Transfer Activity" in the overview tab)
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
+  const [showAddMoneyForm, setShowAddMoneyForm] = useState(false);
+  const [showRemoveMoneyForm, setShowRemoveMoneyForm] = useState(false);
+  const [showAddXpForm, setShowAddXpForm] = useState(false);
+  const [showRemoveXpForm, setShowRemoveXpForm] = useState(false);
+  const [moneyAmount, setMoneyAmount] = useState('');
+  const [xpAmount, setXpAmount] = useState('');
 
   useEffect(() => {
     fetchStudentDetails();
@@ -376,8 +390,333 @@ const StudentDetailView: React.FC = () => {
     );
   }
 
+  const targetUsername = student?.username || (username ? username : displayStudent.username);
+  const targetStudentId = student?.id ?? null;
+  const canManage = isTeacher && !!targetUsername && !!targetStudentId;
+
+  const handleAddMoney = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetUsername || !targetStudentId || !isTeacher) return;
+
+    const amount = parseFloat(moneyAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setActionError('Amount must be greater than 0');
+      setActionSuccess('');
+      return;
+    }
+
+    setActionError('');
+    setActionSuccess('');
+    setActionLoading(true);
+
+    try {
+      const response = await api.post('/transactions/deposit', {
+        username: targetUsername,
+        amount,
+        description: 'Deposit by teacher',
+      });
+      setActionSuccess(response.data?.message || 'Deposit successful');
+      setMoneyAmount('');
+      setShowAddMoneyForm(false);
+      await fetchStudentDetails();
+    } catch (err: any) {
+      setActionError(err.response?.data?.error || 'Deposit failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRemoveMoney = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetUsername || !targetStudentId || !isTeacher) return;
+
+    const amount = parseFloat(moneyAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setActionError('Amount must be greater than 0');
+      setActionSuccess('');
+      return;
+    }
+
+    setActionError('');
+    setActionSuccess('');
+    setActionLoading(true);
+
+    try {
+      const response = await api.post('/transactions/withdraw', {
+        username: targetUsername,
+        amount,
+        description: 'Withdrawal by teacher',
+      });
+      setActionSuccess(response.data?.message || 'Withdrawal successful');
+      setMoneyAmount('');
+      setShowRemoveMoneyForm(false);
+      await fetchStudentDetails();
+    } catch (err: any) {
+      setActionError(err.response?.data?.error || 'Withdrawal failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAddXp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetStudentId || !isTeacher) return;
+
+    const xp = parseInt(xpAmount, 10);
+    if (!Number.isFinite(xp) || xp < 1) {
+      setActionError('XP amount must be a positive integer');
+      setActionSuccess('');
+      return;
+    }
+
+    setActionError('');
+    setActionSuccess('');
+    setActionLoading(true);
+
+    try {
+      const response = await jobsApi.awardXP(targetStudentId, xp);
+      setActionSuccess(response.data?.message || `Added ${xp} XP`);
+      setXpAmount('');
+      setShowAddXpForm(false);
+      await fetchStudentDetails();
+    } catch (err: any) {
+      setActionError(err.response?.data?.error || 'Failed to add XP');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRemoveXp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetStudentId || !isTeacher) return;
+
+    const xp = parseInt(xpAmount, 10);
+    if (!Number.isFinite(xp) || xp < 1) {
+      setActionError('XP amount must be a positive integer');
+      setActionSuccess('');
+      return;
+    }
+
+    setActionError('');
+    setActionSuccess('');
+    setActionLoading(true);
+
+    try {
+      const response = await jobsApi.removeXP(targetStudentId, xp);
+      setActionSuccess(response.data?.message || `Removed ${xp} XP`);
+      setXpAmount('');
+      setShowRemoveXpForm(false);
+      await fetchStudentDetails();
+    } catch (err: any) {
+      setActionError(err.response?.data?.error || 'Failed to remove XP');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-12">
+      {/* Teacher add/remove modals */}
+      {showAddMoneyForm && canManage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Add Money to {targetUsername}
+            </h3>
+            <form onSubmit={handleAddMoney} className="space-y-4">
+              <div>
+                <label className="label">Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  className="input-field"
+                  placeholder="0.00"
+                  value={moneyAmount}
+                  onChange={(e) => setMoneyAmount(e.target.value)}
+                  disabled={actionLoading}
+                />
+              </div>
+
+              {actionError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  {actionError}
+                </div>
+              )}
+
+              <div className="flex space-x-3">
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="flex-1 btn-success disabled:opacity-50"
+                >
+                  {actionLoading ? 'Adding...' : 'Add Money'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddMoneyForm(false)}
+                  className="flex-1 btn-secondary"
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showRemoveMoneyForm && canManage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Remove Money from {targetUsername}
+            </h3>
+            <form onSubmit={handleRemoveMoney} className="space-y-4">
+              <div>
+                <label className="label">Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  className="input-field"
+                  placeholder="0.00"
+                  value={moneyAmount}
+                  onChange={(e) => setMoneyAmount(e.target.value)}
+                  disabled={actionLoading}
+                />
+              </div>
+
+              {actionError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  {actionError}
+                </div>
+              )}
+
+              <div className="flex space-x-3">
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="flex-1 btn-warning disabled:opacity-50"
+                >
+                  {actionLoading ? 'Removing...' : 'Remove Money'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRemoveMoneyForm(false)}
+                  className="flex-1 btn-secondary"
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAddXpForm && canManage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Add XP to {targetUsername}
+            </h3>
+            <form onSubmit={handleAddXp} className="space-y-4">
+              <div>
+                <label className="label">XP Amount</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  required
+                  className="input-field"
+                  placeholder="e.g., 50"
+                  value={xpAmount}
+                  onChange={(e) => setXpAmount(e.target.value)}
+                  disabled={actionLoading}
+                />
+              </div>
+
+              {actionError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  {actionError}
+                </div>
+              )}
+
+              <div className="flex space-x-3">
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="flex-1 btn-success disabled:opacity-50"
+                >
+                  {actionLoading ? 'Adding...' : 'Add XP'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddXpForm(false)}
+                  className="flex-1 btn-secondary"
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showRemoveXpForm && canManage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Remove XP from {targetUsername}
+            </h3>
+            <form onSubmit={handleRemoveXp} className="space-y-4">
+              <div>
+                <label className="label">XP Amount</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  required
+                  className="input-field"
+                  placeholder="e.g., 25"
+                  value={xpAmount}
+                  onChange={(e) => setXpAmount(e.target.value)}
+                  disabled={actionLoading}
+                />
+              </div>
+
+              {actionError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  {actionError}
+                </div>
+              )}
+
+              <div className="flex space-x-3">
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="flex-1 btn-warning disabled:opacity-50"
+                >
+                  {actionLoading ? 'Removing...' : 'Remove XP'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRemoveXpForm(false)}
+                  className="flex-1 btn-secondary"
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -630,6 +969,90 @@ const StudentDetailView: React.FC = () => {
                         </div>
                       </div>
                     </div>
+
+                    {canManage && (
+                      <div className="mt-4">
+                        <h4 className="text-md font-semibold text-gray-900 mb-3">Add or Remove</h4>
+
+                        {actionError && (
+                          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-3">
+                            {actionError}
+                          </div>
+                        )}
+                        {actionSuccess && (
+                          <div className="bg-success-50 border border-success-200 text-success-700 px-4 py-3 rounded-lg mb-3">
+                            {actionSuccess}
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActionError('');
+                              setActionSuccess('');
+                              setMoneyAmount('');
+                              setShowAddMoneyForm(true);
+                              setShowRemoveMoneyForm(false);
+                              setShowAddXpForm(false);
+                              setShowRemoveXpForm(false);
+                            }}
+                            className="btn-success text-sm"
+                          >
+                            <Plus className="h-4 w-4 inline mr-2" />
+                            Add Money
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActionError('');
+                              setActionSuccess('');
+                              setMoneyAmount('');
+                              setShowAddMoneyForm(false);
+                              setShowRemoveMoneyForm(true);
+                              setShowAddXpForm(false);
+                              setShowRemoveXpForm(false);
+                            }}
+                            className="btn-warning text-sm"
+                          >
+                            <Minus className="h-4 w-4 inline mr-2" />
+                            Remove Money
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActionError('');
+                              setActionSuccess('');
+                              setXpAmount('');
+                              setShowAddMoneyForm(false);
+                              setShowRemoveMoneyForm(false);
+                              setShowAddXpForm(true);
+                              setShowRemoveXpForm(false);
+                            }}
+                            className="btn-success text-sm"
+                          >
+                            <Plus className="h-4 w-4 inline mr-2" />
+                            Add XP
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActionError('');
+                              setActionSuccess('');
+                              setXpAmount('');
+                              setShowAddMoneyForm(false);
+                              setShowRemoveMoneyForm(false);
+                              setShowAddXpForm(false);
+                              setShowRemoveXpForm(true);
+                            }}
+                            className="btn-warning text-sm"
+                          >
+                            <Minus className="h-4 w-4 inline mr-2" />
+                            Remove XP
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
