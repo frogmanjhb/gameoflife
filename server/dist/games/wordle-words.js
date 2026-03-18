@@ -103,8 +103,9 @@ function loadGuessList() {
 const ANSWER_WORDS_RAW = loadAnswerWords();
 const GUESS_LIST_WORDS = loadGuessList();
 const GUESS_LIST_SET = new Set(GUESS_LIST_WORDS);
-// Public answer list: never includes any word that appears in the guess-only list
-exports.WORDLE_WORDS = ANSWER_WORDS_RAW.filter((w) => !GUESS_LIST_SET.has(w));
+// Answers should be words that remain allowed as guesses.
+// (The guess list is cleaned to remove inappropriate/profanity words.)
+exports.WORDLE_WORDS = ANSWER_WORDS_RAW.filter((w) => GUESS_LIST_SET.has(w));
 // All words that are allowed as guesses (answers + guess-only words)
 exports.WORDLE_GUESS_WORDS = Array.from(new Set([...exports.WORDLE_WORDS, ...GUESS_LIST_WORDS]));
 // Normalize for comparison: lowercase, trim

@@ -100,7 +100,7 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
         }
         const todayCount = await database_prod_1.default.query(`
       SELECT COUNT(*) as count FROM wordle_sessions
-      WHERE user_id = $1 AND status IN ('won', 'lost') AND ${DAILY_WINDOW_SQL}
+      WHERE user_id = $1 AND ${DAILY_WINDOW_SQL}
     `, [userId]);
         const played = parseInt(todayCount[0]?.count || '0');
         const remainingPlays = Math.max(0, dailyLimit - played);
@@ -146,7 +146,7 @@ router.post('/start', auth_1.authenticateToken, async (req, res) => {
         const dailyLimit = await getWordleDailyLimit();
         const todayCount = await database_prod_1.default.query(`
       SELECT COUNT(*) as count FROM wordle_sessions
-      WHERE user_id = $1 AND status IN ('won', 'lost') AND ${DAILY_WINDOW_SQL}
+      WHERE user_id = $1 AND ${DAILY_WINDOW_SQL}
     `, [userId]);
         const played = parseInt(todayCount[0]?.count || '0');
         if (played >= dailyLimit) {

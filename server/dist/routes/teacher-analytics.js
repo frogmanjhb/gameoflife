@@ -384,6 +384,47 @@ router.get('/engagement', auth_1.authenticateToken, tenant_1.requireTenant, (0, 
             summaryLoginSubquery = `SELECT 0::int as total_logins_users, 0::int as total_logins`;
         }
         const summary = await database_prod_1.default.get(`
+        WITH job_sessions AS (
+          SELECT user_id, experience_points, played_at FROM architect_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM accountant_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM software_engineer_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM marketing_manager_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM graphic_designer_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM journalist_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM event_planner_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM financial_manager_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM hr_director_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM police_lieutenant_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM lawyer_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM town_planner_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM electrical_engineer_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM civil_engineer_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM principal_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM teacher_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM nurse_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM doctor_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM retail_manager_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM entrepreneur_game_sessions
+        )
         SELECT 
           COALESCE(login_stats.total_logins_users, 0)::int as total_logins_users,
           COALESCE(login_stats.total_logins, 0)::int as total_logins,
@@ -392,7 +433,12 @@ router.get('/engagement', auth_1.authenticateToken, tenant_1.requireTenant, (0, 
           COALESCE(transfer_stats.total_transfers_users, 0)::int as total_transfers_users,
           COALESCE(transfer_stats.total_transfers, 0)::int as total_transfers,
           COALESCE(purchase_stats.total_purchases_users, 0)::int as total_purchases_users,
-          COALESCE(purchase_stats.total_purchases, 0)::int as total_purchases
+          COALESCE(purchase_stats.total_purchases, 0)::int as total_purchases,
+          COALESCE(wordle_stats.total_wordle_games, 0)::int as total_wordle_games,
+          COALESCE(wordle_stats.total_wordle_earnings, 0)::numeric as total_wordle_earnings,
+          COALESCE(wordle_stats.total_wordle_xp, 0)::int as total_wordle_xp,
+          COALESCE(job_stats.total_job_challenge_sessions, 0)::int as total_job_challenge_sessions,
+          COALESCE(job_stats.total_job_challenge_xp, 0)::int as total_job_challenge_xp
         FROM (${summaryLoginSubquery}) login_stats
         CROSS JOIN (
           SELECT 
@@ -426,6 +472,27 @@ router.get('/engagement', auth_1.authenticateToken, tenant_1.requireTenant, (0, 
             AND sp.purchase_date >= $1::timestamptz
             AND u.role = 'student'
         ) purchase_stats
+        CROSS JOIN (
+          SELECT 
+            COUNT(*) FILTER (WHERE ws.status IN ('won','lost'))::int as total_wordle_games,
+            COALESCE(SUM(ws.earnings), 0)::numeric as total_wordle_earnings,
+            COALESCE(SUM(CASE WHEN ws.status = 'won' THEN 10 ELSE 0 END), 0)::int as total_wordle_xp
+          FROM wordle_sessions ws
+          JOIN users u ON ws.user_id = u.id
+          WHERE u.school_id = $2
+            AND ws.played_at >= $1::timestamptz
+            AND u.role = 'student'
+        ) wordle_stats
+        CROSS JOIN (
+          SELECT 
+            COUNT(*)::int as total_job_challenge_sessions,
+            COALESCE(SUM(js.experience_points), 0)::int as total_job_challenge_xp
+          FROM job_sessions js
+          JOIN users u ON js.user_id = u.id
+          WHERE u.school_id = $2
+            AND js.played_at >= $1::timestamptz
+            AND u.role = 'student'
+        ) job_stats
       `, [startDateIso, req.schoolId]);
         res.json({
             time_range: timeRange,
@@ -443,7 +510,12 @@ router.get('/engagement', auth_1.authenticateToken, tenant_1.requireTenant, (0, 
                 total_transfers_users: 0,
                 total_transfers: 0,
                 total_purchases_users: 0,
-                total_purchases: 0
+                total_purchases: 0,
+                total_wordle_games: 0,
+                total_wordle_earnings: 0,
+                total_wordle_xp: 0,
+                total_job_challenge_sessions: 0,
+                total_job_challenge_xp: 0
             }
         });
     }

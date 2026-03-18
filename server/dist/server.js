@@ -53,6 +53,7 @@ const leaderboard_1 = __importDefault(require("./routes/leaderboard"));
 const wordle_leaderboard_1 = __importDefault(require("./routes/wordle-leaderboard"));
 const suggestions_bugs_1 = __importDefault(require("./routes/suggestions-bugs"));
 const disasters_1 = __importDefault(require("./routes/disasters"));
+const police_fines_bonuses_1 = __importDefault(require("./routes/police-fines-bonuses"));
 const admin_1 = __importDefault(require("./routes/admin"));
 const super_admin_1 = __importDefault(require("./routes/super-admin"));
 const teacher_analytics_1 = __importDefault(require("./routes/teacher-analytics"));
@@ -198,6 +199,7 @@ app.use('/api/leaderboard', leaderboard_1.default);
 app.use('/api/wordle-leaderboard', wordle_leaderboard_1.default);
 app.use('/api/suggestions-bugs', suggestions_bugs_1.default);
 app.use('/api/disasters', disasters_1.default);
+app.use('/api/police-fines-bonuses', police_fines_bonuses_1.default);
 app.use('/api/teacher-analytics', teacher_analytics_1.default);
 app.use('/api/admin', admin_1.default);
 app.use('/api/admin', super_admin_1.default);
@@ -260,7 +262,8 @@ async function initializeDatabase() {
         ADD COLUMN IF NOT EXISTS last_name VARCHAR(255),
         ADD COLUMN IF NOT EXISTS class VARCHAR(10),
         ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE,
-        ADD COLUMN IF NOT EXISTS job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL
+        ADD COLUMN IF NOT EXISTS job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS hide_from_leaderboards BOOLEAN DEFAULT FALSE
       `);
             console.log('✅ Database migration completed');
         }
@@ -989,6 +992,18 @@ async function initializeDatabase() {
         }
         catch (migrationError) {
             console.log('⚠️ Wordle and chore toggles migration may have already been applied:', migrationError);
+        }
+        // Police fines/bonuses requests table
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '065_police_fine_bonus_requests.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Police fine/bonus requests table migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Police fine/bonus requests migration may have already been applied:', migrationError);
         }
         // Sync default plugins (ensures all known plugins exist - no manual script needed)
         try {

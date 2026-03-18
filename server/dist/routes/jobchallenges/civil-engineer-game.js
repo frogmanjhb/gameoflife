@@ -183,9 +183,9 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Game session has already been submitted' });
         }
         const sessionPlayedAt = new Date(session.played_at).getTime();
-        const minGameDurationMs = 15000; // 15 seconds – allow fast but non-instant runs
+        const minGameDurationMs = 5000; // 5 seconds – allow fast but non-instant runs
         if (Date.now() - sessionPlayedAt < minGameDurationMs) {
-            return res.status(400).json({ error: 'Game submitted too quickly. Each infrastructure project must run for at least 15 seconds.' });
+            return res.status(400).json({ error: 'Game submitted too quickly. Each infrastructure project must run for at least 5 seconds.' });
         }
         const recentCompletions = await database_prod_1.default.query(`
       SELECT COUNT(*) as count FROM civil_engineer_game_sessions 

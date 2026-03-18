@@ -366,6 +366,23 @@ router.post('/:username/reset-password', auth_1.authenticateToken, tenant_1.requ
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+// Toggle whether a student is hidden from leaderboards (teachers only)
+router.post('/:username/leaderboard-visibility', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const { username } = req.params;
+        const hidden = req.body?.hidden === true;
+        const student = await database_prod_1.default.get('SELECT id FROM users WHERE username = $1 AND role = $2 AND school_id = $3', [username, 'student', req.schoolId]);
+        if (!student) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        await database_prod_1.default.run('UPDATE users SET hide_from_leaderboards = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [hidden, student.id]);
+        res.json({ message: hidden ? 'Student hidden from leaderboards' : 'Student made visible on leaderboards', hidden });
+    }
+    catch (error) {
+        console.error('Toggle leaderboard visibility error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 // Get account details by account number (teachers only, same school) - MUST be before /:username/details to avoid "account" matching as username
 router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
@@ -390,6 +407,7 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
         u.updated_at as user_updated_at,
         u.job_id,
         u.job_level,
+        u.job_experience_points,
         u.school_id as user_school_id,
         j.name as job_name,
         j.description as job_description,
@@ -442,7 +460,12 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
                     land_parcels_owned: 0,
                     land_value_total: 0,
                     active_loans: 0,
-                    total_loan_debt: 0
+                    total_loan_debt: 0,
+                    total_wordle_games: 0,
+                    total_wordle_earnings: 0,
+                    total_wordle_xp: 0,
+                    total_job_challenge_sessions: 0,
+                    total_job_challenge_xp: 0
                 }
             });
         }
@@ -546,6 +569,63 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
       ORDER BY created_at DESC
       LIMIT 10
     `, [account.user_id]);
+        // Wordle stats for this student
+        const wordleStats = await database_prod_1.default.get(`
+      SELECT 
+        COUNT(*) FILTER (WHERE status IN ('won','lost'))::int as total_games,
+        COALESCE(SUM(earnings), 0)::numeric as total_earnings,
+        COALESCE(SUM(CASE WHEN status = 'won' THEN 10 ELSE 0 END), 0)::int as total_xp
+      FROM wordle_sessions
+      WHERE user_id = $1
+      `, [account.user_id]);
+        // Job challenge stats (all job challenge games combined) for this student
+        const jobStats = await database_prod_1.default.get(`
+      WITH job_sessions AS (
+        SELECT experience_points FROM architect_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM accountant_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM software_engineer_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM marketing_manager_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM graphic_designer_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM journalist_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM event_planner_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM financial_manager_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM hr_director_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM police_lieutenant_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM lawyer_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM town_planner_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM electrical_engineer_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM civil_engineer_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM principal_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM teacher_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM nurse_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM doctor_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM retail_manager_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM entrepreneur_game_sessions WHERE user_id = $1
+      )
+      SELECT 
+        COUNT(*)::int as total_sessions,
+        COALESCE(SUM(experience_points), 0)::int as total_xp
+      FROM job_sessions
+      `, [account.user_id]);
         // Calculate statistics
         const stats = {
             total_transactions: transactions.length,
@@ -561,7 +641,12 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
             land_parcels_owned: landParcels.length,
             land_value_total: landParcels.reduce((sum, l) => sum + parseFloat(l.value), 0),
             active_loans: loans.filter((l) => l.status === 'active').length,
-            total_loan_debt: loans.filter((l) => l.status === 'active').reduce((sum, l) => sum + parseFloat(l.outstanding_balance), 0)
+            total_loan_debt: loans.filter((l) => l.status === 'active').reduce((sum, l) => sum + parseFloat(l.outstanding_balance), 0),
+            total_wordle_games: wordleStats?.total_games ?? 0,
+            total_wordle_earnings: parseFloat(wordleStats?.total_earnings ?? 0),
+            total_wordle_xp: wordleStats?.total_xp ?? 0,
+            total_job_challenge_sessions: jobStats?.total_sessions ?? 0,
+            total_job_challenge_xp: jobStats?.total_xp ?? 0
         };
         res.json({
             account: {
@@ -582,6 +667,7 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
                 updated_at: account.user_updated_at,
                 job_id: account.job_id,
                 job_level: account.job_level,
+                job_experience_points: account.job_experience_points,
                 job_name: account.job_name,
                 job_description: account.job_description,
                 job_salary: account.job_salary,
@@ -629,6 +715,7 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
         u.updated_at,
         u.job_id,
         u.job_level,
+        u.job_experience_points,
         j.name as job_name,
         j.description as job_description,
         (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary,
@@ -780,6 +867,63 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
       ORDER BY created_at DESC
       LIMIT 10
       `, [student.id]);
+        // Wordle stats for this student
+        const wordleStats = await database_prod_1.default.get(`
+      SELECT 
+        COUNT(*) FILTER (WHERE status IN ('won','lost'))::int as total_games,
+        COALESCE(SUM(earnings), 0)::numeric as total_earnings,
+        COALESCE(SUM(CASE WHEN status = 'won' THEN 10 ELSE 0 END), 0)::int as total_xp
+      FROM wordle_sessions
+      WHERE user_id = $1
+      `, [student.id]);
+        // Job challenge stats (all job challenge games combined) for this student
+        const jobStats = await database_prod_1.default.get(`
+      WITH job_sessions AS (
+        SELECT experience_points FROM architect_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM accountant_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM software_engineer_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM marketing_manager_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM graphic_designer_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM journalist_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM event_planner_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM financial_manager_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM hr_director_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM police_lieutenant_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM lawyer_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM town_planner_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM electrical_engineer_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM civil_engineer_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM principal_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM teacher_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM nurse_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM doctor_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM retail_manager_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM entrepreneur_game_sessions WHERE user_id = $1
+      )
+      SELECT 
+        COUNT(*)::int as total_sessions,
+        COALESCE(SUM(experience_points), 0)::int as total_xp
+      FROM job_sessions
+      `, [student.id]);
         // Calculate statistics
         const stats = {
             total_transactions: transactions.length,
@@ -795,7 +939,12 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
             land_parcels_owned: landParcels.length,
             land_value_total: landParcels.reduce((sum, l) => sum + parseFloat(l.value), 0),
             active_loans: loans.filter(l => l.status === 'active').length,
-            total_loan_debt: loans.filter(l => l.status === 'active').reduce((sum, l) => sum + parseFloat(l.outstanding_balance), 0)
+            total_loan_debt: loans.filter(l => l.status === 'active').reduce((sum, l) => sum + parseFloat(l.outstanding_balance), 0),
+            total_wordle_games: wordleStats?.total_games ?? 0,
+            total_wordle_earnings: parseFloat(wordleStats?.total_earnings ?? 0),
+            total_wordle_xp: wordleStats?.total_xp ?? 0,
+            total_job_challenge_sessions: jobStats?.total_sessions ?? 0,
+            total_job_challenge_xp: jobStats?.total_xp ?? 0
         };
         res.json({
             student,
