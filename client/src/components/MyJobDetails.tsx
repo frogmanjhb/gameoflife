@@ -2275,7 +2275,7 @@ const MyJobDetails: React.FC = () => {
                             : pt.to_username}
                         </p>
                         <p className="text-sm text-gray-600">
-                          R{pt.amount.toFixed(2)} • {pt.description}
+                          R{Number(pt.amount).toFixed(2)} • {pt.description}
                         </p>
                         <p className="text-xs text-gray-400">
                           {new Date(pt.created_at).toLocaleString()}

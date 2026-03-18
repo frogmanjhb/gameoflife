@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import database from '../../database/database-prod';
 import { authenticateToken, AuthenticatedRequest } from '../../middleware/auth';
 import { getXPForLevel } from '../jobs';
-import { JOB_CHALLENGES_DAILY_LIMIT } from './config';
+import { JOB_CHALLENGES_DAILY_LIMIT, JOB_GAME_RECENT_COMPLETIONS_LIMIT } from './config';
 
 const router = Router();
 
@@ -243,7 +243,7 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       WHERE user_id = $1 AND earnings > 0 
       AND played_at > NOW() - INTERVAL '3 minutes'
     `, [userId]);
-    if (parseInt(recentCompletions[0].count, 10) >= 2) {
+    if (parseInt(recentCompletions[0].count, 10) >= JOB_GAME_RECENT_COMPLETIONS_LIMIT) {
       return res.status(429).json({ error: 'Too many games completed recently. Please wait a few minutes before playing again.' });
     }
 

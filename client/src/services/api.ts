@@ -24,7 +24,7 @@ import {
   EntrepreneurGameStatus, EntrepreneurGameStartRequest, EntrepreneurGameSubmitRequest,
   Job, JobApplication, LandParcel, LandPurchaseRequest, 
   LandStats, MyPropertiesResponse, BiomeConfig, BiomeType,
-  TaxBracket, TreasuryInfo, TaxReport, SalaryPaymentResult, TownSettings,
+  TaxBracket, TreasuryInfo, TaxReport, TaxEducationResponse, SalaryPaymentResult, TownSettings,
   Tender, TenderApplication, AccountantPendingTransfer, AccountantAssignmentStudent
 } from '../types';
 
@@ -490,6 +490,11 @@ export const treasuryApi = {
   getTaxReport: (townClass: string, period?: 'week' | 'month' | 'all'): Promise<{ data: TaxReport }> => {
     const params = period ? `?period=${period}` : '';
     return api.get(`/town/tax-report/${townClass}${params}`);
+  },
+
+  // Get tax education breakdown for the current student (tax by job level)
+  getTaxEducation: (): Promise<{ data: TaxEducationResponse }> => {
+    return api.get('/town/tax-education');
   },
 
   // Pay salaries to employed students (with tax)

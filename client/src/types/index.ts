@@ -1081,6 +1081,23 @@ export interface TaxReport {
   recent_transactions: TaxTransaction[];
 }
 
+export interface TaxEducationLevel {
+  level: number;
+  gross_salary: number;
+  tax_rate: number;
+  tax_amount: number;
+  net_salary: number;
+}
+
+export interface TaxEducationResponse {
+  town_class: '6A' | '6B' | '6C';
+  tax_enabled: boolean;
+  current_job_level: number;
+  job_is_contractual: boolean;
+  job_base_salary: number;
+  levels: TaxEducationLevel[];
+}
+
 export interface SalaryPaymentResult {
   message: string;
   paid_count: number;

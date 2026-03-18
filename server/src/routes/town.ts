@@ -371,6 +371,89 @@ router.get('/tax-brackets', authenticateToken, async (req: AuthenticatedRequest,
   }
 });
 
+// Get how tax works for the current student (tax by job level)
+router.get('/tax-education', authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const townClass = req.user?.class;
+    if (!townClass || !['6A', '6B', '6C'].includes(townClass)) {
+      return res.status(400).json({ error: 'Invalid town class' });
+    }
+
+    const schoolId = req.user?.school_id ?? req.schoolId ?? null;
+    const town = schoolId != null
+      ? await database.get('SELECT * FROM town_settings WHERE class = $1 AND school_id = $2', [townClass, schoolId])
+      : await database.get('SELECT * FROM town_settings WHERE class = $1 AND school_id IS NULL', [townClass]);
+
+    if (!town) {
+      return res.status(404).json({ error: 'Town not found' });
+    }
+
+    // Fetch student's job info so we can simulate salaries at different job levels.
+    const student = await database.get(
+      `SELECT
+        u.job_id,
+        COALESCE(j.base_salary, 2000.00) as base_salary,
+        COALESCE(j.is_contractual, false) as is_contractual,
+        COALESCE(u.job_level, 1) as current_job_level
+       FROM users u
+       LEFT JOIN jobs j ON u.job_id = j.id
+       WHERE u.id = $1 AND u.role = 'student'`,
+      [req.user?.id]
+    );
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    const baseSalary = parseFloat(student.base_salary) || 2000;
+    const isContractual = !!student.is_contractual;
+    const currentJobLevel = parseInt(student.current_job_level, 10) || 1;
+    const taxEnabled = !!town.tax_enabled;
+
+    const levels = [];
+    for (let lvl = 1; lvl <= 10; lvl++) {
+      // Match the salary formula used by /pay-salaries (level 1 = 100% base, level 10 = 750% base).
+      const grossSalary = Math.round(
+        baseSalary *
+          (1 + (lvl - 1) * 0.7222) *
+          (isContractual ? 1.5 : 1.0)
+        * 100
+      ) / 100;
+
+      if (taxEnabled) {
+        const taxInfo = await calculateProgressiveTax(grossSalary);
+        levels.push({
+          level: lvl,
+          gross_salary: grossSalary,
+          tax_rate: taxInfo.taxRate,
+          tax_amount: taxInfo.taxAmount,
+          net_salary: taxInfo.netAmount
+        });
+      } else {
+        levels.push({
+          level: lvl,
+          gross_salary: grossSalary,
+          tax_rate: 0,
+          tax_amount: 0,
+          net_salary: grossSalary
+        });
+      }
+    }
+
+    res.json({
+      town_class: townClass,
+      tax_enabled: taxEnabled,
+      current_job_level: currentJobLevel,
+      job_is_contractual: isContractual,
+      job_base_salary: baseSalary,
+      levels
+    });
+  } catch (error) {
+    console.error('Failed to fetch tax education:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get tax report for a town (teachers only)
 router.get('/tax-report/:class', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {
