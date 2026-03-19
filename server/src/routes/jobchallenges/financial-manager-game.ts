@@ -4,6 +4,7 @@ import { authenticateToken, AuthenticatedRequest } from '../../middleware/auth';
 import { isDoublesDayEnabled } from '../../helpers/doubles-day';
 import { getXPForLevel } from '../jobs';
 import { JOB_CHALLENGES_DAILY_LIMIT, JOB_GAME_RECENT_COMPLETIONS_LIMIT } from './config';
+import { getElapsedMsSincePlayedAt } from './min-duration';
 
 const router = Router();
 
@@ -169,9 +170,9 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     if (parseFloat(session.earnings || '0') > 0 || parseInt(session.score || '0', 10) > 0) {
       return res.status(400).json({ error: 'Game session has already been submitted' });
     }
-    const sessionPlayedAt = new Date(session.played_at).getTime();
     const minGameDurationMs = 15000; // 15 seconds – allow fast but non-instant runs
-    if (Date.now() - sessionPlayedAt < minGameDurationMs) {
+    const elapsedMs = await getElapsedMsSincePlayedAt(database, session.played_at);
+    if (elapsedMs < minGameDurationMs) {
       return res.status(400).json({ error: 'Game submitted too quickly. Each payroll cycle must run for at least 15 seconds.' });
     }
     const recentCompletions = await database.query(`

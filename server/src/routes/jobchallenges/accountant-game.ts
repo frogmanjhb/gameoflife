@@ -3,6 +3,7 @@ import database from '../../database/database-prod';
 import { authenticateToken, AuthenticatedRequest } from '../../middleware/auth';
 import { getXPForLevel } from '../jobs';
 import { JOB_CHALLENGES_DAILY_LIMIT, JOB_GAME_RECENT_COMPLETIONS_LIMIT } from './config';
+import { getElapsedMsSincePlayedAt } from './min-duration';
 
 const router = Router();
 
@@ -232,9 +233,9 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.status(400).json({ error: 'Game session has already been submitted' });
     }
 
-    const sessionPlayedAt = new Date(session.played_at).getTime();
     const minGameDurationMs = 15000; // 15 seconds – allow fast but non-instant runs
-    if (Date.now() - sessionPlayedAt < minGameDurationMs) {
+    const elapsedMs = await getElapsedMsSincePlayedAt(database, session.played_at);
+    if (elapsedMs < minGameDurationMs) {
       return res.status(400).json({ error: 'Game submitted too quickly. Each audit case must run for at least 15 seconds.' });
     }
 

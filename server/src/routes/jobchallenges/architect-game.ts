@@ -5,6 +5,7 @@ import { getArchitectQuestion } from '../../games/jobchallenges/architect-questi
 import { isDoublesDayEnabled } from '../../helpers/doubles-day';
 import { getXPForLevel } from '../jobs';
 import { JOB_CHALLENGES_DAILY_LIMIT, JOB_GAME_RECENT_COMPLETIONS_LIMIT } from './config';
+import { getElapsedMsSincePlayedAt } from './min-duration';
 
 const router = Router();
 
@@ -295,10 +296,10 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     }
 
     // SECURITY: Minimum game duration
-    const sessionPlayedAt = new Date(session.played_at).getTime();
     const minGameDurationMs = 15000; // 15 seconds – allow fast but non-instant runs
-    if (Date.now() - sessionPlayedAt < minGameDurationMs) {
-      const elapsedSec = Math.floor((Date.now() - sessionPlayedAt) / 1000);
+    const elapsedMs = await getElapsedMsSincePlayedAt(database, session.played_at);
+    if (elapsedMs < minGameDurationMs) {
+      const elapsedSec = Math.floor(elapsedMs / 1000);
       console.warn(`🚨 SECURITY: User ${req.user.username} submitted session ${session_id} after only ${elapsedSec}s`);
       return res.status(400).json({ error: 'Game submitted too quickly. Each game must run for at least 15 seconds.' });
     }
