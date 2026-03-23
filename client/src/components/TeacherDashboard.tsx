@@ -47,7 +47,7 @@ const TeacherDashboard: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
-  const [jobsSubTab, setJobsSubTab] = useState<'manage' | 'testing'>('manage');
+  const [jobsSubTab, setJobsSubTab] = useState<'manage' | 'testing' | 'unemployed'>('manage');
 
   // Load saved tile order when user and plugins are available
   useEffect(() => {
@@ -193,6 +193,30 @@ const TeacherDashboard: React.FC = () => {
 
   // Get stats for current town
   const currentStats = currentTownClass ? townStats[currentTownClass] : null;
+
+  const unemployedStudentsByClass = useMemo(() => {
+    const grouped = students
+      .filter((student) => !student.job_id)
+      .reduce<Record<string, Student[]>>((acc, student) => {
+        const className = student.class || 'Unassigned';
+        if (!acc[className]) {
+          acc[className] = [];
+        }
+        acc[className].push(student);
+        return acc;
+      }, {});
+
+    return Object.entries(grouped)
+      .sort(([classA], [classB]) => classA.localeCompare(classB))
+      .map(([className, classStudents]) => ({
+        className,
+        students: [...classStudents].sort((a, b) => {
+          const aName = `${a.first_name || ''} ${a.last_name || ''}`.trim() || a.username;
+          const bName = `${b.first_name || ''} ${b.last_name || ''}`.trim() || b.username;
+          return aName.localeCompare(bName);
+        })
+      }));
+  }, [students]);
 
   // Get announcements count per town
   const getAnnouncementsForTown = (townClass: string) => {
@@ -514,6 +538,7 @@ const TeacherDashboard: React.FC = () => {
                   {[
                     { id: 'manage' as const, label: 'Job management' },
                     { id: 'testing' as const, label: 'Job testing' },
+                    { id: 'unemployed' as const, label: 'Unemployed students' },
                   ].map(({ id, label }) => (
                     <button
                       key={id}
@@ -533,6 +558,42 @@ const TeacherDashboard: React.FC = () => {
 
               {jobsSubTab === 'manage' && <JobManagement />}
               {jobsSubTab === 'testing' && <TeacherJobTestingTab />}
+              {jobsSubTab === 'unemployed' && (
+                <div className="space-y-4">
+                  {unemployedStudentsByClass.length === 0 ? (
+                    <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-4">
+                      All students currently have jobs.
+                    </div>
+                  ) : (
+                    unemployedStudentsByClass.map(({ className, students: classStudents }) => (
+                      <div key={className} className="bg-white border border-gray-200 rounded-xl">
+                        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                          <h3 className="font-semibold text-gray-900">Class {className}</h3>
+                          <span className="text-sm font-medium text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">
+                            {classStudents.length} unemployed
+                          </span>
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                          {classStudents.map((student) => {
+                            const fullName = `${student.first_name || ''} ${student.last_name || ''}`.trim();
+                            return (
+                              <div
+                                key={student.id}
+                                className="px-4 py-3 flex items-center justify-between text-sm"
+                              >
+                                <span className="text-gray-900 font-medium">
+                                  {fullName || student.username}
+                                </span>
+                                <span className="text-gray-500">@{student.username}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           )}
 
