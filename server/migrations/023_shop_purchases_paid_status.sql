@@ -14,10 +14,12 @@ ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;
 ALTER TABLE shop_purchases 
 ADD COLUMN IF NOT EXISTS paid_by INTEGER REFERENCES users(id);
 
--- Update existing purchases to be marked as paid (they were already fulfilled)
+-- Backfill paid_at for purchases already marked paid (legacy rows after ADD COLUMN).
+-- Must NOT update rows with paid = false: pending purchases also have paid_at NULL, and this
+-- migration runs on every server boot — a broad WHERE paid_at IS NULL would mark them paid.
 UPDATE shop_purchases 
-SET paid = true, paid_at = created_at 
-WHERE paid_at IS NULL;
+SET paid_at = created_at 
+WHERE paid_at IS NULL AND paid = true;
 
 -- Create index for filtering pending purchases
 CREATE INDEX IF NOT EXISTS idx_shop_purchases_paid ON shop_purchases(paid);
