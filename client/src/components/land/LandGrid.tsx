@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { LandParcel, BiomeType } from '../../types';
 import { landApi } from '../../services/api';
 import { BIOME_CONFIG, formatCurrency, BIOME_ICONS } from './BiomeConfig';
+import { isCommunityAuctionPlot, COMMUNITY_AUCTION_HOVER_TITLE, HIDDEN_AUCTION_PRICE_LABEL } from './communityPlot';
 import LandPopup from './LandPopup';
 import PurchaseModal from './PurchaseModal';
 import { ZoomIn, ZoomOut, Maximize2, Filter, Loader2, RefreshCw } from 'lucide-react';
@@ -104,7 +105,7 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, c
   // Handle cell click
   const handleCellClick = useCallback((row: number, col: number) => {
     const parcel = getParcel(row, col);
-    if (parcel && !parcel.owner_id && !readOnly) {
+    if (parcel && !parcel.owner_id && !readOnly && !isCommunityAuctionPlot(parcel)) {
       setSelectedParcel(parcel);
       setShowPurchaseModal(true);
     }
@@ -195,6 +196,16 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, c
     if (!shouldShowCell(parcel)) {
       return { backgroundColor: '#f3f4f6', opacity: 0.3 };
     }
+
+    if (isCommunityAuctionPlot(parcel)) {
+      const isOwned = !!parcel.owner_id;
+      return {
+        background: isOwned
+          ? 'linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%)'
+          : 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)',
+        border: '2px solid #fef3c7',
+      };
+    }
     
     const config = BIOME_CONFIG[parcel.biome_type];
     const isOwned = !!parcel.owner_id;
@@ -215,12 +226,16 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, c
         const isDragging = canRearrange && draggedParcel?.row_index === row && draggedParcel?.col_index === col;
         const isDropTarget = canRearrange && dropTargetKey === `${row}-${col}`;
         
+        const isAuctionPlot = parcel ? isCommunityAuctionPlot(parcel) : false;
+        
         cells.push(
           <div
             key={`${row}-${col}`}
             className={`transition-all rounded-sm ${
               canRearrange ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
-            } ${isHovered ? 'ring-2 ring-white z-10 scale-110 shadow-lg' : 'hover:brightness-110'} ${
+            } ${isAuctionPlot ? 'land-auction-cell' : ''} ${
+              isHovered && !isAuctionPlot ? 'ring-2 ring-white z-10 scale-110 shadow-lg' : isHovered ? 'ring-2 ring-amber-200 z-10 scale-110 shadow-lg' : 'hover:brightness-110'
+            } ${
               isDragging ? 'opacity-50 scale-95' : ''
             } ${isDropTarget ? 'ring-2 ring-primary-500 ring-offset-1 z-20' : ''}`}
             style={{
@@ -239,8 +254,22 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, c
             onMouseEnter={() => handleCellHover(row, col)}
             onMouseLeave={() => setHoveredParcel(null)}
             onClick={() => handleCellClick(row, col)}
-            title={parcel ? (canRearrange ? `Drag to swap • ${parcel.grid_code}` : parcel.grid_code) : `Empty ${row}-${col}`}
-          />
+            title={
+              parcel
+                ? isAuctionPlot
+                  ? COMMUNITY_AUCTION_HOVER_TITLE
+                  : canRearrange
+                    ? `Drag to swap • ${parcel.grid_code}`
+                    : parcel.grid_code
+                : `Empty ${row}-${col}`
+            }
+          >
+            {isAuctionPlot && cellSize >= 28 && (
+              <span className="flex items-center justify-center w-full h-full text-xs font-bold text-amber-950 drop-shadow-sm pointer-events-none">
+                🏛️
+              </span>
+            )}
+          </div>
         );
       }
     }

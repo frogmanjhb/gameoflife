@@ -18,7 +18,8 @@
     "migrate:land-prices-50": "node run-sql-migration.js migrations/071_land_prices_plus_50_percent.sql",
     "migrate:land-fixed-prices": "node run-sql-migration.js migrations/072_land_fixed_plot_prices.sql",
     "migrate:land-property-economy": "node run-sql-migration.js migrations/073_land_property_economy.sql",
-    "migrate:land-purchase-engineer": "node run-sql-migration.js migrations/074_land_purchase_engineer_approvals.sql"
+    "migrate:land-purchase-engineer": "node run-sql-migration.js migrations/074_land_purchase_engineer_approvals.sql",
+    "migrate:community-auction-plot": "node run-sql-migration.js migrations/075_community_auction_plot_i6.sql"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

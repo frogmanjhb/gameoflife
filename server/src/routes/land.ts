@@ -5,6 +5,12 @@ import { authenticateToken, AuthenticatedRequest, requireRole } from '../middlew
 import { BiomeType, RiskLevel, LandParcel, LandPurchaseRequest } from '../types';
 import { enrichOwnedParcel, calculateAppreciatedValue } from '../domain/landProperty';
 import { calculateTotalPurchaseCost, isLandEngineerJob } from '../domain/landPurchaseApproval';
+import {
+  COMMUNITY_AUCTION_VALUE,
+  isCommunityAuctionPlot,
+  communityAuctionPlotSqlPros,
+  communityAuctionPlotSqlCons,
+} from '../domain/communityAuctionPlot';
 import landEconomyRouter from './land-economy';
 import landPurchaseApprovalRouter, {
   getRequiredLandEngineers,
@@ -303,6 +309,10 @@ router.post('/purchase-request',
       }
       if (parcel.owner_id) {
         return res.status(400).json({ error: 'This parcel is already owned' });
+      }
+
+      if (isCommunityAuctionPlot(parcel.grid_code)) {
+        return res.status(400).json({ error: 'Plot I6 is reserved for the class auction and cannot be purchased directly' });
       }
 
       const userClass = req.user!.class;
@@ -768,6 +778,10 @@ router.post('/seed',
         for (let row = 0; row < 10; row++) {
           for (let col = 0; col < 10; col++) {
             const gridCode = generateGridCode(row, col);
+            if (isCommunityAuctionPlot(gridCode)) {
+              parcels.push(`('${gridCode}', ${row}, ${col}, 'Indian Ocean Coastal Belt', ${COMMUNITY_AUCTION_VALUE}, 'medium', ARRAY[${communityAuctionPlotSqlPros()}], ARRAY[${communityAuctionPlotSqlCons()}], '${townClass}')`);
+              continue;
+            }
             const biome = getBiomeForPosition(row, col, townClass);
             const config = BIOME_CONFIG[biome];
             const value = config.baseValue;
@@ -955,10 +969,11 @@ router.post('/recalculate-values',
       }
 
       const parcels = schoolId !== null
-        ? await database.query('SELECT id, row_index, col_index, biome_type FROM land_parcels WHERE school_id = $1 AND town_class = $2', [schoolId, townClass])
-        : await database.query('SELECT id, row_index, col_index, biome_type FROM land_parcels WHERE school_id IS NULL AND town_class = $1', [townClass]);
+        ? await database.query('SELECT id, grid_code, row_index, col_index, biome_type FROM land_parcels WHERE school_id = $1 AND town_class = $2', [schoolId, townClass])
+        : await database.query('SELECT id, grid_code, row_index, col_index, biome_type FROM land_parcels WHERE school_id IS NULL AND town_class = $1', [townClass]);
       let updated = 0;
       for (const p of parcels) {
+        if (isCommunityAuctionPlot(p.grid_code)) continue;
         const biome = p.biome_type as BiomeType;
         const config = BIOME_CONFIG[biome];
         if (!config) continue;

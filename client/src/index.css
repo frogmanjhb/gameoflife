@@ -161,3 +161,21 @@
     overflow: hidden;
   }
 }
+
+@layer utilities {
+  .land-auction-cell {
+    animation: land-auction-pulse 2s ease-in-out infinite;
+    z-index: 5;
+  }
+
+  @keyframes land-auction-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.75);
+      filter: brightness(1);
+    }
+    50% {
+      box-shadow: 0 0 16px 6px rgba(251, 191, 36, 1);
+      filter: brightness(1.2);
+    }
+  }
+}
