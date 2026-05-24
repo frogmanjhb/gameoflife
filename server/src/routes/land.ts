@@ -3,8 +3,17 @@ import { body, validationResult } from 'express-validator';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { BiomeType, RiskLevel, LandParcel, LandPurchaseRequest } from '../types';
+import { enrichOwnedParcel, calculateAppreciatedValue } from '../domain/landProperty';
+import { calculateTotalPurchaseCost, isLandEngineerJob } from '../domain/landPurchaseApproval';
+import landEconomyRouter from './land-economy';
+import landPurchaseApprovalRouter, {
+  getRequiredLandEngineers,
+  enrichPurchaseRequestWithEngineers,
+} from './land-purchase-approval';
 
 const router = Router();
+router.use(landEconomyRouter);
+router.use(landPurchaseApprovalRouter);
 
 // Biome configuration with pros/cons and base values (prices set so land is meaningful vs salaries)
 const BIOME_CONFIG: Record<BiomeType, { 
@@ -14,62 +23,85 @@ const BIOME_CONFIG: Record<BiomeType, {
   cons: string[];
 }> = {
   'Savanna': {
-    baseValue: 40000,
+    baseValue: 75000,
     risk: 'medium',
     pros: ['Good grazing land', 'Wildlife tourism potential', 'Moderate rainfall'],
     cons: ['Seasonal droughts', 'Fire risk', 'Limited water sources']
   },
   'Grassland': {
-    baseValue: 30000,
+    baseValue: 56250,
     risk: 'low',
     pros: ['Excellent farming potential', 'Easy to develop', 'Stable ecosystem'],
     cons: ['Soil erosion risk', 'Limited shade', 'Overgrazing concerns']
   },
   'Forest': {
-    baseValue: 70000,
+    baseValue: 131250,
     risk: 'medium',
     pros: ['Rich biodiversity', 'Timber resources', 'Carbon credits potential'],
     cons: ['Fire risk', 'Clearing restrictions', 'Difficult access']
   },
   'Fynbos': {
-    baseValue: 90000,
+    baseValue: 135000,
     risk: 'high',
     pros: ['Unique biodiversity', 'Eco-tourism value', 'Protected species habitat'],
     cons: ['Fire-dependent ecosystem', 'Strict conservation laws', 'Limited development']
   },
   'Nama Karoo': {
-    baseValue: 20000,
+    baseValue: 58595,
     risk: 'medium',
     pros: ['Sheep farming suited', 'Low land cost', 'Unique landscape'],
     cons: ['Very dry climate', 'Limited water', 'Remote location']
   },
   'Succulent Karoo': {
-    baseValue: 9000,
+    baseValue: 37970,
     risk: 'high',
     pros: ['Rare plant species', 'Research value', 'Mining potential'],
     cons: ['Extreme temperatures', 'Water scarcity', 'Conservation restrictions']
   },
   'Desert': {
-    baseValue: 16000,
+    baseValue: 67500,
     risk: 'high',
     pros: ['Solar energy potential', 'Low land price', 'Mineral deposits'],
     cons: ['Extreme conditions', 'No water', 'Uninhabitable without infrastructure']
   },
   'Thicket': {
-    baseValue: 50000,
+    baseValue: 93750,
     risk: 'low',
     pros: ['Carbon storage', 'Game farming potential', 'Drought resistant'],
     cons: ['Dense vegetation', 'Clearing needed', 'Elephant damage risk']
   },
   'Indian Ocean Coastal Belt': {
-    baseValue: 120000,
+    baseValue: 180000,
     risk: 'medium',
     pros: ['High property value', 'Tourism potential', 'Port access'],
     cons: ['Coastal erosion', 'Cyclone risk', 'High development costs']
   }
 };
 
-// Helper: Convert row index to Excel-style letter code (A-Z, AA-AZ, BA-BZ, CA-CV)
+const TOWN_CLASSES = ['6A', '6B', '6C'] as const;
+type TownClass = typeof TOWN_CLASSES[number];
+
+function isTownClass(value: unknown): value is TownClass {
+  return typeof value === 'string' && (TOWN_CLASSES as readonly string[]).includes(value);
+}
+
+function resolveTownClass(req: AuthenticatedRequest, queryTownClass?: unknown): TownClass | null {
+  if (req.user!.role === 'student') {
+    const userClass = req.user!.class;
+    return isTownClass(userClass) ? userClass : null;
+  }
+  if (isTownClass(queryTownClass)) {
+    return queryTownClass;
+  }
+  return '6A';
+}
+
+function townClassOffset(townClass: TownClass): number {
+  if (townClass === '6B') return 2;
+  if (townClass === '6C') return 4;
+  return 0;
+}
+
 function rowToLetterCode(row: number): string {
   if (row < 26) {
     return String.fromCharCode(65 + row); // A-Z
@@ -97,8 +129,12 @@ function generateGridCode(row: number, col: number): string {
 // GET /api/land/parcels - Get all parcels (with optional viewport filtering)
 router.get('/parcels', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { minRow, maxRow, minCol, maxCol, owned, biome } = req.query;
+    const { minRow, maxRow, minCol, maxCol, owned, biome, town_class } = req.query;
     const schoolId = req.user?.school_id ?? null;
+    const townClass = resolveTownClass(req, town_class);
+    if (!townClass) {
+      return res.status(400).json({ error: 'Valid town_class (6A, 6B, or 6C) is required' });
+    }
     
     let query = `
       SELECT lp.*, u.username as owner_username, u.first_name as owner_first_name, u.last_name as owner_last_name
@@ -115,6 +151,9 @@ router.get('/parcels', authenticateToken, async (req: AuthenticatedRequest, res:
     } else {
       query += ' AND lp.school_id IS NULL';
     }
+
+    query += ` AND lp.town_class = $${paramIndex++}`;
+    params.push(townClass);
 
     // Viewport filtering for performance
     if (minRow !== undefined && maxRow !== undefined) {
@@ -153,19 +192,24 @@ router.get('/parcels', authenticateToken, async (req: AuthenticatedRequest, res:
 router.get('/parcels/:code', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { code } = req.params;
+    const { town_class } = req.query;
     const schoolId = req.user?.school_id ?? null;
+    const townClass = resolveTownClass(req, town_class);
+    if (!townClass) {
+      return res.status(400).json({ error: 'Valid town_class (6A, 6B, or 6C) is required' });
+    }
     
     const parcel = await database.get(
       schoolId !== null
         ? `SELECT lp.*, u.username as owner_username, u.first_name as owner_first_name, u.last_name as owner_last_name
            FROM land_parcels lp
            LEFT JOIN users u ON lp.owner_id = u.id
-           WHERE lp.grid_code = $1 AND lp.school_id = $2`
+           WHERE lp.grid_code = $1 AND lp.school_id = $2 AND lp.town_class = $3`
         : `SELECT lp.*, u.username as owner_username, u.first_name as owner_first_name, u.last_name as owner_last_name
            FROM land_parcels lp
            LEFT JOIN users u ON lp.owner_id = u.id
-           WHERE lp.grid_code = $1 AND lp.school_id IS NULL`,
-      schoolId !== null ? [code.toUpperCase(), schoolId] : [code.toUpperCase()]
+           WHERE lp.grid_code = $1 AND lp.school_id IS NULL AND lp.town_class = $2`,
+      schoolId !== null ? [code.toUpperCase(), schoolId, townClass] : [code.toUpperCase(), townClass]
     );
 
     if (!parcel) {
@@ -177,7 +221,7 @@ router.get('/parcels/:code', authenticateToken, async (req: AuthenticatedRequest
       SELECT lpr.*, u.username as applicant_username
       FROM land_purchase_requests lpr
       JOIN users u ON lpr.user_id = u.id
-      WHERE lpr.parcel_id = $1 AND lpr.status = 'pending'
+      WHERE lpr.parcel_id = $1 AND lpr.status IN ('pending_engineer', 'pending_teacher')
     `, [parcel.id]);
 
     res.json({ ...parcel, pending_request: pendingRequest || null });
@@ -190,19 +234,45 @@ router.get('/parcels/:code', authenticateToken, async (req: AuthenticatedRequest
 // GET /api/land/my-properties - Get current user's owned properties
 router.get('/my-properties', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const parcels = await database.query(`
-      SELECT * FROM land_parcels
-      WHERE owner_id = $1
-      ORDER BY purchased_at DESC
-    `, [req.user!.id]);
+    const userClass = req.user!.class;
+    const townClass = isTownClass(userClass) ? userClass : null;
+    const parcels = townClass
+      ? await database.query(`
+          SELECT * FROM land_parcels
+          WHERE owner_id = $1 AND town_class = $2
+          ORDER BY purchased_at DESC
+        `, [req.user!.id, townClass])
+      : await database.query(`
+          SELECT * FROM land_parcels
+          WHERE owner_id = $1
+          ORDER BY purchased_at DESC
+        `, [req.user!.id]);
 
-    // Calculate total value
-    const totalValue = parcels.reduce((sum: number, p: LandParcel) => sum + Number(p.value), 0);
+    for (const p of parcels) {
+      if (!p.purchased_at) continue;
+      const purchasePrice = Number(p.purchase_price ?? p.value);
+      const currentValue = calculateAppreciatedValue(purchasePrice, p.purchased_at);
+      if (currentValue !== Number(p.value)) {
+        await database.run(
+          'UPDATE land_parcels SET value = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [currentValue, p.id]
+        );
+        p.value = currentValue;
+      }
+      if (!p.purchase_price) {
+        p.purchase_price = purchasePrice;
+      }
+    }
+
+    const enriched = parcels.map((p: LandParcel) => enrichOwnedParcel(p as any));
+    const totalValue = enriched.reduce((sum: number, p: { current_value: number }) => sum + p.current_value, 0);
+    const totalPurchaseValue = enriched.reduce((sum: number, p: { purchase_price: number }) => sum + p.purchase_price, 0);
 
     res.json({
-      parcels,
-      total_count: parcels.length,
-      total_value: totalValue
+      parcels: enriched,
+      total_count: enriched.length,
+      total_value: totalValue,
+      total_purchase_value: totalPurchaseValue,
     });
   } catch (error) {
     console.error('Failed to fetch user properties:', error);
@@ -235,6 +305,17 @@ router.post('/purchase-request',
         return res.status(400).json({ error: 'This parcel is already owned' });
       }
 
+      const userClass = req.user!.class;
+      if (isTownClass(userClass) && parcel.town_class && parcel.town_class !== userClass) {
+        return res.status(403).json({ error: 'You can only purchase land in your town' });
+      }
+
+      const parcelSchoolId = parcel.school_id ?? null;
+      const userSchoolId = req.user!.school_id ?? null;
+      if (parcelSchoolId !== userSchoolId) {
+        return res.status(404).json({ error: 'Parcel not found' });
+      }
+
       // SECURITY: Validate offered price is at least 90% of parcel value (allow small negotiation room)
       const parcelValue = parseFloat(parcel.value);
       const offeredAmount = parseFloat(offered_price);
@@ -248,35 +329,45 @@ router.post('/purchase-request',
       // Check if user already has a pending request for this parcel
       const existingRequest = await database.get(`
         SELECT * FROM land_purchase_requests 
-        WHERE user_id = $1 AND parcel_id = $2 AND status = 'pending'
+        WHERE user_id = $1 AND parcel_id = $2 AND status IN ('pending_engineer', 'pending_teacher')
       `, [req.user!.id, parcel_id]);
 
       if (existingRequest) {
         return res.status(400).json({ error: 'You already have a pending request for this parcel' });
       }
 
-      // Check if user has sufficient balance
+      const totalCost = calculateTotalPurchaseCost(offeredAmount);
       const account = await database.get('SELECT balance FROM accounts WHERE user_id = $1', [req.user!.id]);
-      if (!account || account.balance < offered_price) {
-        return res.status(400).json({ error: 'Insufficient balance for this purchase' });
+      if (!account || Number(account.balance) < totalCost) {
+        return res.status(400).json({
+          error: `Insufficient balance. You need ${totalCost.toFixed(2)} (plot price plus 10% engineer approval fee).`,
+        });
       }
+
+      const townClassForEngineers = parcel.town_class || userClass;
+      const requiredEngineers = isTownClass(townClassForEngineers)
+        ? await getRequiredLandEngineers(userSchoolId, townClassForEngineers)
+        : [];
+      const initialStatus = requiredEngineers.length > 0 ? 'pending_engineer' : 'pending_teacher';
 
       // Create purchase request (with school_id for tenant isolation)
       const schoolId = req.user!.school_id ?? null;
       const result = schoolId !== null
         ? await database.get(`
             INSERT INTO land_purchase_requests (user_id, parcel_id, offered_price, status, school_id)
-            VALUES ($1, $2, $3, 'pending', $4)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING *
-          `, [req.user!.id, parcel_id, offered_price, schoolId])
+          `, [req.user!.id, parcel_id, offered_price, initialStatus, schoolId])
         : await database.get(`
             INSERT INTO land_purchase_requests (user_id, parcel_id, offered_price, status)
-            VALUES ($1, $2, $3, 'pending')
+            VALUES ($1, $2, $3, $4)
             RETURNING *
-          `, [req.user!.id, parcel_id, offered_price]);
+          `, [req.user!.id, parcel_id, offered_price, initialStatus]);
 
       res.status(201).json({
-        message: 'Purchase request submitted successfully',
+        message: initialStatus === 'pending_engineer'
+          ? 'Purchase request submitted — Architects and Civil Engineers in your class must approve first'
+          : 'Purchase request submitted for teacher approval',
         request: result
       });
     } catch (error) {
@@ -286,14 +377,94 @@ router.post('/purchase-request',
   }
 );
 
-// GET /api/land/purchase-requests - Get purchase requests (teachers see all pending, students see their own)
+// GET /api/land/purchase-requests - teachers, buyers, or engineer approval queue
 router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { status } = req.query;
+    const { status, town_class, role } = req.query;
+    const schoolId = req.user?.school_id ?? null;
+
+    if (req.user!.role === 'student' && role === 'engineer') {
+      const user = await database.get(
+        `SELECT u.id, u.class, u.school_id, j.name AS job_name
+         FROM users u LEFT JOIN jobs j ON j.id = u.job_id WHERE u.id = $1`,
+        [req.user!.id]
+      );
+      if (!user || !isLandEngineerJob(user.job_name)) {
+        return res.status(403).json({ error: 'Only Architects and Civil Engineers can view the approval queue' });
+      }
+      if (!user.class) {
+        return res.json([]);
+      }
+
+      const userId = req.user!.id;
+      let rows;
+      if (schoolId !== null) {
+        rows = await database.query(
+          `SELECT lpr.*,
+                  u.username AS applicant_username,
+                  u.first_name AS applicant_first_name,
+                  u.last_name AS applicant_last_name,
+                  u.class AS applicant_class,
+                  lp.grid_code AS parcel_grid_code,
+                  lp.biome_type AS parcel_biome_type,
+                  lp.value AS parcel_value,
+                  lp.town_class AS parcel_town_class,
+                  r.username AS reviewer_username
+           FROM land_purchase_requests lpr
+           JOIN users u ON lpr.user_id = u.id
+           JOIN land_parcels lp ON lpr.parcel_id = lp.id
+           LEFT JOIN users r ON lpr.reviewed_by = r.id
+           WHERE lpr.status = 'pending_engineer'
+             AND lp.town_class = $1
+             AND u.school_id = $2
+             AND lpr.user_id != $3
+             AND NOT EXISTS (
+               SELECT 1 FROM land_purchase_engineer_approvals lpea
+               WHERE lpea.request_id = lpr.id AND lpea.approver_id = $3
+             )
+           ORDER BY lpr.created_at ASC`,
+          [user.class, schoolId, userId]
+        );
+      } else {
+        rows = await database.query(
+          `SELECT lpr.*,
+                  u.username AS applicant_username,
+                  u.first_name AS applicant_first_name,
+                  u.last_name AS applicant_last_name,
+                  u.class AS applicant_class,
+                  lp.grid_code AS parcel_grid_code,
+                  lp.biome_type AS parcel_biome_type,
+                  lp.value AS parcel_value,
+                  lp.town_class AS parcel_town_class,
+                  r.username AS reviewer_username
+           FROM land_purchase_requests lpr
+           JOIN users u ON lpr.user_id = u.id
+           JOIN land_parcels lp ON lpr.parcel_id = lp.id
+           LEFT JOIN users r ON lpr.reviewed_by = r.id
+           WHERE lpr.status = 'pending_engineer'
+             AND lp.town_class = $1
+             AND u.school_id IS NULL
+             AND lpr.user_id != $2
+             AND NOT EXISTS (
+               SELECT 1 FROM land_purchase_engineer_approvals lpea
+               WHERE lpea.request_id = lpr.id AND lpea.approver_id = $2
+             )
+           ORDER BY lpr.created_at ASC`,
+          [user.class, userId]
+        );
+      }
+
+      const requiredEngineers = await getRequiredLandEngineers(schoolId, user.class);
+      const isRequired = requiredEngineers.some((e) => e.id === req.user!.id);
+      const filtered = isRequired ? rows : [];
+
+      const enriched = await Promise.all(filtered.map((row) => enrichPurchaseRequestWithEngineers(row)));
+      return res.json(enriched);
+    }
+
     let query: string;
     let params: any[];
-
-    const schoolId = req.user?.school_id ?? null;
+    const townClass = req.user!.role === 'teacher' ? resolveTownClass(req, town_class) : null;
 
     if (req.user!.role === 'teacher') {
       query = `
@@ -305,6 +476,7 @@ router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedReq
                lp.grid_code as parcel_grid_code,
                lp.biome_type as parcel_biome_type,
                lp.value as parcel_value,
+               lp.town_class as parcel_town_class,
                r.username as reviewer_username
         FROM land_purchase_requests lpr
         JOIN users u ON lpr.user_id = u.id
@@ -323,6 +495,10 @@ router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedReq
         query += ` AND lpr.status = $${params.length + 1}`;
         params.push(status);
       }
+      if (townClass) {
+        query += ` AND lp.town_class = $${params.length + 1}`;
+        params.push(townClass);
+      }
       
       query += ' ORDER BY lpr.created_at DESC';
     } else {
@@ -331,6 +507,7 @@ router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedReq
                lp.grid_code as parcel_grid_code,
                lp.biome_type as parcel_biome_type,
                lp.value as parcel_value,
+               lp.town_class as parcel_town_class,
                r.username as reviewer_username
         FROM land_purchase_requests lpr
         JOIN land_parcels lp ON lpr.parcel_id = lp.id
@@ -348,7 +525,8 @@ router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedReq
     }
 
     const requests = await database.query(query, params);
-    res.json(requests);
+    const enriched = await Promise.all(requests.map((row) => enrichPurchaseRequestWithEngineers(row)));
+    res.json(enriched);
   } catch (error) {
     console.error('Failed to fetch purchase requests:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -392,8 +570,12 @@ router.put('/purchase-requests/:id',
 
       // Normalize status comparison (handle case sensitivity)
       const currentStatus = String(purchaseRequest.status).toLowerCase().trim();
-      if (currentStatus !== 'pending') {
-        return res.status(400).json({ error: 'This request has already been processed' });
+      if (currentStatus !== 'pending_teacher') {
+        return res.status(400).json({
+          error: currentStatus === 'pending_engineer'
+            ? 'Engineers must approve this request before the teacher can review it'
+            : 'This request has already been processed',
+        });
       }
 
       if (purchaseRequest.owner_id) {
@@ -473,9 +655,12 @@ router.put('/purchase-requests/:id',
           UPDATE land_parcels 
           SET owner_id = $1, 
               purchased_at = CURRENT_TIMESTAMP,
+              purchase_price = $2,
+              value = $2,
+              last_rent_collected_at = NULL,
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2
-        `, [purchaseRequest.user_id, purchaseRequest.parcel_id]);
+          WHERE id = $3
+        `, [purchaseRequest.user_id, offeredPrice, purchaseRequest.parcel_id]);
 
         // Update request status
         await database.run(`
@@ -495,7 +680,7 @@ router.put('/purchase-requests/:id',
               reviewed_by = $1,
               reviewed_at = CURRENT_TIMESTAMP,
               updated_at = CURRENT_TIMESTAMP
-          WHERE parcel_id = $2 AND id != $3 AND status = 'pending'
+          WHERE parcel_id = $2 AND id != $3 AND status IN ('pending_engineer', 'pending_teacher')
         `, [req.user!.id, purchaseRequest.parcel_id, requestId]);
 
       } else {
@@ -539,13 +724,22 @@ router.post('/seed',
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const schoolId = req.user?.school_id ?? null;
-      const existingCount = schoolId !== null
-        ? await database.get('SELECT COUNT(*) as count FROM land_parcels WHERE school_id = $1', [schoolId])
-        : await database.get('SELECT COUNT(*) as count FROM land_parcels WHERE school_id IS NULL');
-      if (existingCount && existingCount.count > 0) {
-        return res.status(400).json({ 
+      const townRows = schoolId !== null
+        ? await database.query(
+            'SELECT town_class, COUNT(*) as count FROM land_parcels WHERE school_id = $1 GROUP BY town_class',
+            [schoolId]
+          )
+        : await database.query(
+            'SELECT town_class, COUNT(*) as count FROM land_parcels WHERE school_id IS NULL GROUP BY town_class'
+          );
+      const hasAllTowns = TOWN_CLASSES.every((tc) =>
+        townRows.some((row: { town_class: string; count: string | number }) => row.town_class === tc && Number(row.count) >= 100)
+      );
+      if (hasAllTowns) {
+        const totalCount = townRows.reduce((sum: number, row: { count: string | number }) => sum + Number(row.count), 0);
+        return res.status(400).json({
           error: 'Land parcels already seeded for this school',
-          count: existingCount.count
+          count: totalCount
         });
       }
 
@@ -556,49 +750,36 @@ router.post('/seed',
         'Thicket', 'Indian Ocean Coastal Belt'
       ];
 
-      // Simple noise-based biome distribution
-      // This creates clusters of similar biomes rather than pure random
-      const getBiomeForPosition = (row: number, col: number): BiomeType => {
-        // Use a simple pseudo-random approach based on position
-        // Create regions/zones across the map
-        const regionSize = 3; // Size of biome regions
+      const getBiomeForPosition = (row: number, col: number, townClass: TownClass): BiomeType => {
+        const regionSize = 3;
         const regionRow = Math.floor(row / regionSize);
         const regionCol = Math.floor(col / regionSize);
-        
-        // Seed based on region
-        const seed = (regionRow * 7 + regionCol * 13) % biomeTypes.length;
-        
-        // Add some variation within regions
-        const variation = (row * 3 + col * 5) % 100;
+        const offset = townClassOffset(townClass);
+        const seed = (regionRow * 7 + regionCol * 13 + offset) % biomeTypes.length;
+        const variation = (row * 3 + col * 5 + offset) % 100;
         if (variation < 20) {
-          // 20% chance to get a different biome
           return biomeTypes[(seed + 1) % biomeTypes.length];
         }
-        
         return biomeTypes[seed];
       };
 
-      // Generate 100 parcels (10x10)
       const parcels: string[] = [];
-      for (let row = 0; row < 10; row++) {
-        for (let col = 0; col < 10; col++) {
-          const gridCode = generateGridCode(row, col);
-          const biome = getBiomeForPosition(row, col);
-          const config = BIOME_CONFIG[biome];
-          
-          // Add some value variation (±20%)
-          const valueVariation = 0.8 + (((row * col) % 100) / 250); // 0.8 to 1.2
-          const value = Math.round(config.baseValue * valueVariation);
-          
-          parcels.push(`('${gridCode}', ${row}, ${col}, '${biome}', ${value}, '${config.risk}', ARRAY[${config.pros.map(p => `'${p.replace(/'/g, "''")}'`).join(',')}], ARRAY[${config.cons.map(c => `'${c.replace(/'/g, "''")}'`).join(',')}])`);
+      for (const townClass of TOWN_CLASSES) {
+        for (let row = 0; row < 10; row++) {
+          for (let col = 0; col < 10; col++) {
+            const gridCode = generateGridCode(row, col);
+            const biome = getBiomeForPosition(row, col, townClass);
+            const config = BIOME_CONFIG[biome];
+            const value = config.baseValue;
+            parcels.push(`('${gridCode}', ${row}, ${col}, '${biome}', ${value}, '${config.risk}', ARRAY[${config.pros.map(p => `'${p.replace(/'/g, "''")}'`).join(',')}], ARRAY[${config.cons.map(c => `'${c.replace(/'/g, "''")}'`).join(',')}], '${townClass}')`);
+          }
         }
       }
 
-      // Insert in batches of 100 for performance (with school_id when teacher has school)
       const batchSize = 100;
       const insertCols = schoolId !== null
-        ? 'grid_code, row_index, col_index, biome_type, value, risk_level, pros, cons, school_id'
-        : 'grid_code, row_index, col_index, biome_type, value, risk_level, pros, cons';
+        ? 'grid_code, row_index, col_index, biome_type, value, risk_level, pros, cons, town_class, school_id'
+        : 'grid_code, row_index, col_index, biome_type, value, risk_level, pros, cons, town_class';
       for (let i = 0; i < parcels.length; i += batchSize) {
         const batch = parcels.slice(i, i + batchSize);
         const values = schoolId !== null
@@ -611,8 +792,8 @@ router.post('/seed',
       }
 
       res.json({
-        message: 'Land parcels seeded successfully',
-        count: 100
+        message: 'Land parcels seeded successfully for all towns',
+        count: parcels.length
       });
     } catch (error) {
       console.error('Failed to seed land parcels:', error);
@@ -621,17 +802,23 @@ router.post('/seed',
   }
 );
 
-// GET /api/land/stats - Get land statistics (school-scoped)
+// GET /api/land/stats - Get land statistics (school- and town-scoped)
 router.get('/stats', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const { town_class } = req.query;
     const schoolId = req.user?.school_id ?? null;
+    const townClass = resolveTownClass(req, town_class);
+    if (!townClass) {
+      return res.status(400).json({ error: 'Valid town_class (6A, 6B, or 6C) is required' });
+    }
+
     const schoolFilter = schoolId !== null
-      ? 'WHERE lp.school_id = $1'
-      : 'WHERE lp.school_id IS NULL';
+      ? 'WHERE lp.school_id = $1 AND lp.town_class = $2'
+      : 'WHERE lp.school_id IS NULL AND lp.town_class = $1';
     const schoolFilterLpr = schoolId !== null
-      ? 'lpr.school_id = $1 AND lpr.status = \'pending\''
-      : 'lpr.school_id IS NULL AND lpr.status = \'pending\'';
-    const params = schoolId !== null ? [schoolId] : [];
+      ? `lpr.school_id = $1 AND lpr.status = 'pending_teacher' AND lp.town_class = $2`
+      : `lpr.school_id IS NULL AND lpr.status = 'pending_teacher' AND lp.town_class = $1`;
+    const params = schoolId !== null ? [schoolId, townClass] : [townClass];
 
     const totalParcels = await database.get(
       `SELECT COUNT(*) as count FROM land_parcels lp ${schoolFilter}`,
@@ -642,7 +829,9 @@ router.get('/stats', authenticateToken, async (req: AuthenticatedRequest, res: R
       params
     );
     const pendingRequests = await database.get(
-      `SELECT COUNT(*) as count FROM land_purchase_requests lpr WHERE ${schoolFilterLpr}`,
+      `SELECT COUNT(*) as count FROM land_purchase_requests lpr
+       JOIN land_parcels lp ON lpr.parcel_id = lp.id
+       WHERE ${schoolFilterLpr}`,
       params
     );
     
@@ -656,14 +845,14 @@ router.get('/stats', authenticateToken, async (req: AuthenticatedRequest, res: R
       params
     );
 
-    const topOwnersParams = schoolId !== null ? [schoolId] : [];
+    const topOwnersParams = schoolId !== null ? [schoolId, townClass] : [townClass];
     const topOwners = await database.query(
       `SELECT u.username, u.first_name, u.last_name, 
               COUNT(lp.id) as parcel_count,
               SUM(lp.value) as total_value
        FROM land_parcels lp
        JOIN users u ON lp.owner_id = u.id
-       ${schoolId !== null ? 'WHERE lp.school_id = $1' : 'WHERE lp.school_id IS NULL'}
+       ${schoolId !== null ? 'WHERE lp.school_id = $1 AND lp.town_class = $2' : 'WHERE lp.school_id IS NULL AND lp.town_class = $1'}
        GROUP BY u.id, u.username, u.first_name, u.last_name
        ORDER BY parcel_count DESC
        LIMIT 10`,
@@ -675,6 +864,7 @@ router.get('/stats', authenticateToken, async (req: AuthenticatedRequest, res: R
       owned_parcels: ownedParcels?.count || 0,
       available_parcels: (totalParcels?.count || 0) - (ownedParcels?.count || 0),
       pending_requests: pendingRequests?.count || 0,
+      town_class: townClass,
       biome_stats: biomeStats,
       top_owners: topOwners
     });
@@ -707,10 +897,13 @@ router.post('/swap',
       }
 
       const schoolId = req.user?.school_id ?? null;
-      const parcelA = await database.get('SELECT id, row_index, col_index, grid_code, school_id FROM land_parcels WHERE id = $1', [parcel_id_a]);
-      const parcelB = await database.get('SELECT id, row_index, col_index, grid_code, school_id FROM land_parcels WHERE id = $1', [parcel_id_b]);
+      const parcelA = await database.get('SELECT id, row_index, col_index, grid_code, school_id, town_class FROM land_parcels WHERE id = $1', [parcel_id_a]);
+      const parcelB = await database.get('SELECT id, row_index, col_index, grid_code, school_id, town_class FROM land_parcels WHERE id = $1', [parcel_id_b]);
       if (!parcelA || !parcelB) {
         return res.status(404).json({ error: 'One or both parcels not found' });
+      }
+      if (parcelA.town_class !== parcelB.town_class) {
+        return res.status(400).json({ error: 'Parcels must belong to the same town' });
       }
       if (schoolId !== null && (parcelA.school_id !== schoolId || parcelB.school_id !== schoolId)) {
         return res.status(404).json({ error: 'One or both parcels not found' });
@@ -754,23 +947,26 @@ router.post('/recalculate-values',
   requireRole(['teacher']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
+      const { town_class } = req.query;
       const schoolId = req.user?.school_id ?? null;
+      const townClass = resolveTownClass(req, town_class);
+      if (!townClass) {
+        return res.status(400).json({ error: 'Valid town_class (6A, 6B, or 6C) is required' });
+      }
+
       const parcels = schoolId !== null
-        ? await database.query('SELECT id, row_index, col_index, biome_type FROM land_parcels WHERE school_id = $1', [schoolId])
-        : await database.query('SELECT id, row_index, col_index, biome_type FROM land_parcels WHERE school_id IS NULL');
+        ? await database.query('SELECT id, row_index, col_index, biome_type FROM land_parcels WHERE school_id = $1 AND town_class = $2', [schoolId, townClass])
+        : await database.query('SELECT id, row_index, col_index, biome_type FROM land_parcels WHERE school_id IS NULL AND town_class = $1', [townClass]);
       let updated = 0;
       for (const p of parcels) {
         const biome = p.biome_type as BiomeType;
         const config = BIOME_CONFIG[biome];
         if (!config) continue;
-        const row = Number(p.row_index);
-        const col = Number(p.col_index);
-        const valueVariation = 0.8 + (((row * col) % 100) / 250);
-        const value = Math.round(config.baseValue * valueVariation);
+        const value = config.baseValue;
         await database.run('UPDATE land_parcels SET value = $1 WHERE id = $2', [value, p.id]);
         updated++;
       }
-      res.json({ message: 'Land values recalculated', updated });
+      res.json({ message: 'Land values recalculated', updated, town_class: townClass });
     } catch (error) {
       console.error('Failed to recalculate land values:', error);
       res.status(500).json({ error: 'Internal server error' });

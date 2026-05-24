@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Briefcase, DollarSign, MapPin, Building, FileText, AlertCircle, CheckCircle, Edit2, Save } from 'lucide-react';
+import { X, Briefcase, DollarSign, MapPin, Building, FileText, AlertCircle, CheckCircle, Edit2, Save, Undo2, Clock } from 'lucide-react';
 import { Job } from '../types';
 import { stripPositionsAvailableFromRequirements, getJobDisplayNameForBoard } from '../utils/jobDisplay';
 
@@ -12,11 +12,28 @@ interface JobDetailsModalProps {
   userJobName?: string;
   applicationsEnabled?: boolean;
   applicationCount?: { count: number; maxApplications: number; canApply: boolean } | null;
+  pendingApplication?: { id: number; status: string } | null;
+  onWithdrawApplication?: () => void;
+  withdrawingApplication?: boolean;
   isTeacher?: boolean;
   onSaveJob?: (jobId: number, data: Partial<Job>) => Promise<Job | void>;
 }
 
-const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job, onApply, userHasJob = false, userJobName, applicationsEnabled = true, applicationCount = null, isTeacher = false, onSaveJob }) => {
+const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
+  isOpen,
+  onClose,
+  job,
+  onApply,
+  userHasJob = false,
+  userJobName,
+  applicationsEnabled = true,
+  applicationCount = null,
+  pendingApplication = null,
+  onWithdrawApplication,
+  withdrawingApplication = false,
+  isTeacher = false,
+  onSaveJob,
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<Job>>({});
   const [saving, setSaving] = useState(false);
@@ -42,8 +59,9 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
 
   // Check if user has reached application limit (no limit on students per job)
   const hasReachedLimit = applicationCount !== null && !applicationCount.canApply;
+  const hasPendingApplication = pendingApplication?.status === 'pending';
   // Determine if user can apply
-  const canApply = !userHasJob && applicationsEnabled && !hasReachedLimit;
+  const canApply = !userHasJob && applicationsEnabled && !hasReachedLimit && !hasPendingApplication;
 
   const handleStartEdit = () => setIsEditing(true);
   const handleCancelEdit = () => setIsEditing(false);
@@ -327,7 +345,19 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
             </div>
           )}
 
-          {applicationCount && applicationCount.count > 0 && (
+          {hasPendingApplication && (
+            <div className="flex items-center space-x-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <Clock className="h-6 w-6 text-yellow-600 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-yellow-800">Application Pending</p>
+                <p className="text-sm text-yellow-700">
+                  Your application is waiting for teacher review. You can withdraw it if you changed your mind.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {applicationCount && applicationCount.count > 0 && !hasPendingApplication && (
             <div className="flex items-center space-x-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <AlertCircle className="h-6 w-6 text-blue-600 flex-shrink-0" />
               <div>
@@ -339,9 +369,18 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
             </div>
           )}
 
-          {/* Apply Button */}
+          {/* Apply / Withdraw */}
           <div className="flex space-x-4 pt-4">
-            {canApply ? (
+            {hasPendingApplication && onWithdrawApplication ? (
+              <button
+                onClick={onWithdrawApplication}
+                disabled={withdrawingApplication}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-md hover:shadow-lg flex items-center justify-center space-x-2"
+              >
+                <Undo2 className="h-5 w-5" />
+                <span>{withdrawingApplication ? 'Withdrawing...' : 'Withdraw Application'}</span>
+              </button>
+            ) : canApply ? (
               <button
                 onClick={onApply}
                 className="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-md hover:shadow-lg"
@@ -355,8 +394,12 @@ const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ isOpen, onClose, job,
               >
                 {!applicationsEnabled
                   ? 'Applications Disabled'
+                  : hasPendingApplication
+                    ? 'Application Pending'
                   : hasReachedLimit
                     ? `Application Limit Reached (${applicationCount?.count || 0}/${applicationCount?.maxApplications || 2})`
+                    : userHasJob
+                      ? 'Already Employed'
                     : 'Cannot Apply'}
               </button>
             )}

@@ -2,7 +2,7 @@ import { BiomeType, BiomeConfig, RiskLevel } from '../../types';
 
 export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
   'Savanna': {
-    baseValue: 40000,
+    baseValue: 75000,
     risk: 'medium',
     color: '#c4a747',
     lightColor: '#e8d999',
@@ -10,7 +10,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Seasonal droughts', 'Fire risk', 'Limited water sources']
   },
   'Grassland': {
-    baseValue: 30000,
+    baseValue: 56250,
     risk: 'low',
     color: '#7cb342',
     lightColor: '#aed581',
@@ -18,7 +18,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Soil erosion risk', 'Limited shade', 'Overgrazing concerns']
   },
   'Forest': {
-    baseValue: 70000,
+    baseValue: 131250,
     risk: 'medium',
     color: '#2e7d32',
     lightColor: '#66bb6a',
@@ -26,7 +26,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Fire risk', 'Clearing restrictions', 'Difficult access']
   },
   'Fynbos': {
-    baseValue: 90000,
+    baseValue: 135000,
     risk: 'high',
     color: '#9c27b0',
     lightColor: '#ce93d8',
@@ -34,7 +34,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Fire-dependent ecosystem', 'Strict conservation laws', 'Limited development']
   },
   'Nama Karoo': {
-    baseValue: 20000,
+    baseValue: 58595,
     risk: 'medium',
     color: '#8d6e63',
     lightColor: '#bcaaa4',
@@ -42,7 +42,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Very dry climate', 'Limited water', 'Remote location']
   },
   'Succulent Karoo': {
-    baseValue: 9000,
+    baseValue: 37970,
     risk: 'high',
     color: '#ff7043',
     lightColor: '#ffab91',
@@ -50,7 +50,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Extreme temperatures', 'Water scarcity', 'Conservation restrictions']
   },
   'Desert': {
-    baseValue: 16000,
+    baseValue: 67500,
     risk: 'high',
     color: '#ffd54f',
     lightColor: '#ffee58',
@@ -58,7 +58,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Extreme conditions', 'No water', 'Uninhabitable without infrastructure']
   },
   'Thicket': {
-    baseValue: 50000,
+    baseValue: 93750,
     risk: 'low',
     color: '#558b2f',
     lightColor: '#8bc34a',
@@ -66,7 +66,7 @@ export const BIOME_CONFIG: Record<BiomeType, BiomeConfig> = {
     cons: ['Dense vegetation', 'Clearing needed', 'Elephant damage risk']
   },
   'Indian Ocean Coastal Belt': {
-    baseValue: 120000,
+    baseValue: 180000,
     risk: 'medium',
     color: '#0288d1',
     lightColor: '#4fc3f7',
@@ -106,8 +106,12 @@ export const BIOME_ICONS: Record<BiomeType, string> = {
   'Indian Ocean Coastal Belt': '🌊'
 };
 
-// Weekly interest rate for land appreciation (2% per week)
-export const WEEKLY_INTEREST_RATE = 0.02;
+// Weekly property appreciation (1% per week) — display only; values come from API
+export const WEEKLY_APPRECIATION_RATE = 0.01;
+export const WEEKLY_RENTAL_YIELD = 0.05;
+
+/** @deprecated Use API-provided current_value from /land/my-properties */
+export const WEEKLY_INTEREST_RATE = WEEKLY_APPRECIATION_RATE;
 
 /**
  * Calculate the number of complete weeks since purchase

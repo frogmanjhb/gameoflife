@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, DollarSign, Loader2, ArrowRight, Map, TrendingUp } from 'lucide-react';
 import { landApi } from '../services/api';
 import { MyPropertiesResponse } from '../types';
-import { formatCurrency, BIOME_CONFIG, BIOME_ICONS, calculateCurrentValue } from './land/BiomeConfig';
+import { formatCurrency, BIOME_CONFIG, BIOME_ICONS } from './land/BiomeConfig';
 
 const MyPropertyCard: React.FC = () => {
   const navigate = useNavigate();
@@ -26,31 +26,9 @@ const MyPropertyCard: React.FC = () => {
     }
   };
 
-  // Calculate current values with 2% weekly interest
-  // Note: useMemo must be called before any early returns to follow Rules of Hooks
-  const { totalCurrentValue, totalAppreciation } = useMemo(() => {
-    if (!properties || properties.total_count === 0) {
-      return { totalCurrentValue: 0, totalAppreciation: 0 };
-    }
-    
-    let currentValue = 0;
-    let originalValue = 0;
-    
-    properties.parcels.forEach(parcel => {
-      const original = Number(parcel.value);
-      originalValue += original;
-      if (parcel.purchased_at) {
-        currentValue += calculateCurrentValue(original, parcel.purchased_at);
-      } else {
-        currentValue += original;
-      }
-    });
-    
-    return {
-      totalCurrentValue: currentValue,
-      totalAppreciation: currentValue - originalValue
-    };
-  }, [properties]);
+  const totalCurrentValue = properties?.total_value ?? 0;
+  const totalPurchaseValue = properties?.total_purchase_value ?? 0;
+  const totalAppreciation = totalCurrentValue - totalPurchaseValue;
 
   if (loading) {
     return (
@@ -136,11 +114,10 @@ const MyPropertyCard: React.FC = () => {
             <div className="space-y-2">
               <p className="text-xs text-gray-500 font-medium">Recent Purchases</p>
               {properties.parcels.slice(0, 3).map((parcel) => {
-                const originalValue = Number(parcel.value);
-                const currentValue = parcel.purchased_at 
-                  ? calculateCurrentValue(originalValue, parcel.purchased_at)
-                  : originalValue;
-                const hasAppreciated = currentValue > originalValue;
+                const purchasePrice = parcel.purchase_price ?? Number(parcel.value);
+                const currentValue = parcel.current_value ?? Number(parcel.value);
+                const appreciation = parcel.appreciation ?? (currentValue - purchasePrice);
+                const hasAppreciated = appreciation > 0;
                 
                 return (
                   <div 
@@ -165,7 +142,7 @@ const MyPropertyCard: React.FC = () => {
                       {hasAppreciated && (
                         <p className="text-xs text-emerald-500 flex items-center justify-end">
                           <TrendingUp className="h-2 w-2 mr-0.5" />
-                          +{formatCurrency(currentValue - originalValue)}
+                          +{formatCurrency(appreciation)}
                         </p>
                       )}
                     </div>

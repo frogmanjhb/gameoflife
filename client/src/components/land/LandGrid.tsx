@@ -11,6 +11,7 @@ interface LandGridProps {
   readOnly?: boolean;
   /** When true (teacher), tiles can be dragged to swap positions to match classroom board */
   canRearrange?: boolean;
+  townClass: '6A' | '6B' | '6C';
 }
 
 const GRID_SIZE = 10;
@@ -18,7 +19,7 @@ const MIN_CELL_SIZE = 20;
 const MAX_CELL_SIZE = 80;
 const DEFAULT_CELL_SIZE = 50;
 
-const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, canRearrange = false }) => {
+const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, canRearrange = false, townClass }) => {
   const [parcels, setParcels] = useState<LandParcel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -42,16 +43,16 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, c
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Fetch all parcels
+  // Fetch all parcels for the selected town
   useEffect(() => {
     fetchParcels();
-  }, []);
+  }, [townClass]);
 
   const fetchParcels = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await landApi.getParcels();
+      const response = await landApi.getParcels({ townClass });
       setParcels(response.data);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load land plots');
@@ -168,7 +169,7 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, c
     setError('');
     setRecalcSuccess(false);
     try {
-      const res = await landApi.recalculateValues();
+      const res = await landApi.recalculateValues(townClass);
       await fetchParcels();
       setError('');
       setHoveredParcel(null);
@@ -179,7 +180,7 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, c
     } finally {
       setRecalcLoading(false);
     }
-  }, []);
+  }, [townClass]);
 
   // Zoom controls
   const zoomIn = () => setCellSize(prev => Math.min(prev + 2, MAX_CELL_SIZE));
@@ -290,10 +291,10 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, c
         <div className="flex flex-wrap items-center justify-between gap-4 bg-amber-50 border border-amber-200 p-4 rounded-xl">
           <div>
             <p className="text-sm text-amber-800">
-              Drag any tile onto another to swap positions and match your classroom board. Use &quot;Recalculate prices&quot; so hover prices match the legend ranges.
+              Drag any tile onto another to swap positions and match your classroom board. Use &quot;Recalculate prices&quot; to sync plot values with the legend.
             </p>
             {recalcSuccess && (
-              <p className="text-sm text-green-700 font-medium mt-2">Prices updated. Hover over tiles to see values within the legend range.</p>
+              <p className="text-sm text-green-700 font-medium mt-2">Prices updated to match the legend.</p>
             )}
           </div>
           <button
@@ -441,12 +442,10 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, c
       {/* Legend */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <h4 className="text-sm font-medium text-gray-700 mb-3">Biome Legend</h4>
-        <p className="text-xs text-gray-500 mb-2">Plot prices vary ±20% within each biome range. Hover a square to see its exact price.</p>
+        <p className="text-xs text-gray-500 mb-2">Each plot in a biome costs the same fixed price. Hover a square to confirm.</p>
         <div className="flex flex-wrap gap-3">
           {biomeTypes.map(biome => {
             const config = BIOME_CONFIG[biome];
-            const minPrice = Math.round(config.baseValue * 0.8);
-            const maxPrice = Math.round(config.baseValue * 1.2);
             return (
               <div 
                 key={biome}
@@ -458,7 +457,7 @@ const LandGrid: React.FC<LandGridProps> = ({ onParcelSelect, readOnly = false, c
                   style={{ backgroundColor: config.color }}
                 />
                 <span className="text-xs text-gray-600">{BIOME_ICONS[biome]} {biome}</span>
-                <span className="text-xs text-gray-400">({formatCurrency(minPrice)} – {formatCurrency(maxPrice)})</span>
+                <span className="text-xs text-gray-400">({formatCurrency(config.baseValue)})</span>
               </div>
             );
           })}

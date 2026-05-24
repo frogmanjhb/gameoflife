@@ -113,6 +113,68 @@ router.get('/my-applications/count', authenticateToken, requireRole(['student'])
   }
 });
 
+// Get student's own job applications (students only)
+router.get('/my-applications', authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const applications = await database.query(
+      `SELECT ja.id, ja.job_id, ja.status, ja.created_at, ja.reviewed_at,
+              j.name as job_name,
+              COALESCE(j.base_salary, 2000.00) as job_salary
+       FROM job_applications ja
+       JOIN jobs j ON ja.job_id = j.id
+       WHERE ja.user_id = $1
+       ORDER BY ja.created_at DESC`,
+      [req.user.id]
+    );
+
+    res.json(applications);
+  } catch (error) {
+    console.error('Failed to fetch student applications:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Withdraw a pending job application (students only, own application)
+router.delete('/my-applications/:id', authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const applicationId = parseInt(req.params.id);
+    if (isNaN(applicationId)) {
+      return res.status(400).json({ error: 'Invalid application ID' });
+    }
+
+    const application = await database.get(
+      'SELECT * FROM job_applications WHERE id = $1 AND user_id = $2',
+      [applicationId, req.user.id]
+    );
+
+    if (!application) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+
+    if (application.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending applications can be withdrawn' });
+    }
+
+    await database.run(
+      'DELETE FROM job_applications WHERE id = $1 AND user_id = $2 AND status = $3',
+      [applicationId, req.user.id, 'pending']
+    );
+
+    res.json({ message: 'Application withdrawn successfully' });
+  } catch (error) {
+    console.error('Failed to withdraw application:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // IMPORTANT: Static routes must come BEFORE parameterized routes
 // Get applications (teachers only, school-scoped: only applicants from teacher's school)
 router.get('/applications', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {

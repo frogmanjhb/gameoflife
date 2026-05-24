@@ -22,7 +22,7 @@ import {
   DoctorGameStatus, DoctorGameStartRequest, DoctorGameSubmitRequest,
   RetailManagerGameStatus, RetailManagerGameStartRequest, RetailManagerGameSubmitRequest,
   EntrepreneurGameStatus, EntrepreneurGameStartRequest, EntrepreneurGameSubmitRequest,
-  Job, JobApplication, LandParcel, LandPurchaseRequest, 
+  Job, JobApplication, LandParcel, LandPurchaseRequest, LandSaleRequest, 
   LandStats, MyPropertiesResponse, BiomeConfig, BiomeType,
   TaxBracket, TreasuryInfo, TaxReport, TaxEducationResponse, SalaryPaymentResult, TownSettings,
   Tender, TenderApplication, AccountantPendingTransfer, AccountantAssignmentStudent
@@ -372,6 +372,16 @@ export const jobsApi = {
     return api.get('/jobs/my-applications/count');
   },
 
+  // Get student's own job applications (students only)
+  getMyApplications: (): Promise<{ data: JobApplication[] }> => {
+    return api.get('/jobs/my-applications');
+  },
+
+  // Withdraw a pending job application (students only)
+  withdrawApplication: (applicationId: number): Promise<{ data: { message: string } }> => {
+    return api.delete(`/jobs/my-applications/${applicationId}`);
+  },
+
   // Award experience points to student (teachers only)
   awardXP: (userId: number, xpAmount: number): Promise<{ data: { message: string; user: any } }> => {
     return api.post('/jobs/award-xp', { user_id: userId, xp_amount: xpAmount });
@@ -405,6 +415,7 @@ export const landApi = {
     maxCol?: number;
     owned?: boolean;
     biome?: BiomeType;
+    townClass?: '6A' | '6B' | '6C';
   }): Promise<{ data: LandParcel[] }> => {
     const params = new URLSearchParams();
     if (filters?.minRow !== undefined) params.append('minRow', filters.minRow.toString());
@@ -413,13 +424,15 @@ export const landApi = {
     if (filters?.maxCol !== undefined) params.append('maxCol', filters.maxCol.toString());
     if (filters?.owned !== undefined) params.append('owned', filters.owned.toString());
     if (filters?.biome) params.append('biome', filters.biome);
+    if (filters?.townClass) params.append('town_class', filters.townClass);
     const queryString = params.toString();
     return api.get(`/land/parcels${queryString ? `?${queryString}` : ''}`);
   },
 
   // Get single parcel details
-  getParcel: (code: string): Promise<{ data: LandParcel }> => {
-    return api.get(`/land/parcels/${code}`);
+  getParcel: (code: string, townClass?: '6A' | '6B' | '6C'): Promise<{ data: LandParcel }> => {
+    const params = townClass ? `?town_class=${townClass}` : '';
+    return api.get(`/land/parcels/${code}${params}`);
   },
 
   // Get user's owned properties
@@ -433,10 +446,26 @@ export const landApi = {
   },
 
   // Get purchase requests
-  getPurchaseRequests: (status?: 'pending' | 'approved' | 'denied'): Promise<{ data: LandPurchaseRequest[] }> => {
-    const params = status ? `?status=${status}` : '';
-    return api.get(`/land/purchase-requests${params}`);
+  getPurchaseRequests: (
+    status?: 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied',
+    townClass?: '6A' | '6B' | '6C'
+  ): Promise<{ data: LandPurchaseRequest[] }> => {
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (townClass) params.append('town_class', townClass);
+    const queryString = params.toString();
+    return api.get(`/land/purchase-requests${queryString ? `?${queryString}` : ''}`);
   },
+
+  getEngineerPurchaseRequests: (): Promise<{ data: LandPurchaseRequest[] }> =>
+    api.get('/land/purchase-requests?role=engineer'),
+
+  reviewEngineerPurchaseRequest: (
+    id: number,
+    status: 'approved' | 'denied',
+    denialReason?: string
+  ): Promise<{ data: { message: string; request: LandPurchaseRequest; fee_paid?: number } }> =>
+    api.put(`/land/purchase-requests/${id}/engineer-review`, { status, denial_reason: denialReason }),
 
   // Update purchase request (teachers only)
   updatePurchaseRequest: (id: number, status: 'approved' | 'denied', denialReason?: string): Promise<{ data: { message: string; request: LandPurchaseRequest } }> => {
@@ -449,8 +478,9 @@ export const landApi = {
   },
 
   // Get land statistics
-  getStats: (): Promise<{ data: LandStats }> => {
-    return api.get('/land/stats');
+  getStats: (townClass?: '6A' | '6B' | '6C'): Promise<{ data: LandStats }> => {
+    const params = townClass ? `?town_class=${townClass}` : '';
+    return api.get(`/land/stats${params}`);
   },
 
   // Get biome configuration
@@ -464,9 +494,30 @@ export const landApi = {
   },
 
   // Recalculate all parcel values to match legend ranges (teachers only)
-  recalculateValues: (): Promise<{ data: { message: string; updated: number } }> => {
-    return api.post('/land/recalculate-values');
-  }
+  recalculateValues: (townClass?: '6A' | '6B' | '6C'): Promise<{ data: { message: string; updated: number } }> => {
+    const params = townClass ? `?town_class=${townClass}` : '';
+    return api.post(`/land/recalculate-values${params}`);
+  },
+
+  collectRent: (parcelId: number): Promise<{ data: { message: string; amount: number; parcel: LandParcel } }> =>
+    api.post(`/land/collect-rent/${parcelId}`),
+
+  createSaleRequest: (parcelId: number, buyerId: number, salePrice: number): Promise<{ data: { message: string; request: LandSaleRequest } }> =>
+    api.post('/land/sale-requests', { parcel_id: parcelId, buyer_id: buyerId, sale_price: salePrice }),
+
+  getSaleRequests: (role?: 'seller' | 'buyer' | 'fm'): Promise<{ data: LandSaleRequest[] }> => {
+    const params = role ? `?role=${role}` : '';
+    return api.get(`/land/sale-requests${params}`);
+  },
+
+  reviewSaleRequest: (id: number, status: 'pending_buyer' | 'denied', denialReason?: string): Promise<{ data: { message: string; request: LandSaleRequest } }> =>
+    api.put(`/land/sale-requests/${id}/fm-review`, { status, denial_reason: denialReason }),
+
+  acceptSaleRequest: (id: number): Promise<{ data: { message: string; request: LandSaleRequest } }> =>
+    api.put(`/land/sale-requests/${id}/accept`),
+
+  cancelSaleRequest: (id: number): Promise<{ data: { message: string } }> =>
+    api.put(`/land/sale-requests/${id}/cancel`),
 };
 
 // Treasury and Tax API methods

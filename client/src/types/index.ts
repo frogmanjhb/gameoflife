@@ -941,6 +941,7 @@ export interface LandParcel {
   row_index: number;
   col_index: number;
   biome_type: BiomeType;
+  town_class: '6A' | '6B' | '6C';
   value: number;
   risk_level: RiskLevel;
   pros: string[];
@@ -950,6 +951,13 @@ export interface LandParcel {
   owner_first_name?: string;
   owner_last_name?: string;
   purchased_at?: string;
+  purchase_price?: number;
+  last_rent_collected_at?: string;
+  current_value?: number;
+  weekly_rent?: number;
+  can_collect_rent?: boolean;
+  weeks_owned?: number;
+  appreciation?: number;
   created_at: string;
   updated_at: string;
   pending_request?: LandPurchaseRequest;
@@ -960,7 +968,7 @@ export interface LandPurchaseRequest {
   user_id: number;
   parcel_id: number;
   offered_price: number;
-  status: 'pending' | 'approved' | 'denied';
+  status: 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied';
   reviewed_by?: number;
   reviewed_at?: string;
   denial_reason?: string;
@@ -973,7 +981,54 @@ export interface LandPurchaseRequest {
   parcel_grid_code?: string;
   parcel_biome_type?: BiomeType;
   parcel_value?: number;
+  parcel_town_class?: '6A' | '6B' | '6C';
   reviewer_username?: string;
+  engineer_approvals?: Array<{
+    approver_id: number;
+    approver_username?: string;
+    approver_first_name?: string;
+    approver_last_name?: string;
+    job_name?: string;
+    fee_amount: number;
+    approved_at: string;
+  }>;
+  required_engineers?: Array<{
+    id: number;
+    username: string;
+    first_name?: string;
+    last_name?: string;
+    job_name: string;
+  }>;
+  engineer_approvals_received?: number;
+  engineer_approvals_required?: number;
+  engineer_fee_total?: number;
+  engineer_fee_per_approver?: number;
+}
+
+export interface LandSaleRequest {
+  id: number;
+  parcel_id: number;
+  seller_id: number;
+  buyer_id: number;
+  sale_price: number;
+  status: 'pending_fm' | 'pending_buyer' | 'completed' | 'denied' | 'cancelled';
+  fm_reviewed_by?: number;
+  fm_reviewed_at?: string;
+  denial_reason?: string;
+  buyer_responded_at?: string;
+  school_id?: number;
+  created_at: string;
+  updated_at: string;
+  parcel_grid_code?: string;
+  parcel_biome_type?: BiomeType;
+  parcel_town_class?: '6A' | '6B' | '6C';
+  seller_username?: string;
+  seller_first_name?: string;
+  seller_last_name?: string;
+  buyer_username?: string;
+  buyer_first_name?: string;
+  buyer_last_name?: string;
+  fm_reviewer_username?: string;
 }
 
 export interface LandStats {
@@ -981,6 +1036,7 @@ export interface LandStats {
   owned_parcels: number;
   available_parcels: number;
   pending_requests: number;
+  town_class?: '6A' | '6B' | '6C';
   biome_stats: Array<{
     biome_type: BiomeType;
     count: number;
@@ -1000,6 +1056,7 @@ export interface MyPropertiesResponse {
   parcels: LandParcel[];
   total_count: number;
   total_value: number;
+  total_purchase_value?: number;
 }
 
 export interface BiomeConfig {

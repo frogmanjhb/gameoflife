@@ -1,16 +1,89 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTown } from '../../contexts/TownContext';
 import { usePlugins } from '../../contexts/PluginContext';
 import { Navigate } from 'react-router-dom';
 import { 
   Map, Loader2, CheckCircle, XCircle, Clock, 
   Users, DollarSign, MapPin, RefreshCw, Database, Filter,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, HardHat
 } from 'lucide-react';
 import { landApi } from '../../services/api';
-import { LandPurchaseRequest, LandStats, MyPropertiesResponse } from '../../types';
+import { LandPurchaseRequest, LandStats, MyPropertiesResponse, LandSaleRequest } from '../../types';
 import { formatCurrency, BIOME_CONFIG, BIOME_ICONS, RISK_COLORS } from '../land/BiomeConfig';
 import LandGrid from '../land/LandGrid';
+import LandPropertyCard from '../land/LandPropertyCard';
+
+const TOWN_CLASS_LIST: Array<'6A' | '6B' | '6C'> = ['6A', '6B', '6C'];
+
+const isActivePurchaseStatus = (status: string) =>
+  status === 'pending_engineer' || status === 'pending_teacher';
+
+const formatPurchaseStatus = (status: string) => {
+  switch (status) {
+    case 'pending_engineer': return 'Awaiting engineers';
+    case 'pending_teacher': return 'Awaiting teacher';
+    case 'approved': return 'Approved';
+    case 'denied': return 'Denied';
+    default: return status;
+  }
+};
+
+const purchaseStatusColor = (status: string) => {
+  switch (status) {
+    case 'pending_engineer': return 'bg-violet-100 text-violet-800 border-violet-300';
+    case 'pending_teacher': return 'bg-amber-100 text-amber-800 border-amber-300';
+    case 'approved': return 'bg-green-100 text-green-800 border-green-300';
+    case 'denied': return 'bg-red-100 text-red-800 border-red-300';
+    default: return 'bg-gray-100 text-gray-800 border-gray-300';
+  }
+};
+
+interface TownClassTabsProps {
+  allTowns: Array<{ class: '6A' | '6B' | '6C'; town_name: string }>;
+  currentTownClass: '6A' | '6B' | '6C' | null;
+  onSelect: (townClass: '6A' | '6B' | '6C') => void;
+}
+
+const TownClassTabs: React.FC<TownClassTabsProps> = ({ allTowns, currentTownClass, onSelect }) => {
+  const towns = allTowns.length > 0
+    ? allTowns
+    : TOWN_CLASS_LIST.map((cls) => ({ class: cls, town_name: `${cls} Town` }));
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="grid grid-cols-3 divide-x divide-gray-200">
+        {towns.map((town) => {
+          const isActive = currentTownClass === town.class;
+          return (
+            <button
+              key={town.class}
+              type="button"
+              onClick={() => onSelect(town.class)}
+              className={`p-4 text-left transition-all ${
+                isActive
+                  ? 'bg-gradient-to-br from-emerald-50 to-teal-100 border-b-4 border-emerald-500'
+                  : 'hover:bg-gray-50 border-b-4 border-transparent'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <div className={`p-2 rounded-lg ${isActive ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                  <MapPin className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className={`font-bold ${isActive ? 'text-emerald-700' : 'text-gray-900'}`}>
+                    {town.town_name}
+                  </h3>
+                  <p className="text-sm text-gray-500">Class {town.class}</p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 // ============================================
 // TEACHER LAND VIEW COMPONENT
@@ -20,6 +93,7 @@ interface TeacherLandViewProps {
 }
 
 const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlugin }) => {
+  const { currentTownClass, allTowns, setCurrentTownClass } = useTown();
   const [activeTab, setActiveTab] = useState<'grid' | 'requests' | 'stats'>('grid');
   const [requests, setRequests] = useState<LandPurchaseRequest[]>([]);
   const [stats, setStats] = useState<LandStats | null>(null);
@@ -27,19 +101,29 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'pending' | 'approved' | 'denied' | ''>('pending');
+  const [filterStatus, setFilterStatus] = useState<'pending_engineer' | 'pending_teacher' | 'approved' | 'denied' | ''>('pending_teacher');
   const [seeding, setSeeding] = useState(false);
+  const [landFullySeeded, setLandFullySeeded] = useState(false);
 
   useEffect(() => {
-    fetchData();
-  }, [filterStatus]);
+    const checkSeeded = async () => {
+      try {
+        const results = await Promise.all(TOWN_CLASS_LIST.map((tc) => landApi.getStats(tc)));
+        setLandFullySeeded(results.every((r) => r.data.total_parcels >= 100));
+      } catch {
+        setLandFullySeeded(false);
+      }
+    };
+    checkSeeded();
+  }, [success]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (!currentTownClass) return;
     setLoading(true);
     try {
       const [requestsRes, statsRes] = await Promise.all([
-        landApi.getPurchaseRequests(filterStatus || undefined),
-        landApi.getStats()
+        landApi.getPurchaseRequests(filterStatus || undefined, currentTownClass),
+        landApi.getStats(currentTownClass)
       ]);
       setRequests(requestsRes.data);
       setStats(statsRes.data);
@@ -48,7 +132,11 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTownClass, filterStatus]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleRequestAction = async (id: number, status: 'approved' | 'denied', reason?: string) => {
     setActionLoading(id);
@@ -72,6 +160,7 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
     try {
       const res = await landApi.seedLandData();
       setSuccess(`${res.data.message} - ${res.data.count} parcels created`);
+      setLandFullySeeded(true);
       fetchData();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to seed land data');
@@ -82,15 +171,31 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-amber-100 text-amber-800';
+      case 'pending_engineer': return 'bg-violet-100 text-violet-800';
+      case 'pending_teacher': return 'bg-amber-100 text-amber-800';
       case 'approved': return 'bg-green-100 text-green-800';
       case 'denied': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
+  if (!currentTownClass) {
+    return (
+      <div className="text-center py-12 text-gray-500">
+        <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-emerald-600" />
+        <p>Loading town data...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      <TownClassTabs
+        allTowns={allTowns}
+        currentTownClass={currentTownClass}
+        onSelect={setCurrentTownClass}
+      />
+
       {/* Header */}
       <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl p-6 text-white">
         <div className="flex items-center justify-between">
@@ -98,20 +203,22 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
             <div className="text-4xl">🗺️</div>
             <div>
               <h1 className="text-2xl font-bold">Land Registry Management</h1>
-              <p className="text-emerald-100">Teacher Administration Panel</p>
+              <p className="text-emerald-100">
+                {allTowns.find((t) => t.class === currentTownClass)?.town_name || `Class ${currentTownClass}`} — Teacher Administration
+              </p>
             </div>
           </div>
           <button
             onClick={handleSeedData}
-            disabled={seeding || (stats !== null && stats.total_parcels > 0)}
+            disabled={seeding || landFullySeeded}
             className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
-              stats && stats.total_parcels > 0 
+              landFullySeeded
                 ? 'bg-white/10 text-white/50 cursor-not-allowed' 
                 : 'bg-white/20 hover:bg-white/30'
             }`}
           >
             <Database className="h-4 w-4" />
-            <span>{seeding ? 'Seeding...' : stats && stats.total_parcels > 0 ? 'Data Seeded' : 'Seed Land Data'}</span>
+            <span>{seeding ? 'Seeding...' : landFullySeeded ? 'All Towns Seeded' : 'Seed Land Data'}</span>
           </button>
         </div>
       </div>
@@ -200,7 +307,7 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                 <div className="mb-6 bg-amber-50 border-2 border-amber-200 rounded-xl p-6 text-center">
                   <Database className="h-12 w-12 mx-auto mb-4 text-amber-500" />
                   <h3 className="text-lg font-semibold text-amber-800 mb-2">No Land Data Yet</h3>
-                  <p className="text-amber-600 mb-4">Click the button below to generate 100 land plots (10x10 grid)</p>
+                  <p className="text-amber-600 mb-4">Click the button below to generate 100 land plots per town (300 total across 6A, 6B, and 6C)</p>
                   <button
                     onClick={handleSeedData}
                     disabled={seeding}
@@ -211,7 +318,7 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                   </button>
                 </div>
               )}
-              <LandGrid readOnly={true} canRearrange={true} />
+              <LandGrid readOnly={true} canRearrange={true} townClass={currentTownClass} />
             </>
           )}
 
@@ -227,7 +334,8 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="">All Requests</option>
-                  <option value="pending">Pending</option>
+                  <option value="pending_teacher">Awaiting teacher</option>
+                  <option value="pending_engineer">Awaiting engineers</option>
                   <option value="approved">Approved</option>
                   <option value="denied">Denied</option>
                 </select>
@@ -267,7 +375,7 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                                 Plot {request.parcel_grid_code}
                               </h4>
                               <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(request.status)}`}>
-                                {request.status.toUpperCase()}
+                                {formatPurchaseStatus(request.status)}
                               </span>
                             </div>
                             <p className="text-sm text-gray-600">
@@ -280,10 +388,16 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                             </p>
                             <p className="text-sm text-gray-500">
                               {request.parcel_biome_type} • Offered: {formatCurrency(request.offered_price)}
+                              {request.parcel_town_class && ` • Town ${request.parcel_town_class}`}
                             </p>
                             <p className="text-xs text-gray-400 mt-1">
                               Submitted: {new Date(request.created_at).toLocaleString()}
                             </p>
+                            {(request.engineer_approvals_required ?? 0) > 0 && (
+                              <p className="text-xs text-violet-700 mt-1">
+                                Engineer approvals: {request.engineer_approvals_received ?? 0}/{request.engineer_approvals_required}
+                              </p>
+                            )}
                             {request.denial_reason && (
                               <p className="text-sm text-red-600 mt-2">
                                 Reason: {request.denial_reason}
@@ -292,7 +406,7 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                           </div>
                         </div>
 
-                        {request.status.toLowerCase() === 'pending' && (
+                        {request.status === 'pending_teacher' && (
                           <div className="flex space-x-2">
                             <button
                               onClick={() => handleRequestAction(request.id, 'approved')}
@@ -435,11 +549,21 @@ interface StudentLandViewProps {
 }
 
 const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlugin }) => {
-  const [activeTab, setActiveTab] = useState<'explore' | 'my-properties' | 'requests'>('explore');
+  const { currentTown, currentTownClass } = useTown();
+  const [activeTab, setActiveTab] = useState<'explore' | 'my-properties' | 'requests' | 'sales' | 'fm-approvals' | 'engineer-approvals'>('explore');
   const [myProperties, setMyProperties] = useState<MyPropertiesResponse | null>(null);
   const [myRequests, setMyRequests] = useState<LandPurchaseRequest[]>([]);
+  const [mySales, setMySales] = useState<LandSaleRequest[]>([]);
+  const [buyerOffers, setBuyerOffers] = useState<LandSaleRequest[]>([]);
+  const [fmApprovals, setFmApprovals] = useState<LandSaleRequest[]>([]);
+  const [engineerApprovals, setEngineerApprovals] = useState<LandPurchaseRequest[]>([]);
+  const [isFinancialManager, setIsFinancialManager] = useState(false);
+  const [isLandEngineer, setIsLandEngineer] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [expandedRequest, setExpandedRequest] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     fetchMyData();
@@ -448,12 +572,34 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
   const fetchMyData = async () => {
     setLoading(true);
     try {
-      const [propertiesRes, requestsRes] = await Promise.all([
+      const [propertiesRes, requestsRes, salesRes, buyerRes] = await Promise.all([
         landApi.getMyProperties(),
-        landApi.getPurchaseRequests()
+        landApi.getPurchaseRequests(),
+        landApi.getSaleRequests('seller'),
+        landApi.getSaleRequests('buyer'),
       ]);
       setMyProperties(propertiesRes.data);
       setMyRequests(requestsRes.data);
+      setMySales(salesRes.data);
+      setBuyerOffers(buyerRes.data);
+
+      try {
+        const fmRes = await landApi.getSaleRequests('fm');
+        setFmApprovals(fmRes.data);
+        setIsFinancialManager(true);
+      } catch {
+        setFmApprovals([]);
+        setIsFinancialManager(false);
+      }
+
+      try {
+        const engineerRes = await landApi.getEngineerPurchaseRequests();
+        setEngineerApprovals(engineerRes.data);
+        setIsLandEngineer(true);
+      } catch {
+        setEngineerApprovals([]);
+        setIsLandEngineer(false);
+      }
     } catch (err: any) {
       console.error('Failed to fetch land data:', err);
     } finally {
@@ -461,14 +607,79 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'bg-amber-100 text-amber-800 border-amber-300';
-      case 'approved': return 'bg-green-100 text-green-800 border-green-300';
-      case 'denied': return 'bg-red-100 text-red-800 border-red-300';
-      default: return 'bg-gray-100 text-gray-800 border-gray-300';
+  const handleFmReview = async (id: number, status: 'pending_buyer' | 'denied') => {
+    let denialReason: string | undefined;
+    if (status === 'denied') {
+      denialReason = prompt('Reason for denial (optional):') || undefined;
+    }
+    setActionLoading(id);
+    setError('');
+    try {
+      await landApi.reviewSaleRequest(id, status, denialReason);
+      setSuccess(status === 'denied' ? 'Sale denied' : 'Sale sent to buyer for acceptance');
+      fetchMyData();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Action failed');
+    } finally {
+      setActionLoading(null);
     }
   };
+
+  const handleAcceptSale = async (id: number) => {
+    setActionLoading(id);
+    setError('');
+    try {
+      await landApi.acceptSaleRequest(id);
+      setSuccess('Property purchased successfully');
+      fetchMyData();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Could not complete purchase');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCancelSale = async (id: number) => {
+    setActionLoading(id);
+    try {
+      await landApi.cancelSaleRequest(id);
+      fetchMyData();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Could not cancel sale');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleEngineerReview = async (id: number, status: 'approved' | 'denied') => {
+    let denialReason: string | undefined;
+    if (status === 'denied') {
+      denialReason = prompt('Reason for denial (optional):') || undefined;
+    }
+    setActionLoading(id);
+    setError('');
+    try {
+      const res = await landApi.reviewEngineerPurchaseRequest(id, status, denialReason);
+      setSuccess(res.data.message);
+      fetchMyData();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Action failed');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const getStatusColor = (status: string) => purchaseStatusColor(status);
+
+  if (!currentTownClass) {
+    return (
+      <div className="text-center py-12 text-gray-500">
+        <MapPin className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+        <p>You need to be assigned to a class (6A, 6B, or 6C) to use the Land Registry.</p>
+        <p className="text-sm mt-1">Please contact your teacher.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -478,7 +689,9 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
           <div className="text-4xl">🗺️</div>
           <div>
             <h1 className="text-2xl font-bold">Land Registry</h1>
-            <p className="text-primary-100">Explore and purchase land parcels</p>
+            <p className="text-primary-100">
+              {currentTown?.town_name || `Class ${currentTownClass}`} — explore and purchase land in your town
+            </p>
           </div>
         </div>
       </div>
@@ -499,6 +712,11 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
               <span className="text-xs font-medium">Portfolio Value</span>
             </div>
             <p className="text-2xl font-bold text-green-600">{formatCurrency(myProperties.total_value)}</p>
+            {myProperties.total_purchase_value != null && myProperties.total_value > myProperties.total_purchase_value && (
+              <p className="text-xs text-emerald-600 mt-1">
+                +{formatCurrency(myProperties.total_value - myProperties.total_purchase_value)} appreciation
+              </p>
+            )}
           </div>
           <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
             <div className="flex items-center space-x-2 text-gray-500 mb-1">
@@ -506,7 +724,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
               <span className="text-xs font-medium">Pending Requests</span>
             </div>
             <p className="text-2xl font-bold text-amber-600">
-              {myRequests.filter(r => r.status === 'pending').length}
+              {myRequests.filter(r => isActivePurchaseStatus(r.status)).length}
             </p>
           </div>
         </div>
@@ -514,12 +732,20 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
 
       {/* Tabs */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
+        {(error || success) && (
+          <div className={`mx-6 mt-4 px-4 py-2 rounded-lg text-sm ${error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+            {error || success}
+          </div>
+        )}
+        <div className="border-b border-gray-200 overflow-x-auto">
+          <nav className="flex space-x-6 px-6 min-w-max">
             {[
               { id: 'explore', label: 'Explore Land', icon: Map },
               { id: 'my-properties', label: 'My Plots', icon: MapPin, badge: myProperties?.total_count },
-              { id: 'requests', label: 'My Requests', icon: Clock, badge: myRequests.filter(r => r.status === 'pending').length }
+              { id: 'requests', label: 'Buy Requests', icon: Clock, badge: myRequests.filter(r => isActivePurchaseStatus(r.status)).length },
+              { id: 'sales', label: 'Sales', icon: DollarSign, badge: buyerOffers.filter(r => r.status === 'pending_buyer').length + mySales.filter(r => r.status === 'pending_fm' || r.status === 'pending_buyer').length },
+              ...(isLandEngineer ? [{ id: 'engineer-approvals', label: 'Land Approvals', icon: HardHat, badge: engineerApprovals.length }] : []),
+              ...(isFinancialManager ? [{ id: 'fm-approvals', label: 'FM Approvals', icon: CheckCircle, badge: fmApprovals.length }] : []),
             ].map(({ id, label, icon: Icon, badge }) => (
               <button
                 key={id}
@@ -543,7 +769,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
         <div className="p-6">
           {/* Explore Tab */}
           {activeTab === 'explore' && (
-            <LandGrid onParcelSelect={(parcel) => console.log('Selected:', parcel)} />
+            <LandGrid onParcelSelect={(parcel) => console.log('Selected:', parcel)} townClass={currentTownClass} />
           )}
 
           {/* My Properties Tab */}
@@ -559,45 +785,169 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
               <p className="text-sm mt-1">Explore the grid and purchase your first plot!</p>
               </div>
             ) : myProperties && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {myProperties.parcels.map((parcel) => (
-                  <div 
-                    key={parcel.id}
-                    className="bg-white rounded-xl border-2 overflow-hidden hover:shadow-lg transition-shadow"
-                    style={{ borderColor: BIOME_CONFIG[parcel.biome_type].color }}
-                  >
-                    <div 
-                      className="p-4 text-white"
-                      style={{ backgroundColor: BIOME_CONFIG[parcel.biome_type].color }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-2xl">{BIOME_ICONS[parcel.biome_type]}</span>
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Properties grow <strong>1% per week</strong>. Collect <strong>5% rental income</strong> weekly, or sell to a classmate (Financial Manager approval required).
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {myProperties.parcels.map((parcel) => (
+                    <LandPropertyCard key={parcel.id} parcel={parcel} onUpdated={fetchMyData} />
+                  ))}
+                </div>
+              </div>
+            )
+          )}
+
+          {/* Sales Tab */}
+          {activeTab === 'sales' && (
+            loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {buyerOffers.filter(r => r.status === 'pending_buyer').length > 0 && (
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-3">Offers waiting for you</h3>
+                    <div className="space-y-3">
+                      {buyerOffers.filter(r => r.status === 'pending_buyer').map((sale) => (
+                        <div key={sale.id} className="border border-primary-200 bg-primary-50 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <h4 className="font-bold">{parcel.grid_code}</h4>
-                            <p className="text-sm opacity-80">{parcel.biome_type}</p>
+                            <p className="font-medium">{sale.parcel_grid_code} — {sale.parcel_biome_type}</p>
+                            <p className="text-sm text-gray-600">
+                              From {sale.seller_first_name || sale.seller_username} · {formatCurrency(sale.sale_price)}
+                            </p>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleAcceptSale(sale.id)}
+                            disabled={actionLoading === sale.id}
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                          >
+                            {actionLoading === sale.id ? 'Processing…' : 'Accept & buy'}
+                          </button>
                         </div>
-                        <p className="text-lg font-bold">{formatCurrency(parcel.value)}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-3">My sale requests</h3>
+                  {mySales.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No sale requests yet. Sell a plot from My Plots.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {mySales.map((sale) => (
+                        <div key={sale.id} className="border border-gray-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium">{sale.parcel_grid_code} → {sale.buyer_username}</p>
+                            <p className="text-sm text-gray-600">{formatCurrency(sale.sale_price)} · {sale.status.replace('_', ' ')}</p>
+                          </div>
+                          {sale.status === 'pending_fm' && (
+                            <button type="button" onClick={() => handleCancelSale(sale.id)} disabled={actionLoading === sale.id} className="text-sm text-red-600 hover:text-red-700">
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          )}
+
+          {/* FM Approvals Tab */}
+          {activeTab === 'fm-approvals' && isFinancialManager && (
+            loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
+              </div>
+            ) : fmApprovals.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">No land sales awaiting Financial Manager approval</p>
+            ) : (
+              <div className="space-y-4">
+                {fmApprovals.map((sale) => (
+                  <div key={sale.id} className="border border-amber-200 bg-amber-50 rounded-xl p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">{sale.parcel_grid_code} ({sale.parcel_biome_type})</p>
+                        <p className="text-sm text-gray-700">
+                          {sale.seller_first_name || sale.seller_username} → {sale.buyer_first_name || sale.buyer_username}
+                        </p>
+                        <p className="text-sm font-medium text-green-700">{formatCurrency(sale.sale_price)}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleFmReview(sale.id, 'pending_buyer')}
+                          disabled={actionLoading === sale.id}
+                          className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleFmReview(sale.id, 'denied')}
+                          disabled={actionLoading === sale.id}
+                          className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
+                        >
+                          Deny
+                        </button>
                       </div>
                     </div>
-                    <div className="p-4 space-y-2 text-sm">
-                      <div className="flex items-center justify-between text-gray-600">
-                        <span>Location:</span>
-                        <span className="font-medium">Row {parcel.row_index + 1}, Col {parcel.col_index + 1}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {/* Engineer Approvals Tab */}
+          {activeTab === 'engineer-approvals' && isLandEngineer && (
+            loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
+              </div>
+            ) : engineerApprovals.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">No land purchases awaiting your approval</p>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Approve land purchases in your class. You earn your share of a <strong>10% professional fee</strong> when you approve.
+                </p>
+                {engineerApprovals.map((request) => (
+                  <div key={request.id} className="border border-violet-200 bg-violet-50 rounded-xl p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">{request.parcel_grid_code} ({request.parcel_biome_type})</p>
+                        <p className="text-sm text-gray-700">
+                          Buyer: {request.applicant_first_name || request.applicant_username} · {formatCurrency(request.offered_price)}
+                        </p>
+                        <p className="text-xs text-violet-700 mt-1">
+                          Approvals: {request.engineer_approvals_received ?? 0}/{request.engineer_approvals_required ?? 0}
+                          {request.engineer_fee_per_approver != null && request.engineer_fee_per_approver > 0 && (
+                            <> · Your fee: {formatCurrency(request.engineer_fee_per_approver)}</>
+                          )}
+                        </p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Risk:</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs ${RISK_COLORS[parcel.risk_level].bg} ${RISK_COLORS[parcel.risk_level].text} capitalize`}>
-                          {parcel.risk_level}
-                        </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEngineerReview(request.id, 'approved')}
+                          disabled={actionLoading === request.id}
+                          className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEngineerReview(request.id, 'denied')}
+                          disabled={actionLoading === request.id}
+                          className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
+                        >
+                          Deny
+                        </button>
                       </div>
-                      {parcel.purchased_at && (
-                        <div className="flex items-center justify-between text-gray-600">
-                          <span>Purchased:</span>
-                          <span className="font-medium">{new Date(parcel.purchased_at).toLocaleDateString()}</span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -641,7 +991,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <span className="text-xs font-medium uppercase">{request.status}</span>
+                          <span className="text-xs font-medium">{formatPurchaseStatus(request.status)}</span>
                           {expandedRequest === request.id ? (
                             <ChevronUp className="h-4 w-4" />
                           ) : (
@@ -657,6 +1007,12 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
                           <span className="opacity-70">Submitted:</span>
                           <span>{new Date(request.created_at).toLocaleString()}</span>
                         </div>
+                        {(request.engineer_approvals_required ?? 0) > 0 && (
+                          <div className="flex justify-between">
+                            <span className="opacity-70">Engineer approvals:</span>
+                            <span>{request.engineer_approvals_received ?? 0} / {request.engineer_approvals_required}</span>
+                          </div>
+                        )}
                         {request.reviewed_at && (
                           <div className="flex justify-between">
                             <span className="opacity-70">Reviewed:</span>

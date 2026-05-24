@@ -1,6 +1,6 @@
 import React from 'react';
 import { LandParcel } from '../../types';
-import { BIOME_CONFIG, RISK_COLORS, formatCurrency, BIOME_ICONS, calculateCurrentValue, getWeeksSincePurchase } from './BiomeConfig';
+import { BIOME_CONFIG, RISK_COLORS, formatCurrency, BIOME_ICONS } from './BiomeConfig';
 import { MapPin, AlertTriangle, ThumbsUp, ThumbsDown, User, Clock, TrendingUp } from 'lucide-react';
 
 interface LandPopupProps {
@@ -14,13 +14,11 @@ const LandPopup: React.FC<LandPopupProps> = ({ parcel, position, containerRef })
   const riskColors = RISK_COLORS[parcel.risk_level];
   const biomeIcon = BIOME_ICONS[parcel.biome_type];
   
-  // Calculate current value with 2% weekly interest for owned plots
-  const originalValue = Number(parcel.value);
-  const weeksSincePurchase = parcel.purchased_at ? getWeeksSincePurchase(parcel.purchased_at) : 0;
-  const currentValue = parcel.owner_id && parcel.purchased_at 
-    ? calculateCurrentValue(originalValue, parcel.purchased_at)
-    : originalValue;
-  const appreciation = currentValue - originalValue;
+  const listPrice = Number(parcel.value);
+  const currentValue = parcel.current_value ?? listPrice;
+  const purchasePrice = parcel.purchase_price ?? listPrice;
+  const appreciation = parcel.appreciation ?? (parcel.owner_id ? currentValue - purchasePrice : 0);
+  const weeksSincePurchase = parcel.weeks_owned ?? 0;
   
   // Get owner display name
   const ownerName = parcel.owner_first_name && parcel.owner_last_name 
@@ -87,7 +85,7 @@ const LandPopup: React.FC<LandPopupProps> = ({ parcel, position, containerRef })
                 </div>
               </>
             ) : (
-              <p className="text-xl font-bold">{formatCurrency(originalValue)}</p>
+              <p className="text-xl font-bold">{formatCurrency(listPrice)}</p>
             )}
             <span className={`text-xs px-2 py-0.5 rounded-full ${
               parcel.owner_id ? 'bg-red-500/30' : 'bg-green-500/30'
@@ -133,13 +131,13 @@ const LandPopup: React.FC<LandPopupProps> = ({ parcel, position, containerRef })
                 <div className="flex items-center space-x-2 text-sm">
                   <TrendingUp className="h-4 w-4 text-green-500" />
                   <span className="text-gray-600">Ownership:</span>
-                  <span>{weeksSincePurchase} {weeksSincePurchase === 1 ? 'week' : 'weeks'} (2% weekly interest)</span>
+                  <span>{weeksSincePurchase} {weeksSincePurchase === 1 ? 'week' : 'weeks'} (+1% value per week)</span>
                 </div>
                 {appreciation > 0 && (
                   <div className="bg-green-50 rounded p-2 mt-1">
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-600">Original Value:</span>
-                      <span>{formatCurrency(originalValue)}</span>
+                      <span className="text-gray-600">Purchase price:</span>
+                      <span>{formatCurrency(purchasePrice)}</span>
                     </div>
                     <div className="flex justify-between text-xs font-medium text-green-700">
                       <span>Current Value:</span>

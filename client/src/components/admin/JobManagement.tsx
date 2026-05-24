@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Briefcase, CheckCircle, XCircle, UserMinus, Clock, Users, ToggleLeft, ToggleRight, Edit2, X, Save, Award, Plus, Search } from 'lucide-react';
 import { jobsApi, businessProposalsApi } from '../../services/api';
 import api from '../../services/api';
@@ -48,6 +48,7 @@ const JobManagement: React.FC = () => {
   const [applicationSearchQuery, setApplicationSearchQuery] = useState<string>('');
   const [expandedJobId, setExpandedJobId] = useState<number | null>(null);
   const [jobAssignmentsFilter, setJobAssignmentsFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
+  const [removingJobUserId, setRemovingJobUserId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -106,12 +107,15 @@ const JobManagement: React.FC = () => {
     }
     try {
       setError(null);
+      setRemovingJobUserId(userId);
       await jobsApi.removeJobFromStudent(userId);
       setSuccess('Job assignment removed successfully');
       fetchData();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to remove job assignment');
+    } finally {
+      setRemovingJobUserId(null);
     }
   };
 
@@ -287,6 +291,22 @@ const JobManagement: React.FC = () => {
     // If somehow base_salary is still 4000, normalize it to 2000
     return baseSalary === 4000 ? 2000 : baseSalary;
   };
+
+  const classStudentsForList = useMemo(() => {
+    return students
+      .filter((s) => s.class === selectedJobAssignmentsClass)
+      .filter((s) => matchesStudentSearch(s, studentSearchQuery))
+      .filter((s) => {
+        if (jobAssignmentsFilter === 'assigned') return Boolean(s.job_name);
+        if (jobAssignmentsFilter === 'unassigned') return !s.job_name;
+        return true;
+      })
+      .sort((a, b) => {
+        const nameA = `${a.last_name || ''} ${a.first_name || ''} ${a.username}`.trim().toLowerCase();
+        const nameB = `${b.last_name || ''} ${b.first_name || ''} ${b.username}`.trim().toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+  }, [students, selectedJobAssignmentsClass, studentSearchQuery, jobAssignmentsFilter]);
 
   if (loading && jobs.length === 0 && applications.length === 0 && (activeTab !== 'business-proposals' || businessProposals.length === 0)) {
     return (
@@ -528,6 +548,63 @@ const JobManagement: React.FC = () => {
             </nav>
           </div>
 
+          {/* Students in class — remove job without opening a job card */}
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">
+                Students in {selectedJobAssignmentsClass}
+              </h3>
+              <span className="text-sm text-gray-500">{classStudentsForList.length} shown</span>
+            </div>
+            {classStudentsForList.length === 0 ? (
+              <p className="px-4 py-6 text-sm text-gray-500 text-center">
+                No students match your search or filter.
+              </p>
+            ) : (
+              <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+                {classStudentsForList.map((student) => {
+                  const isRemoving = removingJobUserId === student.id;
+                  return (
+                    <div
+                      key={student.id}
+                      className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-medium text-gray-900">
+                          {student.first_name} {student.last_name}
+                        </span>
+                        <span className="text-gray-500 ml-2">({student.username})</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {student.job_name ? (
+                          <>
+                            <span className="text-gray-700">
+                              {getJobEmoji(student.job_name)} {student.job_name}
+                              {student.job_level ? (
+                                <span className="text-gray-500 ml-1">· Lv {student.job_level}</span>
+                              ) : null}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveJob(student.id)}
+                              disabled={isRemoving}
+                              className="text-red-600 hover:text-red-700 flex items-center space-x-1 disabled:opacity-50"
+                            >
+                              <UserMinus className="h-4 w-4" />
+                              <span>{isRemoving ? 'Removing...' : 'Remove job'}</span>
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-gray-400 italic">Unemployed</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Jobs: compact square cards; click to expand */}
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
             {jobs
@@ -683,10 +760,11 @@ const JobManagement: React.FC = () => {
                                       </button>
                                       <button
                                         onClick={() => handleRemoveJob(student.id)}
-                                        className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm"
+                                        disabled={removingJobUserId === student.id}
+                                        className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm disabled:opacity-50"
                                       >
                                         <UserMinus className="h-4 w-4" />
-                                        <span>Remove</span>
+                                        <span>{removingJobUserId === student.id ? 'Removing...' : 'Remove'}</span>
                                       </button>
                                     </>
                                   ) : (

@@ -3,8 +3,8 @@ import { usePlugins } from '../../contexts/PluginContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTown } from '../../contexts/TownContext';
 import { Navigate } from 'react-router-dom';
-import { Briefcase, Loader2, AlertCircle, FlaskConical } from 'lucide-react';
-import { Job } from '../../types';
+import { Briefcase, Loader2, AlertCircle, FlaskConical, Clock, Undo2 } from 'lucide-react';
+import { Job, JobApplication } from '../../types';
 import { jobsApi } from '../../services/api';
 import JobCard from '../JobCard';
 import JobDetailsModal from '../JobDetailsModal';
@@ -45,6 +45,9 @@ const JobsPlugin: React.FC = () => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isApplicationFormOpen, setIsApplicationFormOpen] = useState(false);
   const [applicationCount, setApplicationCount] = useState<{ count: number; maxApplications: number; canApply: boolean } | null>(null);
+  const [myApplications, setMyApplications] = useState<JobApplication[]>([]);
+  const [withdrawingApplicationId, setWithdrawingApplicationId] = useState<number | null>(null);
+  const [applicationActionError, setApplicationActionError] = useState<string | null>(null);
   const [classJobAssignments, setClassJobAssignments] = useState<{ id: number; name: string; assigned_students: { first_name: string; last_name: string; username: string }[] }[] | null>(null);
   const [testGameKey, setTestGameKey] = useState<JobGameTestKey | null>(null);
 
@@ -64,6 +67,7 @@ const JobsPlugin: React.FC = () => {
       fetchJobs();
       if (user?.role === 'student') {
         if (!userHasJob) fetchApplicationCount();
+        fetchMyApplications();
         fetchClassJobAssignments();
       }
     }
@@ -90,6 +94,33 @@ const JobsPlugin: React.FC = () => {
     }
   };
 
+  const fetchMyApplications = async () => {
+    try {
+      const response = await jobsApi.getMyApplications();
+      setMyApplications(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch applications:', error);
+    }
+  };
+
+  const handleWithdrawApplication = async (applicationId: number) => {
+    if (!confirm('Withdraw this job application? You can apply again later if you change your mind.')) {
+      return;
+    }
+    try {
+      setApplicationActionError(null);
+      setWithdrawingApplicationId(applicationId);
+      await jobsApi.withdrawApplication(applicationId);
+      setApplicationActionError(null);
+      await fetchMyApplications();
+      await fetchApplicationCount();
+    } catch (error: any) {
+      setApplicationActionError(error.response?.data?.error || 'Failed to withdraw application');
+    } finally {
+      setWithdrawingApplicationId(null);
+    }
+  };
+
   const fetchClassJobAssignments = async () => {
     try {
       const response = await jobsApi.getClassJobAssignments();
@@ -112,6 +143,7 @@ const JobsPlugin: React.FC = () => {
   const handleApplicationSuccess = () => {
     fetchJobs(); // Refresh jobs in case any status changed
     fetchApplicationCount(); // Refresh application count
+    fetchMyApplications();
   };
 
   const handleCloseDetails = () => {
@@ -127,6 +159,11 @@ const JobsPlugin: React.FC = () => {
   const getRotation = (index: number) => {
     return (index * 7.3) % 11 - 5; // Pseudo-random but consistent per job
   };
+
+  const pendingApplications = myApplications.filter((app) => app.status === 'pending');
+  const selectedJobPendingApplication = selectedJob
+    ? myApplications.find((app) => app.job_id === selectedJob.id && app.status === 'pending') ?? null
+    : null;
 
   // Wait for plugins to load before checking
   if (pluginsLoading) {
@@ -161,6 +198,60 @@ const JobsPlugin: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Student's pending applications */}
+      {user?.role === 'student' && pendingApplications.length > 0 && (
+        <div className="bg-white rounded-xl border border-yellow-200 p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2 flex items-center">
+            <Clock className="h-5 w-5 mr-2 text-yellow-600" />
+            Your Pending Applications
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">
+            These applications are waiting for teacher review. You can withdraw one if you changed your mind.
+          </p>
+          {applicationActionError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
+              {applicationActionError}
+            </div>
+          )}
+          <div className="space-y-3">
+            {pendingApplications.map((app) => (
+              <div
+                key={app.id}
+                className="flex flex-wrap items-center justify-between gap-3 p-4 bg-yellow-50 border border-yellow-100 rounded-lg"
+              >
+                <div>
+                  <p className="font-semibold text-gray-900">{app.job_name}</p>
+                  <p className="text-sm text-gray-600">
+                    Applied {new Date(app.created_at).toLocaleDateString('en-ZA')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const job = jobs.find((j) => j.id === app.job_id);
+                      if (job) handleJobClick(job);
+                    }}
+                    className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                  >
+                    View job
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleWithdrawApplication(app.id)}
+                    disabled={withdrawingApplicationId === app.id}
+                    className="text-sm text-red-600 hover:text-red-700 font-medium flex items-center space-x-1 disabled:opacity-50"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                    <span>{withdrawingApplicationId === app.id ? 'Withdrawing...' : 'Withdraw'}</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Who's in each role (students only) */}
       {user?.role === 'student' && classJobAssignments && classJobAssignments.length > 0 && (
@@ -347,6 +438,13 @@ const JobsPlugin: React.FC = () => {
         userJobName={user?.job_name}
         applicationsEnabled={applicationsEnabled}
         applicationCount={applicationCount}
+        pendingApplication={selectedJobPendingApplication}
+        onWithdrawApplication={
+          selectedJobPendingApplication
+            ? () => handleWithdrawApplication(selectedJobPendingApplication.id)
+            : undefined
+        }
+        withdrawingApplication={withdrawingApplicationId === selectedJobPendingApplication?.id}
         isTeacher={user?.role === 'teacher'}
         onSaveJob={
           user?.role === 'teacher'

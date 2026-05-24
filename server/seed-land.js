@@ -9,58 +9,57 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// Biome configuration
 const BIOME_CONFIG = {
   'Savanna': {
-    baseValue: 20000,
+    baseValue: 75000,
     risk: 'medium',
     pros: ['Good grazing land', 'Wildlife tourism potential', 'Moderate rainfall'],
     cons: ['Seasonal droughts', 'Fire risk', 'Limited water sources']
   },
   'Grassland': {
-    baseValue: 15000,
+    baseValue: 56250,
     risk: 'low',
     pros: ['Excellent farming potential', 'Easy to develop', 'Stable ecosystem'],
     cons: ['Soil erosion risk', 'Limited shade', 'Overgrazing concerns']
   },
   'Forest': {
-    baseValue: 35000,
+    baseValue: 131250,
     risk: 'medium',
     pros: ['Rich biodiversity', 'Timber resources', 'Carbon credits potential'],
     cons: ['Fire risk', 'Clearing restrictions', 'Difficult access']
   },
   'Fynbos': {
-    baseValue: 45000,
+    baseValue: 135000,
     risk: 'high',
     pros: ['Unique biodiversity', 'Eco-tourism value', 'Protected species habitat'],
     cons: ['Fire-dependent ecosystem', 'Strict conservation laws', 'Limited development']
   },
   'Nama Karoo': {
-    baseValue: 10000,
+    baseValue: 58595,
     risk: 'medium',
     pros: ['Sheep farming suited', 'Low land cost', 'Unique landscape'],
     cons: ['Very dry climate', 'Limited water', 'Remote location']
   },
   'Succulent Karoo': {
-    baseValue: 4500,
+    baseValue: 37970,
     risk: 'high',
     pros: ['Rare plant species', 'Research value', 'Mining potential'],
     cons: ['Extreme temperatures', 'Water scarcity', 'Conservation restrictions']
   },
   'Desert': {
-    baseValue: 8000,
+    baseValue: 67500,
     risk: 'high',
     pros: ['Solar energy potential', 'Low land price', 'Mineral deposits'],
     cons: ['Extreme conditions', 'No water', 'Uninhabitable without infrastructure']
   },
   'Thicket': {
-    baseValue: 25000,
+    baseValue: 93750,
     risk: 'low',
     pros: ['Carbon storage', 'Game farming potential', 'Drought resistant'],
     cons: ['Dense vegetation', 'Clearing needed', 'Elephant damage risk']
   },
   'Indian Ocean Coastal Belt': {
-    baseValue: 60000,
+    baseValue: 180000,
     risk: 'medium',
     pros: ['High property value', 'Tourism potential', 'Port access'],
     cons: ['Coastal erosion', 'Cyclone risk', 'High development costs']
@@ -69,44 +68,35 @@ const BIOME_CONFIG = {
 
 const biomeTypes = Object.keys(BIOME_CONFIG);
 
-// Helper: Convert row index to Excel-style letter code
 function rowToLetterCode(row) {
   if (row < 26) {
-    return String.fromCharCode(65 + row); // A-Z
+    return String.fromCharCode(65 + row);
   }
   const first = Math.floor(row / 26) - 1;
   const second = row % 26;
   return String.fromCharCode(65 + first) + String.fromCharCode(65 + second);
 }
 
-// Helper: Generate grid code from row and column
 function generateGridCode(row, col) {
   return `${rowToLetterCode(row)}${col + 1}`;
 }
 
-// Simple noise-based biome distribution
 function getBiomeForPosition(row, col) {
   const regionSize = 3;
   const regionRow = Math.floor(row / regionSize);
   const regionCol = Math.floor(col / regionSize);
-  
-  // Seed based on region
   const seed = (regionRow * 7 + regionCol * 13) % biomeTypes.length;
-  
-  // Add some variation within regions
   const variation = (row * 3 + col * 5) % 100;
   if (variation < 20) {
     return biomeTypes[(seed + 1) % biomeTypes.length];
   }
-  
   return biomeTypes[seed];
 }
 
 async function seedLandData() {
   const client = await pool.connect();
-  
+
   try {
-    // Check if parcels already exist
     const existingCheck = await client.query('SELECT COUNT(*) as count FROM land_parcels');
     if (existingCheck.rows[0].count > 0) {
       console.log(`Land parcels already exist (${existingCheck.rows[0].count} parcels). Skipping seed.`);
@@ -116,10 +106,8 @@ async function seedLandData() {
     console.log('Starting land data seeding...');
     console.log('Generating 100 parcels (10x10 grid)...');
 
-    // Start transaction
     await client.query('BEGIN');
 
-    // Generate parcels in batches
     const batchSize = 100;
     let totalInserted = 0;
 
@@ -134,10 +122,7 @@ async function seedLandData() {
         const gridCode = generateGridCode(row, col);
         const biome = getBiomeForPosition(row, col);
         const config = BIOME_CONFIG[biome];
-        
-        // Add some value variation (±20%)
-        const valueVariation = 0.8 + (((row * col) % 100) / 250);
-        const value = Math.round(config.baseValue * valueVariation);
+        const value = config.baseValue;
 
         values.push(`($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`);
         params.push(
@@ -162,25 +147,22 @@ async function seedLandData() {
       console.log(`Inserted ${totalInserted}/100 parcels...`);
     }
 
-    // Commit transaction
     await client.query('COMMIT');
 
     console.log('✅ Land data seeded successfully!');
     console.log(`   Total parcels created: ${totalInserted}`);
 
-    // Show biome distribution
     const distribution = await client.query(`
-      SELECT biome_type, COUNT(*) as count 
-      FROM land_parcels 
-      GROUP BY biome_type 
+      SELECT biome_type, COUNT(*) as count
+      FROM land_parcels
+      GROUP BY biome_type
       ORDER BY count DESC
     `);
-    
+
     console.log('\nBiome distribution:');
     distribution.rows.forEach(row => {
       console.log(`   ${row.biome_type}: ${row.count} parcels`);
     });
-
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('❌ Failed to seed land data:', error);
@@ -190,7 +172,6 @@ async function seedLandData() {
   }
 }
 
-// Run the seeder
 seedLandData()
   .then(() => {
     console.log('\nSeeding complete!');
@@ -200,4 +181,3 @@ seedLandData()
     console.error('Seeding failed:', error);
     process.exit(1);
   });
-

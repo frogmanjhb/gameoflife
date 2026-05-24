@@ -9,7 +9,16 @@
     "start": "node dist/server.js",
     "create-super-admin": "node create-super-admin.js",
     "migrate:multi-tenant": "node run-multi-tenant-migration.js",
-    "migrate:global-jobs": "node run-sql-migration.js migrations/064_add_global_jobs_for_all_schools.sql"
+    "migrate:global-jobs": "node run-sql-migration.js migrations/064_add_global_jobs_for_all_schools.sql",
+    "migrate:land-prices": "node run-sql-migration.js migrations/066_land_biome_price_increase.sql",
+    "migrate:land-town-class": "node run-sql-migration.js migrations/067_land_town_class.sql",
+    "migrate:succulent-desert-prices": "node run-sql-migration.js migrations/068_succulent_desert_price_increase.sql",
+    "migrate:karoo-desert-prices": "node run-sql-migration.js migrations/069_karoo_desert_price_increase.sql",
+    "migrate:karoo-desert-prices-2": "node run-sql-migration.js migrations/070_karoo_desert_price_increase_2.sql",
+    "migrate:land-prices-50": "node run-sql-migration.js migrations/071_land_prices_plus_50_percent.sql",
+    "migrate:land-fixed-prices": "node run-sql-migration.js migrations/072_land_fixed_plot_prices.sql",
+    "migrate:land-property-economy": "node run-sql-migration.js migrations/073_land_property_economy.sql",
+    "migrate:land-purchase-engineer": "node run-sql-migration.js migrations/074_land_purchase_engineer_approvals.sql"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

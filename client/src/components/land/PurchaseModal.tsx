@@ -3,7 +3,9 @@ import { LandParcel } from '../../types';
 import { BIOME_CONFIG, formatCurrency, BIOME_ICONS, RISK_COLORS } from './BiomeConfig';
 import { useAuth } from '../../contexts/AuthContext';
 import { landApi } from '../../services/api';
-import { X, ShoppingCart, AlertCircle, CheckCircle, MapPin, DollarSign, AlertTriangle } from 'lucide-react';
+import { X, ShoppingCart, AlertCircle, CheckCircle, MapPin, DollarSign, AlertTriangle, Info } from 'lucide-react';
+
+const ENGINEER_FEE_RATE = 0.10;
 
 interface PurchaseModalProps {
   parcel: LandParcel;
@@ -22,21 +24,23 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
   const riskColors = RISK_COLORS[parcel.risk_level];
   const balance = Number(account?.balance) || 0;
   const price = Number(parcel.value) || 0;
-  const canAfford = balance >= price;
+  const engineerFee = Math.round(price * ENGINEER_FEE_RATE);
+  const totalRequired = price + engineerFee;
+  const canAfford = balance >= totalRequired;
 
   const handlePurchase = async () => {
     if (!canAfford) return;
-    
+
     setLoading(true);
     setError('');
-    
+
     try {
       await landApi.submitPurchaseRequest(parcel.id, price);
       setSuccess(true);
       setTimeout(() => {
         onSuccess();
         onClose();
-      }, 2000);
+      }, 2500);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to submit purchase request');
     } finally {
@@ -46,19 +50,18 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
-        {/* Header */}
-        <div 
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div
           className="p-6 text-white relative"
           style={{ backgroundColor: biomeConfig.color }}
         >
-          <button 
+          <button
             onClick={onClose}
             className="absolute top-4 right-4 p-1 hover:bg-white/20 rounded-full transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
-          
+
           <div className="flex items-center space-x-4">
             <div className="text-5xl">{biomeIcon}</div>
             <div>
@@ -68,7 +71,6 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
           </div>
         </div>
 
-        {/* Content */}
         <div className="p-6 space-y-6">
           {success ? (
             <div className="text-center py-8">
@@ -76,14 +78,13 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
                 <CheckCircle className="h-8 w-8 text-green-600" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">Request Submitted!</h3>
-              <p className="text-gray-600">
-                Your purchase request has been submitted for teacher approval.
-                You'll be notified once it's reviewed.
+              <p className="text-gray-600 text-sm">
+                Your request is with the Architects and Civil Engineers in your class first.
+                After they all approve, your teacher will give final approval.
               </p>
             </div>
           ) : (
             <>
-              {/* Price and Balance */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-50 rounded-xl p-4">
                   <div className="flex items-center space-x-2 text-gray-500 mb-1">
@@ -103,7 +104,25 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
                 </div>
               </div>
 
-              {/* Location & Risk */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm space-y-2">
+                <div className="flex items-center gap-2 text-amber-900 font-semibold">
+                  <Info className="h-4 w-4 flex-shrink-0" />
+                  <span>Cost summary</span>
+                </div>
+                <div className="flex justify-between text-amber-900">
+                  <span>Plot price</span>
+                  <span>{formatCurrency(price)}</span>
+                </div>
+                <div className="flex justify-between text-amber-900">
+                  <span>Engineer approval fee (10%)</span>
+                  <span>{formatCurrency(engineerFee)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-amber-950 border-t border-amber-200 pt-2">
+                  <span>Total you need available</span>
+                  <span>{formatCurrency(totalRequired)}</span>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between text-sm text-gray-600">
                 <div className="flex items-center space-x-2">
                   <MapPin className="h-4 w-4" />
@@ -117,7 +136,6 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
                 </div>
               </div>
 
-              {/* Pros & Cons Summary */}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="bg-green-50 rounded-lg p-3">
                   <p className="font-medium text-green-800 mb-2">Advantages</p>
@@ -137,7 +155,27 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
                 </div>
               </div>
 
-              {/* Error Message */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900 space-y-3">
+                <p className="font-semibold flex items-center gap-2">
+                  <Info className="h-4 w-4" />
+                  How land purchases work
+                </p>
+                <ol className="list-decimal list-inside space-y-2 text-blue-800">
+                  <li>
+                    <strong>Architects &amp; Civil Engineers</strong> in your class each receive your request and must approve it.
+                  </li>
+                  <li>
+                    When an engineer approves, they are paid their share of a <strong>10% professional fee</strong> from your account.
+                  </li>
+                  <li>
+                    After <strong>every</strong> Architect and Civil Engineer has approved, your request goes to your <strong>teacher</strong>.
+                  </li>
+                  <li>
+                    The <strong>plot price</strong> is deducted only when your teacher gives final approval. Engineer fees are paid as each engineer approves.
+                  </li>
+                </ol>
+              </div>
+
               {error && (
                 <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-lg">
                   <AlertCircle className="h-5 w-5 flex-shrink-0" />
@@ -145,28 +183,18 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
                 </div>
               )}
 
-              {/* Warning if can't afford */}
               {!canAfford && (
                 <div className="flex items-center space-x-2 text-amber-600 bg-amber-50 p-3 rounded-lg">
                   <AlertCircle className="h-5 w-5 flex-shrink-0" />
                   <p className="text-sm">
-                    You need {formatCurrency(price - balance)} more to purchase this plot.
+                    You need {formatCurrency(totalRequired - balance)} more (plot + 10% engineer fee).
                   </p>
                 </div>
               )}
-
-              {/* Info about approval */}
-              <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-700">
-                <p>
-                  <strong>Note:</strong> Plot purchases require teacher approval. 
-                  The purchase amount will be deducted from your balance once approved.
-                </p>
-              </div>
             </>
           )}
         </div>
 
-        {/* Footer */}
         {!success && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex space-x-3">
             <button
@@ -179,8 +207,8 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
               onClick={handlePurchase}
               disabled={!canAfford || loading}
               className={`flex-1 px-4 py-3 rounded-xl font-medium flex items-center justify-center space-x-2 transition-colors ${
-                canAfford 
-                  ? 'bg-primary-600 text-white hover:bg-primary-700' 
+                canAfford
+                  ? 'bg-primary-600 text-white hover:bg-primary-700'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
             >
@@ -195,4 +223,3 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
 };
 
 export default PurchaseModal;
-
