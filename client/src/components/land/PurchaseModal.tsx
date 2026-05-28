@@ -3,9 +3,11 @@ import { LandParcel } from '../../types';
 import { BIOME_CONFIG, formatCurrency, BIOME_ICONS, RISK_COLORS } from './BiomeConfig';
 import { useAuth } from '../../contexts/AuthContext';
 import { landApi } from '../../services/api';
+import {
+  calculateTotalProfessionalFee,
+  calculateTotalPurchaseCost,
+} from '../../utils/landPurchaseCosts';
 import { X, ShoppingCart, AlertCircle, CheckCircle, MapPin, DollarSign, AlertTriangle, Info } from 'lucide-react';
-
-const ENGINEER_FEE_RATE = 0.10;
 
 interface PurchaseModalProps {
   parcel: LandParcel;
@@ -24,8 +26,8 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
   const riskColors = RISK_COLORS[parcel.risk_level];
   const balance = Number(account?.balance) || 0;
   const price = Number(parcel.value) || 0;
-  const engineerFee = Math.round(price * ENGINEER_FEE_RATE);
-  const totalRequired = price + engineerFee;
+  const professionalFee = calculateTotalProfessionalFee(price);
+  const totalRequired = calculateTotalPurchaseCost(price);
   const canAfford = balance >= totalRequired;
 
   const handlePurchase = async () => {
@@ -79,8 +81,8 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">Request Submitted!</h3>
               <p className="text-gray-600 text-sm">
-                Your request is with the Architects and Civil Engineers in your class first.
-                After they all approve, your teacher will give final approval.
+                Your Financial Manager will review whether you can afford the plot and all professional fees.
+                Then Architects and Civil Engineers approve, and your teacher gives final approval.
               </p>
             </div>
           ) : (
@@ -114,9 +116,12 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
                   <span>{formatCurrency(price)}</span>
                 </div>
                 <div className="flex justify-between text-amber-900">
-                  <span>Engineer approval fee (10%)</span>
-                  <span>{formatCurrency(engineerFee)}</span>
+                  <span>Professional fees (5% total)</span>
+                  <span>{formatCurrency(professionalFee)}</span>
                 </div>
+                <p className="text-xs text-amber-800">
+                  Split between your Financial Manager, Architect, and Civil Engineer when each approves.
+                </p>
                 <div className="flex justify-between font-bold text-amber-950 border-t border-amber-200 pt-2">
                   <span>Total you need available</span>
                   <span>{formatCurrency(totalRequired)}</span>
@@ -162,16 +167,16 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
                 </p>
                 <ol className="list-decimal list-inside space-y-2 text-blue-800">
                   <li>
-                    <strong>Architects &amp; Civil Engineers</strong> in your class each receive your request and must approve it.
+                    Your <strong>Financial Manager</strong> checks that you can afford the full cost (plot + 5% fees).
                   </li>
                   <li>
-                    When an engineer approves, they are paid their share of a <strong>10% professional fee</strong> from your account.
+                    <strong>Architects &amp; Civil Engineers</strong> in your class each approve and receive their share of the fee pool.
                   </li>
                   <li>
-                    After <strong>every</strong> Architect and Civil Engineer has approved, your request goes to your <strong>teacher</strong>.
+                    After every engineer has approved, your <strong>teacher</strong> gives final approval.
                   </li>
                   <li>
-                    The <strong>plot price</strong> is deducted only when your teacher gives final approval. Engineer fees are paid as each engineer approves.
+                    The <strong>plot price</strong> goes to the town treasury when your teacher approves. Professional fees are paid at each approval step.
                   </li>
                 </ol>
               </div>
@@ -187,7 +192,7 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({ parcel, onClose, onSucces
                 <div className="flex items-center space-x-2 text-amber-600 bg-amber-50 p-3 rounded-lg">
                   <AlertCircle className="h-5 w-5 flex-shrink-0" />
                   <p className="text-sm">
-                    You need {formatCurrency(totalRequired - balance)} more (plot + 10% engineer fee).
+                    You need {formatCurrency(totalRequired - balance)} more for plot and professional fees.
                   </p>
                 </div>
               )}

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { LogOut, Menu, X, Home } from 'lucide-react';
 import ProfileBadge from './ProfileBadge';
 import StudentIllnessOverlay from './StudentIllnessOverlay';
+import SickNoteModal from './SickNoteModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -153,6 +154,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {children}
 
         {user?.role === 'student' && !user?.account_frozen && <StudentIllnessOverlay />}
+        {user?.role === 'student' && !user?.account_frozen && <SickNoteModal />}
 
         {/* Frozen account overlay - blocks entire system for students with frozen accounts */}
         {user?.role === 'student' && user?.account_frozen && (

@@ -33,6 +33,7 @@ import teacherGameRoutes from './routes/jobchallenges/teacher-game';
 import nurseGameRoutes from './routes/jobchallenges/nurse-game';
 import doctorGameRoutes from './routes/jobchallenges/doctor-game';
 import doctorIllnessRoutes from './routes/doctor-illness';
+import attendanceRoutes from './routes/attendance';
 import retailManagerGameRoutes from './routes/jobchallenges/retail-manager-game';
 import entrepreneurGameRoutes from './routes/jobchallenges/entrepreneur-game';
 import pluginRoutes from './routes/plugins';
@@ -201,6 +202,7 @@ app.use('/api/teacher-game', teacherGameRoutes);
 app.use('/api/nurse-game', nurseGameRoutes);
 app.use('/api/doctor-game', doctorGameRoutes);
 app.use('/api/doctor-illness', doctorIllnessRoutes);
+app.use('/api/attendance', attendanceRoutes);
 app.use('/api/retail-manager-game', retailManagerGameRoutes);
 app.use('/api/entrepreneur-game', entrepreneurGameRoutes);
 app.use('/api/plugins', pluginRoutes);
@@ -1061,6 +1063,17 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Police fine/bonus requests migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '087_attendance_register_sick_notes.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Attendance register and sick notes migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Attendance register migration may have already been applied:', migrationError);
     }
 
     // Sync default plugins (ensures all known plugins exist - no manual script needed)

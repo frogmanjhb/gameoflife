@@ -15,6 +15,7 @@ import landEconomyRouter from './land-economy';
 import landPurchaseApprovalRouter, {
   getRequiredLandEngineers,
   enrichPurchaseRequestWithEngineers,
+  townHasFinancialManager,
 } from './land-purchase-approval';
 
 const router = Router();
@@ -227,7 +228,7 @@ router.get('/parcels/:code', authenticateToken, async (req: AuthenticatedRequest
       SELECT lpr.*, u.username as applicant_username
       FROM land_purchase_requests lpr
       JOIN users u ON lpr.user_id = u.id
-      WHERE lpr.parcel_id = $1 AND lpr.status IN ('pending_engineer', 'pending_teacher')
+      WHERE lpr.parcel_id = $1 AND lpr.status IN ('pending_fm', 'pending_engineer', 'pending_teacher')
     `, [parcel.id]);
 
     res.json({ ...parcel, pending_request: pendingRequest || null });
@@ -339,26 +340,32 @@ router.post('/purchase-request',
       // Check if user already has a pending request for this parcel
       const existingRequest = await database.get(`
         SELECT * FROM land_purchase_requests 
-        WHERE user_id = $1 AND parcel_id = $2 AND status IN ('pending_engineer', 'pending_teacher')
+        WHERE user_id = $1 AND parcel_id = $2 AND status IN ('pending_fm', 'pending_engineer', 'pending_teacher')
       `, [req.user!.id, parcel_id]);
 
       if (existingRequest) {
         return res.status(400).json({ error: 'You already have a pending request for this parcel' });
       }
 
-      const totalCost = calculateTotalPurchaseCost(offeredAmount);
-      const account = await database.get('SELECT balance FROM accounts WHERE user_id = $1', [req.user!.id]);
-      if (!account || Number(account.balance) < totalCost) {
-        return res.status(400).json({
-          error: `Insufficient balance. You need ${totalCost.toFixed(2)} (plot price plus 10% engineer approval fee).`,
-        });
-      }
-
       const townClassForEngineers = parcel.town_class || userClass;
       const requiredEngineers = isTownClass(townClassForEngineers)
         ? await getRequiredLandEngineers(userSchoolId, townClassForEngineers, req.user!.id)
         : [];
-      const initialStatus = requiredEngineers.length > 0 ? 'pending_engineer' : 'pending_teacher';
+      const totalCost = calculateTotalPurchaseCost(offeredAmount, requiredEngineers.length);
+      const account = await database.get('SELECT balance FROM accounts WHERE user_id = $1', [req.user!.id]);
+      if (!account || Number(account.balance) < totalCost) {
+        return res.status(400).json({
+          error: `Insufficient balance. You need R${totalCost.toFixed(2)} (plot price plus 5% professional fees).`,
+        });
+      }
+      const hasFm =
+        isTownClass(townClassForEngineers) &&
+        (await townHasFinancialManager(userSchoolId, townClassForEngineers));
+      const initialStatus = hasFm
+        ? 'pending_fm'
+        : requiredEngineers.length > 0
+          ? 'pending_engineer'
+          : 'pending_teacher';
 
       // Create purchase request (with school_id for tenant isolation)
       const schoolId = req.user!.school_id ?? null;
@@ -375,9 +382,12 @@ router.post('/purchase-request',
           `, [req.user!.id, parcel_id, offered_price, initialStatus]);
 
       res.status(201).json({
-        message: initialStatus === 'pending_engineer'
-          ? 'Purchase request submitted — Architects and Civil Engineers in your class must approve first'
-          : 'Purchase request submitted for teacher approval',
+        message:
+          initialStatus === 'pending_fm'
+            ? 'Purchase request submitted — your Financial Manager will review affordability first'
+            : initialStatus === 'pending_engineer'
+              ? 'Purchase request submitted — Architects and Civil Engineers in your class must approve next'
+              : 'Purchase request submitted for teacher approval',
         request: result
       });
     } catch (error) {
@@ -590,9 +600,12 @@ router.put('/purchase-requests/:id',
       const currentStatus = String(purchaseRequest.status).toLowerCase().trim();
       if (currentStatus !== 'pending_teacher') {
         return res.status(400).json({
-          error: currentStatus === 'pending_engineer'
-            ? 'Engineers must approve this request before the teacher can review it'
-            : 'This request has already been processed',
+          error:
+            currentStatus === 'pending_fm'
+              ? 'The Financial Manager must approve this request first'
+              : currentStatus === 'pending_engineer'
+                ? 'Architects and Civil Engineers must approve this request before the teacher can review it'
+                : 'This request has already been processed',
         });
       }
 
@@ -698,7 +711,7 @@ router.put('/purchase-requests/:id',
               reviewed_by = $1,
               reviewed_at = CURRENT_TIMESTAMP,
               updated_at = CURRENT_TIMESTAMP
-          WHERE parcel_id = $2 AND id != $3 AND status IN ('pending_engineer', 'pending_teacher')
+          WHERE parcel_id = $2 AND id != $3 AND status IN ('pending_fm', 'pending_engineer', 'pending_teacher')
         `, [req.user!.id, purchaseRequest.parcel_id, requestId]);
 
       } else {
@@ -1018,7 +1031,7 @@ async function cancelActiveLandRequestsForParcel(parcelId: number): Promise<void
      SET status = 'denied',
          denial_reason = 'Plot assigned or cleared by teacher',
          updated_at = CURRENT_TIMESTAMP
-     WHERE parcel_id = $1 AND status IN ('pending_engineer', 'pending_teacher')`,
+     WHERE parcel_id = $1 AND status IN ('pending_fm', 'pending_engineer', 'pending_teacher')`,
     [parcelId]
   );
   await database.run(

@@ -34,6 +34,8 @@ import RetailManagerGameModal from './jobchallenges/RetailManagerGameModal';
 import EntrepreneurGameModal from './jobchallenges/EntrepreneurGameModal';
 import EntrepreneurBusinessProposalModal from './jobchallenges/EntrepreneurBusinessProposalModal';
 import EntrepreneurApprovedInstructions from './jobchallenges/EntrepreneurApprovedInstructions';
+import AttendanceRegisterPanel from './AttendanceRegisterPanel';
+import SickNoteApprovalPanel from './SickNoteApprovalPanel';
 
 const MyJobDetails: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
@@ -866,6 +868,17 @@ const MyJobDetails: React.FC = () => {
           </div>
         )}
 
+        {((job?.name || '').toLowerCase().trim().includes('nurse') ||
+          (job?.name || '').toLowerCase().trim().includes('doctor')) && (
+          <AttendanceRegisterPanel jobName={job?.name || ''} />
+        )}
+
+        {((job?.name || '').toLowerCase().trim().includes('hr director') ||
+          (job?.name || '').toLowerCase().trim().includes('financial manager') ||
+          (job?.name || '').toLowerCase().trim().includes('lawyer')) && (
+          <SickNoteApprovalPanel jobName={job?.name || ''} />
+        )}
+
         {/* Daily & Weekly Duties */}
         <div className="mb-6">
           <div className="flex items-center space-x-2 mb-3">
@@ -1626,7 +1639,8 @@ const MyJobDetails: React.FC = () => {
                     Town Finance Challenge
                   </h3>
                   <p className="text-sm text-gray-600">
-                    Complete payroll cycles (5 problems each) to earn XP and money.
+                    Complete payroll cycles (5 problems each) to earn XP and money. Review land purchase affordability in the{' '}
+                    <strong>Land Registry → FM Approvals</strong> tab (+1 XP per purchase cleared).
                   </p>
                 </div>
                 <button

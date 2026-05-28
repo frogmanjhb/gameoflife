@@ -21,6 +21,7 @@ import {
   NurseGameStatus, NurseGameStartRequest, NurseGameSubmitRequest,
   DoctorGameStatus, DoctorGameStartRequest, DoctorGameSubmitRequest,
   DoctorIllnessMyStatus, DoctorIllnessDoctorStatus,
+  AttendanceRegisterStatus, AttendanceMySickNote, SickNoteQueueStatus,
   RetailManagerGameStatus, RetailManagerGameStartRequest, RetailManagerGameSubmitRequest,
   EntrepreneurGameStatus, EntrepreneurGameStartRequest, EntrepreneurGameSubmitRequest,
   Job, JobApplication, LandParcel, LandPurchaseRequest, LandSaleRequest, 
@@ -324,6 +325,36 @@ export const doctorIllnessApi = {
   }> => api.post(`/doctor-illness/approve-cure/${assignmentId}`),
 };
 
+export const attendanceApi = {
+  getRegisterStatus: (): Promise<{ data: AttendanceRegisterStatus }> =>
+    api.get('/attendance/register-status'),
+  submitRegister: (entries: Array<{ student_user_id: number; status: 'present' | 'absent' }>): Promise<{
+    data: {
+      success: boolean;
+      register_id: number;
+      absent_count: number;
+      experience_points: number;
+      new_level: number | null;
+    };
+  }> => api.post('/attendance/submit-register', { entries }),
+  getMySickNote: (): Promise<{ data: AttendanceMySickNote }> =>
+    api.get('/attendance/my-sick-note'),
+  submitSickNote: (sick_note_id: number, explanation: string): Promise<{
+    data: { success: boolean; status: string; reviewer_label: string };
+  }> => api.post('/attendance/submit-sick-note', { sick_note_id, explanation }),
+  getSickNoteQueue: (): Promise<{ data: SickNoteQueueStatus }> =>
+    api.get('/attendance/sick-note-queue'),
+  reviewSickNote: (id: number, approved: boolean): Promise<{
+    data: {
+      success: boolean;
+      approved: boolean;
+      student_display_name: string;
+      experience_points: number;
+      new_level: number | null;
+    };
+  }> => api.post(`/attendance/review-sick-note/${id}`, { approved }),
+};
+
 export interface InsurancePolicy {
   id: number;
   insurance_type: string;
@@ -531,7 +562,7 @@ export const landApi = {
 
   // Get purchase requests
   getPurchaseRequests: (
-    status?: 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied',
+    status?: 'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied',
     townClass?: '6A' | '6B' | '6C'
   ): Promise<{ data: LandPurchaseRequest[] }> => {
     const params = new URLSearchParams();
@@ -543,6 +574,16 @@ export const landApi = {
 
   getEngineerPurchaseRequests: (): Promise<{ data: LandPurchaseRequest[] }> =>
     api.get('/land/purchase-requests?role=engineer'),
+
+  getFmPurchaseRequests: (): Promise<{ data: LandPurchaseRequest[] }> =>
+    api.get('/land/purchase-requests/fm-queue'),
+
+  reviewFmPurchaseRequest: (
+    id: number,
+    status: 'approved' | 'denied',
+    denialReason?: string
+  ): Promise<{ data: { message: string; request: LandPurchaseRequest; fee_paid?: number } }> =>
+    api.put(`/land/purchase-requests/${id}/fm-review`, { status, denial_reason: denialReason }),
 
   reviewEngineerPurchaseRequest: (
     id: number,

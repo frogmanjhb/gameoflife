@@ -29,7 +29,10 @@
     "migrate:lawyer-assignments": "node run-sql-migration.js migrations/081_lawyer_student_assignments.sql",
     "migrate:lawyer-fines-workflow": "node run-sql-migration.js migrations/082_police_fine_bonus_lawyer_workflow.sql",
     "migrate:lawyer-fines-status-width": "node run-sql-migration.js migrations/083_police_fine_bonus_status_width.sql",
-    "migrate:lawyer-fines-status-fix": "node run-sql-migration.js migrations/084_police_fine_bonus_status_fix.sql"
+    "migrate:lawyer-fines-status-fix": "node run-sql-migration.js migrations/084_police_fine_bonus_status_fix.sql",
+    "migrate:lawyer-fines-columns": "node run-sql-migration.js migrations/085_police_fine_bonus_lawyer_columns.sql",
+    "migrate:land-purchase-fm": "node run-sql-migration.js migrations/086_land_purchase_fm_step.sql",
+    "migrate:attendance-register": "node run-sql-migration.js migrations/087_attendance_register_sick_notes.sql"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

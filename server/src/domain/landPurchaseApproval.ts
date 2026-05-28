@@ -1,8 +1,14 @@
-export const ENGINEER_APPROVAL_FEE_RATE = 0.10;
+/** Total professional fees (FM + architects + civil engineers) = 5% of plot price */
+export const TOTAL_PROFESSIONAL_FEE_RATE = 0.05;
 
-export const ACTIVE_PURCHASE_STATUSES = ['pending_engineer', 'pending_teacher'] as const;
+export const ACTIVE_PURCHASE_STATUSES = [
+  'pending_fm',
+  'pending_engineer',
+  'pending_teacher',
+] as const;
 
 export type LandPurchaseStatus =
+  | 'pending_fm'
   | 'pending_engineer'
   | 'pending_teacher'
   | 'approved'
@@ -20,17 +26,86 @@ export function isLandEngineerJob(jobName: string | null | undefined): boolean {
   return hasArchitectJob(jobName) || hasCivilEngineerJob(jobName);
 }
 
-export function calculateTotalEngineerFee(offeredPrice: number): number {
-  return Math.round(offeredPrice * ENGINEER_APPROVAL_FEE_RATE);
+export function calculateTotalProfessionalFee(offeredPrice: number): number {
+  return Math.round(offeredPrice * TOTAL_PROFESSIONAL_FEE_RATE);
+}
+
+export function allocateProfessionalFees(
+  offeredPrice: number,
+  engineerCount: number
+): {
+  professional_fee_total: number;
+  fm_fee: number;
+  engineer_fee_total: number;
+  engineer_fee_per_approver: number;
+} {
+  const professional_fee_total = calculateTotalProfessionalFee(offeredPrice);
+  if (engineerCount <= 0) {
+    return {
+      professional_fee_total,
+      fm_fee: professional_fee_total,
+      engineer_fee_total: 0,
+      engineer_fee_per_approver: 0,
+    };
+  }
+  const parties = 1 + engineerCount;
+  const fm_fee = Math.floor(professional_fee_total / parties);
+  const engineer_fee_total = professional_fee_total - fm_fee;
+  const engineer_fee_per_approver = Math.floor(engineer_fee_total / engineerCount);
+  return {
+    professional_fee_total,
+    fm_fee,
+    engineer_fee_total,
+    engineer_fee_per_approver,
+  };
+}
+
+export function calculateFmFee(offeredPrice: number, engineerCount = 0): number {
+  return allocateProfessionalFees(offeredPrice, engineerCount).fm_fee;
+}
+
+export function calculateTotalEngineerFee(offeredPrice: number, engineerCount: number): number {
+  return allocateProfessionalFees(offeredPrice, engineerCount).engineer_fee_total;
 }
 
 export function calculateEngineerFeeShare(offeredPrice: number, approverCount: number): number {
   if (approverCount <= 0) return 0;
-  return Math.round(calculateTotalEngineerFee(offeredPrice) / approverCount);
+  return allocateProfessionalFees(offeredPrice, approverCount).engineer_fee_per_approver;
 }
 
-export function calculateTotalPurchaseCost(offeredPrice: number): number {
-  return offeredPrice + calculateTotalEngineerFee(offeredPrice);
+export function calculateTotalPurchaseCost(offeredPrice: number, engineerCount = 0): number {
+  return offeredPrice + calculateTotalProfessionalFee(offeredPrice);
+}
+
+export interface PurchaseCostBreakdown {
+  plot_price: number;
+  professional_fee_total: number;
+  fm_fee: number;
+  engineer_fee_total: number;
+  engineer_fee_per_approver: number;
+  total_required: number;
+  buyer_balance: number;
+  can_afford: boolean;
+}
+
+export function buildPurchaseCostBreakdown(
+  offeredPrice: number,
+  engineerCount: number,
+  buyerBalance: number
+): PurchaseCostBreakdown {
+  const plot_price = offeredPrice;
+  const allocation = allocateProfessionalFees(offeredPrice, engineerCount);
+  const total_required = calculateTotalPurchaseCost(offeredPrice);
+  return {
+    plot_price,
+    professional_fee_total: allocation.professional_fee_total,
+    fm_fee: allocation.fm_fee,
+    engineer_fee_total: allocation.engineer_fee_total,
+    engineer_fee_per_approver: allocation.engineer_fee_per_approver,
+    total_required,
+    buyer_balance: buyerBalance,
+    can_afford: buyerBalance >= total_required,
+  };
 }
 
 export interface RequiredEngineer {

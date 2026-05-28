@@ -17,10 +17,11 @@ import LandPropertyCard from '../land/LandPropertyCard';
 const TOWN_CLASS_LIST: Array<'6A' | '6B' | '6C'> = ['6A', '6B', '6C'];
 
 const isActivePurchaseStatus = (status: string) =>
-  status === 'pending_engineer' || status === 'pending_teacher';
+  status === 'pending_fm' || status === 'pending_engineer' || status === 'pending_teacher';
 
 const formatPurchaseStatus = (status: string) => {
   switch (status) {
+    case 'pending_fm': return 'Awaiting Financial Manager';
     case 'pending_engineer': return 'Awaiting engineers';
     case 'pending_teacher': return 'Awaiting teacher';
     case 'approved': return 'Approved';
@@ -31,6 +32,7 @@ const formatPurchaseStatus = (status: string) => {
 
 const purchaseStatusColor = (status: string) => {
   switch (status) {
+    case 'pending_fm': return 'bg-amber-100 text-amber-900 border-amber-300';
     case 'pending_engineer': return 'bg-violet-100 text-violet-800 border-violet-300';
     case 'pending_teacher': return 'bg-amber-100 text-amber-800 border-amber-300';
     case 'approved': return 'bg-green-100 text-green-800 border-green-300';
@@ -101,7 +103,7 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'pending_engineer' | 'pending_teacher' | 'approved' | 'denied' | ''>('pending_teacher');
+  const [filterStatus, setFilterStatus] = useState<'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied' | ''>('pending_teacher');
   const [seeding, setSeeding] = useState(false);
   const [landFullySeeded, setLandFullySeeded] = useState(false);
 
@@ -171,6 +173,7 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'pending_fm': return 'bg-amber-100 text-amber-900';
       case 'pending_engineer': return 'bg-violet-100 text-violet-800';
       case 'pending_teacher': return 'bg-amber-100 text-amber-800';
       case 'approved': return 'bg-green-100 text-green-800';
@@ -336,6 +339,7 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                   <option value="">All Requests</option>
                   <option value="pending_teacher">Awaiting teacher</option>
                   <option value="pending_engineer">Awaiting engineers</option>
+                  <option value="pending_fm">Awaiting Financial Manager</option>
                   <option value="approved">Approved</option>
                   <option value="denied">Denied</option>
                 </select>
@@ -556,6 +560,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
   const [mySales, setMySales] = useState<LandSaleRequest[]>([]);
   const [buyerOffers, setBuyerOffers] = useState<LandSaleRequest[]>([]);
   const [fmApprovals, setFmApprovals] = useState<LandSaleRequest[]>([]);
+  const [fmPurchaseApprovals, setFmPurchaseApprovals] = useState<LandPurchaseRequest[]>([]);
   const [engineerApprovals, setEngineerApprovals] = useState<LandPurchaseRequest[]>([]);
   const [isFinancialManager, setIsFinancialManager] = useState(false);
   const [isLandEngineer, setIsLandEngineer] = useState(false);
@@ -583,14 +588,22 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
       setMySales(salesRes.data);
       setBuyerOffers(buyerRes.data);
 
+      let fmRole = false;
       try {
-        const fmRes = await landApi.getSaleRequests('fm');
-        setFmApprovals(fmRes.data);
-        setIsFinancialManager(true);
+        const fmPurchasesRes = await landApi.getFmPurchaseRequests();
+        setFmPurchaseApprovals(fmPurchasesRes.data);
+        fmRole = true;
+      } catch {
+        setFmPurchaseApprovals([]);
+      }
+      try {
+        const fmSalesRes = await landApi.getSaleRequests('fm');
+        setFmApprovals(fmSalesRes.data);
+        fmRole = true;
       } catch {
         setFmApprovals([]);
-        setIsFinancialManager(false);
       }
+      setIsFinancialManager(fmRole);
 
       try {
         const engineerRes = await landApi.getEngineerPurchaseRequests();
@@ -604,6 +617,24 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
       console.error('Failed to fetch land data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFmPurchaseReview = async (id: number, status: 'approved' | 'denied') => {
+    let denialReason: string | undefined;
+    if (status === 'denied') {
+      denialReason = prompt('Reason for denial (optional):') || undefined;
+    }
+    setActionLoading(id);
+    setError('');
+    try {
+      const res = await landApi.reviewFmPurchaseRequest(id, status, denialReason);
+      setSuccess(res.data.message);
+      fetchMyData();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Action failed');
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -745,7 +776,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
               { id: 'requests', label: 'Buy Requests', icon: Clock, badge: myRequests.filter(r => isActivePurchaseStatus(r.status)).length },
               { id: 'sales', label: 'Sales', icon: DollarSign, badge: buyerOffers.filter(r => r.status === 'pending_buyer').length + mySales.filter(r => r.status === 'pending_fm' || r.status === 'pending_buyer').length },
               ...(isLandEngineer ? [{ id: 'engineer-approvals', label: 'Land Approvals', icon: HardHat, badge: engineerApprovals.length }] : []),
-              ...(isFinancialManager ? [{ id: 'fm-approvals', label: 'FM Approvals', icon: CheckCircle, badge: fmApprovals.length }] : []),
+              ...(isFinancialManager ? [{ id: 'fm-approvals', label: 'FM Approvals', icon: CheckCircle, badge: fmApprovals.length + fmPurchaseApprovals.length }] : []),
             ].map(({ id, label, icon: Icon, badge }) => (
               <button
                 key={id}
@@ -863,10 +894,98 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
               </div>
-            ) : fmApprovals.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">No land sales awaiting Financial Manager approval</p>
+            ) : fmApprovals.length === 0 && fmPurchaseApprovals.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">No land purchases or sales awaiting your approval</p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
+                {fmPurchaseApprovals.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-gray-900">Land purchases — affordability review</h3>
+                    <p className="text-sm text-gray-600">
+                      Check that the buyer can cover the plot price plus 5% professional fees (split between you, architects, and civil engineers).
+                    </p>
+                    {fmPurchaseApprovals.map((request) => {
+                      const breakdown = request.cost_breakdown;
+                      return (
+                        <div key={`purchase-${request.id}`} className="border border-emerald-200 bg-emerald-50 rounded-xl p-4 space-y-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold">{request.parcel_grid_code} ({request.parcel_biome_type})</p>
+                              <p className="text-sm text-gray-700">
+                                Buyer: {request.applicant_first_name || request.applicant_username}
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleFmPurchaseReview(request.id, 'approved')}
+                                disabled={actionLoading === request.id || breakdown?.can_afford === false}
+                                className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleFmPurchaseReview(request.id, 'denied')}
+                                disabled={actionLoading === request.id}
+                                className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
+                              >
+                                Deny
+                              </button>
+                            </div>
+                          </div>
+                          {breakdown && (
+                            <div className="bg-white/80 rounded-lg p-3 text-sm space-y-1 border border-emerald-100">
+                              <div className="flex justify-between">
+                                <span>Buyer balance</span>
+                                <span className={breakdown.can_afford ? 'text-green-700 font-medium' : 'text-red-700 font-medium'}>
+                                  {formatCurrency(breakdown.buyer_balance)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-gray-700">
+                                <span>Plot price</span>
+                                <span>{formatCurrency(breakdown.plot_price)}</span>
+                              </div>
+                              <div className="flex justify-between font-medium text-gray-800">
+                                <span>Professional fees (5% total)</span>
+                                <span>{formatCurrency(breakdown.professional_fee_total)}</span>
+                              </div>
+                              <div className="flex justify-between text-gray-600 text-xs pl-2">
+                                <span>Your FM share</span>
+                                <span>{formatCurrency(breakdown.fm_fee)}</span>
+                              </div>
+                              <div className="flex justify-between text-gray-600 text-xs pl-2">
+                                <span>Architect &amp; engineer share</span>
+                                <span>{formatCurrency(breakdown.engineer_fee_total)}</span>
+                              </div>
+                              {(request.required_engineers?.length ?? 0) > 0 && (
+                                <ul className="text-xs text-gray-600 pl-4 space-y-0.5">
+                                  {request.required_engineers!.map((eng) => (
+                                    <li key={eng.id}>
+                                      {eng.job_name} — {eng.first_name || eng.username}: {formatCurrency(breakdown.engineer_fee_per_approver)} each
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              <div className="flex justify-between font-semibold text-gray-900 border-t border-emerald-100 pt-2 mt-1">
+                                <span>Total required</span>
+                                <span>{formatCurrency(breakdown.total_required)}</span>
+                              </div>
+                              {!breakdown.can_afford && (
+                                <p className="text-red-700 text-xs font-medium pt-1">
+                                  Buyer cannot afford this purchase — deny or wait until their balance is sufficient.
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {fmApprovals.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-gray-900">Peer land sales</h3>
                 {fmApprovals.map((sale) => (
                   <div key={sale.id} className="border border-amber-200 bg-amber-50 rounded-xl p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -898,6 +1017,8 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
                     </div>
                   </div>
                 ))}
+                  </div>
+                )}
               </div>
             )
           )}
@@ -913,7 +1034,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
             ) : (
               <div className="space-y-4">
                 <p className="text-sm text-gray-600">
-                  Approve land purchases in your class. You earn your share of a <strong>10% professional fee</strong> when you approve.
+                  Approve land purchases after the Financial Manager has cleared affordability. You earn your share of the <strong>5% professional fee pool</strong> when you approve.
                 </p>
                 {engineerApprovals.map((request) => (
                   <div key={request.id} className="border border-violet-200 bg-violet-50 rounded-xl p-4">
@@ -1007,6 +1128,12 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
                           <span className="opacity-70">Submitted:</span>
                           <span>{new Date(request.created_at).toLocaleString()}</span>
                         </div>
+                        {request.fm_reviewed_at && (
+                          <div className="flex justify-between">
+                            <span className="opacity-70">FM review:</span>
+                            <span>{request.fm_reviewer_username || 'Financial Manager'}</span>
+                          </div>
+                        )}
                         {(request.engineer_approvals_required ?? 0) > 0 && (
                           <div className="flex justify-between">
                             <span className="opacity-70">Engineer approvals:</span>

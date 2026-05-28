@@ -750,6 +750,47 @@ export interface DoctorIllnessDoctorStatus {
   }>;
 }
 
+export interface AttendanceRegisterStudent {
+  id: number;
+  username: string;
+  display_name: string;
+}
+
+export interface AttendanceRegisterStatus {
+  can_submit: boolean;
+  submitter_role: 'nurse' | 'doctor' | null;
+  already_submitted_today: boolean;
+  submit_xp: number;
+  pay_penalty_factor: number;
+  students: AttendanceRegisterStudent[];
+  today_entries?: Array<{ student_user_id: number; status: 'present' | 'absent' }>;
+  reason?: string | null;
+}
+
+export interface AttendanceMySickNote {
+  required: boolean;
+  sick_note?: {
+    id: number;
+    register_date: string;
+    reviewer_role: string;
+    reviewer_label: string;
+  };
+}
+
+export interface SickNoteQueueItem {
+  id: number;
+  student_username: string;
+  student_display_name: string;
+  explanation: string;
+  submitted_at: string;
+  register_date: string;
+}
+
+export interface SickNoteQueueStatus {
+  pending: SickNoteQueueItem[];
+  approve_xp: number;
+}
+
 export interface RetailManagerGameStatus {
   remaining_plays: number;
   daily_limit: number;
@@ -1050,7 +1091,10 @@ export interface LandPurchaseRequest {
   user_id: number;
   parcel_id: number;
   offered_price: number;
-  status: 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied';
+  status: 'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied';
+  fm_reviewed_by?: number;
+  fm_reviewed_at?: string;
+  fm_reviewer_username?: string;
   reviewed_by?: number;
   reviewed_at?: string;
   denial_reason?: string;
@@ -1085,6 +1129,18 @@ export interface LandPurchaseRequest {
   engineer_approvals_required?: number;
   engineer_fee_total?: number;
   engineer_fee_per_approver?: number;
+  fm_fee?: number;
+  professional_fee_total?: number;
+  cost_breakdown?: {
+    plot_price: number;
+    professional_fee_total: number;
+    fm_fee: number;
+    engineer_fee_total: number;
+    engineer_fee_per_approver: number;
+    total_required: number;
+    buyer_balance: number;
+    can_afford: boolean;
+  };
 }
 
 export interface LandSaleRequest {
