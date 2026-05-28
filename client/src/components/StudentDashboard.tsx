@@ -166,7 +166,7 @@ const StudentDashboard: React.FC = () => {
               <div>
                 <p className="text-sm font-extrabold text-red-900 tracking-wide uppercase">New Tender Available</p>
                 <p className="text-lg font-bold text-red-950">{latestTenderAnnouncement.title}</p>
-                <p className="text-sm text-red-900 mt-1 line-clamp-2">{latestTenderAnnouncement.content}</p>
+                <p className="text-sm text-red-900 mt-1 line-clamp-2 break-words">{latestTenderAnnouncement.content}</p>
                 <div className="mt-3">
                   <Link
                     to="/tenders"
@@ -230,7 +230,7 @@ const StudentDashboard: React.FC = () => {
       </div>
 
       {/* Town Info, Announcements, My Job (when Jobs enabled), and Properties (when Land enabled) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 [&>*]:min-w-0">
         <TownInfo town={currentTown} readOnly={true} />
         <AnnouncementsPanel announcements={announcements} />
         {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/jobs') && user && <MyJobCard user={user} />}

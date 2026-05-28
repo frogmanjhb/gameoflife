@@ -307,7 +307,7 @@ const AnnouncementManagement: React.FC<AnnouncementManagementProps> = ({ announc
                         {announcement.town_class}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap mb-2">{announcement.content}</p>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap mb-2 break-words">{announcement.content}</p>
                     <div className="flex items-center space-x-4 text-xs text-gray-500">
                       <span>Posted by {announcement.created_by_username}</span>
                       <span>{new Date(announcement.created_at).toLocaleDateString()}</span>

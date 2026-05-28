@@ -503,7 +503,7 @@ const TeacherDashboard: React.FC = () => {
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
               {/* Town Info and Announcements */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 [&>*]:min-w-0">
                 <TownInfo town={currentTown} readOnly={true} showTreasury={true} />
                 <AnnouncementsPanel announcements={announcements} />
               </div>

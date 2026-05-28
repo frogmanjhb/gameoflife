@@ -2,6 +2,28 @@ import React from 'react';
 import { Announcement } from '../types';
 import { Bell, Clock } from 'lucide-react';
 
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
+function renderAnnouncementContent(content: string) {
+  const parts = content.split(URL_REGEX);
+  return parts.map((part, index) => {
+    if (/^https?:\/\//.test(part)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary-600 underline break-all"
+        >
+          {part}
+        </a>
+      );
+    }
+    return <React.Fragment key={index}>{part}</React.Fragment>;
+  });
+}
+
 interface AnnouncementsPanelProps {
   announcements: Announcement[];
   maxItems?: number;
@@ -36,7 +58,7 @@ const AnnouncementsPanel: React.FC<AnnouncementsPanelProps> = ({ announcements, 
 
   if (announcements.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-w-0">
         <div className="flex items-center space-x-2 mb-4">
           <Bell className="h-5 w-5 text-primary-600" />
           <h2 className="text-lg font-semibold text-gray-900">Town Alerts</h2>
@@ -51,7 +73,7 @@ const AnnouncementsPanel: React.FC<AnnouncementsPanelProps> = ({ announcements, 
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-w-0">
       <div className="flex items-center space-x-2 mb-4">
         <Bell className="h-5 w-5 text-primary-600" />
         <h2 className="text-lg font-semibold text-gray-900">Town Alerts</h2>
@@ -67,18 +89,20 @@ const AnnouncementsPanel: React.FC<AnnouncementsPanelProps> = ({ announcements, 
           return (
             <div
               key={announcement.id}
-              className={`border-l-4 ${colors.border} pl-4 py-2 ${colors.bg} rounded-r-lg ${
+              className={`border-l-4 ${colors.border} pl-4 py-2 ${colors.bg} rounded-r-lg min-w-0 overflow-hidden ${
                 announcement.enable_wiggle ? 'announcement-wiggle' : ''
               }`}
             >
-              <div className="flex items-start justify-between mb-1">
-                <h3 className={`font-semibold ${colors.text}`}>{announcement.title}</h3>
-                <div className="flex items-center space-x-1 text-xs text-gray-500 ml-2">
+              <div className="flex items-start justify-between gap-2 mb-1 min-w-0">
+                <h3 className={`font-semibold ${colors.text} min-w-0 flex-1 break-words`}>{announcement.title}</h3>
+                <div className="flex shrink-0 items-center space-x-1 text-xs text-gray-500">
                   <Clock className="h-3 w-3" />
                   <span>{formatDate(announcement.created_at)}</span>
                 </div>
               </div>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{announcement.content}</p>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+                {renderAnnouncementContent(announcement.content)}
+              </p>
               {announcement.created_by_username && (
                 <p className="text-xs text-gray-500 mt-1">
                   Posted by {announcement.created_by_username}
