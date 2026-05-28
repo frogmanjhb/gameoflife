@@ -906,41 +906,6 @@ export interface Plugin {
   created_at: string;
 }
 
-export interface NoticeBoardPosterSummary {
-  id: number;
-  title?: string | null;
-  created_at: string;
-  image_data?: string;
-}
-
-export interface NoticeBoardManageStatus {
-  enabled: boolean;
-  poster_count: number;
-  weekly_earnings_per_poster: number;
-  weekly_xp_per_poster: number;
-  potential_weekly_earnings: number;
-  potential_weekly_xp: number;
-  can_collect_weekly: boolean;
-  last_payout_collected_at?: string | null;
-  posters: NoticeBoardPosterSummary[];
-  collected_earnings?: number;
-  collected_experience_points?: number;
-  new_level?: number | null;
-}
-
-export interface NoticeBoardPoster {
-  id: number;
-  title?: string | null;
-  image_data: string;
-  created_at: string;
-}
-
-export interface NoticeBoardPublicView {
-  enabled: boolean;
-  designer_name?: string | null;
-  posters: NoticeBoardPoster[];
-}
-
 export interface CodeBoardAppItem {
   id: number;
   title: string;

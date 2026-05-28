@@ -25,7 +25,6 @@ import InsurancePlugin from './components/plugins/InsurancePlugin';
 import ChoresPlugin from './components/plugins/ChoresPlugin';
 import DoublesDayPlugin from './components/plugins/DoublesDayPlugin';
 import AnalyticsPlugin from './components/plugins/AnalyticsPlugin';
-import NoticeBoardPlugin from './components/plugins/NoticeBoardPlugin';
 import CodeBoardPlugin from './components/plugins/CodeBoardPlugin';
 import EventVotingPlugin from './components/plugins/EventVotingPlugin';
 import SuperAdminDashboard from './components/admin/SuperAdminDashboard';
@@ -366,20 +365,6 @@ const AppContent: React.FC = () => {
                 <PluginProvider>
                   <TownProvider>
                     <AnalyticsPlugin />
-                  </TownProvider>
-                </PluginProvider>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/notice-board"
-            element={
-              <ProtectedRoute>
-                <PluginProvider>
-                  <TownProvider>
-                    <RequireRulesAgreed>
-                      <NoticeBoardPlugin />
-                    </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>
               </ProtectedRoute>

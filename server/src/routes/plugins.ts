@@ -2,21 +2,8 @@ import { Router, Request, Response } from 'express';
 import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { requireTenant } from '../middleware/tenant';
-import { isNoticeBoardLiveForTown } from './notice-board';
 
 const router = Router();
-
-async function applyNoticeBoardVisibility(plugins: any[], user: AuthenticatedRequest['user']) {
-  if (!user || user.role !== 'student') return plugins;
-  const noticeBoardLive = await isNoticeBoardLiveForTown(user.school_id ?? null, user.class);
-  return plugins.map((plugin) => {
-    if (plugin.route_path !== '/notice-board') return plugin;
-    if (!plugin.enabled || !noticeBoardLive) {
-      return { ...plugin, enabled: false };
-    }
-    return plugin;
-  });
-}
 
 // Get all plugins (school-scoped: one row per plugin, preferring school override over global)
 // For each distinct plugin (by route_path), returns the school-specific row if it exists, else the global row.
@@ -32,12 +19,10 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
          ORDER BY route_path, (school_id = $1) DESC NULLS LAST, id`,
         [schoolId]
       );
-      const filtered = await applyNoticeBoardVisibility(plugins, req.user);
-      return res.json(filtered);
+      return res.json(plugins);
     }
     const plugins = await database.query('SELECT * FROM plugins WHERE school_id IS NULL ORDER BY name');
-    const filtered = await applyNoticeBoardVisibility(plugins, req.user);
-    res.json(filtered);
+    res.json(plugins);
   } catch (error) {
     console.error('Failed to fetch plugins:', error);
     res.status(500).json({ error: 'Internal server error' });

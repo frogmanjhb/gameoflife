@@ -36,7 +36,7 @@
     "migrate:lawyer-fines-columns": "node run-sql-migration.js migrations/085_police_fine_bonus_lawyer_columns.sql",
     "migrate:land-purchase-fm": "node run-sql-migration.js migrations/086_land_purchase_fm_step.sql",
     "migrate:attendance-register": "node run-sql-migration.js migrations/087_attendance_register_sick_notes.sql",
-    "migrate:notice-board": "node run-sql-migration.js migrations/088_add_notice_board.sql",
+    "migrate:remove-notice-board": "node run-sql-migration.js migrations/092_remove_notice_board.sql",
     "migrate:class-event-voting": "node run-sql-migration.js migrations/089_add_class_event_voting.sql",
     "migrate:code-board": "node run-sql-migration.js migrations/090_add_code_board.sql",
     "migrate:town-news-board": "node run-sql-migration.js migrations/091_add_town_news_board.sql",

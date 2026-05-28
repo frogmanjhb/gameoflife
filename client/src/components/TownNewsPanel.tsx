@@ -154,8 +154,8 @@ const TownNewsPanel: React.FC = () => {
               Town News Board
             </h3>
             <p className="text-sm text-gray-600 mt-1">
-              Write and submit town news stories with photos. Your teacher must approve each story before it
-              publishes. Once approved, you earn{' '}
+              Submit town news stories, posters, or advertising with photos. Your teacher must approve each
+              submission before it publishes. Once approved, you earn{' '}
               <strong>{status?.story_xp_reward ?? 20} XP</strong> and{' '}
               <strong>R{(status?.story_earnings_reward ?? 5000).toLocaleString()}</strong>.
             </p>

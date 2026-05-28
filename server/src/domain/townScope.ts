@@ -1,6 +1,8 @@
-import { isTownClass, TownClass } from './codeBoard';
+export type TownClass = '6A' | '6B' | '6C';
 
-export type { TownClass };
+export function isTownClass(value: unknown): value is TownClass {
+  return value === '6A' || value === '6B' || value === '6C';
+}
 
 export function resolveViewerTownClass(
   user: { role?: string; class?: string | null } | null | undefined,

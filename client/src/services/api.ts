@@ -22,7 +22,6 @@ import {
   DoctorGameStatus, DoctorGameStartRequest, DoctorGameSubmitRequest,
   DoctorIllnessMyStatus, DoctorIllnessDoctorStatus,
   AttendanceRegisterStatus, AttendanceMySickNote, SickNoteQueueStatus,
-  NoticeBoardManageStatus, NoticeBoardPublicView,
   CodeBoardManageStatus, CodeBoardPublicView, CodeBoardAppItem,
   TownNewsManageStatus, TownNewsPublicView, TownNewsStory,
   ContentSubmissionsPending,
@@ -1092,19 +1091,6 @@ export const studentsAccountantApi = {
 };
 
 // Teacher Analytics API methods
-export const noticeBoardApi = {
-  getManage: (): Promise<{ data: NoticeBoardManageStatus }> => api.get('/notice-board/manage'),
-  getPosters: (): Promise<{ data: NoticeBoardPublicView }> => api.get('/notice-board/posters'),
-  toggle: (enabled: boolean): Promise<{ data: NoticeBoardManageStatus }> =>
-    api.put('/notice-board/toggle', { enabled }),
-  uploadPoster: (data: { image_data: string; title?: string }): Promise<{ data: NoticeBoardManageStatus }> =>
-    api.post('/notice-board/posters', data),
-  deletePoster: (id: number): Promise<{ data: NoticeBoardManageStatus }> =>
-    api.delete(`/notice-board/posters/${id}`),
-  collectWeekly: (): Promise<{ data: NoticeBoardManageStatus }> => api.post('/notice-board/collect-weekly'),
-  getTownStatus: (): Promise<{ data: { enabled: boolean } }> => api.get('/notice-board/town-status'),
-};
-
 export const codeBoardApi = {
   getManage: (): Promise<{ data: CodeBoardManageStatus }> => api.get('/code-board/manage'),
   getApps: (params?: { class?: string }): Promise<{ data: CodeBoardPublicView }> =>

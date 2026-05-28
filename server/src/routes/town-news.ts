@@ -4,7 +4,7 @@ import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import {
   STORY_EARNINGS_REWARD,
   STORY_XP_REWARD,
-  hasJournalistJob,
+  canSubmitTownNews,
   isTownClass,
   sanitizeBody,
   sanitizeHeadline,
@@ -34,14 +34,14 @@ async function getStudentUser(userId: number) {
   );
 }
 
-async function requireJournalist(req: AuthenticatedRequest, res: Response) {
+async function requireTownNewsContributor(req: AuthenticatedRequest, res: Response) {
   if (!req.user || req.user.role !== 'student') {
     res.status(403).json({ error: 'Only students can submit town news stories' });
     return null;
   }
   const user = await getStudentUser(req.user.id);
-  if (!user || !hasJournalistJob(user.job_name)) {
-    res.status(403).json({ error: 'Only Journalists can submit to the Town News Board' });
+  if (!user || !canSubmitTownNews(user.job_name)) {
+    res.status(403).json({ error: 'Only Journalists and Graphic Designers can submit to the Town News Board' });
     return null;
   }
   if (!isTownClass(user.class)) {
@@ -108,30 +108,30 @@ async function getApprovedStoriesForTown(schoolId: number | null, townClass: str
   return rows.map((row: Parameters<typeof mapStoryRow>[0]) => mapStoryRow(row));
 }
 
-// GET /manage — journalist view
+// GET /manage — journalist / graphic designer view
 router.get('/manage', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const journalist = await requireJournalist(req, res);
-    if (!journalist) return;
+    const contributor = await requireTownNewsContributor(req, res);
+    if (!contributor) return;
     if (!(await tablesReady())) {
       return res.status(503).json({ error: 'Town News Board is not available yet. Please try again later.' });
     }
 
-    const schoolId = journalist.school_id ?? null;
+    const schoolId = contributor.school_id ?? null;
     const rows = schoolId != null
       ? await database.query(
           `SELECT id, headline, body, image_data, status, denial_reason, created_at
            FROM town_news_stories
            WHERE school_id = $1 AND town_class = $2 AND journalist_user_id = $3
            ORDER BY created_at DESC`,
-          [schoolId, journalist.class, journalist.id]
+          [schoolId, contributor.class, contributor.id]
         )
       : await database.query(
           `SELECT id, headline, body, image_data, status, denial_reason, created_at
            FROM town_news_stories
            WHERE school_id IS NULL AND town_class = $1 AND journalist_user_id = $2
            ORDER BY created_at DESC`,
-          [journalist.class, journalist.id]
+          [contributor.class, contributor.id]
         );
 
     res.json({
@@ -168,11 +168,11 @@ router.get('/stories', authenticateToken, async (req: AuthenticatedRequest, res:
   }
 });
 
-// POST /stories — journalist submits a story (pending teacher approval)
+// POST /stories — journalist or graphic designer submits (pending teacher approval)
 router.post('/stories', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const journalist = await requireJournalist(req, res);
-    if (!journalist) return;
+    const contributor = await requireTownNewsContributor(req, res);
+    if (!contributor) return;
     if (!(await tablesReady())) {
       return res.status(503).json({ error: 'Town News Board is not available yet. Please try again later.' });
     }
@@ -196,14 +196,14 @@ router.post('/stories', authenticateToken, async (req: AuthenticatedRequest, res
       return res.status(400).json({ error: 'Please write your story' });
     }
 
-    const schoolId = journalist.school_id ?? null;
-    const townClass = journalist.class;
+    const schoolId = contributor.school_id ?? null;
+    const townClass = contributor.class;
 
     const rows = await database.query(
       `INSERT INTO town_news_stories (school_id, town_class, journalist_user_id, headline, body, image_data, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        RETURNING id, headline, body, image_data, status, denial_reason, created_at`,
-      [schoolId, townClass, journalist.id, headline, body, image_data]
+      [schoolId, townClass, contributor.id, headline, body, image_data]
     );
 
     res.status(201).json({
@@ -216,11 +216,11 @@ router.post('/stories', authenticateToken, async (req: AuthenticatedRequest, res
   }
 });
 
-// DELETE /stories/:id — journalist removes own story
+// DELETE /stories/:id — contributor removes own story
 router.delete('/stories/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const journalist = await requireJournalist(req, res);
-    if (!journalist) return;
+    const contributor = await requireTownNewsContributor(req, res);
+    if (!contributor) return;
     if (!(await tablesReady())) {
       return res.status(503).json({ error: 'Town News Board is not available yet. Please try again later.' });
     }
@@ -230,15 +230,15 @@ router.delete('/stories/:id', authenticateToken, async (req: AuthenticatedReques
       return res.status(400).json({ error: 'Invalid story id' });
     }
 
-    const schoolId = journalist.school_id ?? null;
+    const schoolId = contributor.school_id ?? null;
     const existing = schoolId != null
       ? await database.get(
           'SELECT id FROM town_news_stories WHERE id = $1 AND school_id = $2 AND town_class = $3 AND journalist_user_id = $4',
-          [storyId, schoolId, journalist.class, journalist.id]
+          [storyId, schoolId, contributor.class, contributor.id]
         )
       : await database.get(
           'SELECT id FROM town_news_stories WHERE id = $1 AND school_id IS NULL AND town_class = $2 AND journalist_user_id = $3',
-          [storyId, journalist.class, journalist.id]
+          [storyId, contributor.class, contributor.id]
         );
     if (!existing) {
       return res.status(404).json({ error: 'Story not found or you cannot delete it' });

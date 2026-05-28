@@ -63,7 +63,7 @@ const NewsPlugin: React.FC = () => {
           <div className="text-4xl">📰</div>
           <div>
             <h1 className="text-2xl font-bold">Town News Board</h1>
-            <p className="text-primary-100">Local news and updates from your town journalists</p>
+            <p className="text-primary-100">Local news, posters and updates from your town journalists and graphic designers</p>
           </div>
         </div>
       </div>
@@ -78,7 +78,7 @@ const NewsPlugin: React.FC = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
           <Newspaper className="h-16 w-16 mx-auto mb-4 text-gray-300" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">No stories yet</h2>
-          <p className="text-gray-600">Your town journalists have not published any news yet.</p>
+          <p className="text-gray-600">No approved stories or posters have been published yet.</p>
         </div>
       ) : (
         <div className="space-y-6">

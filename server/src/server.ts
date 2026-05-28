@@ -38,7 +38,6 @@ import attendanceRoutes from './routes/attendance';
 import retailManagerGameRoutes from './routes/jobchallenges/retail-manager-game';
 import entrepreneurGameRoutes from './routes/jobchallenges/entrepreneur-game';
 import pluginRoutes from './routes/plugins';
-import noticeBoardRoutes from './routes/notice-board';
 import codeBoardRoutes from './routes/code-board';
 import townNewsRoutes from './routes/town-news';
 import contentSubmissionsRoutes from './routes/content-submissions';
@@ -213,7 +212,6 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/retail-manager-game', retailManagerGameRoutes);
 app.use('/api/entrepreneur-game', entrepreneurGameRoutes);
 app.use('/api/plugins', pluginRoutes);
-app.use('/api/notice-board', noticeBoardRoutes);
 app.use('/api/code-board', codeBoardRoutes);
 app.use('/api/town-news', townNewsRoutes);
 app.use('/api/content-submissions', contentSubmissionsRoutes);
@@ -1122,14 +1120,14 @@ async function initializeDatabase() {
     }
 
     try {
-      const migrationPath = join(__dirname, '..', 'migrations', '088_add_notice_board.sql');
+      const migrationPath = join(__dirname, '..', 'migrations', '092_remove_notice_board.sql');
       if (existsSync(migrationPath)) {
         const migrationSQL = readFileSync(migrationPath, 'utf8');
         await database.query(migrationSQL);
-        console.log('✅ Notice board migration completed');
+        console.log('✅ Remove notice board migration completed');
       }
     } catch (migrationError) {
-      console.log('⚠️ Notice board migration may have already been applied:', migrationError);
+      console.log('⚠️ Remove notice board migration may have already been applied:', migrationError);
     }
 
     try {

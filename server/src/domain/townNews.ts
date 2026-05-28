@@ -1,11 +1,11 @@
 import database from '../database/database-prod';
 import { getXPForLevel } from '../routes/jobs';
-import { isValidImageData } from './noticeBoard';
 
 export const STORY_XP_REWARD = 20;
 export const STORY_EARNINGS_REWARD = 5000;
 export const MAX_HEADLINE_LENGTH = 200;
 export const MAX_BODY_LENGTH = 8000;
+export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 export type TownClass = '6A' | '6B' | '6C';
 
@@ -15,6 +15,25 @@ export function isTownClass(value: unknown): value is TownClass {
 
 export function hasJournalistJob(jobName: string | null | undefined): boolean {
   return (jobName || '').toLowerCase().trim().includes('journalist');
+}
+
+export function hasGraphicDesignerJob(jobName: string | null | undefined): boolean {
+  return (jobName || '').toLowerCase().trim().includes('graphic designer');
+}
+
+export function canSubmitTownNews(jobName: string | null | undefined): boolean {
+  return hasJournalistJob(jobName) || hasGraphicDesignerJob(jobName);
+}
+
+export function estimateImageBytes(imageData: string): number {
+  const base64 = imageData.includes(',') ? imageData.split(',')[1] : imageData;
+  return Math.ceil((base64.length * 3) / 4);
+}
+
+export function isValidImageData(imageData: unknown): imageData is string {
+  if (typeof imageData !== 'string' || !imageData.trim()) return false;
+  if (!/^data:image\/(jpeg|jpg|png|webp|gif);base64,/i.test(imageData)) return false;
+  return estimateImageBytes(imageData) <= MAX_IMAGE_BYTES;
 }
 
 export function sanitizeHeadline(raw: unknown): string {

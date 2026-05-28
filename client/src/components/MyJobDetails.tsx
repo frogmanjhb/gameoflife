@@ -37,7 +37,6 @@ import EntrepreneurBusinessProposalModal from './jobchallenges/EntrepreneurBusin
 import EntrepreneurApprovedInstructions from './jobchallenges/EntrepreneurApprovedInstructions';
 import AttendanceRegisterPanel from './AttendanceRegisterPanel';
 import SickNoteApprovalPanel from './SickNoteApprovalPanel';
-import NoticeBoardPanel from './NoticeBoardPanel';
 import CodeBoardPanel from './CodeBoardPanel';
 import TownNewsPanel from './TownNewsPanel';
 
@@ -1745,7 +1744,7 @@ const MyJobDetails: React.FC = () => {
         )}
 
         {(job?.name || '').toLowerCase().trim().includes('graphic designer') && (
-          <NoticeBoardPanel />
+          <TownNewsPanel />
         )}
 
         {/* Journalist – Data & Reporting Challenge */}
