@@ -22,6 +22,11 @@ import {
   DoctorGameStatus, DoctorGameStartRequest, DoctorGameSubmitRequest,
   DoctorIllnessMyStatus, DoctorIllnessDoctorStatus,
   AttendanceRegisterStatus, AttendanceMySickNote, SickNoteQueueStatus,
+  NoticeBoardManageStatus, NoticeBoardPublicView,
+  CodeBoardManageStatus, CodeBoardPublicView, CodeBoardAppItem,
+  TownNewsManageStatus, TownNewsPublicView, TownNewsStory,
+  ContentSubmissionsPending,
+  ClassEventVotingStatus, ClassEventTiming,
   RetailManagerGameStatus, RetailManagerGameStartRequest, RetailManagerGameSubmitRequest,
   EntrepreneurGameStatus, EntrepreneurGameStartRequest, EntrepreneurGameSubmitRequest,
   Job, JobApplication, LandParcel, LandPurchaseRequest, LandSaleRequest, 
@@ -308,7 +313,9 @@ export const doctorIllnessApi = {
       success: boolean;
       cured: boolean;
       pending_cure?: boolean;
+      pending_insurance_claim?: boolean;
       cure_fee?: number;
+      paid_by_insurance?: boolean;
       doctor_username?: string;
     };
   }> => api.post('/doctor-illness/see-doctor'),
@@ -323,6 +330,51 @@ export const doctorIllnessApi = {
       new_level: number | null;
     };
   }> => api.post(`/doctor-illness/approve-cure/${assignmentId}`),
+};
+
+export const cyberAttackApi = {
+  getEngineerStatus: (): Promise<{ data: import('../types').CyberAttackEngineerStatus }> =>
+    api.get('/cyber-attack/engineer-status'),
+  assignRandom: (): Promise<{
+    data: {
+      success: boolean;
+      assignment: {
+        id: number;
+        victim_username: string;
+        victim_display_name: string;
+        attack_type: string;
+        attack_name: string;
+        assigned_at: string;
+      };
+      remaining_today: number;
+    };
+  }> => api.post('/cyber-attack/assign'),
+  getMyStatus: (): Promise<{ data: import('../types').CyberAttackMyStatus }> =>
+    api.get('/cyber-attack/my-status'),
+  selfResolve: (): Promise<{ data: { success: boolean; repaired: boolean } }> =>
+    api.post('/cyber-attack/self-resolve'),
+  callIt: (): Promise<{
+    data: {
+      success: boolean;
+      repaired: boolean;
+      pending_repair?: boolean;
+      pending_insurance_claim?: boolean;
+      repair_fee?: number;
+      paid_by_insurance?: boolean;
+      engineer_username?: string;
+    };
+  }> => api.post('/cyber-attack/call-it'),
+  approveRepair: (
+    assignmentId: number
+  ): Promise<{
+    data: {
+      success: boolean;
+      repaired: boolean;
+      victim_display_name: string;
+      experience_points: number;
+      new_level: number | null;
+    };
+  }> => api.post(`/cyber-attack/approve-repair/${assignmentId}`),
 };
 
 export const attendanceApi = {
@@ -362,10 +414,12 @@ export interface InsurancePolicy {
   total_cost: number;
   week_start_date: string | null;
   created_at: string;
-  status?: 'pending_broker' | 'approved' | 'denied';
+  status?: 'pending_broker' | 'approved' | 'denied' | 'refunded';
   active?: boolean;
   reviewed_at?: string | null;
   denial_reason?: string | null;
+  refunded_at?: string | null;
+  refund_amount?: number | null;
 }
 
 export interface InsuranceBrokerPendingRequest {
@@ -381,19 +435,99 @@ export interface InsuranceBrokerPendingRequest {
   class: string | null;
 }
 
+export interface InsuranceBrokerPendingClaim {
+  id: number;
+  illness_type: string;
+  cure_fee: number;
+  insurance_claim_requested_at: string;
+  patient_username: string;
+  patient_display_name: string;
+}
+
+export interface InsuranceBrokerPendingCyberClaim {
+  id: number;
+  attack_type: string;
+  repair_fee: number;
+  insurance_claim_requested_at: string;
+  victim_username: string;
+  victim_display_name: string;
+}
+
+export interface InsuranceBrokerReviewResult {
+  success: boolean;
+  status: string;
+  applicant_username?: string;
+  patient_username?: string;
+  patient_display_name?: string;
+  victim_username?: string;
+  victim_display_name?: string;
+  insurance_type?: string;
+  cure_fee?: number;
+  repair_fee?: number;
+  earnings?: number;
+  experience_points?: number;
+  new_level?: number | null;
+}
+
+export interface InsuranceTypeSetting {
+  id: 'health' | 'cyber' | 'property';
+  enabled: boolean;
+}
+
 export const insuranceApi = {
-  getQuote: (): Promise<{ data: { salary: number; rate_percent: number; per_type_per_week: number; types: string[]; broker_required?: boolean } }> =>
-    api.get('/insurance/quote'),
+  getQuote: (): Promise<{
+    data: {
+      salary: number;
+      rate_percent: number;
+      per_type_per_week: number;
+      types: string[];
+      type_settings?: InsuranceTypeSetting[];
+      broker_required?: boolean;
+    };
+  }> => api.get('/insurance/quote'),
   getMyPolicies: (): Promise<{ data: InsurancePolicy[] }> => api.get('/insurance/my-policies'),
   purchase: (data: { types: string[]; weeks: number }): Promise<{ data: { message: string; pending_broker?: boolean; status?: string } }> =>
     api.post('/insurance/purchase', data),
   getBrokerPending: (): Promise<{ data: InsuranceBrokerPendingRequest[] }> =>
     api.get('/insurance/broker/pending'),
+  getBrokerPendingClaims: (): Promise<{ data: InsuranceBrokerPendingClaim[] }> =>
+    api.get('/insurance/broker/pending-claims'),
+  getBrokerPendingCyberClaims: (): Promise<{ data: InsuranceBrokerPendingCyberClaim[] }> =>
+    api.get('/insurance/broker/pending-cyber-claims'),
   reviewBrokerRequest: (
     id: number,
     data: { status: 'approved' | 'denied'; denial_reason?: string }
-  ): Promise<{ data: { success: boolean; status: string; applicant_username?: string; insurance_type?: string } }> =>
+  ): Promise<{ data: InsuranceBrokerReviewResult }> =>
     api.put(`/insurance/broker/requests/${id}/review`, data),
+  reviewBrokerClaim: (
+    assignmentId: number,
+    data: { status: 'approved' | 'denied'; denial_reason?: string }
+  ): Promise<{ data: InsuranceBrokerReviewResult }> =>
+    api.put(`/insurance/broker/claims/${assignmentId}/review`, data),
+  reviewBrokerCyberClaim: (
+    assignmentId: number,
+    data: { status: 'approved' | 'denied'; denial_reason?: string }
+  ): Promise<{ data: InsuranceBrokerReviewResult }> =>
+    api.put(`/insurance/broker/cyber-claims/${assignmentId}/review`, data),
+  refundPurchase: (
+    purchaseId: number
+  ): Promise<{
+    data: {
+      success: boolean;
+      refund_amount: number;
+      original_cost: number;
+      refund_percent: number;
+      student_username: string;
+      insurance_type: string;
+    };
+  }> => api.post(`/insurance/purchases/${purchaseId}/refund`),
+  getTypeSettings: (): Promise<{ data: { types: InsuranceTypeSetting[] } }> =>
+    api.get('/insurance/type-settings'),
+  setTypeEnabled: (
+    type: 'health' | 'cyber' | 'property',
+    enabled: boolean
+  ): Promise<{ data: { types: InsuranceTypeSetting[] } }> =>
+    api.put(`/insurance/type-settings/${type}`, { enabled }),
 };
 
 export const retailManagerGameApi = {
@@ -958,6 +1092,95 @@ export const studentsAccountantApi = {
 };
 
 // Teacher Analytics API methods
+export const noticeBoardApi = {
+  getManage: (): Promise<{ data: NoticeBoardManageStatus }> => api.get('/notice-board/manage'),
+  getPosters: (): Promise<{ data: NoticeBoardPublicView }> => api.get('/notice-board/posters'),
+  toggle: (enabled: boolean): Promise<{ data: NoticeBoardManageStatus }> =>
+    api.put('/notice-board/toggle', { enabled }),
+  uploadPoster: (data: { image_data: string; title?: string }): Promise<{ data: NoticeBoardManageStatus }> =>
+    api.post('/notice-board/posters', data),
+  deletePoster: (id: number): Promise<{ data: NoticeBoardManageStatus }> =>
+    api.delete(`/notice-board/posters/${id}`),
+  collectWeekly: (): Promise<{ data: NoticeBoardManageStatus }> => api.post('/notice-board/collect-weekly'),
+  getTownStatus: (): Promise<{ data: { enabled: boolean } }> => api.get('/notice-board/town-status'),
+};
+
+export const codeBoardApi = {
+  getManage: (): Promise<{ data: CodeBoardManageStatus }> => api.get('/code-board/manage'),
+  getApps: (params?: { class?: string }): Promise<{ data: CodeBoardPublicView }> =>
+    api.get('/code-board/apps', { params }),
+  postApp: (data: { title: string; url: string }): Promise<{ data: { app: CodeBoardAppItem; message: string } }> =>
+    api.post('/code-board/apps', data),
+  deleteApp: (id: number): Promise<{ data: { success: boolean } }> => api.delete(`/code-board/apps/${id}`),
+  starApp: (id: number): Promise<{ data: { success: boolean; star_count: number; creator_xp: number; creator_earnings: number } }> =>
+    api.post(`/code-board/apps/${id}/star`),
+  clickApp: (id: number): Promise<{
+    data: {
+      success: boolean;
+      already_clicked: boolean;
+      url: string;
+      click_count: number;
+      creator_xp?: number;
+      creator_earnings?: number;
+    };
+  }> => api.post(`/code-board/apps/${id}/click`),
+};
+
+export const townNewsApi = {
+  getManage: (): Promise<{ data: TownNewsManageStatus }> => api.get('/town-news/manage'),
+  getStories: (params?: { class?: string }): Promise<{ data: TownNewsPublicView }> =>
+    api.get('/town-news/stories', { params }),
+  submitStory: (data: { headline: string; body: string; image_data?: string }): Promise<{
+    data: {
+      story: TownNewsStory;
+      message: string;
+    };
+  }> => api.post('/town-news/stories', data),
+  deleteStory: (id: number): Promise<{ data: { success: boolean } }> =>
+    api.delete(`/town-news/stories/${id}`),
+};
+
+export const contentSubmissionsApi = {
+  getPending: (): Promise<{ data: ContentSubmissionsPending }> => api.get('/content-submissions/pending'),
+  reviewNewsStory: (
+    id: number,
+    data: { status: 'approved' | 'denied'; denial_reason?: string }
+  ): Promise<{ data: { success: boolean; status: string } }> =>
+    api.post(`/content-submissions/news/${id}/review`, data),
+  reviewCodeApp: (
+    id: number,
+    data: { status: 'approved' | 'denied'; denial_reason?: string }
+  ): Promise<{ data: { success: boolean; status: string } }> =>
+    api.post(`/content-submissions/apps/${id}/review`, data),
+};
+
+export const classEventsApi = {
+  getStatus: (params?: { class?: string }): Promise<{ data: ClassEventVotingStatus }> =>
+    api.get('/class-events/status', { params }),
+  suggest: (data: { title: string; description?: string; timing: ClassEventTiming }): Promise<{
+    data: {
+      success: boolean;
+      event: ClassEventItem;
+      experience_points: number;
+      earnings: number;
+      new_level: number | null;
+      remaining_suggestions: number;
+    };
+  }> => api.post('/class-events/suggest', data),
+  vote: (eventId: number): Promise<{ data: { success: boolean; event_id: number; vote_count: number } }> =>
+    api.post(`/class-events/${eventId}/vote`),
+  updateSettings: (data: {
+    board_visible?: boolean;
+    teacher_board_enabled?: boolean;
+    town_class?: string;
+  }): Promise<{ data: { student_board_visible?: boolean; teacher_board_enabled?: boolean; town_class?: string } }> =>
+    api.patch('/class-events/settings', data),
+  closeEvent: (eventId: number, townClass: string): Promise<{ data: { success: boolean } }> =>
+    api.post(`/class-events/${eventId}/close`, { town_class: townClass }),
+  deleteEvent: (eventId: number, townClass: string): Promise<{ data: { success: boolean } }> =>
+    api.delete(`/class-events/${eventId}`, { params: { class: townClass } }),
+};
+
 export const teacherAnalyticsApi = {
   // Get engagement analytics
   getEngagement: (params?: {

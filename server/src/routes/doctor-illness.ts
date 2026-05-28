@@ -12,7 +12,7 @@ import {
   pickRandomIllnessType,
   DoctorIllnessType,
 } from '../domain/doctor-illness';
-import { hasActiveApprovedHealthInsurance } from '../domain/insurance';
+import { hasActiveApprovedHealthInsurance, classRequiresBrokerApproval, payHealthInsuranceClinicClaim } from '../domain/insurance';
 
 const router = Router();
 
@@ -257,7 +257,7 @@ router.get('/my-status', authenticateToken, async (req: AuthenticatedRequest, re
     }
 
     const row = await database.get(
-      `SELECT illness_type, assigned_at, cure_requested_at, cure_fee,
+      `SELECT illness_type, assigned_at, cure_requested_at, cure_fee, insurance_claim_requested_at,
               d.username AS doctor_username,
               COALESCE(NULLIF(TRIM(CONCAT(d.first_name, ' ', d.last_name)), ''), d.username) AS doctor_display_name
        FROM doctor_illness_assignments a
@@ -275,22 +275,29 @@ router.get('/my-status', authenticateToken, async (req: AuthenticatedRequest, re
     const seeDoctorAt = assignedAt + DOCTOR_SEE_DOCTOR_DELAY_MS;
     const now = Date.now();
     const pendingCure = !!row.cure_requested_at;
-    const canPayForCure = !pendingCure && now >= seeDoctorAt;
+    const pendingInsuranceClaim = !!row.insurance_claim_requested_at && !pendingCure;
+    const canPayForCure = !pendingCure && !pendingInsuranceClaim && now >= seeDoctorAt;
     const type = row.illness_type as DoctorIllnessType;
     const cureFee = parseFloat(String(row.cure_fee ?? DOCTOR_CURE_FEE));
     const healthInsuranceCoversClinic = await hasActiveApprovedHealthInsurance(req.user.id);
+    const brokerRequired = await classRequiresBrokerApproval(
+      req.user.school_id ?? null,
+      req.user.class ?? null
+    );
 
     res.json({
       active: true,
       pending_cure: pendingCure,
+      pending_insurance_claim: pendingInsuranceClaim,
       cure_fee: cureFee,
       health_insurance_covers_clinic: healthInsuranceCoversClinic,
+      insurance_broker_required: brokerRequired && healthInsuranceCoversClinic,
       doctor_username: row.doctor_username,
       doctor_display_name: row.doctor_display_name,
       assigned_at: row.assigned_at,
       see_doctor_available_at: new Date(seeDoctorAt).toISOString(),
       can_see_doctor: canPayForCure,
-      seconds_until_see_doctor: pendingCure || canPayForCure ? 0 : Math.ceil((seeDoctorAt - now) / 1000),
+      seconds_until_see_doctor: pendingCure || pendingInsuranceClaim || canPayForCure ? 0 : Math.ceil((seeDoctorAt - now) / 1000),
       ...illnessPayload(type),
     });
   } catch (error) {
@@ -313,7 +320,7 @@ router.post('/see-doctor', authenticateToken, async (req: AuthenticatedRequest, 
 
     const row = await database.get(
       `SELECT a.id, a.illness_type, a.assigned_at, a.cure_requested_at, a.cure_fee,
-              a.assigned_by_user_id, d.username AS doctor_username
+              a.insurance_claim_requested_at, a.assigned_by_user_id, d.username AS doctor_username
        FROM doctor_illness_assignments a
        JOIN users d ON d.id = a.assigned_by_user_id
        WHERE a.patient_user_id = $1 AND a.cured_at IS NULL
@@ -329,6 +336,12 @@ router.post('/see-doctor', authenticateToken, async (req: AuthenticatedRequest, 
       return res.status(400).json({ error: 'You have already paid. Waiting for your doctor to approve the cure.' });
     }
 
+    if (row.insurance_claim_requested_at) {
+      return res.status(400).json({
+        error: 'Your insurance claim is waiting for your town insurance manager to approve payment.',
+      });
+    }
+
     const seeDoctorAt = new Date(row.assigned_at).getTime() + DOCTOR_SEE_DOCTOR_DELAY_MS;
     if (Date.now() < seeDoctorAt) {
       const secondsLeft = Math.ceil((seeDoctorAt - Date.now()) / 1000);
@@ -338,27 +351,38 @@ router.post('/see-doctor', authenticateToken, async (req: AuthenticatedRequest, 
     }
 
     const cureFee = parseFloat(String(row.cure_fee ?? DOCTOR_CURE_FEE));
+    const hasHealthInsurance = await hasActiveApprovedHealthInsurance(req.user.id);
+    const brokerRequired = await classRequiresBrokerApproval(
+      req.user.school_id ?? null,
+      req.user.class ?? null
+    );
+
+    if (hasHealthInsurance && brokerRequired) {
+      await database.query(
+        `UPDATE doctor_illness_assignments
+         SET insurance_claim_requested_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [row.id]
+      );
+      return res.json({
+        success: true,
+        cured: false,
+        pending_cure: false,
+        pending_insurance_claim: true,
+        cure_fee: cureFee,
+        paid_by_insurance: false,
+        doctor_username: row.doctor_username,
+        illness_type: row.illness_type,
+      });
+    }
+
     const doctorAccount = await database.get('SELECT * FROM accounts WHERE user_id = $1', [row.assigned_by_user_id]);
     if (!doctorAccount) {
       return res.status(400).json({ error: 'Doctor bank account not found for payment' });
     }
 
-    const paidByInsurance = await hasActiveApprovedHealthInsurance(req.user.id);
-
-    if (paidByInsurance) {
-      await database.query(
-        'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [cureFee, doctorAccount.id]
-      );
-      await database.query(
-        `INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description)
-         VALUES (NULL, $1, $2, 'insurance', $3)`,
-        [
-          doctorAccount.id,
-          cureFee,
-          `Health insurance claim — ${row.illness_type} clinic fee (awaiting doctor approval)`,
-        ]
-      );
+    if (hasHealthInsurance) {
+      await payHealthInsuranceClinicClaim(database, row.id, doctorAccount.id, cureFee, row.illness_type);
     } else {
       const patientAccount = await database.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
       if (!patientAccount) {
@@ -387,23 +411,23 @@ router.post('/see-doctor', authenticateToken, async (req: AuthenticatedRequest, 
           `Clinic visit fee — ${row.illness_type} (awaiting doctor approval)`,
         ]
       );
+      await database.query(
+        `UPDATE doctor_illness_assignments
+         SET cure_requested_at = CURRENT_TIMESTAMP,
+             cure_paid_at = CURRENT_TIMESTAMP,
+             paid_by_insurance = FALSE
+         WHERE id = $1`,
+        [row.id]
+      );
     }
-
-    await database.query(
-      `UPDATE doctor_illness_assignments
-       SET cure_requested_at = CURRENT_TIMESTAMP,
-           cure_paid_at = CURRENT_TIMESTAMP,
-           paid_by_insurance = $2
-       WHERE id = $1`,
-      [row.id, paidByInsurance]
-    );
 
     res.json({
       success: true,
       cured: false,
       pending_cure: true,
+      pending_insurance_claim: false,
       cure_fee: cureFee,
-      paid_by_insurance: paidByInsurance,
+      paid_by_insurance: hasHealthInsurance,
       doctor_username: row.doctor_username,
       illness_type: row.illness_type,
     });

@@ -33,10 +33,16 @@ import teacherGameRoutes from './routes/jobchallenges/teacher-game';
 import nurseGameRoutes from './routes/jobchallenges/nurse-game';
 import doctorGameRoutes from './routes/jobchallenges/doctor-game';
 import doctorIllnessRoutes from './routes/doctor-illness';
+import cyberAttackRoutes from './routes/cyber-attack';
 import attendanceRoutes from './routes/attendance';
 import retailManagerGameRoutes from './routes/jobchallenges/retail-manager-game';
 import entrepreneurGameRoutes from './routes/jobchallenges/entrepreneur-game';
 import pluginRoutes from './routes/plugins';
+import noticeBoardRoutes from './routes/notice-board';
+import codeBoardRoutes from './routes/code-board';
+import townNewsRoutes from './routes/town-news';
+import contentSubmissionsRoutes from './routes/content-submissions';
+import classEventsRoutes from './routes/class-events';
 import announcementRoutes from './routes/announcements';
 import townRoutes from './routes/town';
 import jobRoutes from './routes/jobs';
@@ -100,7 +106,7 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '3mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Simple health check (no database dependency) - Railway healthcheck endpoint
@@ -202,10 +208,16 @@ app.use('/api/teacher-game', teacherGameRoutes);
 app.use('/api/nurse-game', nurseGameRoutes);
 app.use('/api/doctor-game', doctorGameRoutes);
 app.use('/api/doctor-illness', doctorIllnessRoutes);
+app.use('/api/cyber-attack', cyberAttackRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/retail-manager-game', retailManagerGameRoutes);
 app.use('/api/entrepreneur-game', entrepreneurGameRoutes);
 app.use('/api/plugins', pluginRoutes);
+app.use('/api/notice-board', noticeBoardRoutes);
+app.use('/api/code-board', codeBoardRoutes);
+app.use('/api/town-news', townNewsRoutes);
+app.use('/api/content-submissions', contentSubmissionsRoutes);
+app.use('/api/class-events', classEventsRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/town', townRoutes);
 app.use('/api/jobs/business-proposals', businessProposalsRoutes);
@@ -1053,6 +1065,39 @@ async function initializeDatabase() {
       console.log('⚠️ Insurance broker approval migration may have already been applied:', migrationError);
     }
 
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '079_insurance_clinic_claim_approval.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Insurance clinic claim approval migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Insurance clinic claim approval migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '080_add_insurance_teacher_refund.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Insurance teacher refund migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Insurance teacher refund migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '081_insurance_type_settings.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Insurance type settings migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Insurance type settings migration may have already been applied:', migrationError);
+    }
+
     // Police fines/bonuses requests table
     try {
       const migrationPath = join(__dirname, '..', 'migrations', '065_police_fine_bonus_requests.sql');
@@ -1074,6 +1119,72 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Attendance register migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '088_add_notice_board.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Notice board migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Notice board migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '089_add_class_event_voting.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Class event voting migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Class event voting migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '090_add_code_board.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Code board migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Code board migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '091_add_town_news_board.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Town news board migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Town news board migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '092_add_content_submission_approval.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Content submission approval migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Content submission approval migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '093_add_cyber_attack_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Cyber attack tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Cyber attack tables migration may have already been applied:', migrationError);
     }
 
     // Sync default plugins (ensures all known plugins exist - no manual script needed)

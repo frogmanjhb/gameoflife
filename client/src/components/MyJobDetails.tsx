@@ -4,9 +4,9 @@ import {
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
   Award, FileText, TrendingUp, Loader2, AlertCircle, Play, CheckCircle, XCircle, Users, Shield, Scale
 } from 'lucide-react';
-import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, doctorIllnessApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi, policeFinesBonusesApi, insuranceApi, InsuranceBrokerPendingRequest, PoliceFineBonus } from '../services/api';
+import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, doctorIllnessApi, cyberAttackApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi, policeFinesBonusesApi, insuranceApi, InsuranceBrokerPendingRequest, InsuranceBrokerPendingClaim, InsuranceBrokerPendingCyberClaim, PoliceFineBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, RetailManagerGameStatus, EntrepreneurGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer } from '../types';
+import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, CyberAttackEngineerStatus, RetailManagerGameStatus, EntrepreneurGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
 import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../utils/jobDisplay';
 import ArchitectGameModal from './jobchallenges/ArchitectGameModal';
@@ -16,6 +16,7 @@ import MarketingManagerGameModal from './jobchallenges/MarketingManagerGameModal
 import GraphicDesignerGameModal from './jobchallenges/GraphicDesignerGameModal';
 import JournalistGameModal from './jobchallenges/JournalistGameModal';
 import EventPlannerGameModal from './jobchallenges/EventPlannerGameModal';
+import ClassEventSuggestForm from './ClassEventSuggestForm';
 import FinancialManagerGameModal from './jobchallenges/FinancialManagerGameModal';
 import HRDirectorGameModal from './jobchallenges/HRDirectorGameModal';
 import PoliceLieutenantGameModal from './jobchallenges/PoliceLieutenantGameModal';
@@ -36,6 +37,9 @@ import EntrepreneurBusinessProposalModal from './jobchallenges/EntrepreneurBusin
 import EntrepreneurApprovedInstructions from './jobchallenges/EntrepreneurApprovedInstructions';
 import AttendanceRegisterPanel from './AttendanceRegisterPanel';
 import SickNoteApprovalPanel from './SickNoteApprovalPanel';
+import NoticeBoardPanel from './NoticeBoardPanel';
+import CodeBoardPanel from './CodeBoardPanel';
+import TownNewsPanel from './TownNewsPanel';
 
 const MyJobDetails: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
@@ -84,6 +88,11 @@ const MyJobDetails: React.FC = () => {
   const [doctorIllnessAssigning, setDoctorIllnessAssigning] = useState(false);
   const [doctorIllnessError, setDoctorIllnessError] = useState<string | null>(null);
   const [doctorIllnessSuccess, setDoctorIllnessSuccess] = useState<string | null>(null);
+  const [cyberAttackStatus, setCyberAttackStatus] = useState<CyberAttackEngineerStatus | null>(null);
+  const [cyberAttackAssigning, setCyberAttackAssigning] = useState(false);
+  const [cyberAttackError, setCyberAttackError] = useState<string | null>(null);
+  const [cyberAttackSuccess, setCyberAttackSuccess] = useState<string | null>(null);
+  const [seApprovingId, setSeApprovingId] = useState<number | null>(null);
   const [doctorApprovingId, setDoctorApprovingId] = useState<number | null>(null);
   const [testIllness, setTestIllness] = useState<DoctorIllnessType | null>(null);
   const [testIllnessRun, setTestIllnessRun] = useState(0);
@@ -125,10 +134,14 @@ const MyJobDetails: React.FC = () => {
   const [disputeReasonDraft, setDisputeReasonDraft] = useState('');
   const [lawyerDisputingId, setLawyerDisputingId] = useState<number | null>(null);
   const [insuranceBrokerPending, setInsuranceBrokerPending] = useState<InsuranceBrokerPendingRequest[]>([]);
+  const [insuranceBrokerClaims, setInsuranceBrokerClaims] = useState<InsuranceBrokerPendingClaim[]>([]);
+  const [insuranceBrokerCyberClaims, setInsuranceBrokerCyberClaims] = useState<InsuranceBrokerPendingCyberClaim[]>([]);
   const [insuranceBrokerLoading, setInsuranceBrokerLoading] = useState(false);
   const [insuranceBrokerError, setInsuranceBrokerError] = useState<string | null>(null);
   const [insuranceBrokerSuccess, setInsuranceBrokerSuccess] = useState<string | null>(null);
   const [insuranceReviewingId, setInsuranceReviewingId] = useState<number | null>(null);
+  const [insuranceClaimReviewingId, setInsuranceClaimReviewingId] = useState<number | null>(null);
+  const [insuranceCyberClaimReviewingId, setInsuranceCyberClaimReviewingId] = useState<number | null>(null);
 
   const isPoliceJob = (job?.name || '').toLowerCase().trim().includes('police lieutenant');
   const isLawyerJob = (job?.name || '').toLowerCase().trim().includes('lawyer');
@@ -221,6 +234,9 @@ const MyJobDetails: React.FC = () => {
   useEffect(() => {
     if (user && (job?.name || '').toLowerCase().trim().includes('software engineer')) {
       fetchSoftwareEngineerGameStatus();
+      if (user.role === 'student') {
+        fetchCyberAttackStatus();
+      }
     }
   }, [user, job]);
 
@@ -344,15 +360,28 @@ const MyJobDetails: React.FC = () => {
   const fetchInsuranceBrokerPending = async () => {
     try {
       setInsuranceBrokerLoading(true);
-      const response = await insuranceApi.getBrokerPending();
-      setInsuranceBrokerPending(response.data || []);
+      const [requestsRes, claimsRes, cyberClaimsRes] = await Promise.all([
+        insuranceApi.getBrokerPending(),
+        insuranceApi.getBrokerPendingClaims(),
+        insuranceApi.getBrokerPendingCyberClaims(),
+      ]);
+      setInsuranceBrokerPending(requestsRes.data || []);
+      setInsuranceBrokerClaims(claimsRes.data || []);
+      setInsuranceBrokerCyberClaims(cyberClaimsRes.data || []);
       setInsuranceBrokerError(null);
     } catch (err: any) {
       setInsuranceBrokerError(err.response?.data?.error || 'Could not load insurance requests');
       setInsuranceBrokerPending([]);
+      setInsuranceBrokerClaims([]);
+      setInsuranceBrokerCyberClaims([]);
     } finally {
       setInsuranceBrokerLoading(false);
     }
+  };
+
+  const formatBrokerReward = (earnings?: number, xp?: number) => {
+    if (!earnings && !xp) return '';
+    return ` You earned R${(earnings ?? 0).toFixed(2)} and ${xp ?? 0} XP.`;
   };
 
   const handleInsuranceBrokerReview = async (requestId: number, status: 'approved' | 'denied') => {
@@ -365,7 +394,7 @@ const MyJobDetails: React.FC = () => {
       const type = response.data.insurance_type || 'insurance';
       setInsuranceBrokerSuccess(
         status === 'approved'
-          ? `Approved ${type} insurance for ${applicant}. Coverage starts today.`
+          ? `Approved ${type} insurance for ${applicant}. Coverage starts today.${formatBrokerReward(response.data.earnings, response.data.experience_points)}`
           : `Denied ${type} insurance for ${applicant}. Premium refunded.`
       );
       await fetchInsuranceBrokerPending();
@@ -373,6 +402,46 @@ const MyJobDetails: React.FC = () => {
       setInsuranceBrokerError(err.response?.data?.error || 'Could not review insurance request');
     } finally {
       setInsuranceReviewingId(null);
+    }
+  };
+
+  const handleInsuranceClaimReview = async (assignmentId: number, status: 'approved' | 'denied') => {
+    setInsuranceClaimReviewingId(assignmentId);
+    setInsuranceBrokerError(null);
+    setInsuranceBrokerSuccess(null);
+    try {
+      const response = await insuranceApi.reviewBrokerClaim(assignmentId, { status });
+      const patient = response.data.patient_display_name || response.data.patient_username || 'patient';
+      setInsuranceBrokerSuccess(
+        status === 'approved'
+          ? `Approved clinic insurance payment for ${patient}.${formatBrokerReward(response.data.earnings, response.data.experience_points)}`
+          : `Denied clinic insurance payment for ${patient}. They can pay out of pocket instead.`
+      );
+      await fetchInsuranceBrokerPending();
+    } catch (err: any) {
+      setInsuranceBrokerError(err.response?.data?.error || 'Could not review insurance claim');
+    } finally {
+      setInsuranceClaimReviewingId(null);
+    }
+  };
+
+  const handleInsuranceCyberClaimReview = async (assignmentId: number, status: 'approved' | 'denied') => {
+    setInsuranceCyberClaimReviewingId(assignmentId);
+    setInsuranceBrokerError(null);
+    setInsuranceBrokerSuccess(null);
+    try {
+      const response = await insuranceApi.reviewBrokerCyberClaim(assignmentId, { status });
+      const victim = response.data.victim_display_name || response.data.victim_username || 'classmate';
+      setInsuranceBrokerSuccess(
+        status === 'approved'
+          ? `Approved cyber repair insurance payment for ${victim}.${formatBrokerReward(response.data.earnings, response.data.experience_points)}`
+          : `Denied cyber repair insurance payment for ${victim}. They can pay out of pocket instead.`
+      );
+      await fetchInsuranceBrokerPending();
+    } catch (err: any) {
+      setInsuranceBrokerError(err.response?.data?.error || 'Could not review cyber insurance claim');
+    } finally {
+      setInsuranceCyberClaimReviewingId(null);
     }
   };
 
@@ -624,6 +693,54 @@ const MyJobDetails: React.FC = () => {
       setDoctorIllnessError(err.response?.data?.error || 'Could not approve cure');
     } finally {
       setDoctorApprovingId(null);
+    }
+  };
+
+  const fetchCyberAttackStatus = async () => {
+    try {
+      const response = await cyberAttackApi.getEngineerStatus();
+      setCyberAttackStatus(response.data);
+      setCyberAttackError(null);
+    } catch (err: any) {
+      setCyberAttackError(err.response?.data?.error || 'Could not load cyber attack status');
+    }
+  };
+
+  const handleAssignRandomCyberAttack = async () => {
+    setCyberAttackAssigning(true);
+    setCyberAttackError(null);
+    setCyberAttackSuccess(null);
+    try {
+      const response = await cyberAttackApi.assignRandom();
+      const a = response.data.assignment;
+      setCyberAttackSuccess(
+        `${a.victim_display_name} hit by ${a.attack_name}. (${response.data.remaining_today} slots left today)`
+      );
+      await fetchCyberAttackStatus();
+    } catch (err: any) {
+      setCyberAttackError(err.response?.data?.error || 'Could not launch cyber attack');
+    } finally {
+      setCyberAttackAssigning(false);
+    }
+  };
+
+  const handleApproveRepair = async (assignmentId: number) => {
+    setSeApprovingId(assignmentId);
+    setCyberAttackError(null);
+    setCyberAttackSuccess(null);
+    try {
+      const response = await cyberAttackApi.approveRepair(assignmentId);
+      const xpMsg = response.data.new_level
+        ? ` Level up! You are now level ${response.data.new_level}.`
+        : '';
+      setCyberAttackSuccess(
+        `Repaired ${response.data.victim_display_name}. +${response.data.experience_points} XP.${xpMsg}`
+      );
+      await fetchCyberAttackStatus();
+    } catch (err: any) {
+      setCyberAttackError(err.response?.data?.error || 'Could not approve repair');
+    } finally {
+      setSeApprovingId(null);
     }
   };
 
@@ -1432,6 +1549,103 @@ const MyJobDetails: React.FC = () => {
           </div>
         )}
 
+        {(job?.name || '').toLowerCase().trim().includes('software engineer') && (
+          <CodeBoardPanel />
+        )}
+
+        {/* Software Engineer – Cyber attack lab (student SE only) */}
+        {user?.role === 'student' && (job?.name || '').toLowerCase().trim().includes('software engineer') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg p-6 border border-indigo-200">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Cyber Lab — Spyware Pop-up Storm</h3>
+                  <p className="text-sm text-gray-600">
+                    Launch a spyware attack on a random classmate. Up to {cyberAttackStatus?.daily_limit ?? 5} students per town class per day.
+                  </p>
+                  <ul className="text-xs text-gray-500 mt-2 list-disc list-inside space-y-0.5">
+                    <li>Victims see fake &quot;Win a free land plot!&quot; pop-ups</li>
+                    <li>Close with × or wait — clicking the prize spawns more pop-ups</li>
+                    <li>At 20 pop-ups they must call IT (R{cyberAttackStatus?.repair_fee?.toFixed(0) ?? '5000'} or cyber insurance)</li>
+                  </ul>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAssignRandomCyberAttack}
+                  disabled={
+                    cyberAttackAssigning ||
+                    !cyberAttackStatus ||
+                    (cyberAttackStatus.remaining_today ?? 0) <= 0
+                  }
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors shrink-0"
+                >
+                  {cyberAttackAssigning ? 'Launching…' : 'Launch Random Cyber Attack'}
+                </button>
+              </div>
+              {cyberAttackStatus && (
+                <p className="text-sm text-gray-700 mb-2">
+                  Remaining today:{' '}
+                  <span className="font-bold">
+                    {cyberAttackStatus.remaining_today} / {cyberAttackStatus.daily_limit}
+                  </span>
+                </p>
+              )}
+              {cyberAttackSuccess && (
+                <p className="text-sm text-indigo-800 bg-indigo-100 rounded-lg px-3 py-2 mb-2">{cyberAttackSuccess}</p>
+              )}
+              {cyberAttackError && (
+                <p className="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2 mb-2">{cyberAttackError}</p>
+              )}
+              {cyberAttackStatus && cyberAttackStatus.pending_repairs.length > 0 && (
+                <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                  <p className="font-semibold text-gray-900 mb-2">Pending IT repair approvals</p>
+                  <p className="text-xs text-gray-600 mb-3">
+                    Victims paid R{cyberAttackStatus.repair_fee?.toFixed(2) ?? '5000.00'} each. Approve to clear their device
+                    (+{cyberAttackStatus.repair_approve_xp ?? 10} XP per repair).
+                  </p>
+                  <ul className="space-y-2">
+                    {cyberAttackStatus.pending_repairs.map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-amber-200 px-3 py-2"
+                      >
+                        <span className="text-sm text-gray-800">
+                          {r.victim_display_name} — {r.attack_name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleApproveRepair(r.id)}
+                          disabled={seApprovingId === r.id}
+                          className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white text-sm font-semibold px-4 py-2 rounded-lg shrink-0"
+                        >
+                          {seApprovingId === r.id ? 'Approving…' : 'Approve repair'}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {cyberAttackStatus && cyberAttackStatus.recent_assignments.length > 0 && (
+                <div className="text-sm">
+                  <p className="font-medium text-gray-700 mb-2">Today&apos;s cyber attacks</p>
+                  <ul className="space-y-1 text-gray-600">
+                    {cyberAttackStatus.recent_assignments.map((a) => (
+                      <li key={a.id}>
+                        {a.victim_display_name} — {a.attack_name}
+                        {a.attack_status === 'repaired'
+                          ? ' (repaired)'
+                          : a.attack_status === 'pending_repair'
+                            ? ' (awaiting IT approval)'
+                            : ' (active)'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Marketing Manager – Campaign Strategy Challenge */}
         {(job?.name || '').toLowerCase().trim().includes('marketing manager') && (
           <div className="pt-6 border-t border-gray-200">
@@ -1530,6 +1744,10 @@ const MyJobDetails: React.FC = () => {
           </div>
         )}
 
+        {(job?.name || '').toLowerCase().trim().includes('graphic designer') && (
+          <NoticeBoardPanel />
+        )}
+
         {/* Journalist – Data & Reporting Challenge */}
         {(job?.name || '').toLowerCase().trim().includes('journalist') && (
           <div className="pt-6 border-t border-gray-200">
@@ -1579,9 +1797,23 @@ const MyJobDetails: React.FC = () => {
           </div>
         )}
 
-        {/* Event Planner – Event Budget Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('journalist') && (
+          <TownNewsPanel />
+        )}
+
+        {/* Event Planner – class events + budget challenge */}
         {(job?.name || '').toLowerCase().trim().includes('event planner') && (
-          <div className="pt-6 border-t border-gray-200">
+          <div className="pt-6 border-t border-gray-200 space-y-6">
+            <div className="bg-gradient-to-r from-rose-50 to-red-50 rounded-lg p-6 border border-rose-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                <Briefcase className="h-5 w-5 text-rose-600" />
+                Class event suggestions
+              </h3>
+              <p className="text-sm text-gray-600">
+                Suggest fun 5-minute activities for your class to vote on (before, during, or after class).
+              </p>
+              <ClassEventSuggestForm />
+            </div>
             <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg p-6 border border-amber-200">
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -2435,7 +2667,7 @@ const MyJobDetails: React.FC = () => {
                   Insurance Broker — Pending requests
                 </h3>
                 <p className="text-sm text-gray-600">
-                  Classmates in your town must get your approval before insurance coverage starts. Denied requests are refunded automatically.
+                  Approve insurance purchases, clinic claims, and cyber IT repair claims for classmates in your town. You earn R500 and 5 XP for each approval. Denied purchase requests are refunded automatically.
                 </p>
               </div>
               {insuranceBrokerSuccess && (
@@ -2448,47 +2680,138 @@ const MyJobDetails: React.FC = () => {
                 <div className="flex justify-center py-6">
                   <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
                 </div>
-              ) : insuranceBrokerPending.length === 0 ? (
-                <p className="text-sm text-gray-500">No pending insurance requests in your town class.</p>
               ) : (
-                <ul className="space-y-2">
-                  {insuranceBrokerPending.map((req) => {
-                    const displayName =
-                      [req.first_name, req.last_name].filter(Boolean).join(' ') || req.username;
-                    return (
-                      <li
-                        key={req.id}
-                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-teal-200 px-3 py-3"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{displayName}</p>
-                          <p className="text-xs text-gray-600">
-                            {req.insurance_type} • {req.weeks} week(s) • R
-                            {parseFloat(String(req.total_cost)).toFixed(2)}
-                          </p>
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleInsuranceBrokerReview(req.id, 'approved')}
-                            disabled={insuranceReviewingId === req.id}
-                            className="bg-teal-600 hover:bg-teal-700 disabled:bg-gray-300 text-white text-sm font-semibold px-4 py-2 rounded-lg"
+                <>
+                  <div className="mb-6">
+                    <p className="text-sm font-semibold text-gray-900 mb-2">Insurance purchases</p>
+                    {insuranceBrokerPending.length === 0 ? (
+                      <p className="text-sm text-gray-500">No pending insurance purchase requests.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {insuranceBrokerPending.map((req) => {
+                          const displayName =
+                            [req.first_name, req.last_name].filter(Boolean).join(' ') || req.username;
+                          return (
+                            <li
+                              key={req.id}
+                              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-teal-200 px-3 py-3"
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">{displayName}</p>
+                                <p className="text-xs text-gray-600">
+                                  {req.insurance_type} • {req.weeks} week(s) • R
+                                  {parseFloat(String(req.total_cost)).toFixed(2)}
+                                </p>
+                              </div>
+                              <div className="flex gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleInsuranceBrokerReview(req.id, 'approved')}
+                                  disabled={insuranceReviewingId === req.id}
+                                  className="bg-teal-600 hover:bg-teal-700 disabled:bg-gray-300 text-white text-sm font-semibold px-4 py-2 rounded-lg"
+                                >
+                                  {insuranceReviewingId === req.id ? '…' : 'Approve'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleInsuranceBrokerReview(req.id, 'denied')}
+                                  disabled={insuranceReviewingId === req.id}
+                                  className="bg-white border border-red-300 text-red-700 hover:bg-red-50 disabled:bg-gray-100 text-sm font-semibold px-4 py-2 rounded-lg"
+                                >
+                                  Deny
+                                </button>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900 mb-2">Clinic insurance payments</p>
+                    {insuranceBrokerClaims.length === 0 ? (
+                      <p className="text-sm text-gray-500">No pending clinic insurance claims.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {insuranceBrokerClaims.map((claim) => (
+                          <li
+                            key={claim.id}
+                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-cyan-200 px-3 py-3"
                           >
-                            {insuranceReviewingId === req.id ? '…' : 'Approve'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleInsuranceBrokerReview(req.id, 'denied')}
-                            disabled={insuranceReviewingId === req.id}
-                            className="bg-white border border-red-300 text-red-700 hover:bg-red-50 disabled:bg-gray-100 text-sm font-semibold px-4 py-2 rounded-lg"
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{claim.patient_display_name}</p>
+                              <p className="text-xs text-gray-600">
+                                {claim.illness_type} • clinic fee R
+                                {parseFloat(String(claim.cure_fee)).toFixed(2)}
+                              </p>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleInsuranceClaimReview(claim.id, 'approved')}
+                                disabled={insuranceClaimReviewingId === claim.id}
+                                className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-300 text-white text-sm font-semibold px-4 py-2 rounded-lg"
+                              >
+                                {insuranceClaimReviewingId === claim.id ? '…' : 'Approve payment'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleInsuranceClaimReview(claim.id, 'denied')}
+                                disabled={insuranceClaimReviewingId === claim.id}
+                                className="bg-white border border-red-300 text-red-700 hover:bg-red-50 disabled:bg-gray-100 text-sm font-semibold px-4 py-2 rounded-lg"
+                              >
+                                Deny
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div className="mt-6">
+                    <p className="text-sm font-semibold text-gray-900 mb-2">Cyber IT repair insurance payments</p>
+                    {insuranceBrokerCyberClaims.length === 0 ? (
+                      <p className="text-sm text-gray-500">No pending cyber repair insurance claims.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {insuranceBrokerCyberClaims.map((claim) => (
+                          <li
+                            key={claim.id}
+                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-indigo-200 px-3 py-3"
                           >
-                            Deny
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{claim.victim_display_name}</p>
+                              <p className="text-xs text-gray-600">
+                                {claim.attack_type} • IT repair R
+                                {parseFloat(String(claim.repair_fee)).toFixed(2)}
+                              </p>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleInsuranceCyberClaimReview(claim.id, 'approved')}
+                                disabled={insuranceCyberClaimReviewingId === claim.id}
+                                className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white text-sm font-semibold px-4 py-2 rounded-lg"
+                              >
+                                {insuranceCyberClaimReviewingId === claim.id ? '…' : 'Approve payment'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleInsuranceCyberClaimReview(claim.id, 'denied')}
+                                disabled={insuranceCyberClaimReviewingId === claim.id}
+                                className="bg-white border border-red-300 text-red-700 hover:bg-red-50 disabled:bg-gray-100 text-sm font-semibold px-4 py-2 rounded-lg"
+                              >
+                                Deny
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           </div>

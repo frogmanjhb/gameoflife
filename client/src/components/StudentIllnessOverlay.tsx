@@ -177,9 +177,10 @@ const StudentIllnessOverlay: React.FC<StudentIllnessOverlayProps> = ({
   const seeDoctorDelayMs = isTestMode ? DOCTOR_ILLNESS_TEST_SEE_DOCTOR_DELAY_MS : PROD_SEE_DOCTOR_DELAY_MS;
 
   const pendingCure = !isTestMode && !!status?.pending_cure;
+  const pendingInsuranceClaim = !isTestMode && !!status?.pending_insurance_claim;
 
   const canPayForCure = useMemo(() => {
-    if (!isActive || !illnessType || pendingCure) return false;
+    if (!isActive || !illnessType || pendingCure || pendingInsuranceClaim) return false;
     if (isTestMode) {
       return Date.now() >= testStartedAtRef.current + seeDoctorDelayMs;
     }
@@ -191,10 +192,10 @@ const StudentIllnessOverlay: React.FC<StudentIllnessOverlayProps> = ({
       return Date.now() >= new Date(status.assigned_at).getTime() + PROD_SEE_DOCTOR_DELAY_MS;
     }
     return false;
-  }, [isActive, illnessType, isTestMode, status, tick, seeDoctorDelayMs, pendingCure]);
+  }, [isActive, illnessType, isTestMode, status, tick, seeDoctorDelayMs, pendingCure, pendingInsuranceClaim]);
 
   const secondsLeft = useMemo(() => {
-    if (!isActive || canPayForCure || pendingCure) return 0;
+    if (!isActive || canPayForCure || pendingCure || pendingInsuranceClaim) return 0;
     if (isTestMode) {
       return Math.max(
         0,
@@ -208,7 +209,7 @@ const StudentIllnessOverlay: React.FC<StudentIllnessOverlayProps> = ({
       return Math.max(0, Math.ceil((new Date(status.see_doctor_available_at).getTime() - Date.now()) / 1000));
     }
     return 0;
-  }, [isActive, canPayForCure, pendingCure, isTestMode, status, tick, seeDoctorDelayMs]);
+  }, [isActive, canPayForCure, pendingCure, pendingInsuranceClaim, isTestMode, status, tick, seeDoctorDelayMs]);
 
   useEffect(() => {
     if (!isTestMode || !testIllness) {
@@ -258,7 +259,7 @@ const StudentIllnessOverlay: React.FC<StudentIllnessOverlayProps> = ({
     setError(null);
     try {
       const res = await doctorIllnessApi.seeDoctor();
-      if (res.data.pending_cure) {
+      if (res.data.pending_cure || res.data.pending_insurance_claim) {
         await fetchStatus();
       } else {
         setStatus({ active: false });
@@ -307,6 +308,12 @@ const StudentIllnessOverlay: React.FC<StudentIllnessOverlayProps> = ({
           )}
           <p className="text-sm font-semibold text-emerald-900">🤒 {illnessName}</p>
           <p className="text-xs text-gray-600 mt-1">{illnessDescription}</p>
+          {pendingInsuranceClaim && (
+            <p className="text-xs text-cyan-800 mt-2 font-medium">
+              Health insurance claim submitted. Waiting for your town insurance manager to approve payment of R
+              {(status?.cure_fee ?? 5000).toFixed(2)}.
+            </p>
+          )}
           {pendingCure && (
             <p className="text-xs text-amber-800 mt-2 font-medium">
               {status?.health_insurance_covers_clinic
@@ -321,11 +328,13 @@ const StudentIllnessOverlay: React.FC<StudentIllnessOverlayProps> = ({
               Clinic opens in {secondsLeft > 0 ? `${secondsLeft}s` : 'a moment…'}
             </p>
           )}
-          {!pendingCure && canPayForCure && (
+          {!pendingCure && !pendingInsuranceClaim && canPayForCure && (
             <p className="text-xs text-gray-600 mt-2">
               {status?.health_insurance_covers_clinic
-                ? `Clinic fee: $${(status?.cure_fee ?? 5000).toFixed(2)} — covered by your health insurance`
-                : `Clinic fee: $${(status?.cure_fee ?? 5000).toFixed(2)} (paid to your town doctor)`}
+                ? status?.insurance_broker_required
+                  ? `Clinic fee: R${(status?.cure_fee ?? 5000).toFixed(2)} — health insurance will pay after your insurance manager approves`
+                  : `Clinic fee: R${(status?.cure_fee ?? 5000).toFixed(2)} — covered by your health insurance`
+                : `Clinic fee: R${(status?.cure_fee ?? 5000).toFixed(2)} (paid to your town doctor)`}
             </p>
           )}
           {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
@@ -343,8 +352,10 @@ const StudentIllnessOverlay: React.FC<StudentIllnessOverlayProps> = ({
             {curing
               ? 'Visiting…'
               : status?.health_insurance_covers_clinic
-                ? 'See a Doctor — insurance covers fee'
-                : `See a Doctor — $${(status?.cure_fee ?? 5000).toFixed(2)}`}
+                ? status?.insurance_broker_required
+                  ? 'See a Doctor — submit insurance claim'
+                  : 'See a Doctor — insurance covers fee'
+                : `See a Doctor — R${(status?.cure_fee ?? 5000).toFixed(2)}`}
           </button>
         )}
       </div>

@@ -12,13 +12,14 @@ import JobManagement from './admin/JobManagement';
 import TreasuryManagement from './admin/TreasuryManagement';
 import WinkelManagement from './admin/WinkelManagement';
 import TeacherJobTestingTab from './admin/TeacherJobTestingTab';
+import TeacherContentApprovals from './admin/TeacherContentApprovals';
 import StudentManagement from './StudentManagement';
 import PendingStudents from './PendingStudents';
 import { 
   Grid, Settings, Briefcase, Building2, Users, Wallet, 
-  TrendingUp, CreditCard, Megaphone, MapPin, Landmark, Clock, ShoppingBag, GripVertical, CalendarDays
+  TrendingUp, CreditCard, Megaphone, MapPin, Landmark, Clock, ShoppingBag, GripVertical, CalendarDays, FileCheck
 } from 'lucide-react';
-import api from '../services/api';
+import api, { contentSubmissionsApi } from '../services/api';
 import { Student, Loan, Transaction } from '../types';
 
 interface TownStats {
@@ -36,8 +37,9 @@ const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
   const { enabledPlugins, plugins, loading: pluginsLoading, refreshPlugins } = usePlugins();
   const { currentTown, currentTownClass, allTowns, announcements, loading: townLoading, setCurrentTownClass, refreshAnnouncements } = useTown();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs' | 'students' | 'pending' | 'shop'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs' | 'students' | 'pending' | 'shop' | 'submissions'>('dashboard');
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingContentCount, setPendingContentCount] = useState(0);
   const [pendingTransfersCount, setPendingTransfersCount] = useState(0);
   const [tileOrder, setTileOrder] = useState<number[]>([]);
   const [draggedTileId, setDraggedTileId] = useState<number | null>(null);
@@ -149,15 +151,17 @@ const TeacherDashboard: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [studentsRes, loansRes, pendingRes, pendingTransfersRes] = await Promise.all([
+      const [studentsRes, loansRes, pendingRes, pendingTransfersRes, contentRes] = await Promise.all([
         api.get('/students'),
         api.get('/loans'),
         api.get('/students/pending').catch(() => ({ data: [] })),
-        api.get('/transactions/pending-transfers').catch(() => ({ data: [] }))
+        api.get('/transactions/pending-transfers').catch(() => ({ data: [] })),
+        contentSubmissionsApi.getPending().catch(() => ({ data: { pending_count: 0 } })),
       ]);
       setStudents(studentsRes.data);
       setLoans(loansRes.data);
       setPendingCount(pendingRes.data?.length || 0);
+      setPendingContentCount(contentRes.data?.pending_count ?? 0);
       const transfers = pendingTransfersRes.data || [];
       setPendingTransfersCount(transfers.filter((t: { status: string }) => t.status === 'pending').length);
     } catch (error) {
@@ -464,6 +468,7 @@ const TeacherDashboard: React.FC = () => {
             {[
               { id: 'dashboard', label: 'Overview', icon: Grid },
               { id: 'pending', label: 'New Students', icon: Clock, badge: pendingCount },
+              { id: 'submissions', label: 'Content', icon: FileCheck, badge: pendingContentCount },
               { id: 'students', label: 'Students', icon: Users },
               { id: 'treasury', label: 'Treasury', icon: Landmark },
               { id: 'jobs', label: 'Jobs', icon: Briefcase },
@@ -508,6 +513,10 @@ const TeacherDashboard: React.FC = () => {
           {/* Pending Students Tab */}
           {activeTab === 'pending' && (
             <PendingStudents onUpdate={fetchData} />
+          )}
+
+          {activeTab === 'submissions' && (
+            <TeacherContentApprovals onUpdate={fetchData} />
           )}
 
           {/* Students Tab */}

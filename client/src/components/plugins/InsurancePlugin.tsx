@@ -5,7 +5,7 @@ import { Navigate } from 'react-router-dom';
 import {
   Shield, Loader2, AlertCircle, Heart, Wifi, Home, Filter
 } from 'lucide-react';
-import api from '../../services/api';
+import api, { insuranceApi, InsuranceTypeSetting } from '../../services/api';
 
 const INSURANCE_TYPES = [
   { id: 'health' as const, label: 'Health', icon: Heart, color: 'text-red-600', bg: 'bg-red-100' },
@@ -18,6 +18,7 @@ interface Quote {
   rate_percent: number;
   per_type_per_week: number;
   types: string[];
+  type_settings?: InsuranceTypeSetting[];
   broker_required?: boolean;
 }
 
@@ -29,8 +30,9 @@ interface Policy {
   week_start_date: string | null;
   created_at: string;
   active?: boolean;
-  status?: 'pending_broker' | 'approved' | 'denied';
+  status?: 'pending_broker' | 'approved' | 'denied' | 'refunded';
   denial_reason?: string | null;
+  refund_amount?: number | null;
 }
 
 interface TeacherPurchase {
@@ -42,6 +44,8 @@ interface TeacherPurchase {
   week_start_date: string | null;
   created_at: string;
   status?: string;
+  refund_amount?: number | null;
+  refunded_at?: string | null;
   username?: string;
   first_name?: string;
   last_name?: string;
@@ -63,6 +67,9 @@ const InsurancePlugin: React.FC = () => {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [weeks, setWeeks] = useState(1);
   const [purchasing, setPurchasing] = useState(false);
+  const [refundingId, setRefundingId] = useState<number | null>(null);
+  const [typeSettings, setTypeSettings] = useState<InsuranceTypeSetting[]>([]);
+  const [typeSettingsSaving, setTypeSettingsSaving] = useState<string | null>(null);
 
   const [viewFilter, setViewFilter] = useState<'all' | 'class' | 'insurance' | 'individual'>('all');
   const [filterClass, setFilterClass] = useState<string>('');
@@ -80,6 +87,8 @@ const InsurancePlugin: React.FC = () => {
       ]);
       setQuote(quoteRes.data);
       setPolicies(policiesRes.data || []);
+      const enabled = quoteRes.data.types || [];
+      setSelectedTypes((prev) => prev.filter((t) => enabled.includes(t)));
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load insurance data');
     }
@@ -92,12 +101,14 @@ const InsurancePlugin: React.FC = () => {
       if (filterClass) params.class = filterClass;
       if (filterType) params.type = filterType;
       if (filterUsername) params.username = filterUsername;
-      const [purchasesRes, classesRes] = await Promise.all([
+      const [purchasesRes, classesRes, settingsRes] = await Promise.all([
         api.get('/insurance/purchases', { params }),
         api.get('/insurance/classes'),
+        insuranceApi.getTypeSettings(),
       ]);
       setTeacherPurchases(purchasesRes.data || []);
       setClasses(classesRes.data || []);
+      setTypeSettings(settingsRes.data.types || []);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load purchases');
     }
@@ -118,9 +129,37 @@ const InsurancePlugin: React.FC = () => {
   }, [insurancePlugin?.enabled, isTeacher, fetchStudentData, fetchTeacherData]);
 
   const handleTypeToggle = (type: string) => {
+    if (!quote?.types.includes(type)) return;
     setSelectedTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
     );
+  };
+
+  const isTypeEnabledForStudents = (typeId: string) => {
+    if (isTeacher) {
+      const setting = typeSettings.find((t) => t.id === typeId);
+      return setting?.enabled ?? true;
+    }
+    return quote?.types.includes(typeId) ?? true;
+  };
+
+  const handleTeacherTypeToggle = async (typeId: 'health' | 'cyber' | 'property', currentlyEnabled: boolean) => {
+    setTypeSettingsSaving(typeId);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await insuranceApi.setTypeEnabled(typeId, !currentlyEnabled);
+      setTypeSettings(res.data.types || []);
+      setSuccess(
+        !currentlyEnabled
+          ? `${INSURANCE_TYPES.find((t) => t.id === typeId)?.label || typeId} insurance is now available for students.`
+          : `${INSURANCE_TYPES.find((t) => t.id === typeId)?.label || typeId} insurance is now disabled for students.`
+      );
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Could not update insurance type setting');
+    } finally {
+      setTypeSettingsSaving(null);
+    }
   };
 
   const handlePurchase = async () => {
@@ -153,6 +192,38 @@ const InsurancePlugin: React.FC = () => {
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', year: 'numeric' });
 
+  const canTeacherRefund = (purchase: TeacherPurchase) => {
+    const status = (purchase.status || 'approved').toLowerCase();
+    return status === 'approved' || status === 'pending_broker';
+  };
+
+  const teacherRefundAmount = (totalCost: number) =>
+    Math.round(parseFloat(String(totalCost)) * 0.9 * 100) / 100;
+
+  const handleRefund = async (purchase: TeacherPurchase) => {
+    const refundAmount = teacherRefundAmount(parseFloat(String(purchase.total_cost)));
+    const studentName = [purchase.first_name, purchase.last_name].filter(Boolean).join(' ') || purchase.username || 'student';
+    const confirmed = window.confirm(
+      `Refund 90% (${formatCurrency(refundAmount)}) of ${formatCurrency(parseFloat(String(purchase.total_cost)))} to ${studentName}? Coverage will be cancelled.`
+    );
+    if (!confirmed) return;
+
+    setRefundingId(purchase.id);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await insuranceApi.refundPurchase(purchase.id);
+      setSuccess(
+        `Refunded ${formatCurrency(res.data.refund_amount)} (90%) to ${res.data.student_username} for ${res.data.insurance_type} insurance.`
+      );
+      fetchTeacherData();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Refund failed');
+    } finally {
+      setRefundingId(null);
+    }
+  };
+
   if (pluginsLoading || !insurancePlugin) {
     return (
       <div className="flex justify-center py-12">
@@ -175,7 +246,9 @@ const InsurancePlugin: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold">Insurance</h1>
             <p className="text-teal-100">
-              {isTeacher ? 'View all insurance purchases by class, type, or student' : 'Health, cyber and property insurance — 5% of salary per type per week'}
+              {isTeacher
+                ? 'View insurance purchases and refund 90% of premium when needed'
+                : 'Health, cyber and property insurance — 5% of salary per type per week'}
             </p>
           </div>
         </div>
@@ -195,6 +268,36 @@ const InsurancePlugin: React.FC = () => {
 
       {isTeacher ? (
         <>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Available insurance types</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Disable types to stop students from buying them. At least one type must stay available.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {INSURANCE_TYPES.map((t) => {
+                const setting = typeSettings.find((s) => s.id === t.id);
+                const enabled = setting?.enabled ?? true;
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => handleTeacherTypeToggle(t.id, enabled)}
+                    disabled={typeSettingsSaving === t.id}
+                    className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 font-medium transition-colors ${
+                      enabled
+                        ? 'border-teal-400 bg-teal-50 text-teal-800 hover:bg-teal-100'
+                        : 'border-gray-300 bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    } disabled:opacity-60`}
+                  >
+                    <Icon className={`h-5 w-5 ${enabled ? t.color : 'text-gray-400'}`} />
+                    <span>{enabled ? `Disable ${t.label}` : `Enable ${t.label}`}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center gap-2 mb-3">
               <Filter className="h-5 w-5 text-gray-500" />
@@ -285,6 +388,7 @@ const InsurancePlugin: React.FC = () => {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week start</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -308,9 +412,32 @@ const InsurancePlugin: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">{p.weeks}</td>
                         <td className="px-4 py-3 font-semibold text-primary-600">{formatCurrency(parseFloat(String(p.total_cost)))}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 capitalize">{p.status || 'approved'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 capitalize">
+                          {p.status || 'approved'}
+                          {p.status === 'refunded' && p.refund_amount != null && (
+                            <span className="block text-xs text-gray-500">
+                              Refunded {formatCurrency(parseFloat(String(p.refund_amount)))}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-600">{p.week_start_date ? formatDate(p.week_start_date) : '—'}</td>
                         <td className="px-4 py-3 text-sm text-gray-500">{formatDate(p.created_at)}</td>
+                        <td className="px-4 py-3">
+                          {canTeacherRefund(p) ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRefund(p)}
+                              disabled={refundingId === p.id}
+                              className="text-sm font-semibold text-amber-700 hover:text-amber-900 disabled:opacity-50"
+                            >
+                              {refundingId === p.id
+                                ? 'Refunding…'
+                                : `Refund 90% (${formatCurrency(teacherRefundAmount(parseFloat(String(p.total_cost))))})`}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -332,7 +459,7 @@ const InsurancePlugin: React.FC = () => {
               </p>
               {quote.broker_required && (
                 <p className="text-amber-800 bg-amber-50 rounded-lg p-3 text-sm mb-4">
-                  Your town has an insurance broker. Purchases must be approved before coverage starts. Premium is charged when you submit; denied requests are refunded.
+                  Your town has an insurance manager. Purchases and clinic insurance payments need their approval before coverage or payment applies. Premium is charged when you submit; denied purchase requests are refunded.
                 </p>
               )}
               {quote.salary <= 0 && (
@@ -352,20 +479,24 @@ const InsurancePlugin: React.FC = () => {
                 <div className="flex flex-wrap gap-3">
                   {INSURANCE_TYPES.map((t) => {
                     const Icon = t.icon;
+                    const typeEnabled = isTypeEnabledForStudents(t.id);
                     return (
                       <button
                         key={t.id}
                         type="button"
                         onClick={() => handleTypeToggle(t.id)}
-                        disabled={!quote || quote.salary <= 0}
+                        disabled={!quote || quote.salary <= 0 || !typeEnabled}
+                        title={!typeEnabled ? 'This insurance type is disabled by your teacher' : undefined}
                         className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 transition-colors ${
-                          selectedTypes.includes(t.id)
-                            ? 'border-primary-500 bg-primary-50 text-primary-700'
-                            : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                          !typeEnabled
+                            ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                            : selectedTypes.includes(t.id)
+                              ? 'border-primary-500 bg-primary-50 text-primary-700'
+                              : 'border-gray-200 hover:border-gray-300 text-gray-700'
                         } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
-                        <Icon className={`h-5 w-5 ${t.color}`} />
-                        <span>{t.label}</span>
+                        <Icon className={`h-5 w-5 ${typeEnabled ? t.color : 'text-gray-400'}`} />
+                        <span>{t.label}{!typeEnabled ? ' (disabled)' : ''}</span>
                       </button>
                     );
                   })}
@@ -428,6 +559,9 @@ const InsurancePlugin: React.FC = () => {
                             {p.week_start_date ? ` from ${formatDate(p.week_start_date)}` : ''}
                             {' • '}
                             {formatCurrency(parseFloat(String(p.total_cost)))}
+                            {p.status === 'refunded' && p.refund_amount != null && (
+                              <span> • refunded {formatCurrency(parseFloat(String(p.refund_amount)))}</span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -440,6 +574,11 @@ const InsurancePlugin: React.FC = () => {
                         {p.status === 'denied' && (
                           <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-200 text-red-800">
                             Denied
+                          </span>
+                        )}
+                        {p.status === 'refunded' && (
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-800">
+                            Refunded
                           </span>
                         )}
                         {p.active && (

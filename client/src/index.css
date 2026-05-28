@@ -135,6 +135,25 @@
     animation-play-state: paused;
   }
 
+  @keyframes vote-attention {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgb(239 68 68 / 0.35);
+    }
+    50% {
+      transform: scale(1.02);
+      box-shadow: 0 0 16px 4px rgb(239 68 68 / 0.55);
+    }
+  }
+
+  .vote-attention {
+    animation: vote-attention 1.5s ease-in-out infinite;
+  }
+
+  .vote-attention:hover {
+    animation-play-state: paused;
+  }
+
   /* Pushpin Styles */
   .pushpin {
     position: absolute;
@@ -308,6 +327,18 @@ body[data-illness-button-lock='true'] select,
 body[data-illness-button-lock='true'] textarea {
   pointer-events: none !important;
   cursor: not-allowed !important;
+}
+
+/* Spyware pop-up storm (cyber attack) */
+@keyframes spyware-popup-drift {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(6px, -8px); }
+  50% { transform: translate(-4px, 6px); }
+  75% { transform: translate(8px, 4px); }
+}
+
+.spyware-popup-window {
+  animation: spyware-popup-drift 6s ease-in-out infinite;
 }
 
 @layer utilities {

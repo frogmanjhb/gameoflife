@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePlugins } from '../contexts/PluginContext';
 import { useTown } from '../contexts/TownContext';
+import { classEventsApi } from '../services/api';
 import PluginCard from './PluginCard';
 import AnnouncementsPanel from './AnnouncementsPanel';
 import TownInfo from './TownInfo';
@@ -46,6 +47,27 @@ const StudentDashboard: React.FC = () => {
   const pluginsToShow = (canAccessPlugins ? enabledPlugins : enabledPlugins.filter((p) => p.route_path === '/town-rules'))
     .filter((p) => p.route_path !== '/analytics');
   const { currentTown, announcements, loading: townLoading } = useTown();
+
+  const eventVotingEnabled = enabledPlugins.some((p) => p.route_path === '/event-voting');
+  const [eventVotingNeedsVote, setEventVotingNeedsVote] = useState(false);
+
+  useEffect(() => {
+    if (!canAccessPlugins || !eventVotingEnabled || user?.role !== 'student') {
+      setEventVotingNeedsVote(false);
+      return;
+    }
+    const fetchVoteStatus = async () => {
+      try {
+        const res = await classEventsApi.getStatus();
+        setEventVotingNeedsVote(!!res.data.needs_vote);
+      } catch {
+        setEventVotingNeedsVote(false);
+      }
+    };
+    fetchVoteStatus();
+    const interval = setInterval(fetchVoteStatus, 15000);
+    return () => clearInterval(interval);
+  }, [canAccessPlugins, eventVotingEnabled, user?.role]);
   
   // Get header color theme (set once per login session)
   const [headerTheme] = useState(getRandomHeaderColor);
@@ -180,7 +202,11 @@ const StudentDashboard: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {pluginsToShow.map((plugin) => (
-              <PluginCard key={plugin.id} plugin={plugin} />
+              <PluginCard
+                key={plugin.id}
+                plugin={plugin}
+                needsVote={plugin.route_path === '/event-voting' && eventVotingNeedsVote}
+              />
             ))}
           </div>
         )}

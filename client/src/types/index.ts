@@ -716,10 +716,12 @@ export interface DoctorIllnessMyStatus {
   can_see_doctor?: boolean;
   seconds_until_see_doctor?: number;
   pending_cure?: boolean;
+  pending_insurance_claim?: boolean;
   cure_fee?: number;
   doctor_username?: string;
   doctor_display_name?: string;
   health_insurance_covers_clinic?: boolean;
+  insurance_broker_required?: boolean;
 }
 
 export interface DoctorIllnessPendingCure {
@@ -747,6 +749,51 @@ export interface DoctorIllnessDoctorStatus {
     assigned_at: string;
     cured_at: string | null;
     illness_status: 'sick' | 'pending_cure' | 'recovered';
+  }>;
+}
+
+export type CyberAttackType = 'spyware_popup_storm';
+
+export interface CyberAttackMyStatus {
+  active: boolean;
+  attack_type?: CyberAttackType;
+  attack_name?: string;
+  attack_description?: string;
+  assigned_at?: string;
+  pending_repair?: boolean;
+  pending_insurance_claim?: boolean;
+  repair_fee?: number;
+  engineer_username?: string;
+  engineer_display_name?: string;
+  cyber_insurance_covers_repair?: boolean;
+  insurance_broker_required?: boolean;
+}
+
+export interface CyberAttackPendingRepair {
+  id: number;
+  victim_username: string;
+  victim_display_name: string;
+  attack_type: CyberAttackType;
+  attack_name: string;
+  repair_fee: number;
+  repair_requested_at: string;
+}
+
+export interface CyberAttackEngineerStatus {
+  remaining_today: number;
+  daily_limit: number;
+  repair_fee: number;
+  repair_approve_xp: number;
+  pending_repairs: CyberAttackPendingRepair[];
+  recent_assignments: Array<{
+    id: number;
+    victim_username: string;
+    victim_display_name: string;
+    attack_type: CyberAttackType;
+    attack_name: string;
+    assigned_at: string;
+    repaired_at: string | null;
+    attack_status: 'active' | 'pending_repair' | 'repaired';
   }>;
 }
 
@@ -857,6 +904,160 @@ export interface Plugin {
   icon?: string;
   description?: string;
   created_at: string;
+}
+
+export interface NoticeBoardPosterSummary {
+  id: number;
+  title?: string | null;
+  created_at: string;
+  image_data?: string;
+}
+
+export interface NoticeBoardManageStatus {
+  enabled: boolean;
+  poster_count: number;
+  weekly_earnings_per_poster: number;
+  weekly_xp_per_poster: number;
+  potential_weekly_earnings: number;
+  potential_weekly_xp: number;
+  can_collect_weekly: boolean;
+  last_payout_collected_at?: string | null;
+  posters: NoticeBoardPosterSummary[];
+  collected_earnings?: number;
+  collected_experience_points?: number;
+  new_level?: number | null;
+}
+
+export interface NoticeBoardPoster {
+  id: number;
+  title?: string | null;
+  image_data: string;
+  created_at: string;
+}
+
+export interface NoticeBoardPublicView {
+  enabled: boolean;
+  designer_name?: string | null;
+  posters: NoticeBoardPoster[];
+}
+
+export interface CodeBoardAppItem {
+  id: number;
+  title: string;
+  url: string;
+  star_count: number;
+  click_count: number;
+  created_at: string;
+  status?: ContentSubmissionStatus;
+  denial_reason?: string | null;
+  engineer_user_id?: number;
+  engineer_name?: string;
+  is_own_app?: boolean;
+  has_starred?: boolean;
+  has_clicked?: boolean;
+}
+
+export interface CodeBoardManageStatus {
+  apps: CodeBoardAppItem[];
+  max_apps: number;
+  star_xp_reward: number;
+  star_earnings_reward: number;
+  click_xp_reward: number;
+  click_earnings_reward: number;
+}
+
+export interface CodeBoardPublicView {
+  apps: CodeBoardAppItem[];
+  star_xp_reward: number;
+  star_earnings_reward: number;
+  click_xp_reward: number;
+  click_earnings_reward: number;
+}
+
+export type ContentSubmissionStatus = 'pending' | 'approved' | 'denied';
+
+export interface TownNewsStory {
+  id: number;
+  headline: string;
+  body: string;
+  image_data?: string | null;
+  created_at: string;
+  status?: ContentSubmissionStatus;
+  denial_reason?: string | null;
+  journalist_name?: string;
+}
+
+export interface TownNewsManageStatus {
+  stories: TownNewsStory[];
+  story_xp_reward: number;
+  story_earnings_reward: number;
+}
+
+export interface TownNewsPublicView {
+  stories: TownNewsStory[];
+}
+
+export interface PendingNewsStorySubmission {
+  id: number;
+  headline: string;
+  body: string;
+  image_data?: string | null;
+  town_class: string;
+  status: ContentSubmissionStatus;
+  created_at: string;
+  submitter_name: string;
+  submitter_username: string;
+}
+
+export interface PendingCodeAppSubmission {
+  id: number;
+  title: string;
+  url: string;
+  town_class: string;
+  status: ContentSubmissionStatus;
+  created_at: string;
+  submitter_name: string;
+  submitter_username: string;
+}
+
+export interface ContentSubmissionsPending {
+  news_stories: PendingNewsStorySubmission[];
+  code_apps: PendingCodeAppSubmission[];
+  pending_count: number;
+  story_xp_reward: number;
+  story_earnings_reward: number;
+}
+
+export type ClassEventTiming = 'before_class' | 'after_class' | 'during_class';
+
+export interface ClassEventItem {
+  id: number;
+  title: string;
+  description?: string | null;
+  timing: ClassEventTiming;
+  timing_label: string;
+  status: 'open' | 'closed';
+  vote_count: number;
+  has_voted: boolean;
+  suggested_by_user_id: number;
+  suggester_username?: string;
+  suggester_name?: string;
+  created_at: string;
+}
+
+export interface ClassEventVotingStatus {
+  teacher_board_enabled: boolean;
+  student_board_visible: boolean;
+  board_active: boolean;
+  is_event_planner: boolean;
+  suggestions_this_week: number;
+  suggestions_per_week: number;
+  remaining_suggestions: number;
+  suggestion_xp_reward: number;
+  suggestion_earnings_reward: number;
+  events: ClassEventItem[];
+  needs_vote: boolean;
+  town_class?: string;
 }
 
 export interface Announcement {

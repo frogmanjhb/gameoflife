@@ -24,6 +24,9 @@
     "migrate:doctor-illness": "node run-sql-migration.js migrations/076_add_doctor_illness_tables.sql",
     "migrate:doctor-illness-cure": "node run-sql-migration.js migrations/077_add_doctor_illness_cure_flow.sql",
     "migrate:insurance-broker": "node run-sql-migration.js migrations/078_add_insurance_broker_approval.sql",
+    "migrate:insurance-clinic-claims": "node run-sql-migration.js migrations/079_insurance_clinic_claim_approval.sql",
+    "migrate:insurance-teacher-refund": "node run-sql-migration.js migrations/080_add_insurance_teacher_refund.sql",
+    "migrate:insurance-type-settings": "node run-sql-migration.js migrations/081_insurance_type_settings.sql",
     "migrate:accountant-assignments": "node run-sql-migration.js migrations/079_accountant_student_assignments.sql",
     "migrate:accountant-assignments-m2m": "node run-sql-migration.js migrations/080_accountant_assignments_many_to_many.sql",
     "migrate:lawyer-assignments": "node run-sql-migration.js migrations/081_lawyer_student_assignments.sql",
@@ -32,7 +35,13 @@
     "migrate:lawyer-fines-status-fix": "node run-sql-migration.js migrations/084_police_fine_bonus_status_fix.sql",
     "migrate:lawyer-fines-columns": "node run-sql-migration.js migrations/085_police_fine_bonus_lawyer_columns.sql",
     "migrate:land-purchase-fm": "node run-sql-migration.js migrations/086_land_purchase_fm_step.sql",
-    "migrate:attendance-register": "node run-sql-migration.js migrations/087_attendance_register_sick_notes.sql"
+    "migrate:attendance-register": "node run-sql-migration.js migrations/087_attendance_register_sick_notes.sql",
+    "migrate:notice-board": "node run-sql-migration.js migrations/088_add_notice_board.sql",
+    "migrate:class-event-voting": "node run-sql-migration.js migrations/089_add_class_event_voting.sql",
+    "migrate:code-board": "node run-sql-migration.js migrations/090_add_code_board.sql",
+    "migrate:town-news-board": "node run-sql-migration.js migrations/091_add_town_news_board.sql",
+    "migrate:content-submission-approval": "node run-sql-migration.js migrations/092_add_content_submission_approval.sql",
+    "migrate:cyber-attack": "node run-sql-migration.js migrations/093_add_cyber_attack_tables.sql"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
