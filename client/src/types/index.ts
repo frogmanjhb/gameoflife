@@ -952,6 +952,42 @@ export interface AccountantAssignmentStudent {
   class?: string;
 }
 
+export interface AccountantAssignmentLink {
+  accountant_user_id: number;
+  accountant_username: string;
+  accountant_first_name?: string | null;
+  accountant_last_name?: string | null;
+}
+
+export interface AccountantAssignableStudent extends AccountantAssignmentStudent {
+  job_name?: string | null;
+  assigned_accountants: AccountantAssignmentLink[];
+}
+
+export interface TeacherAccountantAssignmentsResponse {
+  clients: AccountantAssignmentStudent[];
+  assignable: AccountantAssignableStudent[];
+  manual_mode: boolean;
+}
+
+export interface LawyerAssignmentLink {
+  lawyer_user_id: number;
+  lawyer_username: string;
+  lawyer_first_name?: string | null;
+  lawyer_last_name?: string | null;
+}
+
+export interface LawyerAssignableStudent extends AccountantAssignmentStudent {
+  job_name?: string | null;
+  assigned_lawyers: LawyerAssignmentLink[];
+}
+
+export interface TeacherLawyerAssignmentsResponse {
+  clients: AccountantAssignmentStudent[];
+  assignable: LawyerAssignableStudent[];
+  manual_mode: boolean;
+}
+
 export type QuestionType = 'short_answer' | 'long_answer' | 'multiple_choice' | 'yes_no';
 
 export interface ApplicationQuestion {

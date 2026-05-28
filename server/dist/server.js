@@ -36,6 +36,7 @@ const principal_game_1 = __importDefault(require("./routes/jobchallenges/princip
 const teacher_game_1 = __importDefault(require("./routes/jobchallenges/teacher-game"));
 const nurse_game_1 = __importDefault(require("./routes/jobchallenges/nurse-game"));
 const doctor_game_1 = __importDefault(require("./routes/jobchallenges/doctor-game"));
+const doctor_illness_1 = __importDefault(require("./routes/doctor-illness"));
 const retail_manager_game_1 = __importDefault(require("./routes/jobchallenges/retail-manager-game"));
 const entrepreneur_game_1 = __importDefault(require("./routes/jobchallenges/entrepreneur-game"));
 const plugins_1 = __importDefault(require("./routes/plugins"));
@@ -182,6 +183,7 @@ app.use('/api/principal-game', principal_game_1.default);
 app.use('/api/teacher-game', teacher_game_1.default);
 app.use('/api/nurse-game', nurse_game_1.default);
 app.use('/api/doctor-game', doctor_game_1.default);
+app.use('/api/doctor-illness', doctor_illness_1.default);
 app.use('/api/retail-manager-game', retail_manager_game_1.default);
 app.use('/api/entrepreneur-game', entrepreneur_game_1.default);
 app.use('/api/plugins', plugins_1.default);
@@ -992,6 +994,40 @@ async function initializeDatabase() {
         }
         catch (migrationError) {
             console.log('⚠️ Wordle and chore toggles migration may have already been applied:', migrationError);
+        }
+        // Doctor illness assignments
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '076_add_doctor_illness_tables.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Doctor illness tables migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Doctor illness tables migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '077_add_doctor_illness_cure_flow.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Doctor illness cure flow migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Doctor illness cure flow migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '078_add_insurance_broker_approval.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Insurance broker approval migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Insurance broker approval migration may have already been applied:', migrationError);
         }
         // Police fines/bonuses requests table
         try {

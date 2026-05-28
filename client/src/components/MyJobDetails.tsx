@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
-  Award, FileText, TrendingUp, Loader2, AlertCircle, Play, CheckCircle, XCircle, Users, Shield 
+  Award, FileText, TrendingUp, Loader2, AlertCircle, Play, CheckCircle, XCircle, Users, Shield, Scale
 } from 'lucide-react';
-import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, doctorIllnessApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi, policeFinesBonusesApi, insuranceApi, InsuranceBrokerPendingRequest } from '../services/api';
+import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, doctorIllnessApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi, policeFinesBonusesApi, insuranceApi, InsuranceBrokerPendingRequest, PoliceFineBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, RetailManagerGameStatus, EntrepreneurGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
@@ -111,8 +111,17 @@ const MyJobDetails: React.FC = () => {
   const [policeStudents, setPoliceStudents] = useState<{ id: number; username: string; first_name: string | null; last_name: string | null; class: string | null }[]>([]);
   const [policeStudentsLoading, setPoliceStudentsLoading] = useState(false);
   const [policeSelectedUsername, setPoliceSelectedUsername] = useState('');
-  const [policeHistory, setPoliceHistory] = useState<import('../services/api').PoliceFineBonus[]>([]);
+  const [policeHistory, setPoliceHistory] = useState<PoliceFineBonus[]>([]);
   const [policeHistoryLoading, setPoliceHistoryLoading] = useState(false);
+  const [policeEvidenceDraft, setPoliceEvidenceDraft] = useState<Record<number, string>>({});
+  const [policeEvidenceSubmitting, setPoliceEvidenceSubmitting] = useState<number | null>(null);
+  const [lawyerQueue, setLawyerQueue] = useState<PoliceFineBonus[]>([]);
+  const [lawyerQueueLoading, setLawyerQueueLoading] = useState(false);
+  const [lawyerQueueError, setLawyerQueueError] = useState<string | null>(null);
+  const [lawyerReviewingId, setLawyerReviewingId] = useState<number | null>(null);
+  const [lawyerNotesDraft, setLawyerNotesDraft] = useState('');
+  const [disputeReasonDraft, setDisputeReasonDraft] = useState('');
+  const [lawyerDisputingId, setLawyerDisputingId] = useState<number | null>(null);
   const [insuranceBrokerPending, setInsuranceBrokerPending] = useState<InsuranceBrokerPendingRequest[]>([]);
   const [insuranceBrokerLoading, setInsuranceBrokerLoading] = useState(false);
   const [insuranceBrokerError, setInsuranceBrokerError] = useState<string | null>(null);
@@ -120,7 +129,43 @@ const MyJobDetails: React.FC = () => {
   const [insuranceReviewingId, setInsuranceReviewingId] = useState<number | null>(null);
 
   const isPoliceJob = (job?.name || '').toLowerCase().trim().includes('police lieutenant');
+  const isLawyerJob = (job?.name || '').toLowerCase().trim().includes('lawyer');
   const isInsuranceBrokerJob = (job?.name || '').toLowerCase().trim().includes('insurance');
+
+  const formatFineBonusStatus = (status: string) => {
+    switch (status) {
+      case 'pending_lawyer': return 'Lawyer review';
+      case 'pending_teacher': return 'Teacher approval';
+      case 'disputed': return 'Disputed';
+      default: return status;
+    }
+  };
+
+  const fetchLawyerQueue = async () => {
+    try {
+      setLawyerQueueLoading(true);
+      setLawyerQueueError(null);
+      const res = await policeFinesBonusesApi.getLawyerQueue();
+      setLawyerQueue(res.data || []);
+    } catch (err: any) {
+      setLawyerQueueError(err.response?.data?.error || 'Failed to load client fines and bonuses');
+      setLawyerQueue([]);
+    } finally {
+      setLawyerQueueLoading(false);
+    }
+  };
+
+  const refreshPoliceHistory = async () => {
+    try {
+      setPoliceHistoryLoading(true);
+      const res = await policeFinesBonusesApi.getMyHistory();
+      setPoliceHistory(res.data || []);
+    } catch {
+      setPoliceHistory([]);
+    } finally {
+      setPoliceHistoryLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!isPoliceJob) return;
@@ -140,19 +185,13 @@ const MyJobDetails: React.FC = () => {
 
   useEffect(() => {
     if (!isPoliceJob) return;
-    const loadHistory = async () => {
-      try {
-        setPoliceHistoryLoading(true);
-        const res = await policeFinesBonusesApi.getMyHistory();
-        setPoliceHistory(res.data || []);
-      } catch {
-        setPoliceHistory([]);
-      } finally {
-        setPoliceHistoryLoading(false);
-      }
-    };
-    loadHistory();
+    refreshPoliceHistory();
   }, [isPoliceJob]);
+
+  useEffect(() => {
+    if (!isLawyerJob) return;
+    fetchLawyerQueue();
+  }, [isLawyerJob]);
 
   useEffect(() => {
     if (jobId) {
@@ -934,9 +973,61 @@ const MyJobDetails: React.FC = () => {
                         {h.description && (
                           <p className="text-gray-600 mt-0.5 truncate">{h.description}</p>
                         )}
+                        {h.status === 'disputed' && h.dispute_reason && (
+                          <p className="text-xs text-amber-800 mt-1">
+                            <span className="font-medium">Lawyer dispute:</span> {h.dispute_reason}
+                          </p>
+                        )}
+                        {h.police_evidence_response && (
+                          <p className="text-xs text-gray-600 mt-1">
+                            <span className="font-medium">Your evidence:</span> {h.police_evidence_response}
+                          </p>
+                        )}
                         <p className="text-xs text-gray-400 mt-0.5">
                           {new Date(h.created_at).toLocaleDateString()}
                         </p>
+                        {h.status === 'disputed' && (
+                          <div className="mt-2 space-y-2">
+                            <textarea
+                              value={policeEvidenceDraft[h.id] ?? ''}
+                              onChange={(e) =>
+                                setPoliceEvidenceDraft((prev) => ({ ...prev, [h.id]: e.target.value }))
+                              }
+                              placeholder="Add evidence to support this fine (required)..."
+                              className="input-field w-full text-sm"
+                              rows={2}
+                            />
+                            <button
+                              type="button"
+                              disabled={policeEvidenceSubmitting === h.id || !(policeEvidenceDraft[h.id] || '').trim()}
+                              onClick={async () => {
+                                setPoliceEvidenceSubmitting(h.id);
+                                setPoliceError(null);
+                                setPoliceSuccess(null);
+                                try {
+                                  await policeFinesBonusesApi.submitPoliceEvidence(
+                                    h.id,
+                                    (policeEvidenceDraft[h.id] || '').trim()
+                                  );
+                                  setPoliceSuccess('Evidence submitted — sent back to lawyer');
+                                  setPoliceEvidenceDraft((prev) => {
+                                    const next = { ...prev };
+                                    delete next[h.id];
+                                    return next;
+                                  });
+                                  refreshPoliceHistory();
+                                } catch (err: any) {
+                                  setPoliceError(err.response?.data?.error || 'Failed to submit evidence');
+                                } finally {
+                                  setPoliceEvidenceSubmitting(null);
+                                }
+                              }}
+                              className="btn-primary text-sm disabled:opacity-50"
+                            >
+                              {policeEvidenceSubmitting === h.id ? 'Submitting...' : 'Submit evidence to lawyer'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <span
                         className={`ml-3 shrink-0 text-xs font-semibold px-2 py-1 rounded-full ${
@@ -944,10 +1035,12 @@ const MyJobDetails: React.FC = () => {
                             ? 'bg-green-200 text-green-800'
                             : h.status === 'denied'
                             ? 'bg-red-200 text-red-800'
+                            : h.status === 'disputed'
+                            ? 'bg-orange-200 text-orange-800'
                             : 'bg-amber-200 text-amber-800'
                         }`}
                       >
-                        {h.status.toUpperCase()}
+                        {formatFineBonusStatus(h.status).toUpperCase()}
                       </span>
                     </div>
                   ))}
@@ -1712,6 +1805,194 @@ const MyJobDetails: React.FC = () => {
                     <div className="text-gray-500">Hard High Score</div>
                     <div className="text-lg font-bold text-gray-900">{lawyerGameStatus.high_scores?.hard ?? 0}</div>
                   </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 bg-gradient-to-r from-indigo-50 to-violet-50 rounded-lg p-6 border border-indigo-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                <Scale className="h-5 w-5 text-indigo-600" />
+                Client Fines &amp; Bonuses
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Review police fines and bonuses for your assigned clients. Approve to send to teacher; dispute a fine to request more evidence from police.
+              </p>
+              {lawyerQueueError && (
+                <p className="text-sm text-red-600 mb-2">{lawyerQueueError}</p>
+              )}
+              {lawyerQueueLoading ? (
+                <div className="flex items-center gap-2 text-gray-600 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading queue...</span>
+                </div>
+              ) : lawyerQueue.length === 0 ? (
+                <p className="text-sm text-gray-600">No pending fines or bonuses for your clients.</p>
+              ) : (
+                <div className="space-y-4">
+                  {lawyerQueue.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`rounded-lg p-4 border ${
+                        item.type === 'fine' ? 'bg-white border-red-200' : 'bg-white border-green-200'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full ${
+                          item.type === 'fine' ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'
+                        }`}>
+                          {item.type}
+                        </span>
+                        <span className="font-medium text-gray-900">
+                          {item.target_first_name && item.target_last_name
+                            ? `${item.target_first_name} ${item.target_last_name}`
+                            : item.target_username}
+                        </span>
+                        <span className="font-semibold">R{Number(item.amount).toFixed(2)}</span>
+                      </div>
+                      {item.description && (
+                        <p className="text-sm text-gray-700 mb-1">{item.description}</p>
+                      )}
+                      {item.police_evidence_response && (
+                        <p className="text-sm text-gray-600 mb-1">
+                          <span className="font-medium">Police evidence:</span> {item.police_evidence_response}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 mb-3">
+                        Police: {item.submitted_by_first_name || item.submitted_by_username}
+                        {' · '}Teacher initials: {item.teacher_initials}
+                      </p>
+                      {lawyerDisputingId === item.id ? (
+                        <div className="space-y-2 mb-3">
+                          <textarea
+                            value={disputeReasonDraft}
+                            onChange={(e) => setDisputeReasonDraft(e.target.value)}
+                            placeholder="Why is this fine disputed? (required)"
+                            className="input-field w-full text-sm"
+                            rows={2}
+                          />
+                          <textarea
+                            value={lawyerNotesDraft}
+                            onChange={(e) => setLawyerNotesDraft(e.target.value)}
+                            placeholder="Optional notes for police/teacher"
+                            className="input-field w-full text-sm"
+                            rows={2}
+                          />
+                        </div>
+                      ) : (
+                        <textarea
+                          value={lawyerReviewingId === item.id ? lawyerNotesDraft : ''}
+                          onChange={(e) => {
+                            setLawyerReviewingId(item.id);
+                            setLawyerNotesDraft(e.target.value);
+                          }}
+                          placeholder="Optional legal notes"
+                          className="input-field w-full text-sm mb-3"
+                          rows={2}
+                        />
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {lawyerDisputingId === item.id ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={lawyerReviewingId === item.id && !disputeReasonDraft.trim()}
+                              onClick={async () => {
+                                if (!disputeReasonDraft.trim()) return;
+                                setLawyerReviewingId(item.id);
+                                try {
+                                  await policeFinesBonusesApi.dispute(
+                                    item.id,
+                                    disputeReasonDraft.trim(),
+                                    lawyerNotesDraft.trim() || undefined
+                                  );
+                                  setLawyerDisputingId(null);
+                                  setDisputeReasonDraft('');
+                                  setLawyerNotesDraft('');
+                                  fetchLawyerQueue();
+                                } catch (err: any) {
+                                  setLawyerQueueError(err.response?.data?.error || 'Failed to dispute');
+                                } finally {
+                                  setLawyerReviewingId(null);
+                                }
+                              }}
+                              className="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700"
+                            >
+                              Send dispute to Police
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLawyerDisputingId(null);
+                                setDisputeReasonDraft('');
+                              }}
+                              className="px-3 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              disabled={lawyerReviewingId === item.id}
+                              onClick={async () => {
+                                setLawyerReviewingId(item.id);
+                                try {
+                                  await policeFinesBonusesApi.lawyerApprove(
+                                    item.id,
+                                    lawyerNotesDraft.trim() || undefined
+                                  );
+                                  setLawyerNotesDraft('');
+                                  fetchLawyerQueue();
+                                } catch (err: any) {
+                                  setLawyerQueueError(err.response?.data?.error || 'Failed to approve');
+                                } finally {
+                                  setLawyerReviewingId(null);
+                                }
+                              }}
+                              className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700 disabled:opacity-50"
+                            >
+                              Approve for teacher
+                            </button>
+                            <button
+                              type="button"
+                              disabled={lawyerReviewingId === item.id}
+                              onClick={async () => {
+                                setLawyerReviewingId(item.id);
+                                try {
+                                  await policeFinesBonusesApi.lawyerDeny(
+                                    item.id,
+                                    lawyerNotesDraft.trim() || undefined
+                                  );
+                                  setLawyerNotesDraft('');
+                                  fetchLawyerQueue();
+                                } catch (err: any) {
+                                  setLawyerQueueError(err.response?.data?.error || 'Failed to deny');
+                                } finally {
+                                  setLawyerReviewingId(null);
+                                }
+                              }}
+                              className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
+                            >
+                              Deny
+                            </button>
+                            {item.type === 'fine' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLawyerDisputingId(item.id);
+                                  setDisputeReasonDraft('');
+                                }}
+                                className="px-3 py-2 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700"
+                              >
+                                Dispute fine
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

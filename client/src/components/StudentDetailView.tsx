@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   User, Briefcase, Home, CreditCard, TrendingUp, TrendingDown, DollarSign, Plus, Minus,
   ArrowLeft, MapPin, Gamepad2, Pizza, ShoppingBag, FileText, Calendar,
-  Clock, CheckCircle, XCircle, AlertCircle, Loader, Building2, Shield
+  Clock, CheckCircle, XCircle, AlertCircle, Loader, Building2, Shield, Users, UserPlus, Scale
 } from 'lucide-react';
-import api, { jobsApi } from '../services/api';
+import api, { jobsApi, studentsAccountantApi, studentsLawyerApi } from '../services/api';
+import type { AccountantAssignmentStudent, AccountantAssignableStudent, LawyerAssignableStudent } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { getDisplayJobTitle } from '../utils/jobDisplay';
 
@@ -184,10 +185,50 @@ const StudentDetailView: React.FC = () => {
   const [showRemoveXpForm, setShowRemoveXpForm] = useState(false);
   const [moneyAmount, setMoneyAmount] = useState('');
   const [xpAmount, setXpAmount] = useState('');
+  const [accountantClients, setAccountantClients] = useState<AccountantAssignmentStudent[]>([]);
+  const [accountantAssignable, setAccountantAssignable] = useState<AccountantAssignableStudent[]>([]);
+  const [accountantManualMode, setAccountantManualMode] = useState(false);
+  const [accountantAssignmentsLoading, setAccountantAssignmentsLoading] = useState(false);
+  const [accountantAssignmentsError, setAccountantAssignmentsError] = useState('');
+  const [accountantAssignmentActionError, setAccountantAssignmentActionError] = useState('');
+  const [selectedStudentToAdd, setSelectedStudentToAdd] = useState('');
+  const [accountantAssignmentSaving, setAccountantAssignmentSaving] = useState(false);
+  const [lawyerClients, setLawyerClients] = useState<AccountantAssignmentStudent[]>([]);
+  const [lawyerAssignable, setLawyerAssignable] = useState<LawyerAssignableStudent[]>([]);
+  const [lawyerManualMode, setLawyerManualMode] = useState(false);
+  const [lawyerAssignmentsLoading, setLawyerAssignmentsLoading] = useState(false);
+  const [lawyerAssignmentsError, setLawyerAssignmentsError] = useState('');
+  const [lawyerAssignmentActionError, setLawyerAssignmentActionError] = useState('');
+  const [selectedLawyerStudentToAdd, setSelectedLawyerStudentToAdd] = useState('');
+  const [lawyerAssignmentSaving, setLawyerAssignmentSaving] = useState(false);
+
+  const isAccountantJob = (jobName?: string | null) =>
+    (jobName || '').toLowerCase().includes('accountant');
+  const isLawyerJob = (jobName?: string | null) => {
+    const n = (jobName || '').toLowerCase();
+    return n.includes('lawyer');
+  };
 
   useEffect(() => {
     fetchStudentDetails();
   }, [identifier]);
+
+  const fetchAccountantAssignments = async (username: string) => {
+    try {
+      setAccountantAssignmentsLoading(true);
+      setAccountantAssignmentsError('');
+      const response = await studentsAccountantApi.getAssignments(username);
+      setAccountantClients(response.data.clients || []);
+      setAccountantAssignable(response.data.assignable || []);
+      setAccountantManualMode(response.data.manual_mode);
+    } catch (err: any) {
+      setAccountantAssignmentsError(err.response?.data?.error || 'Failed to load accountant assignments');
+      setAccountantClients([]);
+      setAccountantAssignable([]);
+    } finally {
+      setAccountantAssignmentsLoading(false);
+    }
+  };
 
   const fetchStudentDetails = async () => {
     try {
@@ -221,12 +262,91 @@ const StudentDetailView: React.FC = () => {
       }
       
       setData(response.data);
+      const loadedStudent = response.data?.student;
+      if (isTeacher && loadedStudent?.username && isAccountantJob(loadedStudent.job_name)) {
+        fetchAccountantAssignments(loadedStudent.username);
+      } else {
+        setAccountantClients([]);
+        setAccountantAssignable([]);
+        setAccountantAssignmentsError('');
+      }
+      if (isTeacher && loadedStudent?.username && isLawyerJob(loadedStudent.job_name)) {
+        fetchLawyerAssignments(loadedStudent.username);
+      } else {
+        setLawyerClients([]);
+        setLawyerAssignable([]);
+        setLawyerAssignmentsError('');
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load student details');
     } finally {
       setLoading(false);
     }
   };
+
+  const fetchLawyerAssignments = async (username: string) => {
+    try {
+      setLawyerAssignmentsLoading(true);
+      setLawyerAssignmentsError('');
+      const response = await studentsLawyerApi.getAssignments(username);
+      setLawyerClients(response.data.clients || []);
+      setLawyerAssignable(response.data.assignable || []);
+      setLawyerManualMode(response.data.manual_mode);
+    } catch (err: any) {
+      setLawyerAssignmentsError(err.response?.data?.error || 'Failed to load lawyer assignments');
+      setLawyerClients([]);
+      setLawyerAssignable([]);
+    } finally {
+      setLawyerAssignmentsLoading(false);
+    }
+  };
+
+  const handleLawyerAssignment = async (
+    lawyerUsername: string,
+    targetStudentId: number,
+    action: 'add' | 'remove'
+  ) => {
+    try {
+      setLawyerAssignmentSaving(true);
+      setLawyerAssignmentActionError('');
+      await studentsLawyerApi.updateAssignment(lawyerUsername, targetStudentId, action);
+      if (action === 'add') setSelectedLawyerStudentToAdd('');
+      await fetchLawyerAssignments(lawyerUsername);
+    } catch (err: any) {
+      setLawyerAssignmentActionError(err.response?.data?.error || 'Failed to update assignment');
+    } finally {
+      setLawyerAssignmentSaving(false);
+    }
+  };
+
+  const handleAccountantAssignment = async (
+    accountantUsername: string,
+    targetStudentId: number,
+    action: 'add' | 'remove'
+  ) => {
+    try {
+      setAccountantAssignmentSaving(true);
+      setAccountantAssignmentActionError('');
+      const response = await studentsAccountantApi.updateAssignment(accountantUsername, targetStudentId, action);
+      setAccountantClients(response.data.clients || []);
+      setAccountantManualMode(response.data.manual_mode);
+      if (action === 'add') {
+        setSelectedStudentToAdd('');
+      }
+      await fetchAccountantAssignments(accountantUsername);
+    } catch (err: any) {
+      setAccountantAssignmentActionError(err.response?.data?.error || 'Failed to update assignment');
+    } finally {
+      setAccountantAssignmentSaving(false);
+    }
+  };
+
+  const formatStudentDisplayName = (s: {
+    first_name?: string;
+    last_name?: string;
+    username: string;
+  }) =>
+    s.first_name && s.last_name ? `${s.first_name} ${s.last_name}` : s.username;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-ZA', {
@@ -858,6 +978,230 @@ const StudentDetailView: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {isTeacher && student?.username && isAccountantJob(student.job_name) && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Assigned Students</h3>
+                    <p className="text-sm text-gray-500">
+                      Students and other accountants this role reviews for transfer approvals. Links can overlap across multiple accountants.
+                      {accountantManualMode ? ' (teacher-managed)' : ' (auto-distributed until you change assignments)'}
+                    </p>
+                  </div>
+                </div>
+
+                {accountantAssignmentsLoading && (
+                  <div className="flex items-center gap-2 text-gray-600 text-sm">
+                    <Loader className="h-4 w-4 animate-spin" />
+                    <span>Loading assignments...</span>
+                  </div>
+                )}
+
+                {accountantAssignmentsError && !accountantAssignmentsLoading && (
+                  <p className="text-sm text-red-600">{accountantAssignmentsError}</p>
+                )}
+
+                {accountantAssignmentActionError && (
+                  <p className="text-sm text-red-600 mb-2">{accountantAssignmentActionError}</p>
+                )}
+
+                {!accountantAssignmentsLoading && !accountantAssignmentsError && (
+                  <>
+                    {accountantClients.length > 0 ? (
+                      <ul className="space-y-2 mb-4">
+                        {accountantClients.map((client) => (
+                          <li
+                            key={client.id}
+                            className="flex items-center justify-between gap-3 py-2 px-3 bg-gray-50 rounded-lg"
+                          >
+                            <span className="text-sm font-medium text-gray-900">
+                              {formatStudentDisplayName(client)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleAccountantAssignment(student!.username!, client.id, 'remove')}
+                              disabled={accountantAssignmentSaving}
+                              className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50 flex items-center gap-1"
+                            >
+                              <Minus className="h-3 w-3" />
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-gray-600 mb-4">No students assigned yet.</p>
+                    )}
+
+                    {accountantAssignable.length > 0 && (
+                      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                        <div className="flex-1">
+                          <label className="text-sm text-gray-500 block mb-1">Add student or accountant from town class</label>
+                          <select
+                            value={selectedStudentToAdd}
+                            onChange={(e) => setSelectedStudentToAdd(e.target.value)}
+                            className="input-field w-full"
+                            disabled={accountantAssignmentSaving}
+                          >
+                            <option value="">Select a student...</option>
+                            {accountantAssignable
+                              .filter((s) => !accountantClients.some((c) => c.id === s.id))
+                              .map((s) => {
+                              const isAccountantPeer = (s.job_name || '').toLowerCase().includes('accountant');
+                              const name = `${formatStudentDisplayName(s)}${isAccountantPeer ? ' (Accountant)' : ''}`;
+                              const otherAccountants = (s.assigned_accountants ?? []).filter(
+                                (a) => a.accountant_user_id !== student?.id
+                              );
+                              const formatAccountantName = (a: {
+                                accountant_first_name?: string | null;
+                                accountant_last_name?: string | null;
+                                accountant_username: string;
+                              }) =>
+                                a.accountant_first_name && a.accountant_last_name
+                                  ? `${a.accountant_first_name} ${a.accountant_last_name}`
+                                  : a.accountant_username;
+                              const assignedLabel =
+                                otherAccountants.length > 0
+                                  ? ` — also with ${otherAccountants.map(formatAccountantName).join(', ')}`
+                                  : '';
+                              return (
+                                <option key={s.id} value={String(s.id)}>
+                                  {name}{assignedLabel}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const id = parseInt(selectedStudentToAdd, 10);
+                            if (id) handleAccountantAssignment(student!.username!, id, 'add');
+                          }}
+                          disabled={accountantAssignmentSaving || !selectedStudentToAdd}
+                          className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          <UserPlus className="h-4 w-4" />
+                          <span>Add Student</span>
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {isTeacher && student?.username && isLawyerJob(student.job_name) && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <Scale className="h-5 w-5 text-indigo-600" />
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Assigned Clients</h3>
+                    <p className="text-sm text-gray-500">
+                      Students (and other lawyers) this lawyer represents for fines and bonuses (~10 each with overlap).
+                      {lawyerManualMode ? ' (teacher-managed)' : ' (auto-distributed until you change assignments)'}
+                    </p>
+                  </div>
+                </div>
+
+                {lawyerAssignmentsLoading && (
+                  <div className="flex items-center gap-2 text-gray-600 text-sm">
+                    <Loader className="h-4 w-4 animate-spin" />
+                    <span>Loading assignments...</span>
+                  </div>
+                )}
+
+                {lawyerAssignmentsError && !lawyerAssignmentsLoading && (
+                  <p className="text-sm text-red-600">{lawyerAssignmentsError}</p>
+                )}
+
+                {lawyerAssignmentActionError && (
+                  <p className="text-sm text-red-600 mb-2">{lawyerAssignmentActionError}</p>
+                )}
+
+                {!lawyerAssignmentsLoading && !lawyerAssignmentsError && (
+                  <>
+                    {lawyerClients.length > 0 ? (
+                      <ul className="space-y-2 mb-4">
+                        {lawyerClients.map((client) => (
+                          <li
+                            key={client.id}
+                            className="flex items-center justify-between gap-3 py-2 px-3 bg-gray-50 rounded-lg"
+                          >
+                            <span className="text-sm font-medium text-gray-900">
+                              {formatStudentDisplayName(client)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleLawyerAssignment(student!.username!, client.id, 'remove')}
+                              disabled={lawyerAssignmentSaving}
+                              className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50 flex items-center gap-1"
+                            >
+                              <Minus className="h-3 w-3" />
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-gray-600 mb-4">No clients assigned yet.</p>
+                    )}
+
+                    {lawyerAssignable.length > 0 && (
+                      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                        <div className="flex-1">
+                          <label className="text-sm text-gray-500 block mb-1">Add client from town class</label>
+                          <select
+                            value={selectedLawyerStudentToAdd}
+                            onChange={(e) => setSelectedLawyerStudentToAdd(e.target.value)}
+                            className="input-field w-full"
+                            disabled={lawyerAssignmentSaving}
+                          >
+                            <option value="">Select a student...</option>
+                            {lawyerAssignable
+                              .filter((s) => !lawyerClients.some((c) => c.id === s.id))
+                              .map((s) => {
+                                const isLawyerPeer = isLawyerJob(s.job_name);
+                                const name = `${formatStudentDisplayName(s)}${isLawyerPeer ? ' (Lawyer)' : ''}`;
+                                const otherLawyers = (s.assigned_lawyers ?? []).filter(
+                                  (a) => a.lawyer_user_id !== student?.id
+                                );
+                                const formatLawyerName = (a: LawyerAssignableStudent['assigned_lawyers'][0]) =>
+                                  a.lawyer_first_name && a.lawyer_last_name
+                                    ? `${a.lawyer_first_name} ${a.lawyer_last_name}`
+                                    : a.lawyer_username;
+                                const assignedLabel =
+                                  otherLawyers.length > 0
+                                    ? ` — also with ${otherLawyers.map(formatLawyerName).join(', ')}`
+                                    : '';
+                                return (
+                                  <option key={s.id} value={String(s.id)}>
+                                    {name}{assignedLabel}
+                                  </option>
+                                );
+                              })}
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const id = parseInt(selectedLawyerStudentToAdd, 10);
+                            if (id) handleLawyerAssignment(student!.username!, id, 'add');
+                          }}
+                          disabled={lawyerAssignmentSaving || !selectedLawyerStudentToAdd}
+                          className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          <UserPlus className="h-4 w-4" />
+                          <span>Add Client</span>
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 

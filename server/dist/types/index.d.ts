@@ -177,6 +177,7 @@ export interface LandParcel {
     row_index: number;
     col_index: number;
     biome_type: BiomeType;
+    town_class: '6A' | '6B' | '6C';
     value: number;
     risk_level: RiskLevel;
     pros: string[];

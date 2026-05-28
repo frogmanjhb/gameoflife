@@ -1,1 +1,1 @@
-{"version":3,"file":"config.d.ts","sourceRoot":"","sources":["../../../src/routes/jobchallenges/config.ts"],"names":[],"mappings":"AAAA;;;GAGG;AACH,eAAO,MAAM,0BAA0B,IAAI,CAAC"}
+{"version":3,"file":"config.d.ts","sourceRoot":"","sources":["../../../src/routes/jobchallenges/config.ts"],"names":[],"mappings":"AAAA;;;GAGG;AACH,eAAO,MAAM,0BAA0B,IAAI,CAAC;AAO5C,eAAO,MAAM,iCAAiC,IAAI,CAAC"}

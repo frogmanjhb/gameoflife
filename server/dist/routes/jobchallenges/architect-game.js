@@ -9,6 +9,7 @@ const auth_1 = require("../../middleware/auth");
 const doubles_day_1 = require("../../helpers/doubles-day");
 const jobs_1 = require("../jobs");
 const config_1 = require("./config");
+const min_duration_1 = require("./min-duration");
 const router = (0, express_1.Router)();
 // Get architect game status (remaining plays, high scores, recent sessions)
 router.get('/status', auth_1.authenticateToken, async (req, res) => {
@@ -260,10 +261,10 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Game session has already been submitted' });
         }
         // SECURITY: Minimum game duration
-        const sessionPlayedAt = new Date(session.played_at).getTime();
         const minGameDurationMs = 15000; // 15 seconds – allow fast but non-instant runs
-        if (Date.now() - sessionPlayedAt < minGameDurationMs) {
-            const elapsedSec = Math.floor((Date.now() - sessionPlayedAt) / 1000);
+        const elapsedMs = await (0, min_duration_1.getElapsedMsSincePlayedAt)(database_prod_1.default, session.played_at);
+        if (elapsedMs < minGameDurationMs) {
+            const elapsedSec = Math.floor(elapsedMs / 1000);
             console.warn(`🚨 SECURITY: User ${req.user.username} submitted session ${session_id} after only ${elapsedSec}s`);
             return res.status(400).json({ error: 'Game submitted too quickly. Each game must run for at least 15 seconds.' });
         }
@@ -273,7 +274,7 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
       WHERE user_id = $1 AND earnings > 0 
       AND played_at > NOW() - INTERVAL '3 minutes'
     `, [userId]);
-        if (parseInt(recentCompletions[0].count) >= 2) {
+        if (parseInt(recentCompletions[0].count, 10) >= config_1.JOB_GAME_RECENT_COMPLETIONS_LIMIT) {
             console.warn(`🚨 SECURITY: User ${req.user.username} exceeded rate limit`);
             return res.status(429).json({ error: 'Too many games completed recently. Please wait a few minutes before playing again.' });
         }

@@ -26,7 +26,9 @@ import {
   Job, JobApplication, LandParcel, LandPurchaseRequest, LandSaleRequest, 
   LandStats, MyPropertiesResponse, BiomeConfig, BiomeType,
   TaxBracket, TreasuryInfo, TaxReport, TaxEducationResponse, SalaryPaymentResult, TownSettings,
-  Tender, TenderApplication, AccountantPendingTransfer, AccountantAssignmentStudent
+  Tender, TenderApplication, AccountantPendingTransfer, AccountantAssignmentStudent,
+  TeacherAccountantAssignmentsResponse,
+  TeacherLawyerAssignmentsResponse
 } from '../types';
 
 // Support for multiple deployment platforms
@@ -695,7 +697,16 @@ export interface PoliceFineBonus {
   amount: number;
   description: string | null;
   teacher_initials: string;
-  status: 'pending' | 'approved' | 'denied';
+  status: 'pending_lawyer' | 'disputed' | 'pending_teacher' | 'approved' | 'denied';
+  lawyer_reviewed_by_username?: string | null;
+  lawyer_reviewed_by_first_name?: string | null;
+  lawyer_reviewed_by_last_name?: string | null;
+  lawyer_reviewed_at?: string | null;
+  lawyer_notes?: string | null;
+  dispute_reason?: string | null;
+  police_evidence_response?: string | null;
+  lawyer_disputed_at?: string | null;
+  police_evidence_at?: string | null;
   reviewed_by_username: string | null;
   reviewed_at: string | null;
   created_at: string;
@@ -712,7 +723,7 @@ export const policeFinesBonusesApi = {
     api.post('/police-fines-bonuses', data),
 
   getPending: (): Promise<{ data: PoliceFineBonus[] }> =>
-    api.get('/police-fines-bonuses?status=pending'),
+    api.get('/police-fines-bonuses?status=pending_teacher'),
 
   getAll: (): Promise<{ data: PoliceFineBonus[] }> =>
     api.get('/police-fines-bonuses?status=all'),
@@ -720,11 +731,45 @@ export const policeFinesBonusesApi = {
   getMyHistory: (): Promise<{ data: PoliceFineBonus[] }> =>
     api.get('/police-fines-bonuses/my-history'),
 
+  getLawyerQueue: (): Promise<{ data: PoliceFineBonus[] }> =>
+    api.get('/police-fines-bonuses/lawyer-queue'),
+
+  lawyerApprove: (id: number, lawyerNotes?: string): Promise<{ data: { message: string } }> =>
+    api.post(`/police-fines-bonuses/${id}/lawyer-approve`, lawyerNotes ? { lawyer_notes: lawyerNotes } : {}),
+
+  lawyerDeny: (id: number, lawyerNotes?: string): Promise<{ data: { message: string } }> =>
+    api.post(`/police-fines-bonuses/${id}/lawyer-deny`, lawyerNotes ? { lawyer_notes: lawyerNotes } : {}),
+
+  dispute: (id: number, disputeReason: string, lawyerNotes?: string): Promise<{ data: { message: string } }> =>
+    api.post(`/police-fines-bonuses/${id}/dispute`, {
+      dispute_reason: disputeReason,
+      ...(lawyerNotes ? { lawyer_notes: lawyerNotes } : {}),
+    }),
+
+  submitPoliceEvidence: (id: number, policeEvidenceResponse: string): Promise<{ data: { message: string } }> =>
+    api.post(`/police-fines-bonuses/${id}/police-evidence`, { police_evidence_response: policeEvidenceResponse }),
+
   approve: (id: number): Promise<{ data: { message: string } }> =>
     api.post(`/police-fines-bonuses/${id}/approve`),
 
   deny: (id: number): Promise<{ data: { message: string } }> =>
     api.post(`/police-fines-bonuses/${id}/deny`),
+};
+
+export const studentsLawyerApi = {
+  getAssignments: (username: string): Promise<{ data: TeacherLawyerAssignmentsResponse }> => {
+    return api.get(`/students/${encodeURIComponent(username)}/lawyer-assignments`);
+  },
+  updateAssignment: (
+    username: string,
+    studentId: number,
+    action: 'add' | 'remove'
+  ): Promise<{ data: { message: string; clients: AccountantAssignmentStudent[]; manual_mode: boolean } }> => {
+    return api.post(`/students/${encodeURIComponent(username)}/lawyer-assignments`, {
+      student_id: studentId,
+      action,
+    });
+  },
 };
 
 // Shop Item type for Winkel management
@@ -852,6 +897,23 @@ export const tendersApi = {
   payTender: (tenderId: number): Promise<{ data: Tender }> => {
     return api.post(`/tenders/${tenderId}/pay`);
   }
+};
+
+// Teacher: Chartered Accountant client assignments
+export const studentsAccountantApi = {
+  getAssignments: (username: string): Promise<{ data: TeacherAccountantAssignmentsResponse }> => {
+    return api.get(`/students/${encodeURIComponent(username)}/accountant-assignments`);
+  },
+  updateAssignment: (
+    username: string,
+    studentId: number,
+    action: 'add' | 'remove'
+  ): Promise<{ data: { message: string; clients: AccountantAssignmentStudent[]; manual_mode: boolean } }> => {
+    return api.post(`/students/${encodeURIComponent(username)}/accountant-assignments`, {
+      student_id: studentId,
+      action,
+    });
+  },
 };
 
 // Teacher Analytics API methods

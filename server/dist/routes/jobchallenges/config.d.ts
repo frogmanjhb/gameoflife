@@ -3,4 +3,5 @@
  * All job challenges (Architect, future roles) use the same daily limit.
  */
 export declare const JOB_CHALLENGES_DAILY_LIMIT = 3;
+export declare const JOB_GAME_RECENT_COMPLETIONS_LIMIT = 5;
 //# sourceMappingURL=config.d.ts.map

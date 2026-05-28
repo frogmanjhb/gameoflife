@@ -9,9 +9,7 @@ const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
 const jobs_1 = require("./jobs");
-function hasAccountantJob(jobName) {
-    return (jobName || '').toLowerCase().includes('accountant');
-}
+const accountant_assignments_1 = require("../domain/accountant-assignments");
 // Helper function to check if student can make transactions
 async function checkStudentCanTransact(userId) {
     // Check if student has negative balance
@@ -34,63 +32,6 @@ async function checkStudentCanTransact(userId) {
         };
     }
     return { canTransact: true };
-}
-async function getAccountantContext(userId) {
-    const accountant = await database_prod_1.default.get(`SELECT u.id, u.class, u.school_id, j.name as job_name
-     FROM users u
-     LEFT JOIN jobs j ON u.job_id = j.id
-     WHERE u.id = $1 AND u.role = 'student'`, [userId]);
-    if (!accountant || !hasAccountantJob(accountant.job_name)) {
-        throw new Error('NOT_ACCOUNTANT');
-    }
-    const className = accountant.class || null;
-    const schoolId = accountant.school_id ?? null;
-    if (!className) {
-        return { accountant, responsibleStudentIds: [], supervisedAccountantId: null };
-    }
-    const students = await database_prod_1.default.query(`SELECT u.id, u.job_id, j.name as job_name
-     FROM users u
-     LEFT JOIN jobs j ON u.job_id = j.id
-     WHERE u.role = 'student'
-       AND u.class = $1
-       AND ${schoolId !== null ? 'u.school_id = $2' : 'u.school_id IS NULL'}
-     ORDER BY u.id`, schoolId !== null ? [className, schoolId] : [className]);
-    const accountantIds = [];
-    const nonAccountantStudentIds = [];
-    for (const s of students) {
-        if (hasAccountantJob(s.job_name)) {
-            accountantIds.push(s.id);
-        }
-        else {
-            nonAccountantStudentIds.push(s.id);
-        }
-    }
-    const totalAccountants = accountantIds.length || 1;
-    // If only one accountant in the class, they are responsible for all non-accountant students.
-    if (totalAccountants === 1) {
-        return {
-            accountant,
-            responsibleStudentIds: nonAccountantStudentIds,
-            supervisedAccountantId: null
-        };
-    }
-    // Deterministically split non-accountant students into contiguous groups per accountant.
-    const sortedAccountantIds = accountantIds.slice().sort((a, b) => a - b);
-    const index = sortedAccountantIds.indexOf(accountant.id);
-    if (index === -1) {
-        // Fallback: no matching accountant id found; treat as no responsibility.
-        return { accountant, responsibleStudentIds: [], supervisedAccountantId: null };
-    }
-    const chunkSize = Math.ceil(nonAccountantStudentIds.length / totalAccountants);
-    const start = index * chunkSize;
-    const end = start + chunkSize;
-    const responsibleStudentIds = nonAccountantStudentIds.slice(start, end);
-    // Each accountant is also responsible for exactly one other accountant,
-    // using a simple ring assignment over the sorted accountant IDs.
-    const supervisedAccountantId = sortedAccountantIds.length > 1
-        ? sortedAccountantIds[(index + 1) % sortedAccountantIds.length]
-        : null;
-    return { accountant, responsibleStudentIds, supervisedAccountantId };
 }
 const router = (0, express_1.Router)();
 // Get transaction history
@@ -374,7 +315,7 @@ router.get('/my-approvals', auth_1.authenticateToken, (0, auth_1.requireRole)(['
         }
         let context;
         try {
-            context = await getAccountantContext(req.user.id);
+            context = await (0, accountant_assignments_1.getAccountantContext)(req.user.id);
         }
         catch (err) {
             if (err instanceof Error && err.message === 'NOT_ACCOUNTANT') {
@@ -419,7 +360,7 @@ router.get('/my-approvals/assignments', auth_1.authenticateToken, (0, auth_1.req
         }
         let context;
         try {
-            context = await getAccountantContext(req.user.id);
+            context = await (0, accountant_assignments_1.getAccountantContext)(req.user.id);
         }
         catch (err) {
             if (err instanceof Error && err.message === 'NOT_ACCOUNTANT') {
@@ -461,7 +402,7 @@ router.post('/my-approvals/:id/approve', auth_1.authenticateToken, (0, auth_1.re
         }
         let context;
         try {
-            context = await getAccountantContext(req.user.id);
+            context = await (0, accountant_assignments_1.getAccountantContext)(req.user.id);
         }
         catch (err) {
             if (err instanceof Error && err.message === 'NOT_ACCOUNTANT') {
@@ -584,7 +525,7 @@ router.post('/my-approvals/:id/deny', [
         }
         let context;
         try {
-            context = await getAccountantContext(req.user.id);
+            context = await (0, accountant_assignments_1.getAccountantContext)(req.user.id);
         }
         catch (err) {
             if (err instanceof Error && err.message === 'NOT_ACCOUNTANT') {

@@ -9,6 +9,7 @@ const auth_1 = require("../../middleware/auth");
 const doubles_day_1 = require("../../helpers/doubles-day");
 const jobs_1 = require("../jobs");
 const config_1 = require("./config");
+const min_duration_1 = require("./min-duration");
 const router = (0, express_1.Router)();
 function hasNurseJob(jobName) {
     return (jobName || '').toLowerCase().trim().includes('nurse');
@@ -182,16 +183,16 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
         if (parseFloat(session.earnings || '0') > 0 || parseInt(session.score || '0', 10) > 0) {
             return res.status(400).json({ error: 'Game session has already been submitted' });
         }
-        const sessionPlayedAt = new Date(session.played_at).getTime();
         const minGameDurationMs = 15000; // 15 seconds – allow fast but non-instant runs
-        if (Date.now() - sessionPlayedAt < minGameDurationMs) {
+        const elapsedMs = await (0, min_duration_1.getElapsedMsSincePlayedAt)(database_prod_1.default, session.played_at);
+        if (elapsedMs < minGameDurationMs) {
             return res.status(400).json({ error: 'Game submitted too quickly. Each health check cycle must run for at least 15 seconds.' });
         }
         const recentCompletions = await database_prod_1.default.query(`
       SELECT COUNT(*) as count FROM nurse_game_sessions 
       WHERE user_id = $1 AND earnings > 0 AND played_at > NOW() - INTERVAL '3 minutes'
     `, [userId]);
-        if (parseInt(recentCompletions[0].count, 10) >= 2) {
+        if (parseInt(recentCompletions[0].count, 10) >= config_1.JOB_GAME_RECENT_COMPLETIONS_LIMIT) {
             return res.status(429).json({ error: 'Too many games completed recently. Please wait a few minutes before playing again.' });
         }
         const calculateStreakBonus = (sequence) => {

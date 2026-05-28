@@ -4,10 +4,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const express_validator_1 = require("express-validator");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
+const accountant_assignments_1 = require("../domain/accountant-assignments");
+const lawyer_assignments_1 = require("../domain/lawyer-assignments");
 const router = (0, express_1.Router)();
 // TEMPORARY: Diagnose student data issues (teachers only, same school)
 router.get('/diagnose/:searchTerm', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
@@ -380,6 +383,335 @@ router.post('/:username/leaderboard-visibility', auth_1.authenticateToken, tenan
     }
     catch (error) {
         console.error('Toggle leaderboard visibility error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Lawyer client assignments (teachers only, same school)
+router.get('/:username/lawyer-assignments', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const { username } = req.params;
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        const student = await database_prod_1.default.get(`SELECT u.id, u.username, u.class, u.school_id, j.name AS job_name
+         FROM users u
+         LEFT JOIN jobs j ON u.job_id = j.id
+         WHERE u.username = $1 AND u.role = 'student'
+           AND ${schoolId !== null ? 'u.school_id = $2' : 'u.school_id IS NULL'}`, schoolId !== null ? [username, schoolId] : [username]);
+        if (!student)
+            return res.status(404).json({ error: 'Student not found' });
+        if (!(0, lawyer_assignments_1.hasLawyerJob)(student.job_name)) {
+            return res.status(400).json({ error: 'Student is not a Lawyer' });
+        }
+        if (!student.class) {
+            return res.status(400).json({ error: 'Lawyer has no town class' });
+        }
+        const className = student.class;
+        const manualMode = await (0, lawyer_assignments_1.classUsesManualLawyerAssignments)(schoolId, className);
+        let clients;
+        if (manualMode) {
+            clients = await (0, lawyer_assignments_1.getManualClientRows)(student.id, className, schoolId);
+        }
+        else {
+            const clientIds = await (0, lawyer_assignments_1.getLawyerClientIds)(student.id);
+            if (!clientIds.length) {
+                clients = [];
+            }
+            else {
+                const placeholders = clientIds.map((_, idx) => `$${idx + 1}`).join(', ');
+                clients = await database_prod_1.default.query(`SELECT u.id, u.username, u.first_name, u.last_name, u.class
+             FROM users u WHERE u.id IN (${placeholders})
+             ORDER BY u.last_name NULLS LAST, u.first_name NULLS LAST, u.username`, clientIds);
+            }
+        }
+        const { lawyerIds, nonLawyerStudentIds } = await (0, lawyer_assignments_1.getClassLawyerRoster)(className, schoolId);
+        const assignableIds = [
+            ...nonLawyerStudentIds,
+            ...lawyerIds.filter((id) => id !== student.id),
+        ];
+        const assignmentRows = manualMode
+            ? await database_prod_1.default.query(`SELECT a.student_user_id, a.lawyer_user_id,
+                    l.username AS lawyer_username,
+                    l.first_name AS lawyer_first_name,
+                    l.last_name AS lawyer_last_name
+             FROM lawyer_student_assignments a
+             JOIN users l ON l.id = a.lawyer_user_id
+             WHERE a.town_class = $1 AND a.school_id IS NOT DISTINCT FROM $2`, [className, schoolId])
+            : [];
+        const assignmentByStudent = new Map();
+        for (const row of assignmentRows) {
+            const list = assignmentByStudent.get(row.student_user_id) ?? [];
+            list.push({
+                lawyer_user_id: row.lawyer_user_id,
+                lawyer_username: row.lawyer_username,
+                lawyer_first_name: row.lawyer_first_name,
+                lawyer_last_name: row.lawyer_last_name,
+            });
+            assignmentByStudent.set(row.student_user_id, list);
+        }
+        const assignableRaw = assignableIds.length
+            ? await database_prod_1.default.query(`SELECT u.id, u.username, u.first_name, u.last_name, u.class, j.name AS job_name
+             FROM users u
+             LEFT JOIN jobs j ON u.job_id = j.id
+             WHERE u.id = ANY($1::int[])
+             ORDER BY u.last_name NULLS LAST, u.first_name NULLS LAST, u.username`, [assignableIds])
+            : [];
+        const assignable = assignableRaw.map((s) => {
+            const assignedLawyers = assignmentByStudent.get(s.id) ?? [];
+            return {
+                ...s,
+                assigned_lawyers: assignedLawyers.map((a) => ({
+                    lawyer_user_id: a.lawyer_user_id,
+                    lawyer_username: a.lawyer_username,
+                    lawyer_first_name: a.lawyer_first_name,
+                    lawyer_last_name: a.lawyer_last_name,
+                })),
+            };
+        });
+        res.json({ clients, assignable, manual_mode: manualMode });
+    }
+    catch (error) {
+        console.error('Get lawyer assignments (teacher) error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+router.post('/:username/lawyer-assignments', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), [
+    (0, express_validator_1.body)('student_id').isInt().withMessage('Student ID is required'),
+    (0, express_validator_1.body)('action').isIn(['add', 'remove']).withMessage('Action must be add or remove'),
+], async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { username } = req.params;
+        const { student_id: targetStudentId, action } = req.body;
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        const lawyer = await database_prod_1.default.get(`SELECT u.id, u.username, u.class, u.school_id, j.name AS job_name
+         FROM users u
+         LEFT JOIN jobs j ON u.job_id = j.id
+         WHERE u.username = $1 AND u.role = 'student'
+           AND ${schoolId !== null ? 'u.school_id = $2' : 'u.school_id IS NULL'}`, schoolId !== null ? [username, schoolId] : [username]);
+        if (!lawyer)
+            return res.status(404).json({ error: 'Student not found' });
+        if (!(0, lawyer_assignments_1.hasLawyerJob)(lawyer.job_name)) {
+            return res.status(400).json({ error: 'Student is not a Lawyer' });
+        }
+        if (!lawyer.class) {
+            return res.status(400).json({ error: 'Lawyer has no town class' });
+        }
+        const className = lawyer.class;
+        const targetStudent = await database_prod_1.default.get(`SELECT u.id, u.class, u.school_id, j.name AS job_name
+         FROM users u
+         LEFT JOIN jobs j ON u.job_id = j.id
+         WHERE u.id = $1 AND u.role = 'student'`, [targetStudentId]);
+        if (!targetStudent)
+            return res.status(404).json({ error: 'Target student not found' });
+        if (schoolId !== null && targetStudent.school_id !== schoolId) {
+            return res.status(404).json({ error: 'Target student not found' });
+        }
+        if (targetStudent.class !== className) {
+            return res.status(400).json({ error: 'Student must be in the same town class as the lawyer' });
+        }
+        if (targetStudentId === lawyer.id) {
+            return res.status(400).json({ error: 'A lawyer cannot be assigned to themselves' });
+        }
+        const manualMode = await (0, lawyer_assignments_1.classUsesManualLawyerAssignments)(schoolId, className);
+        if (!manualMode) {
+            await (0, lawyer_assignments_1.seedManualAssignmentsFromAutoSplit)(className, schoolId);
+        }
+        if (action === 'add') {
+            const alreadyLinked = await database_prod_1.default.get(`SELECT id FROM lawyer_student_assignments
+           WHERE lawyer_user_id = $1 AND student_user_id = $2
+             AND town_class = $3 AND school_id IS NOT DISTINCT FROM $4`, [lawyer.id, targetStudentId, className, schoolId]);
+            if (alreadyLinked) {
+                return res.status(400).json({ error: 'This student is already assigned to this lawyer' });
+            }
+            await database_prod_1.default.run(`INSERT INTO lawyer_student_assignments (lawyer_user_id, student_user_id, school_id, town_class)
+           VALUES ($1, $2, $3, $4)`, [lawyer.id, targetStudentId, schoolId, className]);
+        }
+        else {
+            const existing = await database_prod_1.default.get(`SELECT id FROM lawyer_student_assignments
+           WHERE lawyer_user_id = $1 AND student_user_id = $2
+             AND town_class = $3 AND school_id IS NOT DISTINCT FROM $4`, [lawyer.id, targetStudentId, className, schoolId]);
+            if (!existing) {
+                return res.status(400).json({ error: 'This student is not assigned to this lawyer' });
+            }
+            await database_prod_1.default.run(`DELETE FROM lawyer_student_assignments
+           WHERE lawyer_user_id = $1 AND student_user_id = $2
+             AND town_class = $3 AND school_id IS NOT DISTINCT FROM $4`, [lawyer.id, targetStudentId, className, schoolId]);
+        }
+        const clients = await (0, lawyer_assignments_1.getManualClientRows)(lawyer.id, className, schoolId);
+        res.json({ message: action === 'add' ? 'Student assigned' : 'Student removed', clients, manual_mode: true });
+    }
+    catch (error) {
+        console.error('Update lawyer assignments (teacher) error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Chartered Accountant client assignments (teachers only, same school)
+router.get('/:username/accountant-assignments', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const { username } = req.params;
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        const student = await database_prod_1.default.get(`SELECT u.id, u.username, u.class, u.school_id, j.name AS job_name
+         FROM users u
+         LEFT JOIN jobs j ON u.job_id = j.id
+         WHERE u.username = $1 AND u.role = 'student'
+           AND ${schoolId !== null ? 'u.school_id = $2' : 'u.school_id IS NULL'}`, schoolId !== null ? [username, schoolId] : [username]);
+        if (!student) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        if (!(0, accountant_assignments_1.hasAccountantJob)(student.job_name)) {
+            return res.status(400).json({ error: 'Student is not a Chartered Accountant' });
+        }
+        if (!student.class) {
+            return res.status(400).json({ error: 'Accountant has no town class' });
+        }
+        const className = student.class;
+        const manualMode = await (0, accountant_assignments_1.classUsesManualAccountantAssignments)(schoolId, className);
+        let clients;
+        if (manualMode) {
+            clients = await (0, accountant_assignments_1.getManualClientRows)(student.id, className, schoolId);
+        }
+        else {
+            const context = await (0, accountant_assignments_1.getAccountantContext)(student.id);
+            const userIds = [...context.responsibleStudentIds];
+            if (context.supervisedAccountantId && !userIds.includes(context.supervisedAccountantId)) {
+                userIds.push(context.supervisedAccountantId);
+            }
+            if (!userIds.length) {
+                clients = [];
+            }
+            else {
+                const placeholders = userIds.map((_, idx) => `$${idx + 1}`).join(', ');
+                clients = await database_prod_1.default.query(`SELECT u.id, u.username, u.first_name, u.last_name, u.class
+             FROM users u WHERE u.id IN (${placeholders})
+             ORDER BY u.last_name NULLS LAST, u.first_name NULLS LAST, u.username`, userIds);
+            }
+        }
+        const { accountantIds, nonAccountantStudentIds } = await (0, accountant_assignments_1.getClassAccountantRoster)(className, schoolId);
+        const assignableIds = [
+            ...nonAccountantStudentIds,
+            ...accountantIds.filter((id) => id !== student.id),
+        ];
+        const assignmentRows = manualMode
+            ? await database_prod_1.default.query(`SELECT a.student_user_id, a.accountant_user_id,
+                    acc.username AS accountant_username,
+                    acc.first_name AS accountant_first_name,
+                    acc.last_name AS accountant_last_name
+             FROM accountant_student_assignments a
+             JOIN users acc ON acc.id = a.accountant_user_id
+             WHERE a.town_class = $1 AND a.school_id IS NOT DISTINCT FROM $2`, [className, schoolId])
+            : [];
+        const assignmentByStudent = new Map();
+        for (const row of assignmentRows) {
+            const list = assignmentByStudent.get(row.student_user_id) ?? [];
+            list.push({
+                accountant_user_id: row.accountant_user_id,
+                accountant_username: row.accountant_username,
+                accountant_first_name: row.accountant_first_name,
+                accountant_last_name: row.accountant_last_name,
+            });
+            assignmentByStudent.set(row.student_user_id, list);
+        }
+        const assignableRaw = assignableIds.length
+            ? await database_prod_1.default.query(`SELECT u.id, u.username, u.first_name, u.last_name, u.class, j.name AS job_name
+             FROM users u
+             LEFT JOIN jobs j ON u.job_id = j.id
+             WHERE u.id = ANY($1::int[])
+             ORDER BY u.last_name NULLS LAST, u.first_name NULLS LAST, u.username`, [assignableIds])
+            : [];
+        const assignable = assignableRaw.map((s) => {
+            const assignedAccountants = assignmentByStudent.get(s.id) ?? [];
+            return {
+                ...s,
+                assigned_accountants: assignedAccountants.map((a) => ({
+                    accountant_user_id: a.accountant_user_id,
+                    accountant_username: a.accountant_username,
+                    accountant_first_name: a.accountant_first_name,
+                    accountant_last_name: a.accountant_last_name,
+                })),
+            };
+        });
+        res.json({ clients, assignable, manual_mode: manualMode });
+    }
+    catch (error) {
+        console.error('Get accountant assignments (teacher) error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+router.post('/:username/accountant-assignments', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), [
+    (0, express_validator_1.body)('student_id').isInt().withMessage('Student ID is required'),
+    (0, express_validator_1.body)('action').isIn(['add', 'remove']).withMessage('Action must be add or remove'),
+], async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { username } = req.params;
+        const { student_id: targetStudentId, action } = req.body;
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        const accountant = await database_prod_1.default.get(`SELECT u.id, u.username, u.class, u.school_id, j.name AS job_name
+         FROM users u
+         LEFT JOIN jobs j ON u.job_id = j.id
+         WHERE u.username = $1 AND u.role = 'student'
+           AND ${schoolId !== null ? 'u.school_id = $2' : 'u.school_id IS NULL'}`, schoolId !== null ? [username, schoolId] : [username]);
+        if (!accountant) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        if (!(0, accountant_assignments_1.hasAccountantJob)(accountant.job_name)) {
+            return res.status(400).json({ error: 'Student is not a Chartered Accountant' });
+        }
+        if (!accountant.class) {
+            return res.status(400).json({ error: 'Accountant has no town class' });
+        }
+        const className = accountant.class;
+        const targetStudent = await database_prod_1.default.get(`SELECT u.id, u.class, u.school_id, j.name AS job_name
+         FROM users u
+         LEFT JOIN jobs j ON u.job_id = j.id
+         WHERE u.id = $1 AND u.role = 'student'`, [targetStudentId]);
+        if (!targetStudent) {
+            return res.status(404).json({ error: 'Target student not found' });
+        }
+        if (schoolId !== null && targetStudent.school_id !== schoolId) {
+            return res.status(404).json({ error: 'Target student not found' });
+        }
+        if (targetStudent.class !== className) {
+            return res.status(400).json({ error: 'Student must be in the same town class as the accountant' });
+        }
+        if (targetStudentId === accountant.id) {
+            return res.status(400).json({ error: 'An accountant cannot be assigned to themselves' });
+        }
+        const manualMode = await (0, accountant_assignments_1.classUsesManualAccountantAssignments)(schoolId, className);
+        if (!manualMode) {
+            await (0, accountant_assignments_1.seedManualAssignmentsFromAutoSplit)(className, schoolId);
+        }
+        if (action === 'add') {
+            const alreadyLinked = await database_prod_1.default.get(`SELECT id FROM accountant_student_assignments
+           WHERE accountant_user_id = $1 AND student_user_id = $2
+             AND town_class = $3 AND school_id IS NOT DISTINCT FROM $4`, [accountant.id, targetStudentId, className, schoolId]);
+            if (alreadyLinked) {
+                return res.status(400).json({ error: 'This student is already assigned to this accountant' });
+            }
+            await database_prod_1.default.run(`INSERT INTO accountant_student_assignments (accountant_user_id, student_user_id, school_id, town_class)
+           VALUES ($1, $2, $3, $4)`, [accountant.id, targetStudentId, schoolId, className]);
+        }
+        else {
+            const existing = await database_prod_1.default.get(`SELECT id FROM accountant_student_assignments
+           WHERE accountant_user_id = $1 AND student_user_id = $2
+             AND town_class = $3 AND school_id IS NOT DISTINCT FROM $4`, [accountant.id, targetStudentId, className, schoolId]);
+            if (!existing) {
+                return res.status(400).json({ error: 'This student is not assigned to this accountant' });
+            }
+            await database_prod_1.default.run(`DELETE FROM accountant_student_assignments
+           WHERE accountant_user_id = $1 AND student_user_id = $2
+             AND town_class = $3 AND school_id IS NOT DISTINCT FROM $4`, [accountant.id, targetStudentId, className, schoolId]);
+        }
+        const clients = await (0, accountant_assignments_1.getManualClientRows)(accountant.id, className, schoolId);
+        res.json({ message: action === 'add' ? 'Student assigned' : 'Student removed', clients, manual_mode: true });
+    }
+    catch (error) {
+        console.error('Update accountant assignments (teacher) error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

@@ -845,7 +845,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">Pending Fines & Bonuses</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Submitted by the Police Lieutenant. Approve to move money, or deny to cancel.
+                  Approved by a lawyer for assigned clients. Final teacher approval applies fines or bonuses.
                 </p>
               </div>
               {pendingFinesBonuses.length === 0 ? (
@@ -891,6 +891,16 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                               <span className="font-medium">Reason:</span> {pfb.description}
                             </p>
                           )}
+                          {pfb.lawyer_notes && (
+                            <p className="text-sm text-indigo-800">
+                              <span className="font-medium">Lawyer notes:</span> {pfb.lawyer_notes}
+                            </p>
+                          )}
+                          {pfb.police_evidence_response && (
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">Police evidence:</span> {pfb.police_evidence_response}
+                            </p>
+                          )}
                           <p className="text-xs text-gray-500 mt-1">
                             Submitted by{' '}
                             {pfb.submitted_by_first_name && pfb.submitted_by_last_name
@@ -902,7 +912,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                           </p>
                         </div>
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-200 text-amber-800 shrink-0 ml-3">
-                          PENDING
+                          TEACHER REVIEW
                         </span>
                       </div>
                       <div className="flex gap-2">

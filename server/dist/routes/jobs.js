@@ -111,6 +111,51 @@ router.get('/my-applications/count', auth_1.authenticateToken, (0, auth_1.requir
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+// Get student's own job applications (students only)
+router.get('/my-applications', auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        const applications = await database_prod_1.default.query(`SELECT ja.id, ja.job_id, ja.status, ja.created_at, ja.reviewed_at,
+              j.name as job_name,
+              COALESCE(j.base_salary, 2000.00) as job_salary
+       FROM job_applications ja
+       JOIN jobs j ON ja.job_id = j.id
+       WHERE ja.user_id = $1
+       ORDER BY ja.created_at DESC`, [req.user.id]);
+        res.json(applications);
+    }
+    catch (error) {
+        console.error('Failed to fetch student applications:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Withdraw a pending job application (students only, own application)
+router.delete('/my-applications/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        const applicationId = parseInt(req.params.id);
+        if (isNaN(applicationId)) {
+            return res.status(400).json({ error: 'Invalid application ID' });
+        }
+        const application = await database_prod_1.default.get('SELECT * FROM job_applications WHERE id = $1 AND user_id = $2', [applicationId, req.user.id]);
+        if (!application) {
+            return res.status(404).json({ error: 'Application not found' });
+        }
+        if (application.status !== 'pending') {
+            return res.status(400).json({ error: 'Only pending applications can be withdrawn' });
+        }
+        await database_prod_1.default.run('DELETE FROM job_applications WHERE id = $1 AND user_id = $2 AND status = $3', [applicationId, req.user.id, 'pending']);
+        res.json({ message: 'Application withdrawn successfully' });
+    }
+    catch (error) {
+        console.error('Failed to withdraw application:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 // IMPORTANT: Static routes must come BEFORE parameterized routes
 // Get applications (teachers only, school-scoped: only applicants from teacher's school)
 router.get('/applications', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
@@ -698,6 +743,66 @@ router.post('/award-xp', auth_1.authenticateToken, tenant_1.requireTenant, (0, a
     }
     catch (error) {
         console.error('Failed to award XP:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Remove experience points from student (teachers only, student must be in teacher's school)
+router.post('/remove-xp', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), [
+    (0, express_validator_1.body)('user_id').isInt().withMessage('User ID is required'),
+    (0, express_validator_1.body)('xp_amount').isInt({ min: 1 }).withMessage('XP amount must be a positive integer')
+], async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { user_id, xp_amount } = req.body;
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        // Verify user is a student in this school
+        const user = await database_prod_1.default.get('SELECT * FROM users WHERE id = $1 AND role = $2', [user_id, 'student']);
+        if (!user) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        if (schoolId !== null && user.school_id !== schoolId) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        if (!user.job_id) {
+            return res.status(400).json({ error: 'Student does not have a job assigned' });
+        }
+        // Get current level and XP
+        const currentLevel = user.job_level || 1;
+        const currentXP = user.job_experience_points || 0;
+        const newXP = Math.max(currentXP - xp_amount, 0);
+        // Calculate what level the student should be at with new XP
+        let newLevel = 1;
+        for (let level = 1; level < 10; level++) {
+            const xpForNextLevel = getXPForLevel(level + 1);
+            if (newXP >= xpForNextLevel) {
+                newLevel = level + 1;
+            }
+            else {
+                break;
+            }
+        }
+        await database_prod_1.default.run('UPDATE users SET job_experience_points = $1, job_level = $2 WHERE id = $3', [newXP, newLevel, user_id]);
+        // Get updated user with job info
+        const updated = await database_prod_1.default.get(`SELECT u.*, 
+                j.name as job_name,
+                COALESCE(j.base_salary, 2000.00) as base_salary,
+                COALESCE(j.is_contractual, false) as is_contractual,
+                (COALESCE(j.base_salary, 2000.00) * 
+                 (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * 
+                 CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary
+         FROM users u 
+         LEFT JOIN jobs j ON u.job_id = j.id 
+         WHERE u.id = $1`, [user_id]);
+        res.json({
+            message: `Removed ${xp_amount} XP${newLevel < currentLevel ? ` - Level down to ${newLevel}!` : ''}`,
+            user: updated
+        });
+    }
+    catch (error) {
+        console.error('Failed to remove XP:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
