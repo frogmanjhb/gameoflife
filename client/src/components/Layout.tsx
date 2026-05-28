@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, Menu, X, Home } from 'lucide-react';
 import ProfileBadge from './ProfileBadge';
+import StudentIllnessOverlay from './StudentIllnessOverlay';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -150,6 +151,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
         {children}
+
+        {user?.role === 'student' && !user?.account_frozen && <StudentIllnessOverlay />}
 
         {/* Frozen account overlay - blocks entire system for students with frozen accounts */}
         {user?.role === 'student' && user?.account_frozen && (

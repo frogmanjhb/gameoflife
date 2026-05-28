@@ -13,37 +13,34 @@ const router = Router();
 
 export async function getRequiredLandEngineers(
   schoolId: number | null,
-  townClass: string
+  townClass: string,
+  excludeUserId?: number
 ): Promise<RequiredEngineer[]> {
+  const params: unknown[] = [townClass];
+  let schoolFilter = 'u.school_id IS NULL';
   if (schoolId !== null) {
-    return database.query(
-      `SELECT u.id, u.username, u.first_name, u.last_name, j.name AS job_name
-       FROM users u
-       JOIN jobs j ON j.id = u.job_id
-       WHERE u.role = 'student'
-         AND u.class = $1
-         AND u.school_id = $2
-         AND (
-           LOWER(j.name) LIKE '%architect%'
-           OR LOWER(j.name) LIKE '%civil engineer%'
-         )
-       ORDER BY u.id`,
-      [townClass, schoolId]
-    );
+    schoolFilter = 'u.school_id = $2';
+    params.push(schoolId);
   }
+  let excludeFilter = '';
+  if (excludeUserId !== undefined) {
+    excludeFilter = ` AND u.id != $${params.length + 1}`;
+    params.push(excludeUserId);
+  }
+
   return database.query(
     `SELECT u.id, u.username, u.first_name, u.last_name, j.name AS job_name
      FROM users u
      JOIN jobs j ON j.id = u.job_id
      WHERE u.role = 'student'
        AND u.class = $1
-       AND u.school_id IS NULL
+       AND ${schoolFilter}
        AND (
          LOWER(j.name) LIKE '%architect%'
          OR LOWER(j.name) LIKE '%civil engineer%'
-       )
+       )${excludeFilter}
      ORDER BY u.id`,
-    [townClass]
+    params
   );
 }
 
@@ -61,11 +58,53 @@ export async function getEngineerApprovalsForRequest(requestId: number) {
   );
 }
 
+export async function maybeAdvanceToTeacherReview(
+  requestId: number,
+  buyerId: number,
+  schoolId: number | null,
+  townClass: string
+): Promise<void> {
+  const requiredEngineers = await getRequiredLandEngineers(schoolId, townClass, buyerId);
+  if (requiredEngineers.length === 0) {
+    await database.run(
+      `UPDATE land_purchase_requests
+       SET status = 'pending_teacher', updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND status = 'pending_engineer'`,
+      [requestId]
+    );
+    return;
+  }
+  const engineerApprovals = await getEngineerApprovalsForRequest(requestId);
+  if (engineerApprovals.length >= requiredEngineers.length) {
+    await database.run(
+      `UPDATE land_purchase_requests
+       SET status = 'pending_teacher', updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND status = 'pending_engineer'`,
+      [requestId]
+    );
+  }
+}
+
 export async function enrichPurchaseRequestWithEngineers(request: Record<string, unknown>) {
   const townClass = request.parcel_town_class as string;
   const schoolId = (request.school_id as number | null | undefined) ?? null;
-  const requiredEngineers = townClass
-    ? await getRequiredLandEngineers(schoolId, townClass)
+  const buyerId = request.user_id as number;
+  const requestId = request.id as number;
+  const status = String(request.status || '').toLowerCase();
+
+  if (status === 'pending_engineer' && townClass && buyerId) {
+    await maybeAdvanceToTeacherReview(requestId, buyerId, schoolId, townClass);
+    const refreshed = await database.get(
+      'SELECT status FROM land_purchase_requests WHERE id = $1',
+      [requestId]
+    );
+    if (refreshed) {
+      request.status = refreshed.status;
+    }
+  }
+
+  const requiredEngineers = townClass && buyerId
+    ? await getRequiredLandEngineers(schoolId, townClass, buyerId)
     : [];
   const engineerApprovals = await getEngineerApprovalsForRequest(request.id as number);
   const offeredPrice = Number(request.offered_price) || 0;
@@ -153,7 +192,8 @@ router.put('/purchase-requests/:id/engineer-review',
 
       const requiredEngineers = await getRequiredLandEngineers(
         purchaseRequest.school_id ?? null,
-        purchaseRequest.parcel_town_class
+        purchaseRequest.parcel_town_class,
+        purchaseRequest.user_id
       );
       const isRequired = requiredEngineers.some((e) => e.id === req.user!.id);
       if (!isRequired) {

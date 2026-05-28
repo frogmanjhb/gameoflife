@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "create-super-admin": "node create-super-admin.js",
     "migrate:multi-tenant": "node run-multi-tenant-migration.js",
+    "migrate:weekly-loans": "node run-sql-migration.js migrations/004_weekly_loan_payments.sql",
     "migrate:global-jobs": "node run-sql-migration.js migrations/064_add_global_jobs_for_all_schools.sql",
     "migrate:land-prices": "node run-sql-migration.js migrations/066_land_biome_price_increase.sql",
     "migrate:land-town-class": "node run-sql-migration.js migrations/067_land_town_class.sql",
@@ -19,7 +20,10 @@
     "migrate:land-fixed-prices": "node run-sql-migration.js migrations/072_land_fixed_plot_prices.sql",
     "migrate:land-property-economy": "node run-sql-migration.js migrations/073_land_property_economy.sql",
     "migrate:land-purchase-engineer": "node run-sql-migration.js migrations/074_land_purchase_engineer_approvals.sql",
-    "migrate:community-auction-plot": "node run-sql-migration.js migrations/075_community_auction_plot_i6.sql"
+    "migrate:community-auction-plot": "node run-sql-migration.js migrations/075_community_auction_plot_i6.sql",
+    "migrate:doctor-illness": "node run-sql-migration.js migrations/076_add_doctor_illness_tables.sql",
+    "migrate:doctor-illness-cure": "node run-sql-migration.js migrations/077_add_doctor_illness_cure_flow.sql",
+    "migrate:insurance-broker": "node run-sql-migration.js migrations/078_add_insurance_broker_approval.sql"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

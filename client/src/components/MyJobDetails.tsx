@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
-  Award, FileText, TrendingUp, Loader2, AlertCircle, Play, CheckCircle, XCircle, Users 
+  Award, FileText, TrendingUp, Loader2, AlertCircle, Play, CheckCircle, XCircle, Users, Shield 
 } from 'lucide-react';
-import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi, policeFinesBonusesApi } from '../services/api';
+import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, doctorIllnessApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi, policeFinesBonusesApi, insuranceApi, InsuranceBrokerPendingRequest } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, RetailManagerGameStatus, EntrepreneurGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer } from '../types';
+import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, RetailManagerGameStatus, EntrepreneurGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
 import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../utils/jobDisplay';
 import ArchitectGameModal from './jobchallenges/ArchitectGameModal';
@@ -27,6 +27,9 @@ import PrincipalGameModal from './jobchallenges/PrincipalGameModal';
 import TeacherGameModal from './jobchallenges/TeacherGameModal';
 import NurseGameModal from './jobchallenges/NurseGameModal';
 import DoctorGameModal from './jobchallenges/DoctorGameModal';
+import DoctorIllnessTestButtons from './DoctorIllnessTestButtons';
+import StudentIllnessOverlay from './StudentIllnessOverlay';
+import { DoctorIllnessType } from '../utils/doctorIllness';
 import RetailManagerGameModal from './jobchallenges/RetailManagerGameModal';
 import EntrepreneurGameModal from './jobchallenges/EntrepreneurGameModal';
 import EntrepreneurBusinessProposalModal from './jobchallenges/EntrepreneurBusinessProposalModal';
@@ -75,6 +78,13 @@ const MyJobDetails: React.FC = () => {
   const [isNurseGameOpen, setIsNurseGameOpen] = useState(false);
   const [doctorGameStatus, setDoctorGameStatus] = useState<DoctorGameStatus | null>(null);
   const [isDoctorGameOpen, setIsDoctorGameOpen] = useState(false);
+  const [doctorIllnessStatus, setDoctorIllnessStatus] = useState<DoctorIllnessDoctorStatus | null>(null);
+  const [doctorIllnessAssigning, setDoctorIllnessAssigning] = useState(false);
+  const [doctorIllnessError, setDoctorIllnessError] = useState<string | null>(null);
+  const [doctorIllnessSuccess, setDoctorIllnessSuccess] = useState<string | null>(null);
+  const [doctorApprovingId, setDoctorApprovingId] = useState<number | null>(null);
+  const [testIllness, setTestIllness] = useState<DoctorIllnessType | null>(null);
+  const [testIllnessRun, setTestIllnessRun] = useState(0);
   const [retailManagerGameStatus, setRetailManagerGameStatus] = useState<RetailManagerGameStatus | null>(null);
   const [isRetailManagerGameOpen, setIsRetailManagerGameOpen] = useState(false);
   const [entrepreneurGameStatus, setEntrepreneurGameStatus] = useState<EntrepreneurGameStatus | null>(null);
@@ -103,8 +113,14 @@ const MyJobDetails: React.FC = () => {
   const [policeSelectedUsername, setPoliceSelectedUsername] = useState('');
   const [policeHistory, setPoliceHistory] = useState<import('../services/api').PoliceFineBonus[]>([]);
   const [policeHistoryLoading, setPoliceHistoryLoading] = useState(false);
+  const [insuranceBrokerPending, setInsuranceBrokerPending] = useState<InsuranceBrokerPendingRequest[]>([]);
+  const [insuranceBrokerLoading, setInsuranceBrokerLoading] = useState(false);
+  const [insuranceBrokerError, setInsuranceBrokerError] = useState<string | null>(null);
+  const [insuranceBrokerSuccess, setInsuranceBrokerSuccess] = useState<string | null>(null);
+  const [insuranceReviewingId, setInsuranceReviewingId] = useState<number | null>(null);
 
   const isPoliceJob = (job?.name || '').toLowerCase().trim().includes('police lieutenant');
+  const isInsuranceBrokerJob = (job?.name || '').toLowerCase().trim().includes('insurance');
 
   useEffect(() => {
     if (!isPoliceJob) return;
@@ -254,6 +270,9 @@ const MyJobDetails: React.FC = () => {
   useEffect(() => {
     if (user && (job?.name || '').toLowerCase().trim().includes('doctor')) {
       fetchDoctorGameStatus();
+      if (user.role === 'student') {
+        fetchDoctorIllnessStatus();
+      }
     }
   }, [user, job]);
 
@@ -274,6 +293,47 @@ const MyJobDetails: React.FC = () => {
       fetchEntrepreneurGameStatus();
     }
   }, [user, job]);
+
+  useEffect(() => {
+    if (user?.role === 'student' && isInsuranceBrokerJob) {
+      fetchInsuranceBrokerPending();
+    }
+  }, [user, job]);
+
+  const fetchInsuranceBrokerPending = async () => {
+    try {
+      setInsuranceBrokerLoading(true);
+      const response = await insuranceApi.getBrokerPending();
+      setInsuranceBrokerPending(response.data || []);
+      setInsuranceBrokerError(null);
+    } catch (err: any) {
+      setInsuranceBrokerError(err.response?.data?.error || 'Could not load insurance requests');
+      setInsuranceBrokerPending([]);
+    } finally {
+      setInsuranceBrokerLoading(false);
+    }
+  };
+
+  const handleInsuranceBrokerReview = async (requestId: number, status: 'approved' | 'denied') => {
+    setInsuranceReviewingId(requestId);
+    setInsuranceBrokerError(null);
+    setInsuranceBrokerSuccess(null);
+    try {
+      const response = await insuranceApi.reviewBrokerRequest(requestId, { status });
+      const applicant = response.data.applicant_username || 'student';
+      const type = response.data.insurance_type || 'insurance';
+      setInsuranceBrokerSuccess(
+        status === 'approved'
+          ? `Approved ${type} insurance for ${applicant}. Coverage starts today.`
+          : `Denied ${type} insurance for ${applicant}. Premium refunded.`
+      );
+      await fetchInsuranceBrokerPending();
+    } catch (err: any) {
+      setInsuranceBrokerError(err.response?.data?.error || 'Could not review insurance request');
+    } finally {
+      setInsuranceReviewingId(null);
+    }
+  };
 
   const fetchEntrepreneurProposals = async () => {
     try {
@@ -475,6 +535,54 @@ const MyJobDetails: React.FC = () => {
       setDoctorGameStatus(response.data);
     } catch (err: any) {
       console.log('Doctor game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchDoctorIllnessStatus = async () => {
+    try {
+      const response = await doctorIllnessApi.getDoctorStatus();
+      setDoctorIllnessStatus(response.data);
+      setDoctorIllnessError(null);
+    } catch (err: any) {
+      setDoctorIllnessError(err.response?.data?.error || 'Could not load illness clinic status');
+    }
+  };
+
+  const handleAssignRandomIllness = async () => {
+    setDoctorIllnessAssigning(true);
+    setDoctorIllnessError(null);
+    setDoctorIllnessSuccess(null);
+    try {
+      const response = await doctorIllnessApi.assignRandom();
+      const a = response.data.assignment;
+      setDoctorIllnessSuccess(
+        `${a.patient_display_name} caught ${a.illness_name}. (${response.data.remaining_today} slots left today)`
+      );
+      await fetchDoctorIllnessStatus();
+    } catch (err: any) {
+      setDoctorIllnessError(err.response?.data?.error || 'Could not assign illness');
+    } finally {
+      setDoctorIllnessAssigning(false);
+    }
+  };
+
+  const handleApproveCure = async (assignmentId: number) => {
+    setDoctorApprovingId(assignmentId);
+    setDoctorIllnessError(null);
+    setDoctorIllnessSuccess(null);
+    try {
+      const response = await doctorIllnessApi.approveCure(assignmentId);
+      const xpMsg = response.data.new_level
+        ? ` Level up! You are now level ${response.data.new_level}.`
+        : '';
+      setDoctorIllnessSuccess(
+        `Cured ${response.data.patient_display_name}. +${response.data.experience_points} XP.${xpMsg}`
+      );
+      await fetchDoctorIllnessStatus();
+    } catch (err: any) {
+      setDoctorIllnessError(err.response?.data?.error || 'Could not approve cure');
+    } finally {
+      setDoctorApprovingId(null);
     }
   };
 
@@ -1916,6 +2024,181 @@ const MyJobDetails: React.FC = () => {
           </div>
         )}
 
+        {/* Doctor – teacher illness previews */}
+        {user?.role === 'teacher' && (job?.name || '').toLowerCase().trim().includes('doctor') && (
+          <div className="pt-6 border-t border-gray-200">
+            <DoctorIllnessTestButtons
+              activeTest={testIllness}
+              onStartTest={(type) => {
+                setTestIllness(type);
+                setTestIllnessRun((n) => n + 1);
+              }}
+            />
+          </div>
+        )}
+
+        {/* Doctor – Random illness clinic (student doctors only) */}
+        {user?.role === 'student' && (job?.name || '').toLowerCase().trim().includes('doctor') && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-6 border border-emerald-200">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Town Clinic — Random Illness</h3>
+                  <p className="text-sm text-gray-600">
+                    Assign a random illness to a classmate. Up to {doctorIllnessStatus?.daily_limit ?? 5} students per town class per day.
+                  </p>
+                  <ul className="text-xs text-gray-500 mt-2 list-disc list-inside space-y-0.5">
+                    <li>Verdigris Vertigo — wavy green screen</li>
+                    <li>Town Hall Lockdown — buttons locked until clinic opens</li>
+                    <li>Treasury Beetle Plague — bugs on screen</li>
+                  </ul>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAssignRandomIllness}
+                  disabled={
+                    doctorIllnessAssigning ||
+                    !doctorIllnessStatus ||
+                    (doctorIllnessStatus.remaining_today ?? 0) <= 0
+                  }
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors shrink-0"
+                >
+                  {doctorIllnessAssigning ? 'Assigning…' : 'Make Random Student Sick'}
+                </button>
+              </div>
+              {doctorIllnessStatus && (
+                <p className="text-sm text-gray-700 mb-2">
+                  Remaining today:{' '}
+                  <span className="font-bold">
+                    {doctorIllnessStatus.remaining_today} / {doctorIllnessStatus.daily_limit}
+                  </span>
+                </p>
+              )}
+              {doctorIllnessSuccess && (
+                <p className="text-sm text-emerald-800 bg-emerald-100 rounded-lg px-3 py-2 mb-2">{doctorIllnessSuccess}</p>
+              )}
+              {doctorIllnessError && (
+                <p className="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2 mb-2">{doctorIllnessError}</p>
+              )}
+              {doctorIllnessStatus && doctorIllnessStatus.pending_cures.length > 0 && (
+                <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                  <p className="font-semibold text-gray-900 mb-2">Pending cure approvals</p>
+                  <p className="text-xs text-gray-600 mb-3">
+                    Patients paid ${doctorIllnessStatus.cure_fee?.toFixed(2) ?? '5000.00'} each. Approve to cure them
+                    (+{doctorIllnessStatus.cure_approve_xp ?? 10} XP per cure).
+                  </p>
+                  <ul className="space-y-2">
+                    {doctorIllnessStatus.pending_cures.map((c) => (
+                      <li
+                        key={c.id}
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-amber-200 px-3 py-2"
+                      >
+                        <span className="text-sm text-gray-800">
+                          {c.patient_display_name} — {c.illness_name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleApproveCure(c.id)}
+                          disabled={doctorApprovingId === c.id}
+                          className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-sm font-semibold px-4 py-2 rounded-lg shrink-0"
+                        >
+                          {doctorApprovingId === c.id ? 'Approving…' : 'Approve cure'}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {doctorIllnessStatus && doctorIllnessStatus.recent_assignments.length > 0 && (
+                <div className="text-sm">
+                  <p className="font-medium text-gray-700 mb-2">Today&apos;s clinic visits</p>
+                  <ul className="space-y-1 text-gray-600">
+                    {doctorIllnessStatus.recent_assignments.map((a) => (
+                      <li key={a.id}>
+                        {a.patient_display_name} — {a.illness_name}
+                        {a.illness_status === 'recovered'
+                          ? ' (recovered)'
+                          : a.illness_status === 'pending_cure'
+                            ? ' (paid — awaiting your approval)'
+                            : ' (sick)'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Insurance broker — approve classmate insurance requests */}
+        {user?.role === 'student' && isInsuranceBrokerJob && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-lg p-6 border border-teal-200">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-teal-600" />
+                  Insurance Broker — Pending requests
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Classmates in your town must get your approval before insurance coverage starts. Denied requests are refunded automatically.
+                </p>
+              </div>
+              {insuranceBrokerSuccess && (
+                <p className="text-sm text-teal-800 bg-teal-100 rounded-lg px-3 py-2 mb-2">{insuranceBrokerSuccess}</p>
+              )}
+              {insuranceBrokerError && (
+                <p className="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2 mb-2">{insuranceBrokerError}</p>
+              )}
+              {insuranceBrokerLoading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
+                </div>
+              ) : insuranceBrokerPending.length === 0 ? (
+                <p className="text-sm text-gray-500">No pending insurance requests in your town class.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {insuranceBrokerPending.map((req) => {
+                    const displayName =
+                      [req.first_name, req.last_name].filter(Boolean).join(' ') || req.username;
+                    return (
+                      <li
+                        key={req.id}
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg border border-teal-200 px-3 py-3"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{displayName}</p>
+                          <p className="text-xs text-gray-600">
+                            {req.insurance_type} • {req.weeks} week(s) • R
+                            {parseFloat(String(req.total_cost)).toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleInsuranceBrokerReview(req.id, 'approved')}
+                            disabled={insuranceReviewingId === req.id}
+                            className="bg-teal-600 hover:bg-teal-700 disabled:bg-gray-300 text-white text-sm font-semibold px-4 py-2 rounded-lg"
+                          >
+                            {insuranceReviewingId === req.id ? '…' : 'Approve'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleInsuranceBrokerReview(req.id, 'denied')}
+                            disabled={insuranceReviewingId === req.id}
+                            className="bg-white border border-red-300 text-red-700 hover:bg-red-50 disabled:bg-gray-100 text-sm font-semibold px-4 py-2 rounded-lg"
+                          >
+                            Deny
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Doctor – Public Health & Biome Challenge */}
         {(job?.name || '').toLowerCase().trim().includes('doctor') && (
           <div className="pt-6 border-t border-gray-200">
@@ -2580,6 +2863,14 @@ const MyJobDetails: React.FC = () => {
           isOpen={isEntrepreneurProposalModalOpen}
           onClose={() => setIsEntrepreneurProposalModalOpen(false)}
           onSuccess={() => fetchEntrepreneurProposals()}
+        />
+      )}
+
+      {user?.role === 'teacher' && testIllness && (
+        <StudentIllnessOverlay
+          key={testIllnessRun}
+          testIllness={testIllness}
+          onTestEnd={() => setTestIllness(null)}
         />
       )}
     </div>

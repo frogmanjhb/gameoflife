@@ -18,6 +18,7 @@ interface Quote {
   rate_percent: number;
   per_type_per_week: number;
   types: string[];
+  broker_required?: boolean;
 }
 
 interface Policy {
@@ -25,9 +26,11 @@ interface Policy {
   insurance_type: string;
   weeks: number;
   total_cost: number;
-  week_start_date: string;
+  week_start_date: string | null;
   created_at: string;
   active?: boolean;
+  status?: 'pending_broker' | 'approved' | 'denied';
+  denial_reason?: string | null;
 }
 
 interface TeacherPurchase {
@@ -36,8 +39,9 @@ interface TeacherPurchase {
   insurance_type: string;
   weeks: number;
   total_cost: number;
-  week_start_date: string;
+  week_start_date: string | null;
   created_at: string;
+  status?: string;
   username?: string;
   first_name?: string;
   last_name?: string;
@@ -129,7 +133,11 @@ const InsurancePlugin: React.FC = () => {
     setSuccess('');
     try {
       await api.post('/insurance/purchase', { types: selectedTypes, weeks });
-      setSuccess(`Insurance purchased for ${weeks} week(s): ${selectedTypes.join(', ')}.`);
+      setSuccess(
+        quote?.broker_required
+          ? `Insurance request submitted for broker approval (${weeks} week(s): ${selectedTypes.join(', ')}).`
+          : `Insurance purchased for ${weeks} week(s): ${selectedTypes.join(', ')}.`
+      );
       setSelectedTypes([]);
       setWeeks(1);
       fetchStudentData();
@@ -274,6 +282,7 @@ const InsurancePlugin: React.FC = () => {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Weeks</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week start</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                     </tr>
@@ -299,7 +308,8 @@ const InsurancePlugin: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">{p.weeks}</td>
                         <td className="px-4 py-3 font-semibold text-primary-600">{formatCurrency(parseFloat(String(p.total_cost)))}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{formatDate(p.week_start_date)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 capitalize">{p.status || 'approved'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{p.week_start_date ? formatDate(p.week_start_date) : '—'}</td>
                         <td className="px-4 py-3 text-sm text-gray-500">{formatDate(p.created_at)}</td>
                       </tr>
                     ))}
@@ -320,6 +330,11 @@ const InsurancePlugin: React.FC = () => {
               <p className="text-gray-600 mb-4">
                 Each insurance type costs <strong>{quote.rate_percent}%</strong> of your salary per week ({formatCurrency(quote.per_type_per_week)} per type).
               </p>
+              {quote.broker_required && (
+                <p className="text-amber-800 bg-amber-50 rounded-lg p-3 text-sm mb-4">
+                  Your town has an insurance broker. Purchases must be approved before coverage starts. Premium is charged when you submit; denied requests are refunded.
+                </p>
+              )}
               {quote.salary <= 0 && (
                 <p className="text-amber-700 bg-amber-50 rounded-lg p-3 text-sm">
                   You need a job to buy insurance. Get a job first, then return here.
@@ -330,7 +345,7 @@ const InsurancePlugin: React.FC = () => {
 
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Buy insurance</h2>
-            <p className="text-sm text-gray-600 mb-4">Select one or more types and number of weeks. Cost is 5% of salary per type per week.</p>
+            <p className="text-sm text-gray-600 mb-4">Select one or more types and number of weeks. Cost is 5% of salary per type per week. Active health insurance pays clinic fees automatically when you are sick.</p>
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Types</p>
@@ -409,15 +424,30 @@ const InsurancePlugin: React.FC = () => {
                         <div>
                           <p className="font-semibold text-gray-900">{meta?.label || p.insurance_type}</p>
                           <p className="text-sm text-gray-600">
-                            {p.weeks} week(s) from {formatDate(p.week_start_date)} • {formatCurrency(parseFloat(String(p.total_cost)))}
+                            {p.weeks} week(s)
+                            {p.week_start_date ? ` from ${formatDate(p.week_start_date)}` : ''}
+                            {' • '}
+                            {formatCurrency(parseFloat(String(p.total_cost)))}
                           </p>
                         </div>
                       </div>
-                      {p.active && (
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-200 text-teal-800">
-                          Active
-                        </span>
-                      )}
+                      <div className="flex flex-col items-end gap-1">
+                        {p.status === 'pending_broker' && (
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-200 text-amber-900">
+                            Pending broker
+                          </span>
+                        )}
+                        {p.status === 'denied' && (
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-200 text-red-800">
+                            Denied
+                          </span>
+                        )}
+                        {p.active && (
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-200 text-teal-800">
+                            Active
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

@@ -704,6 +704,52 @@ export interface DoctorGameSubmitRequest {
   answer_sequence: boolean[];
 }
 
+export type DoctorIllnessType = 'verdigris_vertigo' | 'button_lock_fever' | 'creep_crawlies';
+
+export interface DoctorIllnessMyStatus {
+  active: boolean;
+  illness_type?: DoctorIllnessType;
+  illness_name?: string;
+  illness_description?: string;
+  assigned_at?: string;
+  see_doctor_available_at?: string;
+  can_see_doctor?: boolean;
+  seconds_until_see_doctor?: number;
+  pending_cure?: boolean;
+  cure_fee?: number;
+  doctor_username?: string;
+  doctor_display_name?: string;
+  health_insurance_covers_clinic?: boolean;
+}
+
+export interface DoctorIllnessPendingCure {
+  id: number;
+  patient_username: string;
+  patient_display_name: string;
+  illness_type: DoctorIllnessType;
+  illness_name: string;
+  cure_fee: number;
+  cure_requested_at: string;
+}
+
+export interface DoctorIllnessDoctorStatus {
+  remaining_today: number;
+  daily_limit: number;
+  cure_fee: number;
+  cure_approve_xp: number;
+  pending_cures: DoctorIllnessPendingCure[];
+  recent_assignments: Array<{
+    id: number;
+    patient_username: string;
+    patient_display_name: string;
+    illness_type: DoctorIllnessType;
+    illness_name: string;
+    assigned_at: string;
+    cured_at: string | null;
+    illness_status: 'sick' | 'pending_cure' | 'recovered';
+  }>;
+}
+
 export interface RetailManagerGameStatus {
   remaining_plays: number;
   daily_limit: number;

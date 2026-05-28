@@ -20,6 +20,7 @@ import {
   TeacherGameStatus, TeacherGameStartRequest, TeacherGameSubmitRequest,
   NurseGameStatus, NurseGameStartRequest, NurseGameSubmitRequest,
   DoctorGameStatus, DoctorGameStartRequest, DoctorGameSubmitRequest,
+  DoctorIllnessMyStatus, DoctorIllnessDoctorStatus,
   RetailManagerGameStatus, RetailManagerGameStartRequest, RetailManagerGameSubmitRequest,
   EntrepreneurGameStatus, EntrepreneurGameStartRequest, EntrepreneurGameSubmitRequest,
   Job, JobApplication, LandParcel, LandPurchaseRequest, LandSaleRequest, 
@@ -281,6 +282,87 @@ export const doctorGameApi = {
     api.post('/doctor-game/submit', data)
 };
 
+export const doctorIllnessApi = {
+  getDoctorStatus: (): Promise<{ data: DoctorIllnessDoctorStatus }> =>
+    api.get('/doctor-illness/doctor-status'),
+  assignRandom: (): Promise<{
+    data: {
+      success: boolean;
+      assignment: {
+        id: number;
+        patient_username: string;
+        patient_display_name: string;
+        illness_type: string;
+        illness_name: string;
+        assigned_at: string;
+      };
+      remaining_today: number;
+    };
+  }> => api.post('/doctor-illness/assign'),
+  getMyStatus: (): Promise<{ data: DoctorIllnessMyStatus }> => api.get('/doctor-illness/my-status'),
+  seeDoctor: (): Promise<{
+    data: {
+      success: boolean;
+      cured: boolean;
+      pending_cure?: boolean;
+      cure_fee?: number;
+      doctor_username?: string;
+    };
+  }> => api.post('/doctor-illness/see-doctor'),
+  approveCure: (
+    assignmentId: number
+  ): Promise<{
+    data: {
+      success: boolean;
+      cured: boolean;
+      patient_display_name: string;
+      experience_points: number;
+      new_level: number | null;
+    };
+  }> => api.post(`/doctor-illness/approve-cure/${assignmentId}`),
+};
+
+export interface InsurancePolicy {
+  id: number;
+  insurance_type: string;
+  weeks: number;
+  total_cost: number;
+  week_start_date: string | null;
+  created_at: string;
+  status?: 'pending_broker' | 'approved' | 'denied';
+  active?: boolean;
+  reviewed_at?: string | null;
+  denial_reason?: string | null;
+}
+
+export interface InsuranceBrokerPendingRequest {
+  id: number;
+  user_id: number;
+  insurance_type: string;
+  weeks: number;
+  total_cost: number;
+  created_at: string;
+  username: string;
+  first_name: string | null;
+  last_name: string | null;
+  class: string | null;
+}
+
+export const insuranceApi = {
+  getQuote: (): Promise<{ data: { salary: number; rate_percent: number; per_type_per_week: number; types: string[]; broker_required?: boolean } }> =>
+    api.get('/insurance/quote'),
+  getMyPolicies: (): Promise<{ data: InsurancePolicy[] }> => api.get('/insurance/my-policies'),
+  purchase: (data: { types: string[]; weeks: number }): Promise<{ data: { message: string; pending_broker?: boolean; status?: string } }> =>
+    api.post('/insurance/purchase', data),
+  getBrokerPending: (): Promise<{ data: InsuranceBrokerPendingRequest[] }> =>
+    api.get('/insurance/broker/pending'),
+  reviewBrokerRequest: (
+    id: number,
+    data: { status: 'approved' | 'denied'; denial_reason?: string }
+  ): Promise<{ data: { success: boolean; status: string; applicant_username?: string; insurance_type?: string } }> =>
+    api.put(`/insurance/broker/requests/${id}/review`, data),
+};
+
 export const retailManagerGameApi = {
   getStatus: (): Promise<{ data: RetailManagerGameStatus }> => api.get('/retail-manager-game/status'),
   startGame: (data: RetailManagerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
@@ -518,6 +600,15 @@ export const landApi = {
 
   cancelSaleRequest: (id: number): Promise<{ data: { message: string } }> =>
     api.put(`/land/sale-requests/${id}/cancel`),
+
+  getClassStudents: (townClass: '6A' | '6B' | '6C'): Promise<{ data: Array<{ id: number; username: string; first_name?: string; last_name?: string; class?: string }> }> =>
+    api.get(`/land/class-students?town_class=${townClass}`),
+
+  assignParcelOwner: (parcelId: number, studentId: number): Promise<{ data: { message: string; parcel: LandParcel } }> =>
+    api.put(`/land/parcels/${parcelId}/owner`, { student_id: studentId }),
+
+  removeParcelOwner: (parcelId: number): Promise<{ data: { message: string; parcel: LandParcel } }> =>
+    api.delete(`/land/parcels/${parcelId}/owner`),
 };
 
 // Treasury and Tax API methods

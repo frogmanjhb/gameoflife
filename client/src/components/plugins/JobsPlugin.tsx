@@ -31,6 +31,9 @@ import NurseGameModal from '../jobchallenges/NurseGameModal';
 import DoctorGameModal from '../jobchallenges/DoctorGameModal';
 import RetailManagerGameModal from '../jobchallenges/RetailManagerGameModal';
 import EntrepreneurGameModal from '../jobchallenges/EntrepreneurGameModal';
+import DoctorIllnessTestButtons from '../DoctorIllnessTestButtons';
+import StudentIllnessOverlay from '../StudentIllnessOverlay';
+import { DoctorIllnessType } from '../../utils/doctorIllness';
 
 const JobsPlugin: React.FC = () => {
   const { plugins, loading: pluginsLoading } = usePlugins();
@@ -50,6 +53,8 @@ const JobsPlugin: React.FC = () => {
   const [applicationActionError, setApplicationActionError] = useState<string | null>(null);
   const [classJobAssignments, setClassJobAssignments] = useState<{ id: number; name: string; assigned_students: { first_name: string; last_name: string; username: string }[] }[] | null>(null);
   const [testGameKey, setTestGameKey] = useState<JobGameTestKey | null>(null);
+  const [testIllness, setTestIllness] = useState<DoctorIllnessType | null>(null);
+  const [testIllnessRun, setTestIllnessRun] = useState(0);
 
   // Check if current user already has a job
   const userHasJob = user?.job_id !== null && user?.job_id !== undefined;
@@ -351,7 +356,7 @@ const JobsPlugin: React.FC = () => {
             Try each job challenge game as students will see it. No points or money are recorded.
           </p>
           <div className="flex flex-wrap gap-2">
-            {JOB_GAME_TEST_LIST.map(({ key, label }) => (
+            {JOB_GAME_TEST_LIST.filter(({ key }) => key !== 'doctor').map(({ key, label }) => (
               <button
                 key={key}
                 type="button"
@@ -362,6 +367,24 @@ const JobsPlugin: React.FC = () => {
                 Test {label}
               </button>
             ))}
+          </div>
+          <div className="mt-5 pt-5 border-t border-gray-200 space-y-3">
+            <h3 className="text-sm font-semibold text-gray-800">Junior Doctor</h3>
+            <button
+              type="button"
+              onClick={() => setTestGameKey('doctor')}
+              className="inline-flex items-center px-3 py-2 rounded-lg font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors text-sm"
+            >
+              <FlaskConical className="h-4 w-4 mr-1.5" />
+              Test Health Investigation
+            </button>
+            <DoctorIllnessTestButtons
+              activeTest={testIllness}
+              onStartTest={(type) => {
+                setTestIllness(type);
+                setTestIllnessRun((n) => n + 1);
+              }}
+            />
           </div>
         </div>
       )}
@@ -470,6 +493,14 @@ const JobsPlugin: React.FC = () => {
       )}
 
       {/* Test job game modals (teacher only) */}
+      {user?.role === 'teacher' && testIllness && (
+        <StudentIllnessOverlay
+          key={testIllnessRun}
+          testIllness={testIllness}
+          onTestEnd={() => setTestIllness(null)}
+        />
+      )}
+
       {user?.role === 'teacher' && (
         <>
           <ArchitectGameModal isOpen={testGameKey === 'architect'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />

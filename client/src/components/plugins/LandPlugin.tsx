@@ -318,7 +318,7 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                   </button>
                 </div>
               )}
-              <LandGrid readOnly={true} canRearrange={true} townClass={currentTownClass} />
+              <LandGrid readOnly={true} canRearrange={true} canManageOwnership={true} townClass={currentTownClass} />
             </>
           )}
 

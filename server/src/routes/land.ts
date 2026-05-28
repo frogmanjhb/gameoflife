@@ -356,7 +356,7 @@ router.post('/purchase-request',
 
       const townClassForEngineers = parcel.town_class || userClass;
       const requiredEngineers = isTownClass(townClassForEngineers)
-        ? await getRequiredLandEngineers(userSchoolId, townClassForEngineers)
+        ? await getRequiredLandEngineers(userSchoolId, townClassForEngineers, req.user!.id)
         : [];
       const initialStatus = requiredEngineers.length > 0 ? 'pending_engineer' : 'pending_teacher';
 
@@ -464,9 +464,17 @@ router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedReq
         );
       }
 
-      const requiredEngineers = await getRequiredLandEngineers(schoolId, user.class);
-      const isRequired = requiredEngineers.some((e) => e.id === req.user!.id);
-      const filtered = isRequired ? rows : [];
+      const filtered: typeof rows = [];
+      for (const row of rows) {
+        const requiredForRequest = await getRequiredLandEngineers(
+          schoolId,
+          user.class,
+          row.user_id
+        );
+        if (requiredForRequest.some((e) => e.id === req.user!.id)) {
+          filtered.push(row);
+        }
+      }
 
       const enriched = await Promise.all(filtered.map((row) => enrichPurchaseRequestWithEngineers(row)));
       return res.json(enriched);
@@ -984,6 +992,178 @@ router.post('/recalculate-values',
       res.json({ message: 'Land values recalculated', updated, town_class: townClass });
     } catch (error) {
       console.error('Failed to recalculate land values:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+async function getParcelForTeacher(parcelId: number, schoolId: number | null, townClass: string) {
+  return database.get(
+    schoolId !== null
+      ? `SELECT lp.*, u.username AS owner_username, u.first_name AS owner_first_name, u.last_name AS owner_last_name
+         FROM land_parcels lp
+         LEFT JOIN users u ON lp.owner_id = u.id
+         WHERE lp.id = $1 AND lp.school_id = $2 AND lp.town_class = $3`
+      : `SELECT lp.*, u.username AS owner_username, u.first_name AS owner_first_name, u.last_name AS owner_last_name
+         FROM land_parcels lp
+         LEFT JOIN users u ON lp.owner_id = u.id
+         WHERE lp.id = $1 AND lp.school_id IS NULL AND lp.town_class = $2`,
+    schoolId !== null ? [parcelId, schoolId, townClass] : [parcelId, townClass]
+  );
+}
+
+async function cancelActiveLandRequestsForParcel(parcelId: number): Promise<void> {
+  await database.run(
+    `UPDATE land_purchase_requests
+     SET status = 'denied',
+         denial_reason = 'Plot assigned or cleared by teacher',
+         updated_at = CURRENT_TIMESTAMP
+     WHERE parcel_id = $1 AND status IN ('pending_engineer', 'pending_teacher')`,
+    [parcelId]
+  );
+  await database.run(
+    `UPDATE land_sale_requests
+     SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+     WHERE parcel_id = $1 AND status IN ('pending_fm', 'pending_buyer')`,
+    [parcelId]
+  );
+}
+
+// GET /api/land/class-students — students in a town class (teachers only)
+router.get('/class-students', authenticateToken, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const townClass = resolveTownClass(req, req.query.town_class);
+    if (!townClass) {
+      return res.status(400).json({ error: 'Valid town_class (6A, 6B, or 6C) is required' });
+    }
+    const schoolId = req.user?.school_id ?? null;
+    const students = schoolId !== null
+      ? await database.query(
+          `SELECT u.id, u.username, u.first_name, u.last_name, u.class
+           FROM users u
+           WHERE u.role = 'student' AND u.class = $1 AND u.school_id = $2
+           ORDER BY u.last_name, u.first_name, u.username`,
+          [townClass, schoolId]
+        )
+      : await database.query(
+          `SELECT u.id, u.username, u.first_name, u.last_name, u.class
+           FROM users u
+           WHERE u.role = 'student' AND u.class = $1 AND u.school_id IS NULL
+           ORDER BY u.last_name, u.first_name, u.username`,
+          [townClass]
+        );
+    res.json(students);
+  } catch (error) {
+    console.error('Failed to fetch class students for land assign:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/land/parcels/:parcelId/owner — teacher assigns plot to student (no charge)
+router.put('/parcels/:parcelId/owner',
+  authenticateToken,
+  requireRole(['teacher']),
+  body('student_id').isInt({ min: 1 }),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const parcelId = parseInt(req.params.parcelId, 10);
+      const { student_id: studentId } = req.body;
+      const schoolId = req.user?.school_id ?? null;
+
+      const parcel = await database.get('SELECT * FROM land_parcels WHERE id = $1', [parcelId]);
+      if (!parcel) {
+        return res.status(404).json({ error: 'Parcel not found' });
+      }
+      if (schoolId !== null && parcel.school_id !== schoolId) {
+        return res.status(404).json({ error: 'Parcel not found' });
+      }
+      if (schoolId === null && parcel.school_id !== null) {
+        return res.status(404).json({ error: 'Parcel not found' });
+      }
+      if (!parcel.town_class) {
+        return res.status(400).json({ error: 'Parcel has no town class' });
+      }
+
+      const student = await database.get(
+        `SELECT id, class, school_id, role FROM users WHERE id = $1`,
+        [studentId]
+      );
+      if (!student || student.role !== 'student') {
+        return res.status(404).json({ error: 'Student not found' });
+      }
+      if ((student.school_id ?? null) !== schoolId) {
+        return res.status(400).json({ error: 'Student must be in your school' });
+      }
+      if (student.class !== parcel.town_class) {
+        return res.status(400).json({ error: 'Student must be in the same town class as the plot' });
+      }
+
+      const assignValue = Number(parcel.value) || 0;
+      await cancelActiveLandRequestsForParcel(parcelId);
+      await database.run(
+        `UPDATE land_parcels
+         SET owner_id = $1,
+             purchased_at = CURRENT_TIMESTAMP,
+             purchase_price = $2,
+             last_rent_collected_at = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $3`,
+        [studentId, assignValue, parcelId]
+      );
+
+      const updated = await getParcelForTeacher(parcelId, schoolId, parcel.town_class);
+      res.json({ message: 'Plot assigned to student', parcel: updated });
+    } catch (error) {
+      console.error('Failed to assign parcel owner:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// DELETE /api/land/parcels/:parcelId/owner — teacher removes plot from student
+router.delete('/parcels/:parcelId/owner',
+  authenticateToken,
+  requireRole(['teacher']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const parcelId = parseInt(req.params.parcelId, 10);
+      const schoolId = req.user?.school_id ?? null;
+
+      const parcel = await database.get('SELECT * FROM land_parcels WHERE id = $1', [parcelId]);
+      if (!parcel) {
+        return res.status(404).json({ error: 'Parcel not found' });
+      }
+      if (schoolId !== null && parcel.school_id !== schoolId) {
+        return res.status(404).json({ error: 'Parcel not found' });
+      }
+      if (schoolId === null && parcel.school_id !== null) {
+        return res.status(404).json({ error: 'Parcel not found' });
+      }
+      if (!parcel.owner_id) {
+        return res.status(400).json({ error: 'This plot is not assigned to a student' });
+      }
+
+      await cancelActiveLandRequestsForParcel(parcelId);
+      await database.run(
+        `UPDATE land_parcels
+         SET owner_id = NULL,
+             purchased_at = NULL,
+             purchase_price = NULL,
+             last_rent_collected_at = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [parcelId]
+      );
+
+      const updated = await getParcelForTeacher(parcelId, schoolId, parcel.town_class);
+      res.json({ message: 'Plot ownership removed', parcel: updated });
+    } catch (error) {
+      console.error('Failed to remove parcel owner:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }
