@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePlugins } from '../contexts/PluginContext';
 import { useTown } from '../contexts/TownContext';
-import { classEventsApi } from '../services/api';
+import { classEventsApi, fiveMinuteLessonsApi } from '../services/api';
 import PluginCard from './PluginCard';
 import AnnouncementsPanel from './AnnouncementsPanel';
 import TownInfo from './TownInfo';
@@ -49,25 +49,39 @@ const StudentDashboard: React.FC = () => {
   const { currentTown, announcements, loading: townLoading } = useTown();
 
   const eventVotingEnabled = enabledPlugins.some((p) => p.route_path === '/event-voting');
+  const fiveMinuteLessonsEnabled = enabledPlugins.some((p) => p.route_path === '/five-minute-lessons');
   const [eventVotingNeedsVote, setEventVotingNeedsVote] = useState(false);
+  const [lessonsNeedsVote, setLessonsNeedsVote] = useState(false);
 
   useEffect(() => {
-    if (!canAccessPlugins || !eventVotingEnabled || user?.role !== 'student') {
+    if (!canAccessPlugins || user?.role !== 'student') {
       setEventVotingNeedsVote(false);
+      setLessonsNeedsVote(false);
       return;
     }
     const fetchVoteStatus = async () => {
       try {
-        const res = await classEventsApi.getStatus();
-        setEventVotingNeedsVote(!!res.data.needs_vote);
+        if (eventVotingEnabled) {
+          const res = await classEventsApi.getStatus();
+          setEventVotingNeedsVote(!!res.data.needs_vote);
+        } else {
+          setEventVotingNeedsVote(false);
+        }
+        if (fiveMinuteLessonsEnabled) {
+          const res = await fiveMinuteLessonsApi.getStatus();
+          setLessonsNeedsVote(!!res.data.needs_vote);
+        } else {
+          setLessonsNeedsVote(false);
+        }
       } catch {
         setEventVotingNeedsVote(false);
+        setLessonsNeedsVote(false);
       }
     };
     fetchVoteStatus();
     const interval = setInterval(fetchVoteStatus, 15000);
     return () => clearInterval(interval);
-  }, [canAccessPlugins, eventVotingEnabled, user?.role]);
+  }, [canAccessPlugins, eventVotingEnabled, fiveMinuteLessonsEnabled, user?.role]);
   
   // Get header color theme (set once per login session)
   const [headerTheme] = useState(getRandomHeaderColor);
@@ -205,7 +219,10 @@ const StudentDashboard: React.FC = () => {
               <PluginCard
                 key={plugin.id}
                 plugin={plugin}
-                needsVote={plugin.route_path === '/event-voting' && eventVotingNeedsVote}
+                needsVote={
+                  (plugin.route_path === '/event-voting' && eventVotingNeedsVote) ||
+                  (plugin.route_path === '/five-minute-lessons' && lessonsNeedsVote)
+                }
               />
             ))}
           </div>

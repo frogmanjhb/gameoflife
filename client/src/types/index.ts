@@ -1025,6 +1025,42 @@ export interface ClassEventVotingStatus {
   town_class?: string;
 }
 
+export type FiveMinuteLessonStatus = 'pending' | 'denied' | 'open' | 'closed';
+
+export interface FiveMinuteLessonItem {
+  id: number;
+  title: string;
+  description?: string | null;
+  class_content: string;
+  timing: ClassEventTiming;
+  timing_label: string;
+  status: FiveMinuteLessonStatus;
+  status_label: string;
+  vote_count: number;
+  has_voted: boolean;
+  suggested_by_user_id: number;
+  suggester_username?: string;
+  suggester_name?: string;
+  created_at: string;
+}
+
+export interface FiveMinuteLessonsStatus {
+  teacher_board_enabled: boolean;
+  student_board_visible: boolean;
+  board_active: boolean;
+  is_lesson_presenter: boolean;
+  suggestions_this_week: number;
+  suggestions_per_week: number;
+  remaining_suggestions: number;
+  suggestion_xp_reward: number;
+  suggestion_earnings_reward: number;
+  lessons: FiveMinuteLessonItem[];
+  pending_lessons: FiveMinuteLessonItem[];
+  pending_count: number;
+  needs_vote: boolean;
+  town_class?: string;
+}
+
 export interface Announcement {
   id: number;
   title: string;

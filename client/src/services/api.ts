@@ -25,7 +25,8 @@ import {
   CodeBoardManageStatus, CodeBoardPublicView, CodeBoardAppItem,
   TownNewsManageStatus, TownNewsPublicView, TownNewsStory,
   ContentSubmissionsPending,
-  ClassEventVotingStatus, ClassEventTiming,
+  ClassEventVotingStatus, ClassEventTiming, ClassEventItem,
+  FiveMinuteLessonsStatus, FiveMinuteLessonItem,
   RetailManagerGameStatus, RetailManagerGameStartRequest, RetailManagerGameSubmitRequest,
   EntrepreneurGameStatus, EntrepreneurGameStartRequest, EntrepreneurGameSubmitRequest,
   Job, JobApplication, LandParcel, LandPurchaseRequest, LandSaleRequest, 
@@ -1165,6 +1166,53 @@ export const classEventsApi = {
     api.post(`/class-events/${eventId}/close`, { town_class: townClass }),
   deleteEvent: (eventId: number, townClass: string): Promise<{ data: { success: boolean } }> =>
     api.delete(`/class-events/${eventId}`, { params: { class: townClass } }),
+};
+
+export const fiveMinuteLessonsApi = {
+  getStatus: (params?: { class?: string }): Promise<{ data: FiveMinuteLessonsStatus }> =>
+    api.get('/five-minute-lessons/status', { params }),
+  suggest: (data: {
+    title: string;
+    description?: string;
+    class_content: string;
+    timing: ClassEventTiming;
+  }): Promise<{
+    data: {
+      success: boolean;
+      lesson: FiveMinuteLessonItem;
+      remaining_suggestions: number;
+      message: string;
+    };
+  }> => api.post('/five-minute-lessons/suggest', data),
+  vote: (lessonId: number): Promise<{ data: { success: boolean; lesson_id: number; vote_count: number } }> =>
+    api.post(`/five-minute-lessons/${lessonId}/vote`),
+  approve: (
+    lessonId: number,
+    townClass: string
+  ): Promise<{
+    data: {
+      success: boolean;
+      experience_points: number;
+      earnings: number;
+      new_level: number | null;
+    };
+  }> => api.post(`/five-minute-lessons/${lessonId}/approve`, { town_class: townClass }),
+  deny: (
+    lessonId: number,
+    townClass: string,
+    denial_reason?: string
+  ): Promise<{ data: { success: boolean } }> =>
+    api.post(`/five-minute-lessons/${lessonId}/deny`, { town_class: townClass, denial_reason }),
+  updateSettings: (data: {
+    board_visible?: boolean;
+    teacher_board_enabled?: boolean;
+    town_class?: string;
+  }): Promise<{ data: { student_board_visible?: boolean; teacher_board_enabled?: boolean; town_class?: string } }> =>
+    api.patch('/five-minute-lessons/settings', data),
+  closeLesson: (lessonId: number, townClass: string): Promise<{ data: { success: boolean } }> =>
+    api.post(`/five-minute-lessons/${lessonId}/close`, { town_class: townClass }),
+  deleteLesson: (lessonId: number, townClass: string): Promise<{ data: { success: boolean } }> =>
+    api.delete(`/five-minute-lessons/${lessonId}`, { params: { class: townClass } }),
 };
 
 export const teacherAnalyticsApi = {

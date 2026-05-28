@@ -41,7 +41,8 @@
     "migrate:code-board": "node run-sql-migration.js migrations/090_add_code_board.sql",
     "migrate:town-news-board": "node run-sql-migration.js migrations/091_add_town_news_board.sql",
     "migrate:content-submission-approval": "node run-sql-migration.js migrations/092_add_content_submission_approval.sql",
-    "migrate:cyber-attack": "node run-sql-migration.js migrations/093_add_cyber_attack_tables.sql"
+    "migrate:cyber-attack": "node run-sql-migration.js migrations/093_add_cyber_attack_tables.sql",
+    "migrate:five-minute-lessons": "node run-sql-migration.js migrations/094_add_five_minute_lessons.sql"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

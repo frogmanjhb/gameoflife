@@ -27,6 +27,7 @@ import DoublesDayPlugin from './components/plugins/DoublesDayPlugin';
 import AnalyticsPlugin from './components/plugins/AnalyticsPlugin';
 import CodeBoardPlugin from './components/plugins/CodeBoardPlugin';
 import EventVotingPlugin from './components/plugins/EventVotingPlugin';
+import FiveMinuteLessonsPlugin from './components/plugins/FiveMinuteLessonsPlugin';
 import SuperAdminDashboard from './components/admin/SuperAdminDashboard';
 import RequireRulesAgreed from './components/RequireRulesAgreed';
 import ShowcasePage from './components/ShowcasePage';
@@ -392,6 +393,20 @@ const AppContent: React.FC = () => {
                   <TownProvider>
                     <RequireRulesAgreed>
                       <EventVotingPlugin />
+                    </RequireRulesAgreed>
+                  </TownProvider>
+                </PluginProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/five-minute-lessons"
+            element={
+              <ProtectedRoute>
+                <PluginProvider>
+                  <TownProvider>
+                    <RequireRulesAgreed>
+                      <FiveMinuteLessonsPlugin />
                     </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>

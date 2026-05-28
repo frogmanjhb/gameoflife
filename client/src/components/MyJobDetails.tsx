@@ -17,6 +17,7 @@ import GraphicDesignerGameModal from './jobchallenges/GraphicDesignerGameModal';
 import JournalistGameModal from './jobchallenges/JournalistGameModal';
 import EventPlannerGameModal from './jobchallenges/EventPlannerGameModal';
 import ClassEventSuggestForm from './ClassEventSuggestForm';
+import FiveMinuteLessonSuggestForm from './FiveMinuteLessonSuggestForm';
 import FinancialManagerGameModal from './jobchallenges/FinancialManagerGameModal';
 import HRDirectorGameModal from './jobchallenges/HRDirectorGameModal';
 import PoliceLieutenantGameModal from './jobchallenges/PoliceLieutenantGameModal';
@@ -2391,9 +2392,19 @@ const MyJobDetails: React.FC = () => {
           </div>
         )}
 
-        {/* Principal – School Leadership Challenge */}
+        {/* Principal – 5-minute lessons + School Leadership Challenge */}
         {(job?.name || '').toLowerCase().trim().includes('principal') && (
-          <div className="pt-6 border-t border-gray-200">
+          <div className="pt-6 border-t border-gray-200 space-y-6">
+            <div className="bg-gradient-to-r from-indigo-50 to-violet-50 rounded-lg p-6 border border-indigo-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                <Briefcase className="h-5 w-5 text-indigo-600" />
+                5 Minute Lessons
+              </h3>
+              <p className="text-sm text-gray-600">
+                Suggest short teaching activities linked to class content. Your teacher approves them before the class votes.
+              </p>
+              <FiveMinuteLessonSuggestForm />
+            </div>
             <div className="bg-gradient-to-r from-violet-50 to-blue-50 rounded-lg p-6 border border-violet-200">
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -2444,9 +2455,20 @@ const MyJobDetails: React.FC = () => {
           </div>
         )}
 
-        {/* Teacher – Learning Support Challenge */}
-        {(job?.name || '').toLowerCase().trim().includes('teacher') && (
-          <div className="pt-6 border-t border-gray-200">
+        {/* Teacher – 5-minute lessons + Learning Support Challenge */}
+        {(job?.name || '').toLowerCase().trim().includes('teacher') &&
+          !(job?.name || '').toLowerCase().trim().includes('event planner') && (
+          <div className="pt-6 border-t border-gray-200 space-y-6">
+            <div className="bg-gradient-to-r from-indigo-50 to-emerald-50 rounded-lg p-6 border border-indigo-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                <Briefcase className="h-5 w-5 text-indigo-600" />
+                5 Minute Lessons
+              </h3>
+              <p className="text-sm text-gray-600">
+                Suggest short teaching activities linked to class content. Your teacher approves them before the class votes.
+              </p>
+              <FiveMinuteLessonSuggestForm />
+            </div>
             <div className="bg-gradient-to-r from-amber-50 to-emerald-50 rounded-lg p-6 border border-amber-200">
               <div className="flex items-center justify-between mb-4">
                 <div>

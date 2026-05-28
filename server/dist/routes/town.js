@@ -7,6 +7,7 @@ const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
+const attendance_1 = require("../domain/attendance");
 const router = (0, express_1.Router)();
 // Helper function to calculate progressive tax rate based on salary
 async function calculateProgressiveTax(salary) {
@@ -456,13 +457,19 @@ router.post('/pay-salaries/:class', auth_1.authenticateToken, (0, auth_1.require
         if (students.length === 0) {
             return res.json({ message: 'No employed students found', paid_count: 0, total_paid: 0, total_tax: 0 });
         }
+        const salarySchoolId = req.user?.school_id ?? req.schoolId ?? null;
+        const absentNoSickNoteIds = await (0, attendance_1.getAbsentWithoutSickNoteStudentIds)(townClass, salarySchoolId, students.map((s) => s.id));
         // Calculate total salaries needed
         let totalGross = 0;
         let totalTax = 0;
         let totalNet = 0;
         const paymentDetails = [];
         for (const student of students) {
-            const salary = parseFloat(student.salary) || 0;
+            let salary = parseFloat(student.salary) || 0;
+            const absentWithoutSickNote = absentNoSickNoteIds.has(student.id);
+            if (absentWithoutSickNote) {
+                salary = salary * attendance_1.ABSENT_NO_SICK_NOTE_PAY_FACTOR;
+            }
             // Calculate tax if enabled
             let taxInfo = { taxRate: 0, taxAmount: 0, netAmount: salary };
             if (town.tax_enabled) {
@@ -474,6 +481,8 @@ router.post('/pay-salaries/:class', auth_1.authenticateToken, (0, auth_1.require
             paymentDetails.push({
                 ...student,
                 gross_salary: salary,
+                original_gross_salary: parseFloat(student.salary) || 0,
+                absent_without_sick_note: absentWithoutSickNote,
                 tax_rate: taxInfo.taxRate,
                 tax_amount: taxInfo.taxAmount,
                 net_salary: taxInfo.netAmount
@@ -499,8 +508,12 @@ router.post('/pay-salaries/:class', auth_1.authenticateToken, (0, auth_1.require
                     // Record salary transaction
                     await client.query('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [payment.account_id, payment.net_salary, 'salary',
                         town.tax_enabled
-                            ? `Salary for ${payment.job_name} (R${payment.gross_salary} - ${payment.tax_rate}% tax = R${payment.net_salary})`
-                            : `Salary for ${payment.job_name}`
+                            ? payment.absent_without_sick_note
+                                ? `Salary for ${payment.job_name} (reduced — absent without sick note: R${payment.gross_salary} - ${payment.tax_rate}% tax = R${payment.net_salary})`
+                                : `Salary for ${payment.job_name} (R${payment.gross_salary} - ${payment.tax_rate}% tax = R${payment.net_salary})`
+                            : payment.absent_without_sick_note
+                                ? `Salary for ${payment.job_name} (reduced — absent without sick note)`
+                                : `Salary for ${payment.job_name}`
                     ]);
                     // Record tax transaction if tax was applied
                     if (town.tax_enabled && payment.tax_amount > 0) {
@@ -513,7 +526,6 @@ router.post('/pay-salaries/:class', auth_1.authenticateToken, (0, auth_1.require
                 }
             }
             // Deduct net salaries from treasury (tax stays in treasury)
-            const salarySchoolId = req.user?.school_id ?? req.schoolId ?? null;
             if (salarySchoolId != null) {
                 await client.query('UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [totalNet, townClass, salarySchoolId]);
             }
