@@ -440,6 +440,8 @@ router.get('/engagement',
           SELECT user_id, experience_points, played_at FROM retail_manager_game_sessions
           UNION ALL
           SELECT user_id, experience_points, played_at FROM entrepreneur_game_sessions
+          UNION ALL
+          SELECT user_id, experience_points, played_at FROM insurance_manager_game_sessions
         )
         SELECT 
           COALESCE(login_stats.total_logins_users, 0)::int as total_logins_users,

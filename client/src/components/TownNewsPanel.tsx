@@ -1,8 +1,18 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ImagePlus, Loader2, Send, Trash2 } from 'lucide-react';
 import { townNewsApi } from '../services/api';
-import { TownNewsManageStatus, TownNewsStory, ContentSubmissionStatus } from '../types';
+import { TownNewsManageStatus, TownNewsStory, ContentSubmissionStatus, TownNewsWidgets } from '../types';
+import TownNewsStoryCard from './TownNewsStoryCard';
+import {
+  EMPTY_TOWN_NEWS_WIDGETS,
+  TOWN_NEWS_ACCENT_OPTIONS,
+  TOWN_NEWS_BADGE_OPTIONS,
+  TOWN_NEWS_EMOJI_OPTIONS,
+  TOWN_NEWS_HEADLINE_STYLE_OPTIONS,
+  badgeLabel,
+  hasWidgets,
+} from '../utils/townNewsWidgets';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
@@ -27,6 +37,15 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+function buildWidgetsPayload(widgets: TownNewsWidgets): TownNewsWidgets | undefined {
+  const out: TownNewsWidgets = {};
+  if (widgets.badge) out.badge = widgets.badge;
+  if (widgets.headline_style) out.headline_style = widgets.headline_style;
+  if (widgets.accent) out.accent = widgets.accent;
+  if (widgets.emojis && widgets.emojis.length > 0) out.emojis = [...widgets.emojis];
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 const TownNewsPanel: React.FC = () => {
   const [status, setStatus] = useState<TownNewsManageStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,7 +56,19 @@ const TownNewsPanel: React.FC = () => {
   const [body, setBody] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageData, setImageData] = useState<string | null>(null);
+  const [widgets, setWidgets] = useState<TownNewsWidgets>({ ...EMPTY_TOWN_NEWS_WIDGETS });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const previewWidgets = useMemo((): TownNewsWidgets => {
+    const out: TownNewsWidgets = {};
+    if (widgets.badge) out.badge = widgets.badge;
+    if (widgets.headline_style) out.headline_style = widgets.headline_style;
+    if (widgets.accent) out.accent = widgets.accent;
+    if (widgets.emojis?.length) out.emojis = widgets.emojis;
+    return out;
+  }, [widgets]);
+
+  const showPreview = headline.trim().length > 0 || body.trim().length > 0;
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -88,6 +119,28 @@ const TownNewsPanel: React.FC = () => {
     setImagePreview(null);
   };
 
+  const toggleEmoji = (emoji: string) => {
+    setWidgets((prev) => {
+      const current = prev.emojis ?? [];
+      if (current.includes(emoji)) {
+        return { ...prev, emojis: current.filter((e) => e !== emoji) };
+      }
+      if (current.length >= 5) {
+        setError('You can pick up to 5 emojis.');
+        return prev;
+      }
+      setError(null);
+      return { ...prev, emojis: [...current, emoji] };
+    });
+  };
+
+  const resetForm = () => {
+    setHeadline('');
+    setBody('');
+    clearImage();
+    setWidgets({ ...EMPTY_TOWN_NEWS_WIDGETS });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!headline.trim() || !body.trim()) return;
@@ -96,15 +149,15 @@ const TownNewsPanel: React.FC = () => {
       setActionLoading(true);
       setError(null);
       setSuccess(null);
+      const payload = buildWidgetsPayload(widgets);
       const res = await townNewsApi.submitStory({
         headline: headline.trim(),
         body: body.trim(),
         image_data: imageData || undefined,
+        widgets: payload,
       });
       setSuccess(res.data.message || 'Story submitted for teacher approval.');
-      setHeadline('');
-      setBody('');
-      clearImage();
+      resetForm();
       await fetchStatus();
     } catch (err: unknown) {
       setError(
@@ -154,9 +207,9 @@ const TownNewsPanel: React.FC = () => {
               Town News Board
             </h3>
             <p className="text-sm text-gray-600 mt-1">
-              Submit town news stories, posters, or advertising with photos. Your teacher must approve each
-              submission before it publishes. Once approved, you earn{' '}
-              <strong>{status?.story_xp_reward ?? 20} XP</strong> and{' '}
+              Submit town news stories, posters, or advertising with photos. Add optional widgets (badge, style,
+              colour bar, emojis) to stand out. Your teacher must approve each submission before it publishes. Once
+              approved, you earn <strong>{status?.story_xp_reward ?? 20} XP</strong> and{' '}
               <strong>R{(status?.story_earnings_reward ?? 5000).toLocaleString()}</strong>.
             </p>
           </div>
@@ -172,7 +225,7 @@ const TownNewsPanel: React.FC = () => {
           <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">{success}</p>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-3 mb-5">
+        <form onSubmit={handleSubmit} className="space-y-4 mb-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Headline</label>
             <input
@@ -197,6 +250,132 @@ const TownNewsPanel: React.FC = () => {
               disabled={actionLoading}
             />
           </div>
+
+          <div className="rounded-lg border border-indigo-100 bg-white p-4 space-y-4">
+            <p className="text-sm font-semibold text-gray-900">Story widgets (optional)</p>
+
+            <div>
+              <span className="block text-xs font-medium text-gray-600 mb-2">Story badge</span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={() => setWidgets((p) => ({ ...p, badge: undefined }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                    !widgets.badge
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-300'
+                  }`}
+                >
+                  None
+                </button>
+                {TOWN_NEWS_BADGE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={() => setWidgets((p) => ({ ...p, badge: opt.id }))}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                      widgets.badge === opt.id
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="block text-xs font-medium text-gray-600 mb-2">Headline style</span>
+              <div className="flex flex-wrap gap-2">
+                {TOWN_NEWS_HEADLINE_STYLE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={() =>
+                      setWidgets((p) => ({
+                        ...p,
+                        headline_style: p.headline_style === opt.id ? undefined : opt.id,
+                      }))
+                    }
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                      widgets.headline_style === opt.id
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="block text-xs font-medium text-gray-600 mb-2">Accent colour bar</span>
+              <div className="flex flex-wrap gap-2 items-center">
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={() => setWidgets((p) => ({ ...p, accent: undefined }))}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                    !widgets.accent
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-gray-700 border-gray-300'
+                  }`}
+                >
+                  None
+                </button>
+                {TOWN_NEWS_ACCENT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    disabled={actionLoading}
+                    title={opt.label}
+                    onClick={() =>
+                      setWidgets((p) => ({
+                        ...p,
+                        accent: p.accent === opt.id ? undefined : opt.id,
+                      }))
+                    }
+                    className={`h-8 w-14 rounded-md border-2 ${
+                      opt.id === 'teal' ? 'bg-teal-500' : opt.id === 'gold' ? 'bg-amber-500' : 'bg-red-600'
+                    } ${widgets.accent === opt.id ? 'border-indigo-700 ring-2 ring-indigo-300' : 'border-transparent opacity-80 hover:opacity-100'}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="block text-xs font-medium text-gray-600 mb-2">
+                Emoji strip (up to 5)
+                {widgets.emojis?.length ? ` · ${widgets.emojis.length}/5 selected` : ''}
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {TOWN_NEWS_EMOJI_OPTIONS.map((emoji) => {
+                  const selected = widgets.emojis?.includes(emoji);
+                  return (
+                    <button
+                      key={emoji}
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={() => toggleEmoji(emoji)}
+                      className={`text-xl w-10 h-10 rounded-lg border flex items-center justify-center ${
+                        selected
+                          ? 'bg-indigo-100 border-indigo-400 ring-2 ring-indigo-200'
+                          : 'bg-white border-gray-200 hover:border-indigo-200'
+                      }`}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Photo (optional)</label>
             <input
@@ -235,6 +414,20 @@ const TownNewsPanel: React.FC = () => {
               />
             )}
           </div>
+
+          {showPreview && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">Preview</p>
+              <TownNewsStoryCard
+                headline={headline.trim() || 'Your headline'}
+                body={body.trim() || 'Your story text…'}
+                image_data={imagePreview}
+                widgets={previewWidgets}
+                compact
+              />
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={actionLoading || !headline.trim() || !body.trim()}
@@ -258,6 +451,11 @@ const TownNewsPanel: React.FC = () => {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-gray-900">{story.headline}</p>
+                    {story.widgets?.badge && (
+                      <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                        {badgeLabel(story.widgets.badge)}
+                      </span>
+                    )}
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${submissionStatusClass(story.status)}`}>
                       {submissionStatusLabel(story.status)}
                     </span>
@@ -269,6 +467,7 @@ const TownNewsPanel: React.FC = () => {
                   <p className="text-xs text-gray-400 mt-1">
                     {new Date(story.created_at).toLocaleString()}
                     {story.image_data ? ' · includes photo' : ''}
+                    {hasWidgets(story.widgets) ? ' · widgets' : ''}
                   </p>
                 </div>
                 <button

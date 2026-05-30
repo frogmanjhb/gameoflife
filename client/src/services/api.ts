@@ -11,6 +11,7 @@ import {
   EventPlannerGameStatus, EventPlannerGameStartRequest, EventPlannerGameSubmitRequest,
   FinancialManagerGameStatus, FinancialManagerGameStartRequest, FinancialManagerGameSubmitRequest,
   HRDirectorGameStatus, HRDirectorGameStartRequest, HRDirectorGameSubmitRequest,
+  InsuranceManagerGameStatus, InsuranceManagerGameStartRequest, InsuranceManagerGameSubmitRequest,
   PoliceLieutenantGameStatus, PoliceLieutenantGameStartRequest, PoliceLieutenantGameSubmitRequest,
   LawyerGameStatus, LawyerGameStartRequest, LawyerGameSubmitRequest,
   TownPlannerGameStatus, TownPlannerGameStartRequest, TownPlannerGameSubmitRequest,
@@ -216,6 +217,14 @@ export const hrDirectorGameApi = {
     api.post('/hr-director-game/start', data),
   submitGame: (data: HRDirectorGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
     api.post('/hr-director-game/submit', data)
+};
+
+export const insuranceManagerGameApi = {
+  getStatus: (): Promise<{ data: InsuranceManagerGameStatus }> => api.get('/insurance-manager-game/status'),
+  startGame: (data: InsuranceManagerGameStartRequest): Promise<{ data: { session: { id: number } } }> =>
+    api.post('/insurance-manager-game/start', data),
+  submitGame: (data: InsuranceManagerGameSubmitRequest): Promise<{ data: { success: boolean; earnings: number; experience_points: number; new_level: number | null; isNewHighScore: boolean } }> =>
+    api.post('/insurance-manager-game/submit', data)
 };
 
 export const policeLieutenantGameApi = {
@@ -853,7 +862,18 @@ export const transactionsApi = {
   },
   denyAsAccountant: (id: number, denialReason?: string): Promise<{ data: { message: string } }> => {
     return api.post(`/transactions/my-approvals/${id}/deny`, denialReason ? { denial_reason: denialReason } : {});
-  }
+  },
+  getAccountantClientDetails: (
+    username: string
+  ): Promise<{ data: import('../types').AccountantClientDetailsResponse }> => {
+    return api.get(`/transactions/accountant-clients/${encodeURIComponent(username)}/details`);
+  },
+  submitAccountantClientAdvice: (
+    username: string,
+    advice: string
+  ): Promise<{ data: import('../types').AccountantClientAdviceSubmitResponse }> => {
+    return api.post(`/transactions/accountant-clients/${encodeURIComponent(username)}/advice`, { advice });
+  },
 };
 
 export interface PoliceFineBonus {
@@ -894,7 +914,7 @@ export const policeFinesBonusesApi = {
     description: string;
     amount: number;
     teacher_initials: string;
-  }): Promise<{ data: { message: string } }> =>
+  }): Promise<{ data: { message: string; experience_points?: number; new_level?: number | null; submit_xp?: number } }> =>
     api.post('/police-fines-bonuses', data),
 
   getPending: (): Promise<{ data: PoliceFineBonus[] }> =>
@@ -909,13 +929,13 @@ export const policeFinesBonusesApi = {
   getLawyerQueue: (): Promise<{ data: PoliceFineBonus[] }> =>
     api.get('/police-fines-bonuses/lawyer-queue'),
 
-  lawyerApprove: (id: number, lawyerNotes?: string): Promise<{ data: { message: string } }> =>
+  lawyerApprove: (id: number, lawyerNotes?: string): Promise<{ data: { message: string; experience_points?: number; new_level?: number | null } }> =>
     api.post(`/police-fines-bonuses/${id}/lawyer-approve`, lawyerNotes ? { lawyer_notes: lawyerNotes } : {}),
 
-  lawyerDeny: (id: number, lawyerNotes?: string): Promise<{ data: { message: string } }> =>
+  lawyerDeny: (id: number, lawyerNotes?: string): Promise<{ data: { message: string; experience_points?: number; new_level?: number | null } }> =>
     api.post(`/police-fines-bonuses/${id}/lawyer-deny`, lawyerNotes ? { lawyer_notes: lawyerNotes } : {}),
 
-  dispute: (id: number, disputeReason: string, lawyerNotes?: string): Promise<{ data: { message: string } }> =>
+  dispute: (id: number, disputeReason: string, lawyerNotes?: string): Promise<{ data: { message: string; experience_points?: number; new_level?: number | null } }> =>
     api.post(`/police-fines-bonuses/${id}/dispute`, {
       dispute_reason: disputeReason,
       ...(lawyerNotes ? { lawyer_notes: lawyerNotes } : {}),
@@ -1075,6 +1095,11 @@ export const tendersApi = {
 };
 
 // Teacher: Chartered Accountant client assignments
+export const studentsApi = {
+  getMyEarningsProfile: (): Promise<{ data: import('../types').StudentEarningsProfile }> =>
+    api.get('/students/me/earnings-profile'),
+};
+
 export const studentsAccountantApi = {
   getAssignments: (username: string): Promise<{ data: TeacherAccountantAssignmentsResponse }> => {
     return api.get(`/students/${encodeURIComponent(username)}/accountant-assignments`);
@@ -1117,7 +1142,12 @@ export const townNewsApi = {
   getManage: (): Promise<{ data: TownNewsManageStatus }> => api.get('/town-news/manage'),
   getStories: (params?: { class?: string }): Promise<{ data: TownNewsPublicView }> =>
     api.get('/town-news/stories', { params }),
-  submitStory: (data: { headline: string; body: string; image_data?: string }): Promise<{
+  submitStory: (data: {
+    headline: string;
+    body: string;
+    image_data?: string;
+    widgets?: import('../types').TownNewsWidgets;
+  }): Promise<{
     data: {
       story: TownNewsStory;
       message: string;

@@ -553,6 +553,7 @@ interface StudentLandViewProps {
 }
 
 const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlugin }) => {
+  const { refreshProfile } = useAuth();
   const { currentTown, currentTownClass } = useTown();
   const [activeTab, setActiveTab] = useState<'explore' | 'my-properties' | 'requests' | 'sales' | 'fm-approvals' | 'engineer-approvals'>('explore');
   const [myProperties, setMyProperties] = useState<MyPropertiesResponse | null>(null);
@@ -629,7 +630,11 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
     setError('');
     try {
       const res = await landApi.reviewFmPurchaseRequest(id, status, denialReason);
-      setSuccess(res.data.message);
+      const xpMsg = res.data.experience_points
+        ? ` +${res.data.experience_points} XP${res.data.new_level ? ` — level ${res.data.new_level}!` : ''}.`
+        : '';
+      setSuccess(res.data.message + xpMsg);
+      if (res.data.experience_points) await refreshProfile();
       fetchMyData();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Action failed');
@@ -691,7 +696,11 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
     setError('');
     try {
       const res = await landApi.reviewEngineerPurchaseRequest(id, status, denialReason);
-      setSuccess(res.data.message);
+      const xpMsg = res.data.experience_points
+        ? ` +${res.data.experience_points} XP${res.data.new_level ? ` — level ${res.data.new_level}!` : ''}.`
+        : '';
+      setSuccess(res.data.message + xpMsg);
+      if (res.data.experience_points) await refreshProfile();
       fetchMyData();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Action failed');
@@ -902,7 +911,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
                   <div className="space-y-4">
                     <h3 className="font-semibold text-gray-900">Land purchases — affordability review</h3>
                     <p className="text-sm text-gray-600">
-                      Check that the buyer can cover the plot price plus 5% professional fees (split between you, architects, and civil engineers).
+                      Check that the buyer can cover the plot price plus 5% professional fees (split between you, architects, and civil engineers). You earn <strong>+10 XP</strong> for each purchase you clear.
                     </p>
                     {fmPurchaseApprovals.map((request) => {
                       const breakdown = request.cost_breakdown;
@@ -1034,7 +1043,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
             ) : (
               <div className="space-y-4">
                 <p className="text-sm text-gray-600">
-                  Approve land purchases after the Financial Manager has cleared affordability. You earn your share of the <strong>5% professional fee pool</strong> when you approve.
+                  Approve land purchases after the Financial Manager has cleared affordability. Architects and Civil Engineers earn <strong>+50 XP</strong> plus their share of the <strong>5% professional fee pool</strong> when they approve.
                 </p>
                 {engineerApprovals.map((request) => (
                   <div key={request.id} className="border border-violet-200 bg-violet-50 rounded-xl p-4">

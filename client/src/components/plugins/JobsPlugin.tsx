@@ -31,6 +31,7 @@ import NurseGameModal from '../jobchallenges/NurseGameModal';
 import DoctorGameModal from '../jobchallenges/DoctorGameModal';
 import RetailManagerGameModal from '../jobchallenges/RetailManagerGameModal';
 import EntrepreneurGameModal from '../jobchallenges/EntrepreneurGameModal';
+import InsuranceManagerGameModal from '../jobchallenges/InsuranceManagerGameModal';
 import DoctorIllnessTestButtons from '../DoctorIllnessTestButtons';
 import StudentIllnessOverlay from '../StudentIllnessOverlay';
 import { DoctorIllnessType } from '../../utils/doctorIllness';
@@ -523,6 +524,7 @@ const JobsPlugin: React.FC = () => {
           <DoctorGameModal isOpen={testGameKey === 'doctor'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
           <RetailManagerGameModal isOpen={testGameKey === 'retailManager'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
           <EntrepreneurGameModal isOpen={testGameKey === 'entrepreneur'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
+          <InsuranceManagerGameModal isOpen={testGameKey === 'insuranceManager'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
         </>
       )}
     </div>

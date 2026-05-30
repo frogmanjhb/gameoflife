@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ACTIVE_PURCHASE_STATUSES = exports.TOTAL_PROFESSIONAL_FEE_RATE = void 0;
+exports.ACTIVE_PURCHASE_STATUSES = exports.CIVIL_ENGINEER_LAND_REVIEW_XP = exports.LAND_ENGINEER_REVIEW_XP = exports.FM_LAND_REVIEW_XP = exports.TOTAL_PROFESSIONAL_FEE_RATE = void 0;
 exports.hasArchitectJob = hasArchitectJob;
 exports.hasCivilEngineerJob = hasCivilEngineerJob;
 exports.isLandEngineerJob = isLandEngineerJob;
@@ -13,6 +13,10 @@ exports.calculateTotalPurchaseCost = calculateTotalPurchaseCost;
 exports.buildPurchaseCostBreakdown = buildPurchaseCostBreakdown;
 /** Total professional fees (FM + architects + civil engineers) = 5% of plot price */
 exports.TOTAL_PROFESSIONAL_FEE_RATE = 0.05;
+exports.FM_LAND_REVIEW_XP = 10;
+exports.LAND_ENGINEER_REVIEW_XP = 50;
+/** @deprecated Use LAND_ENGINEER_REVIEW_XP */
+exports.CIVIL_ENGINEER_LAND_REVIEW_XP = exports.LAND_ENGINEER_REVIEW_XP;
 exports.ACTIVE_PURCHASE_STATUSES = [
     'pending_fm',
     'pending_engineer',

@@ -20,7 +20,7 @@ export interface InsuranceBroker {
     last_name: string | null;
 }
 export declare function getClassInsuranceBrokers(schoolId: number | null, townClass: string): Promise<InsuranceBroker[]>;
-export declare function classRequiresBrokerApproval(schoolId: number | null, townClass: string | null | undefined): Promise<boolean>;
+export declare function classRequiresBrokerApproval(schoolId: number | null, townClass: string | null | undefined, requestingUserId?: number | null): Promise<boolean>;
 export declare function getDisabledInsuranceTypes(schoolId: number | null): Promise<InsuranceType[]>;
 export declare function getEnabledInsuranceTypes(schoolId: number | null): Promise<InsuranceType[]>;
 export declare function getInsuranceTypeSettings(schoolId: number | null): Promise<Array<{

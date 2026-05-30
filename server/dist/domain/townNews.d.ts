@@ -7,6 +7,7 @@ export type TownClass = '6A' | '6B' | '6C';
 export declare function isTownClass(value: unknown): value is TownClass;
 export declare function hasJournalistJob(jobName: string | null | undefined): boolean;
 export declare function hasGraphicDesignerJob(jobName: string | null | undefined): boolean;
+export declare function hasEntrepreneurJob(jobName: string | null | undefined): boolean;
 export declare function canSubmitTownNews(jobName: string | null | undefined): boolean;
 export declare function estimateImageBytes(imageData: string): number;
 export declare function isValidImageData(imageData: unknown): imageData is string;

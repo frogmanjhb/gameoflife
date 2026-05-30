@@ -110,10 +110,14 @@ export async function getClassInsuranceBrokers(
 
 export async function classRequiresBrokerApproval(
   schoolId: number | null,
-  townClass: string | null | undefined
+  townClass: string | null | undefined,
+  requestingUserId?: number | null
 ): Promise<boolean> {
   if (!townClass) return false;
   const brokers = await getClassInsuranceBrokers(schoolId, townClass);
+  if (requestingUserId != null) {
+    return brokers.some((b) => b.id !== requestingUserId);
+  }
   return brokers.length > 0;
 }
 

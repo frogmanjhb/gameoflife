@@ -7,6 +7,7 @@ exports.MAX_IMAGE_BYTES = exports.MAX_BODY_LENGTH = exports.MAX_HEADLINE_LENGTH 
 exports.isTownClass = isTownClass;
 exports.hasJournalistJob = hasJournalistJob;
 exports.hasGraphicDesignerJob = hasGraphicDesignerJob;
+exports.hasEntrepreneurJob = hasEntrepreneurJob;
 exports.canSubmitTownNews = canSubmitTownNews;
 exports.estimateImageBytes = estimateImageBytes;
 exports.isValidImageData = isValidImageData;
@@ -30,8 +31,13 @@ function hasJournalistJob(jobName) {
 function hasGraphicDesignerJob(jobName) {
     return (jobName || '').toLowerCase().trim().includes('graphic designer');
 }
+function hasEntrepreneurJob(jobName) {
+    return (jobName || '').toLowerCase().trim().includes('entrepreneur');
+}
 function canSubmitTownNews(jobName) {
-    return hasJournalistJob(jobName) || hasGraphicDesignerJob(jobName);
+    return (hasJournalistJob(jobName) ||
+        hasGraphicDesignerJob(jobName) ||
+        hasEntrepreneurJob(jobName));
 }
 function estimateImageBytes(imageData) {
     const base64 = imageData.includes(',') ? imageData.split(',')[1] : imageData;

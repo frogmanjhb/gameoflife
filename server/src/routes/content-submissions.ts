@@ -4,6 +4,7 @@ import { authenticateToken, AuthenticatedRequest, requireRole } from '../middlew
 import { requireTenant } from '../middleware/tenant';
 import { isReviewStatus } from '../domain/contentApproval';
 import { payStorySubmissionReward, STORY_EARNINGS_REWARD, STORY_XP_REWARD } from '../domain/townNews';
+import { parseTownNewsWidgetsFromDb } from '../domain/townNewsWidgets';
 
 const router = Router();
 
@@ -36,7 +37,7 @@ router.get('/pending', authenticateToken, requireTenant, requireRole(['teacher']
     const schoolId = req.schoolId ?? req.user?.school_id ?? null;
 
     const newsStories = await database.query(
-      `SELECT s.id, s.headline, s.body, s.image_data, s.town_class, s.status, s.created_at,
+      `SELECT s.id, s.headline, s.body, s.image_data, s.widgets, s.town_class, s.status, s.created_at,
               u.username AS submitter_username, u.first_name AS submitter_first_name, u.last_name AS submitter_last_name
        FROM town_news_stories s
        JOIN users u ON u.id = s.journalist_user_id
@@ -60,6 +61,7 @@ router.get('/pending', authenticateToken, requireTenant, requireRole(['teacher']
       headline: string;
       body: string;
       image_data?: string | null;
+      widgets?: unknown;
       town_class: string;
       status: string;
       created_at: string;
@@ -71,6 +73,7 @@ router.get('/pending', authenticateToken, requireTenant, requireRole(['teacher']
       headline: row.headline,
       body: row.body,
       image_data: row.image_data ?? null,
+      widgets: parseTownNewsWidgetsFromDb(row.widgets),
       town_class: row.town_class,
       status: row.status,
       created_at: row.created_at,

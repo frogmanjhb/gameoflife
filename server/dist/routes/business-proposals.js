@@ -8,11 +8,8 @@ const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
 const auth_2 = require("../middleware/auth");
+const businessProposals_1 = require("../domain/businessProposals");
 const router = (0, express_1.Router)();
-const ENTREPRENEUR_JOB_NAME = 'entrepreneur – town business founder';
-function hasEntrepreneurJob(jobName) {
-    return (jobName || '').toLowerCase().trim() === ENTREPRENEUR_JOB_NAME;
-}
 // Submit a business proposal (students with Entrepreneur job only)
 router.post('/', auth_1.authenticateToken, (0, auth_2.requireRole)(['student']), async (req, res) => {
     try {
@@ -21,7 +18,7 @@ router.post('/', auth_1.authenticateToken, (0, auth_2.requireRole)(['student']),
         const userId = req.user.id;
         const schoolId = req.user.school_id ?? null;
         const user = await database_prod_1.default.get(`SELECT u.id, j.name as job_name FROM users u LEFT JOIN jobs j ON u.job_id = j.id WHERE u.id = $1`, [userId]);
-        if (!user || !hasEntrepreneurJob(user.job_name)) {
+        if (!user || !(0, businessProposals_1.hasEntrepreneurJob)(user.job_name)) {
             return res.status(403).json({ error: 'Only Entrepreneurs (Town Business Founder) can submit business proposals' });
         }
         const { business_name, payload } = req.body;
@@ -29,7 +26,6 @@ router.post('/', auth_1.authenticateToken, (0, auth_2.requireRole)(['student']),
             return res.status(400).json({ error: 'Business name is required' });
         }
         const payloadObj = payload && typeof payload === 'object' ? payload : {};
-        // One active proposal per user: pending or approved. If they already have pending, reject; if approved, they can submit another (new business).
         const existing = await database_prod_1.default.get(`SELECT id, status FROM business_proposals WHERE user_id = $1 AND status = 'pending' LIMIT 1`, [userId]);
         if (existing) {
             return res.status(400).json({ error: 'You already have a pending business proposal. Wait for teacher approval or withdrawal.' });
@@ -106,9 +102,18 @@ router.put('/:id', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_2.
         if (proposal.status !== 'pending') {
             return res.status(400).json({ error: 'Proposal has already been reviewed' });
         }
+        let reward = null;
+        if (status === 'approved') {
+            reward = await (0, businessProposals_1.awardProposalApprovalXp)(proposal.user_id);
+        }
         await database_prod_1.default.run(`UPDATE business_proposals SET status = $1, reviewed_at = CURRENT_TIMESTAMP, reviewed_by = $2, denial_reason = $3 WHERE id = $4`, [status, req.user?.id ?? null, status === 'denied' ? (denial_reason || null) : null, id]);
         const updated = await database_prod_1.default.get('SELECT * FROM business_proposals WHERE id = $1', [id]);
-        res.json(updated);
+        res.json({
+            ...updated,
+            proposal_xp_reward: businessProposals_1.PROPOSAL_APPROVE_XP,
+            experience_points: reward?.experience_points ?? 0,
+            new_level: reward?.new_level ?? null,
+        });
     }
     catch (error) {
         console.error('Update business proposal error:', error);

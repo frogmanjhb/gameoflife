@@ -230,7 +230,7 @@ router.get('/my-status', auth_1.authenticateToken, async (req, res) => {
         const type = row.illness_type;
         const cureFee = parseFloat(String(row.cure_fee ?? doctor_illness_1.DOCTOR_CURE_FEE));
         const healthInsuranceCoversClinic = await (0, insurance_1.hasActiveApprovedHealthInsurance)(req.user.id);
-        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null);
+        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null, req.user.id);
         res.json({
             active: true,
             pending_cure: pendingCure,
@@ -289,7 +289,7 @@ router.post('/see-doctor', auth_1.authenticateToken, async (req, res) => {
         }
         const cureFee = parseFloat(String(row.cure_fee ?? doctor_illness_1.DOCTOR_CURE_FEE));
         const hasHealthInsurance = await (0, insurance_1.hasActiveApprovedHealthInsurance)(req.user.id);
-        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null);
+        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null, req.user.id);
         if (hasHealthInsurance && brokerRequired) {
             await database_prod_1.default.query(`UPDATE doctor_illness_assignments
          SET insurance_claim_requested_at = CURRENT_TIMESTAMP

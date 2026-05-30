@@ -4,6 +4,13 @@ import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { requireTenant } from '../middleware/tenant';
 import { getLawyerClientIds, getLawyerIdsForStudent, hasLawyerJob } from '../domain/lawyer-assignments';
+import {
+  awardPoliceSubmitXp,
+  awardLawyerFineReviewXp,
+  hasPoliceLieutenantJob,
+  LAWYER_FINE_REVIEW_XP,
+  POLICE_FINE_BONUS_SUBMIT_XP,
+} from '../domain/police-fines';
 
 const router = Router();
 
@@ -94,7 +101,7 @@ router.post('/', authenticateToken, requireTenant, async (req: AuthenticatedRequ
     if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
     const studentRow = await getPoliceStudent(user.id);
-    if (!studentRow || !(studentRow.job_name || '').toLowerCase().includes('police lieutenant')) {
+    if (!studentRow || !hasPoliceLieutenantJob(studentRow.job_name)) {
       return res.status(403).json({ error: 'Only the Police Lieutenant may submit fines/bonuses' });
     }
 
@@ -146,12 +153,19 @@ router.post('/', authenticateToken, requireTenant, async (req: AuthenticatedRequ
       ]
     );
 
+    const xpResult = await awardPoliceSubmitXp(user.id);
+
     const msg =
       initialStatus === 'pending_lawyer'
         ? `${type === 'fine' ? 'Fine' : 'Bonus'} submitted for lawyer review, then teacher approval`
         : `${type === 'fine' ? 'Fine' : 'Bonus'} submitted for teacher approval (no lawyer assigned to this student)`;
 
-    return res.status(201).json({ message: msg });
+    return res.status(201).json({
+      message: msg,
+      experience_points: xpResult.experience_points,
+      new_level: xpResult.new_level,
+      submit_xp: POLICE_FINE_BONUS_SUBMIT_XP,
+    });
   } catch (err) {
     console.error('police-fines-bonuses POST error:', err);
     return res.status(500).json({ error: 'Failed to submit request' });
@@ -282,7 +296,14 @@ router.post(
         [user.id, lawyerNotes, requestId]
       );
 
-      return res.json({ message: 'Sent to teacher for final approval' });
+      const xpResult = await awardLawyerFineReviewXp(user.id);
+
+      return res.json({
+        message: 'Sent to teacher for final approval',
+        experience_points: xpResult.experience_points,
+        new_level: xpResult.new_level,
+        review_xp: LAWYER_FINE_REVIEW_XP,
+      });
     } catch (err) {
       console.error('police-fines-bonuses lawyer-approve error:', err);
       return res.status(500).json({ error: 'Failed to approve request' });
@@ -332,7 +353,14 @@ router.post(
         [user.id, lawyerNotes, requestId]
       );
 
-      return res.json({ message: 'Request denied by lawyer' });
+      const xpResult = await awardLawyerFineReviewXp(user.id);
+
+      return res.json({
+        message: 'Request denied by lawyer',
+        experience_points: xpResult.experience_points,
+        new_level: xpResult.new_level,
+        review_xp: LAWYER_FINE_REVIEW_XP,
+      });
     } catch (err) {
       console.error('police-fines-bonuses lawyer-deny error:', err);
       return res.status(500).json({ error: 'Failed to deny request' });
@@ -394,7 +422,14 @@ router.post(
         [disputeReason, lawyerNotes, user.id, requestId]
       );
 
-      return res.json({ message: 'Fine disputed — returned to Police for more evidence' });
+      const xpResult = await awardLawyerFineReviewXp(user.id);
+
+      return res.json({
+        message: 'Fine disputed — returned to Police for more evidence',
+        experience_points: xpResult.experience_points,
+        new_level: xpResult.new_level,
+        review_xp: LAWYER_FINE_REVIEW_XP,
+      });
     } catch (err) {
       console.error('police-fines-bonuses dispute error:', err);
       return res.status(500).json({ error: 'Failed to dispute request' });

@@ -6,6 +6,7 @@ import { usePlugins } from '../../contexts/PluginContext';
 import { useTown } from '../../contexts/TownContext';
 import { townNewsApi } from '../../services/api';
 import { TownNewsPublicView } from '../../types';
+import TownNewsStoryCard, { storyToCardProps } from '../TownNewsStoryCard';
 
 const NewsPlugin: React.FC = () => {
   const { plugins, loading: pluginsLoading } = usePlugins();
@@ -63,7 +64,9 @@ const NewsPlugin: React.FC = () => {
           <div className="text-4xl">📰</div>
           <div>
             <h1 className="text-2xl font-bold">Town News Board</h1>
-            <p className="text-primary-100">Local news, posters and updates from your town journalists and graphic designers</p>
+            <p className="text-primary-100">
+              Local news, posters and updates from journalists, graphic designers, and entrepreneurs
+            </p>
           </div>
         </div>
       </div>
@@ -83,26 +86,7 @@ const NewsPlugin: React.FC = () => {
       ) : (
         <div className="space-y-6">
           {data.stories.map((story) => (
-            <article
-              key={story.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
-            >
-              {story.image_data && (
-                <img
-                  src={story.image_data}
-                  alt={story.headline}
-                  className="w-full max-h-80 object-cover bg-gray-100"
-                />
-              )}
-              <div className="p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-2">{story.headline}</h2>
-                <p className="text-sm text-gray-500 mb-4">
-                  {story.journalist_name && <span>By {story.journalist_name} · </span>}
-                  {new Date(story.created_at).toLocaleString()}
-                </p>
-                <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">{story.body}</div>
-              </div>
-            </article>
+            <TownNewsStoryCard key={story.id} {...storyToCardProps(story)} />
           ))}
         </div>
       )}

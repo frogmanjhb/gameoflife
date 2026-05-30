@@ -226,7 +226,7 @@ router.get('/my-status', auth_1.authenticateToken, async (req, res) => {
         const type = row.attack_type;
         const repairFee = parseFloat(String(row.repair_fee ?? cyber_attack_1.CYBER_REPAIR_FEE));
         const cyberInsuranceCoversRepair = await (0, insurance_1.hasActiveApprovedCyberInsurance)(req.user.id);
-        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null);
+        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null, req.user.id);
         res.json({
             active: true,
             pending_repair: pendingRepair,
@@ -304,7 +304,7 @@ router.post('/call-it', auth_1.authenticateToken, async (req, res) => {
         }
         const repairFee = parseFloat(String(row.repair_fee ?? cyber_attack_1.CYBER_REPAIR_FEE));
         const hasCyberInsurance = await (0, insurance_1.hasActiveApprovedCyberInsurance)(req.user.id);
-        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null);
+        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null, req.user.id);
         if (hasCyberInsurance && brokerRequired) {
             await database_prod_1.default.query(`UPDATE cyber_attack_assignments
          SET insurance_claim_requested_at = CURRENT_TIMESTAMP

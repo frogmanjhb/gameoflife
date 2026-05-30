@@ -282,7 +282,8 @@ router.get('/my-status', authenticateToken, async (req: AuthenticatedRequest, re
     const healthInsuranceCoversClinic = await hasActiveApprovedHealthInsurance(req.user.id);
     const brokerRequired = await classRequiresBrokerApproval(
       req.user.school_id ?? null,
-      req.user.class ?? null
+      req.user.class ?? null,
+      req.user.id
     );
 
     res.json({
@@ -354,7 +355,8 @@ router.post('/see-doctor', authenticateToken, async (req: AuthenticatedRequest, 
     const hasHealthInsurance = await hasActiveApprovedHealthInsurance(req.user.id);
     const brokerRequired = await classRequiresBrokerApproval(
       req.user.school_id ?? null,
-      req.user.class ?? null
+      req.user.class ?? null,
+      req.user.id
     );
 
     if (hasHealthInsurance && brokerRequired) {

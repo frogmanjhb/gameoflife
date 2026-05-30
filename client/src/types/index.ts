@@ -23,6 +23,32 @@ export interface User {
   updated_at: string;
 }
 
+export interface StudentEarningsProfile {
+  job_level: number;
+  job_experience_points: number;
+  job_name: string | null;
+  account_balance: number;
+  xp: {
+    wordle: number;
+    job_challenge_games: number;
+    job_tasks_and_other: number;
+    total: number;
+  };
+  money: {
+    math_chores: number;
+    wordle: number;
+    job_challenge_games: number;
+    salary: number;
+    job_tasks: number;
+    total_earned: number;
+  };
+  counts: {
+    math_chores_sessions: number;
+    wordle_games: number;
+    job_challenge_sessions: number;
+  };
+}
+
 export interface Account {
   id: number;
   user_id: number;
@@ -436,6 +462,35 @@ export interface HRDirectorGameStartRequest {
 }
 
 export interface HRDirectorGameSubmitRequest {
+  session_id: number;
+  score: number;
+  correct_answers: number;
+  total_problems: number;
+  answer_sequence: boolean[];
+}
+
+export interface InsuranceManagerGameStatus {
+  remaining_plays: number;
+  daily_limit: number;
+  high_scores: { easy: number; medium: number; hard: number; extreme: number };
+  recent_sessions: Array<{
+    id: number;
+    user_id: number;
+    difficulty: string;
+    score: number;
+    correct_answers: number;
+    total_problems: number;
+    experience_points: number;
+    earnings: number;
+    played_at: string;
+  }>;
+}
+
+export interface InsuranceManagerGameStartRequest {
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+}
+
+export interface InsuranceManagerGameSubmitRequest {
   session_id: number;
   score: number;
   correct_answers: number;
@@ -941,11 +996,23 @@ export interface CodeBoardPublicView {
 
 export type ContentSubmissionStatus = 'pending' | 'approved' | 'denied';
 
+export type TownNewsBadge = 'breaking' | 'exclusive' | 'sponsored' | 'grand_opening' | 'town_alert';
+export type TownNewsHeadlineStyle = 'classic' | 'tabloid' | 'business_ad' | 'event_poster';
+export type TownNewsAccent = 'teal' | 'gold' | 'red';
+
+export interface TownNewsWidgets {
+  badge?: TownNewsBadge;
+  headline_style?: TownNewsHeadlineStyle;
+  accent?: TownNewsAccent;
+  emojis?: string[];
+}
+
 export interface TownNewsStory {
   id: number;
   headline: string;
   body: string;
   image_data?: string | null;
+  widgets?: TownNewsWidgets;
   created_at: string;
   status?: ContentSubmissionStatus;
   denial_reason?: string | null;
@@ -967,6 +1034,7 @@ export interface PendingNewsStorySubmission {
   headline: string;
   body: string;
   image_data?: string | null;
+  widgets?: TownNewsWidgets;
   town_class: string;
   status: ContentSubmissionStatus;
   created_at: string;
@@ -1193,6 +1261,43 @@ export interface AccountantAssignmentStudent {
   first_name?: string;
   last_name?: string;
   class?: string;
+  job_name?: string | null;
+}
+
+export interface AccountantClientAdviceRecord {
+  id: number;
+  advice_text: string;
+  created_at: string;
+}
+
+export interface AccountantClientDetailsResponse {
+  student: {
+    id: number;
+    username: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    class?: string | null;
+    job_name?: string | null;
+    job_level?: number;
+    job_experience_points?: number;
+    account_number?: string;
+    balance?: number | string;
+    last_activity?: string;
+  };
+  transactions: Transaction[];
+  loans: Loan[];
+  prior_advice: AccountantClientAdviceRecord[];
+  advice_xp_reward: number;
+  advice_earnings_reward: number;
+}
+
+export interface AccountantClientAdviceSubmitResponse {
+  message: string;
+  experience_points: number;
+  earnings: number;
+  new_level: number | null;
+  advice_xp_reward: number;
+  advice_earnings_reward: number;
 }
 
 export interface AccountantAssignmentLink {

@@ -4,9 +4,9 @@ import {
   ArrowLeft, Briefcase, DollarSign, MapPin, Building2, ClipboardList, 
   Award, FileText, TrendingUp, Loader2, AlertCircle, Play, CheckCircle, XCircle, Users, Shield, Scale
 } from 'lucide-react';
-import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, doctorIllnessApi, cyberAttackApi, retailManagerGameApi, entrepreneurGameApi, transactionsApi, policeFinesBonusesApi, insuranceApi, InsuranceBrokerPendingRequest, InsuranceBrokerPendingClaim, InsuranceBrokerPendingCyberClaim, PoliceFineBonus } from '../services/api';
+import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, doctorIllnessApi, cyberAttackApi, retailManagerGameApi, entrepreneurGameApi, insuranceManagerGameApi, transactionsApi, policeFinesBonusesApi, insuranceApi, InsuranceBrokerPendingRequest, InsuranceBrokerPendingClaim, InsuranceBrokerPendingCyberClaim, PoliceFineBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, CyberAttackEngineerStatus, RetailManagerGameStatus, EntrepreneurGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer } from '../types';
+import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, CyberAttackEngineerStatus, RetailManagerGameStatus, EntrepreneurGameStatus, InsuranceManagerGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
 import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../utils/jobDisplay';
 import ArchitectGameModal from './jobchallenges/ArchitectGameModal';
@@ -34,6 +34,7 @@ import StudentIllnessOverlay from './StudentIllnessOverlay';
 import { DoctorIllnessType } from '../utils/doctorIllness';
 import RetailManagerGameModal from './jobchallenges/RetailManagerGameModal';
 import EntrepreneurGameModal from './jobchallenges/EntrepreneurGameModal';
+import InsuranceManagerGameModal from './jobchallenges/InsuranceManagerGameModal';
 import EntrepreneurBusinessProposalModal from './jobchallenges/EntrepreneurBusinessProposalModal';
 import EntrepreneurApprovedInstructions from './jobchallenges/EntrepreneurApprovedInstructions';
 import AttendanceRegisterPanel from './AttendanceRegisterPanel';
@@ -44,7 +45,12 @@ import TownNewsPanel from './TownNewsPanel';
 const MyJobDetails: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
+
+  const onJobGameComplete = (refreshStatus: () => void | Promise<void>) => async () => {
+    await Promise.resolve(refreshStatus());
+    await refreshProfile();
+  };
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +106,8 @@ const MyJobDetails: React.FC = () => {
   const [isRetailManagerGameOpen, setIsRetailManagerGameOpen] = useState(false);
   const [entrepreneurGameStatus, setEntrepreneurGameStatus] = useState<EntrepreneurGameStatus | null>(null);
   const [isEntrepreneurGameOpen, setIsEntrepreneurGameOpen] = useState(false);
+  const [insuranceManagerGameStatus, setInsuranceManagerGameStatus] = useState<InsuranceManagerGameStatus | null>(null);
+  const [isInsuranceManagerGameOpen, setIsInsuranceManagerGameOpen] = useState(false);
   const [entrepreneurProposals, setEntrepreneurProposals] = useState<import('../types').BusinessProposal[]>([]);
   const [entrepreneurProposalsLoading, setEntrepreneurProposalsLoading] = useState(false);
   const [isEntrepreneurProposalModalOpen, setIsEntrepreneurProposalModalOpen] = useState(false);
@@ -110,6 +118,14 @@ const MyJobDetails: React.FC = () => {
   const [accountantApprovalsLoading, setAccountantApprovalsLoading] = useState(false);
   const [accountantApprovalsError, setAccountantApprovalsError] = useState<string | null>(null);
   const [isAccountantApprovalsOpen, setIsAccountantApprovalsOpen] = useState(false);
+
+  const isAccountantPeer = (student: AccountantAssignmentStudent) =>
+    (student.job_name || '').toLowerCase().includes('accountant');
+
+  const formatAssignmentStudentName = (student: AccountantAssignmentStudent) =>
+    student.first_name && student.last_name
+      ? `${student.first_name} ${student.last_name}`
+      : student.username;
   const [isPoliceFineBonusOpen, setIsPoliceFineBonusOpen] = useState(false);
   const [policeFineBonusType, setPoliceFineBonusType] = useState<'fine' | 'bonus'>('fine');
   const [policeSelectedStudentId, setPoliceSelectedStudentId] = useState<number | ''>('');
@@ -129,6 +145,7 @@ const MyJobDetails: React.FC = () => {
   const [lawyerQueue, setLawyerQueue] = useState<PoliceFineBonus[]>([]);
   const [lawyerQueueLoading, setLawyerQueueLoading] = useState(false);
   const [lawyerQueueError, setLawyerQueueError] = useState<string | null>(null);
+  const [lawyerActionSuccess, setLawyerActionSuccess] = useState<string | null>(null);
   const [lawyerReviewingId, setLawyerReviewingId] = useState<number | null>(null);
   const [lawyerNotesDraft, setLawyerNotesDraft] = useState('');
   const [disputeReasonDraft, setDisputeReasonDraft] = useState('');
@@ -349,6 +366,9 @@ const MyJobDetails: React.FC = () => {
     if (user && (job?.name || '').toLowerCase().trim().includes('entrepreneur')) {
       fetchEntrepreneurGameStatus();
     }
+    if (user && isInsuranceBrokerJob) {
+      fetchInsuranceManagerGameStatus();
+    }
   }, [user, job]);
 
   useEffect(() => {
@@ -398,6 +418,7 @@ const MyJobDetails: React.FC = () => {
           : `Denied ${type} insurance for ${applicant}. Premium refunded.`
       );
       await fetchInsuranceBrokerPending();
+      if (status === 'approved') await refreshProfile();
     } catch (err: any) {
       setInsuranceBrokerError(err.response?.data?.error || 'Could not review insurance request');
     } finally {
@@ -418,6 +439,7 @@ const MyJobDetails: React.FC = () => {
           : `Denied clinic insurance payment for ${patient}. They can pay out of pocket instead.`
       );
       await fetchInsuranceBrokerPending();
+      if (status === 'approved') await refreshProfile();
     } catch (err: any) {
       setInsuranceBrokerError(err.response?.data?.error || 'Could not review insurance claim');
     } finally {
@@ -438,6 +460,7 @@ const MyJobDetails: React.FC = () => {
           : `Denied cyber repair insurance payment for ${victim}. They can pay out of pocket instead.`
       );
       await fetchInsuranceBrokerPending();
+      if (status === 'approved') await refreshProfile();
     } catch (err: any) {
       setInsuranceBrokerError(err.response?.data?.error || 'Could not review cyber insurance claim');
     } finally {
@@ -689,6 +712,7 @@ const MyJobDetails: React.FC = () => {
         `Cured ${response.data.patient_display_name}. +${response.data.experience_points} XP.${xpMsg}`
       );
       await fetchDoctorIllnessStatus();
+      await refreshProfile();
     } catch (err: any) {
       setDoctorIllnessError(err.response?.data?.error || 'Could not approve cure');
     } finally {
@@ -737,6 +761,7 @@ const MyJobDetails: React.FC = () => {
         `Repaired ${response.data.victim_display_name}. +${response.data.experience_points} XP.${xpMsg}`
       );
       await fetchCyberAttackStatus();
+      await refreshProfile();
     } catch (err: any) {
       setCyberAttackError(err.response?.data?.error || 'Could not approve repair');
     } finally {
@@ -759,6 +784,15 @@ const MyJobDetails: React.FC = () => {
       setEntrepreneurGameStatus(response.data);
     } catch (err: any) {
       console.log('Entrepreneur game status not available:', err.response?.data?.error);
+    }
+  };
+
+  const fetchInsuranceManagerGameStatus = async () => {
+    try {
+      const response = await insuranceManagerGameApi.getStatus();
+      setInsuranceManagerGameStatus(response.data);
+    } catch (err: any) {
+      console.log('Insurance Manager game status not available:', err.response?.data?.error);
     }
   };
 
@@ -1042,7 +1076,7 @@ const MyJobDetails: React.FC = () => {
               {isPoliceJob && (
                 <div className="mt-3 border-t border-gray-200 pt-3">
                   <p className="text-xs text-gray-500">
-                    The Fines and Bonuses tools are for real-life teachers to record approved actions in the Bank plugin.
+                    Log fines and bonuses for classmates (with evidence). Each submission earns +5 XP. Requests go to the lawyer (if assigned), then teacher approval in the Bank plugin.
                   </p>
                 </div>
               )}
@@ -1314,24 +1348,29 @@ const MyJobDetails: React.FC = () => {
                       setPoliceError(null);
                       setPoliceSuccess(null);
                       try {
-                        await policeFinesBonusesApi.submit({
+                        const response = await policeFinesBonusesApi.submit({
                           type: policeFineBonusType,
                           target_username: policeSelectedUsername,
                           description: policeDescription,
                           amount: parseFloat(policeAmount),
                           teacher_initials: policeTeacherInitials.trim(),
                         });
+                        const xpMsg = response.data.experience_points
+                          ? ` +${response.data.experience_points} XP${
+                              response.data.new_level ? ` — level ${response.data.new_level}!` : ''
+                            }.`
+                          : '';
                         setPoliceSuccess(
-                          policeFineBonusType === 'fine'
+                          (policeFineBonusType === 'fine'
                             ? 'Fine request sent — awaiting teacher approval in the Bank plugin.'
-                            : 'Bonus request sent — awaiting teacher approval in the Bank plugin.'
+                            : 'Bonus request sent — awaiting teacher approval in the Bank plugin.') + xpMsg
                         );
                         setPoliceSelectedStudentId('');
                         setPoliceSelectedUsername('');
                         setPoliceAmount('');
                         setPoliceDescription('');
                         setPoliceTeacherInitials('');
-                        // Refresh history
+                        await refreshProfile();
                         policeFinesBonusesApi.getMyHistory().then((r) => setPoliceHistory(r.data || [])).catch(() => {});
                       } catch (err: any) {
                         setPoliceError(err.response?.data?.error || 'Failed to submit request');
@@ -1430,7 +1469,7 @@ const MyJobDetails: React.FC = () => {
                 return (
                   <div className="space-y-3">
                     <p className="text-sm text-gray-700">
-                      Submit a business proposal for teacher approval. Once approved, you can start your business and follow the weekly instructions.
+                      Submit a business proposal for teacher approval. Once approved, you earn <strong>+50 XP</strong> and can start your business.
                     </p>
                     <button
                       type="button"
@@ -1498,6 +1537,10 @@ const MyJobDetails: React.FC = () => {
               )}
             </div>
           </div>
+        )}
+
+        {(job?.name || '').toLowerCase().trim().includes('entrepreneur') && (
+          <TownNewsPanel />
         )}
 
         {/* Software Engineer – Logic & Systems Challenge */}
@@ -1872,7 +1915,7 @@ const MyJobDetails: React.FC = () => {
                   </h3>
                   <p className="text-sm text-gray-600">
                     Complete payroll cycles (5 problems each) to earn XP and money. Review land purchase affordability in the{' '}
-                    <strong>Land Registry → FM Approvals</strong> tab (+1 XP per purchase cleared).
+                    <strong>Land Registry → FM Approvals</strong> tab (+10 XP per purchase cleared).
                   </p>
                 </div>
                 <button
@@ -2061,8 +2104,11 @@ const MyJobDetails: React.FC = () => {
                 Client Fines &amp; Bonuses
               </h3>
               <p className="text-sm text-gray-600 mb-4">
-                Review police fines and bonuses for your assigned clients. Approve to send to teacher; dispute a fine to request more evidence from police.
+                Review police fines and bonuses for your assigned clients. Each review (approve, deny, or dispute) earns +10 XP. Approve to send to teacher; dispute a fine to request more evidence from police.
               </p>
+              {lawyerActionSuccess && (
+                <p className="text-sm text-green-700 mb-2">{lawyerActionSuccess}</p>
+              )}
               {lawyerQueueError && (
                 <p className="text-sm text-red-600 mb-2">{lawyerQueueError}</p>
               )}
@@ -2146,14 +2192,22 @@ const MyJobDetails: React.FC = () => {
                                 if (!disputeReasonDraft.trim()) return;
                                 setLawyerReviewingId(item.id);
                                 try {
-                                  await policeFinesBonusesApi.dispute(
+                                  const response = await policeFinesBonusesApi.dispute(
                                     item.id,
                                     disputeReasonDraft.trim(),
                                     lawyerNotesDraft.trim() || undefined
                                   );
+                                  const xpMsg = response.data.experience_points
+                                    ? ` +${response.data.experience_points} XP${
+                                        response.data.new_level ? ` — level ${response.data.new_level}!` : ''
+                                      }.`
+                                    : '';
+                                  setLawyerActionSuccess((response.data.message || 'Dispute sent.') + xpMsg);
+                                  setLawyerQueueError(null);
                                   setLawyerDisputingId(null);
                                   setDisputeReasonDraft('');
                                   setLawyerNotesDraft('');
+                                  await refreshProfile();
                                   fetchLawyerQueue();
                                 } catch (err: any) {
                                   setLawyerQueueError(err.response?.data?.error || 'Failed to dispute');
@@ -2184,11 +2238,19 @@ const MyJobDetails: React.FC = () => {
                               onClick={async () => {
                                 setLawyerReviewingId(item.id);
                                 try {
-                                  await policeFinesBonusesApi.lawyerApprove(
+                                  const response = await policeFinesBonusesApi.lawyerApprove(
                                     item.id,
                                     lawyerNotesDraft.trim() || undefined
                                   );
+                                  const xpMsg = response.data.experience_points
+                                    ? ` +${response.data.experience_points} XP${
+                                        response.data.new_level ? ` — level ${response.data.new_level}!` : ''
+                                      }.`
+                                    : '';
+                                  setLawyerActionSuccess((response.data.message || 'Approved for teacher.') + xpMsg);
+                                  setLawyerQueueError(null);
                                   setLawyerNotesDraft('');
+                                  await refreshProfile();
                                   fetchLawyerQueue();
                                 } catch (err: any) {
                                   setLawyerQueueError(err.response?.data?.error || 'Failed to approve');
@@ -2206,11 +2268,19 @@ const MyJobDetails: React.FC = () => {
                               onClick={async () => {
                                 setLawyerReviewingId(item.id);
                                 try {
-                                  await policeFinesBonusesApi.lawyerDeny(
+                                  const response = await policeFinesBonusesApi.lawyerDeny(
                                     item.id,
                                     lawyerNotesDraft.trim() || undefined
                                   );
+                                  const xpMsg = response.data.experience_points
+                                    ? ` +${response.data.experience_points} XP${
+                                        response.data.new_level ? ` — level ${response.data.new_level}!` : ''
+                                      }.`
+                                    : '';
+                                  setLawyerActionSuccess((response.data.message || 'Request denied.') + xpMsg);
+                                  setLawyerQueueError(null);
                                   setLawyerNotesDraft('');
+                                  await refreshProfile();
                                   fetchLawyerQueue();
                                 } catch (err: any) {
                                   setLawyerQueueError(err.response?.data?.error || 'Failed to deny');
@@ -2354,7 +2424,8 @@ const MyJobDetails: React.FC = () => {
                     Infrastructure Design Challenge
                   </h3>
                   <p className="text-sm text-gray-600">
-                    Complete infrastructure projects (5 problems each) to earn XP and money.
+                    Complete infrastructure projects (5 problems each) to earn XP and money. Review land purchases in the{' '}
+                    <strong>Land Registry → Engineer Approvals</strong> tab (+50 XP per approval, plus your fee share).
                   </p>
                 </div>
                 <button
@@ -2672,6 +2743,55 @@ const MyJobDetails: React.FC = () => {
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Insurance Manager – Risk Review Challenge */}
+        {user?.role === 'student' && isInsuranceBrokerJob && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-teal-50 to-emerald-50 rounded-lg p-6 border border-teal-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-teal-600" />
+                    Risk Review Challenge
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Complete risk review cycles (5 problems each) to earn XP and money.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsInsuranceManagerGameOpen(true)}
+                  disabled={!insuranceManagerGameStatus || (insuranceManagerGameStatus.remaining_plays ?? 0) <= 0}
+                  className="bg-teal-600 hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Play className="h-5 w-5" />
+                  <span>Start Risk Review</span>
+                </button>
+              </div>
+              {insuranceManagerGameStatus && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Remaining Today</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {insuranceManagerGameStatus.remaining_plays} / {insuranceManagerGameStatus.daily_limit}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Easy High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{insuranceManagerGameStatus.high_scores?.easy ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Medium High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{insuranceManagerGameStatus.high_scores?.medium ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Hard High Score</div>
+                    <div className="text-lg font-bold text-gray-900">{insuranceManagerGameStatus.high_scores?.hard ?? 0}</div>
+                  </div>
                 </div>
               )}
             </div>
@@ -2997,7 +3117,8 @@ const MyJobDetails: React.FC = () => {
                   <div>
                     <h3 className="text-md font-semibold text-gray-900">People You Are Responsible For</h3>
                     <p className="text-xs text-gray-600">
-                      These students and one other accountant&apos;s transfers need your approval. Each approved transfer earns you 1 XP.
+                      Click a student&apos;s name to review their transactions and submit advice (10 XP + R500 per submission).
+                      Transfers from assigned students and one peer accountant need your approval (1 XP each).
                     </p>
                   </div>
                 </div>
@@ -3029,21 +3150,37 @@ const MyJobDetails: React.FC = () => {
                 <>
                   {accountantAssignments && accountantAssignments.length > 0 ? (
                     <ul className="mt-2 space-y-1 text-sm text-gray-800">
-                      {accountantAssignments.map((student) => (
-                        <li key={student.id} className="flex items-center gap-2">
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span>
-                            {student.first_name && student.last_name
-                              ? `${student.first_name} ${student.last_name}`
-                              : student.username}
-                            {student.class ? (
-                              <span className="text-gray-500 text-xs ml-2">
-                                ({student.class})
+                      {accountantAssignments.map((student) => {
+                        const peer = isAccountantPeer(student);
+                        return (
+                          <li key={student.id} className="flex items-center gap-2">
+                            <span
+                              className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                peer ? 'bg-amber-500' : 'bg-emerald-500'
+                              }`}
+                            />
+                            {peer ? (
+                              <span>
+                                {formatAssignmentStudentName(student)}
+                                <span className="text-gray-500 text-xs ml-2">(Accountant — transfer approvals only)</span>
                               </span>
-                            ) : null}
-                          </span>
-                        </li>
-                      ))}
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/accountant-client/${student.username}`)}
+                                className="text-emerald-700 hover:text-emerald-900 hover:underline font-medium text-left"
+                              >
+                                {formatAssignmentStudentName(student)}
+                                {student.class ? (
+                                  <span className="text-gray-500 text-xs ml-2 font-normal">
+                                    ({student.class})
+                                  </span>
+                                ) : null}
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : (
                     <p className="mt-2 text-sm text-gray-600">
@@ -3067,7 +3204,8 @@ const MyJobDetails: React.FC = () => {
                     Design Approval Challenges
                   </h3>
                   <p className="text-sm text-gray-600">
-                    Solve design calculations to earn experience points and money
+                    Solve design calculations to earn experience points and money. Review land purchases in the{' '}
+                    <strong>Land Registry → Engineer Approvals</strong> tab (+50 XP per approval, plus your fee share).
                   </p>
                 </div>
                 <button
@@ -3121,7 +3259,7 @@ const MyJobDetails: React.FC = () => {
             fetchArchitectGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchArchitectGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchArchitectGameStatus)}
           gameStatus={architectGameStatus}
         />
       )}
@@ -3135,7 +3273,7 @@ const MyJobDetails: React.FC = () => {
             fetchAccountantGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchAccountantGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchAccountantGameStatus)}
           gameStatus={accountantGameStatus}
         />
       )}
@@ -3210,6 +3348,7 @@ const MyJobDetails: React.FC = () => {
                             try {
                               await transactionsApi.approveAsAccountant(pt.id);
                               setAccountantApprovals((prev) => prev.filter((x) => x.id !== pt.id));
+                              await refreshProfile();
                             } catch (err: any) {
                               setAccountantApprovalsError(err.response?.data?.error || 'Failed to approve transfer');
                             }
@@ -3253,7 +3392,7 @@ const MyJobDetails: React.FC = () => {
             fetchSoftwareEngineerGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchSoftwareEngineerGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchSoftwareEngineerGameStatus)}
           gameStatus={softwareEngineerGameStatus}
         />
       )}
@@ -3267,7 +3406,7 @@ const MyJobDetails: React.FC = () => {
             fetchMarketingManagerGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchMarketingManagerGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchMarketingManagerGameStatus)}
           gameStatus={marketingManagerGameStatus}
         />
       )}
@@ -3281,7 +3420,7 @@ const MyJobDetails: React.FC = () => {
             fetchGraphicDesignerGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchGraphicDesignerGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchGraphicDesignerGameStatus)}
           gameStatus={graphicDesignerGameStatus}
         />
       )}
@@ -3295,7 +3434,7 @@ const MyJobDetails: React.FC = () => {
             fetchJournalistGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchJournalistGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchJournalistGameStatus)}
           gameStatus={journalistGameStatus}
         />
       )}
@@ -3309,7 +3448,7 @@ const MyJobDetails: React.FC = () => {
             fetchEventPlannerGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchEventPlannerGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchEventPlannerGameStatus)}
           gameStatus={eventPlannerGameStatus}
         />
       )}
@@ -3323,7 +3462,7 @@ const MyJobDetails: React.FC = () => {
             fetchFinancialManagerGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchFinancialManagerGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchFinancialManagerGameStatus)}
           gameStatus={financialManagerGameStatus}
         />
       )}
@@ -3337,7 +3476,7 @@ const MyJobDetails: React.FC = () => {
             fetchHRDirectorGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchHRDirectorGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchHRDirectorGameStatus)}
           gameStatus={hrDirectorGameStatus}
         />
       )}
@@ -3351,7 +3490,7 @@ const MyJobDetails: React.FC = () => {
             fetchPoliceLieutenantGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchPoliceLieutenantGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchPoliceLieutenantGameStatus)}
           gameStatus={policeLieutenantGameStatus}
         />
       )}
@@ -3365,7 +3504,7 @@ const MyJobDetails: React.FC = () => {
             fetchLawyerGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchLawyerGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchLawyerGameStatus)}
           gameStatus={lawyerGameStatus}
         />
       )}
@@ -3379,7 +3518,7 @@ const MyJobDetails: React.FC = () => {
             fetchTownPlannerGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchTownPlannerGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchTownPlannerGameStatus)}
           gameStatus={townPlannerGameStatus}
         />
       )}
@@ -3393,7 +3532,7 @@ const MyJobDetails: React.FC = () => {
             fetchElectricalEngineerGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchElectricalEngineerGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchElectricalEngineerGameStatus)}
           gameStatus={electricalEngineerGameStatus}
         />
       )}
@@ -3407,7 +3546,7 @@ const MyJobDetails: React.FC = () => {
             fetchCivilEngineerGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchCivilEngineerGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchCivilEngineerGameStatus)}
           gameStatus={civilEngineerGameStatus}
         />
       )}
@@ -3421,7 +3560,7 @@ const MyJobDetails: React.FC = () => {
             fetchPrincipalGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchPrincipalGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchPrincipalGameStatus)}
           gameStatus={principalGameStatus}
         />
       )}
@@ -3435,7 +3574,7 @@ const MyJobDetails: React.FC = () => {
             fetchTeacherGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchTeacherGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchTeacherGameStatus)}
           gameStatus={teacherGameStatus}
         />
       )}
@@ -3449,7 +3588,7 @@ const MyJobDetails: React.FC = () => {
             fetchNurseGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchNurseGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchNurseGameStatus)}
           gameStatus={nurseGameStatus}
         />
       )}
@@ -3463,7 +3602,7 @@ const MyJobDetails: React.FC = () => {
             fetchDoctorGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchDoctorGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchDoctorGameStatus)}
           gameStatus={doctorGameStatus}
         />
       )}
@@ -3477,8 +3616,22 @@ const MyJobDetails: React.FC = () => {
             fetchRetailManagerGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchRetailManagerGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchRetailManagerGameStatus)}
           gameStatus={retailManagerGameStatus}
+        />
+      )}
+
+      {/* Insurance Manager Game Modal */}
+      {user?.role === 'student' && isInsuranceBrokerJob && (
+        <InsuranceManagerGameModal
+          isOpen={isInsuranceManagerGameOpen}
+          onClose={() => {
+            setIsInsuranceManagerGameOpen(false);
+            fetchInsuranceManagerGameStatus();
+            window.location.reload();
+          }}
+          onGameComplete={() => onJobGameComplete(fetchInsuranceManagerGameStatus)}
+          gameStatus={insuranceManagerGameStatus}
         />
       )}
 
@@ -3491,7 +3644,7 @@ const MyJobDetails: React.FC = () => {
             fetchEntrepreneurGameStatus();
             window.location.reload();
           }}
-          onGameComplete={() => fetchEntrepreneurGameStatus()}
+          onGameComplete={() => onJobGameComplete(fetchEntrepreneurGameStatus)}
           gameStatus={entrepreneurGameStatus}
         />
       )}

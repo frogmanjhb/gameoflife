@@ -37,6 +37,7 @@ import cyberAttackRoutes from './routes/cyber-attack';
 import attendanceRoutes from './routes/attendance';
 import retailManagerGameRoutes from './routes/jobchallenges/retail-manager-game';
 import entrepreneurGameRoutes from './routes/jobchallenges/entrepreneur-game';
+import insuranceManagerGameRoutes from './routes/jobchallenges/insurance-manager-game';
 import pluginRoutes from './routes/plugins';
 import codeBoardRoutes from './routes/code-board';
 import townNewsRoutes from './routes/town-news';
@@ -212,6 +213,7 @@ app.use('/api/cyber-attack', cyberAttackRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/retail-manager-game', retailManagerGameRoutes);
 app.use('/api/entrepreneur-game', entrepreneurGameRoutes);
+app.use('/api/insurance-manager-game', insuranceManagerGameRoutes);
 app.use('/api/plugins', pluginRoutes);
 app.use('/api/code-board', codeBoardRoutes);
 app.use('/api/town-news', townNewsRoutes);
@@ -882,6 +884,18 @@ async function initializeDatabase() {
       }
     } catch (migrationError) {
       console.log('⚠️ Entrepreneur game tables migration may have already been applied:', migrationError);
+    }
+
+    // Insurance Manager (Risk Review) game tables
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '098_add_insurance_manager_game_tables.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Insurance Manager game tables migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Insurance Manager game tables migration may have already been applied:', migrationError);
     }
 
     // Add paid status to shop purchases (Winkel pending/paid tracking)

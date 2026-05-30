@@ -6,6 +6,7 @@ import {
   PendingCodeAppSubmission,
   PendingNewsStorySubmission,
 } from '../../types';
+import TownNewsStoryCard from '../TownNewsStoryCard';
 
 function StatusBadge({ status }: { status: string }) {
   if (status === 'pending') {
@@ -95,20 +96,18 @@ const TeacherContentApprovals: React.FC<TeacherContentApprovalsProps> = ({ onUpd
               <span className="text-xs font-medium text-gray-500">Town News · {story.town_class}</span>
               <StatusBadge status={story.status} />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mt-1">{story.headline}</h3>
             <p className="text-sm text-gray-500">
               By {story.submitter_name} ({story.submitter_username}) · {new Date(story.created_at).toLocaleString()}
             </p>
           </div>
         </div>
-        <p className="text-sm text-gray-700 whitespace-pre-wrap">{story.body}</p>
-        {story.image_data && (
-          <img
-            src={story.image_data}
-            alt={story.headline}
-            className="max-h-48 rounded-lg border border-gray-200 object-cover"
-          />
-        )}
+        <TownNewsStoryCard
+          headline={story.headline}
+          body={story.body}
+          image_data={story.image_data}
+          widgets={story.widgets}
+          compact
+        />
         <p className="text-xs text-gray-500">
           Approving pays the journalist {data?.story_xp_reward ?? 20} XP and R
           {(data?.story_earnings_reward ?? 5000).toLocaleString()} from town treasury.

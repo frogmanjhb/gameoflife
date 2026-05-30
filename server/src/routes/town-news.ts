@@ -10,6 +10,11 @@ import {
   sanitizeHeadline,
   sanitizeOptionalImage,
 } from '../domain/townNews';
+import {
+  parseTownNewsWidgetsFromDb,
+  sanitizeTownNewsWidgets,
+  widgetsToJson,
+} from '../domain/townNewsWidgets';
 import { resolveViewerTownClass, viewerTownClassError } from '../domain/townScope';
 import { ContentSubmissionStatus } from '../domain/contentApproval';
 
@@ -41,7 +46,9 @@ async function requireTownNewsContributor(req: AuthenticatedRequest, res: Respon
   }
   const user = await getStudentUser(req.user.id);
   if (!user || !canSubmitTownNews(user.job_name)) {
-    res.status(403).json({ error: 'Only Journalists and Graphic Designers can submit to the Town News Board' });
+    res.status(403).json({
+      error: 'Only Journalists, Graphic Designers, and Entrepreneurs can submit to the Town News Board',
+    });
     return null;
   }
   if (!isTownClass(user.class)) {
@@ -61,6 +68,7 @@ function mapStoryRow(row: {
   headline: string;
   body: string;
   image_data?: string | null;
+  widgets?: unknown;
   created_at: string;
   status?: ContentSubmissionStatus;
   denial_reason?: string | null;
@@ -74,6 +82,7 @@ function mapStoryRow(row: {
     headline: row.headline,
     body: row.body,
     image_data: row.image_data ?? null,
+    widgets: parseTownNewsWidgetsFromDb(row.widgets),
     created_at: row.created_at,
     status: row.status ?? 'approved',
     denial_reason: row.denial_reason ?? null,
@@ -120,14 +129,14 @@ router.get('/manage', authenticateToken, async (req: AuthenticatedRequest, res: 
     const schoolId = contributor.school_id ?? null;
     const rows = schoolId != null
       ? await database.query(
-          `SELECT id, headline, body, image_data, status, denial_reason, created_at
+          `SELECT id, headline, body, image_data, widgets, status, denial_reason, created_at
            FROM town_news_stories
            WHERE school_id = $1 AND town_class = $2 AND journalist_user_id = $3
            ORDER BY created_at DESC`,
           [schoolId, contributor.class, contributor.id]
         )
       : await database.query(
-          `SELECT id, headline, body, image_data, status, denial_reason, created_at
+          `SELECT id, headline, body, image_data, widgets, status, denial_reason, created_at
            FROM town_news_stories
            WHERE school_id IS NULL AND town_class = $1 AND journalist_user_id = $2
            ORDER BY created_at DESC`,
@@ -196,14 +205,17 @@ router.post('/stories', authenticateToken, async (req: AuthenticatedRequest, res
       return res.status(400).json({ error: 'Please write your story' });
     }
 
+    const widgets = sanitizeTownNewsWidgets(req.body?.widgets);
+    const widgetsJson = widgetsToJson(widgets);
+
     const schoolId = contributor.school_id ?? null;
     const townClass = contributor.class;
 
     const rows = await database.query(
-      `INSERT INTO town_news_stories (school_id, town_class, journalist_user_id, headline, body, image_data, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-       RETURNING id, headline, body, image_data, status, denial_reason, created_at`,
-      [schoolId, townClass, contributor.id, headline, body, image_data]
+      `INSERT INTO town_news_stories (school_id, town_class, journalist_user_id, headline, body, image_data, widgets, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 'pending')
+       RETURNING id, headline, body, image_data, widgets, status, denial_reason, created_at`,
+      [schoolId, townClass, contributor.id, headline, body, image_data, widgetsJson]
     );
 
     res.status(201).json({

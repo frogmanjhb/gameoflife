@@ -8,6 +8,8 @@ import LoginForm from './components/LoginForm';
 import StudentDashboard from './components/StudentDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
 import StudentDetailView from './components/StudentDetailView';
+import StudentProfileView from './components/StudentProfileView';
+import AccountantClientDetailView from './components/AccountantClientDetailView';
 import BankPlugin from './components/plugins/BankPlugin';
 import LandPlugin from './components/plugins/LandPlugin';
 import JobsPlugin from './components/plugins/JobsPlugin';
@@ -112,12 +114,38 @@ const AppContent: React.FC = () => {
         }
       />
       <Route
+        path="/my-profile"
+        element={
+          <ProtectedRoute>
+            <PluginProvider>
+              <TownProvider>
+                <RequireRulesAgreed>
+                  <StudentProfileView />
+                </RequireRulesAgreed>
+              </TownProvider>
+            </PluginProvider>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/student/:username"
         element={
           <ProtectedRoute>
             <PluginProvider>
               <TownProvider>
                 <StudentDetailView />
+              </TownProvider>
+            </PluginProvider>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/accountant-client/:username"
+        element={
+          <ProtectedRoute>
+            <PluginProvider>
+              <TownProvider>
+                <AccountantClientDetailView />
               </TownProvider>
             </PluginProvider>
           </ProtectedRoute>

@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle, FileText, Loader2, XCircle } from 'lucide-react';
 import { attendanceApi } from '../services/api';
 import { SickNoteQueueStatus } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SickNoteApprovalPanelProps {
   jobName: string;
 }
 
 const SickNoteApprovalPanel: React.FC<SickNoteApprovalPanelProps> = ({ jobName }) => {
+  const { refreshProfile } = useAuth();
   const name = jobName.toLowerCase().trim();
   const canReview =
     name.includes('hr director') || name.includes('financial manager') || name.includes('lawyer');
@@ -55,6 +57,7 @@ const SickNoteApprovalPanel: React.FC<SickNoteApprovalPanelProps> = ({ jobName }
         `${approved ? 'Approved' : 'Denied'} sick note for ${res.data.student_display_name}.${xpMsg}`
       );
       await fetchQueue();
+      if (approved) await refreshProfile();
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||

@@ -100,10 +100,13 @@ async function getClassInsuranceBrokers(schoolId, townClass) {
        AND LOWER(j.name) LIKE '%insurance%'
      ORDER BY u.id`, params);
 }
-async function classRequiresBrokerApproval(schoolId, townClass) {
+async function classRequiresBrokerApproval(schoolId, townClass, requestingUserId) {
     if (!townClass)
         return false;
     const brokers = await getClassInsuranceBrokers(schoolId, townClass);
+    if (requestingUserId != null) {
+        return brokers.some((b) => b.id !== requestingUserId);
+    }
     return brokers.length > 0;
 }
 async function getDisabledInsuranceTypes(schoolId) {

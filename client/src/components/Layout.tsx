@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, Menu, X, Home } from 'lucide-react';
+import { LogOut, Menu, X, Home, UserCircle } from 'lucide-react';
 import ProfileBadge from './ProfileBadge';
 import StudentIllnessOverlay from './StudentIllnessOverlay';
 import StudentCyberAttackOverlay from './StudentCyberAttackOverlay';
@@ -22,6 +22,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Home },
+    ...(user?.role === 'student'
+      ? [{ name: 'My Profile', href: '/my-profile', icon: UserCircle }]
+      : []),
   ];
 
   const isActive = (path: string) => {
@@ -71,9 +74,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {user && (
               <div className="hidden md:flex items-center space-x-4">
                 <div className="flex items-center space-x-3 text-sm text-gray-600">
-                  <ProfileBadge user={user} size="md" />
+                  {user.role === 'student' ? (
+                    <Link to="/my-profile" className="hover:opacity-80 transition-opacity" title="My Profile">
+                      <ProfileBadge user={user} size="md" />
+                    </Link>
+                  ) : (
+                    <ProfileBadge user={user} size="md" />
+                  )}
                   <div className="flex flex-col">
-                    <span className="font-medium text-gray-900">{user.username}</span>
+                    {user.role === 'student' ? (
+                      <Link to="/my-profile" className="font-medium text-gray-900 hover:text-primary-700">
+                        {user.username}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-gray-900">{user.username}</span>
+                    )}
                     <span className="px-2 py-0.5 bg-primary-100 text-primary-800 rounded-full text-xs font-medium">
                       {user.role === 'teacher' ? '👨‍🏫 Teacher' : '🎓 Student'}
                     </span>

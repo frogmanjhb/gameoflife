@@ -41,6 +41,7 @@ const cyber_attack_1 = __importDefault(require("./routes/cyber-attack"));
 const attendance_1 = __importDefault(require("./routes/attendance"));
 const retail_manager_game_1 = __importDefault(require("./routes/jobchallenges/retail-manager-game"));
 const entrepreneur_game_1 = __importDefault(require("./routes/jobchallenges/entrepreneur-game"));
+const insurance_manager_game_1 = __importDefault(require("./routes/jobchallenges/insurance-manager-game"));
 const plugins_1 = __importDefault(require("./routes/plugins"));
 const code_board_1 = __importDefault(require("./routes/code-board"));
 const town_news_1 = __importDefault(require("./routes/town-news"));
@@ -195,6 +196,7 @@ app.use('/api/cyber-attack', cyber_attack_1.default);
 app.use('/api/attendance', attendance_1.default);
 app.use('/api/retail-manager-game', retail_manager_game_1.default);
 app.use('/api/entrepreneur-game', entrepreneur_game_1.default);
+app.use('/api/insurance-manager-game', insurance_manager_game_1.default);
 app.use('/api/plugins', plugins_1.default);
 app.use('/api/code-board', code_board_1.default);
 app.use('/api/town-news', town_news_1.default);
@@ -861,6 +863,18 @@ async function initializeDatabase() {
         }
         catch (migrationError) {
             console.log('⚠️ Entrepreneur game tables migration may have already been applied:', migrationError);
+        }
+        // Insurance Manager (Risk Review) game tables
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '098_add_insurance_manager_game_tables.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Insurance Manager game tables migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Insurance Manager game tables migration may have already been applied:', migrationError);
         }
         // Add paid status to shop purchases (Winkel pending/paid tracking)
         try {

@@ -20,6 +20,7 @@ import {
   hasLawyerJob,
   seedManualAssignmentsFromAutoSplit as seedLawyerAssignmentsFromAutoSplit,
 } from '../domain/lawyer-assignments';
+import { buildStudentEarningsProfile } from '../domain/studentEarningsProfile';
 
 const router = Router();
 
@@ -147,6 +148,25 @@ router.get('/transfer-recipients', authenticateToken, async (req: AuthenticatedR
     res.json(recipients);
   } catch (error) {
     console.error('Get transfer recipients error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Student self-service: XP and money earned breakdown
+router.get('/me/earnings-profile', authenticateToken, requireTenant, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'student') {
+      return res.status(403).json({ error: 'Only students can view their earnings profile' });
+    }
+
+    const profile = await buildStudentEarningsProfile(req.user.id);
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    res.json(profile);
+  } catch (error) {
+    console.error('Get student earnings profile error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1180,6 +1200,8 @@ router.get('/account/:accountNumber/details', authenticateToken, requireTenant, 
         SELECT experience_points FROM retail_manager_game_sessions WHERE user_id = $1
         UNION ALL
         SELECT experience_points FROM entrepreneur_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM insurance_manager_game_sessions WHERE user_id = $1
       )
       SELECT 
         COUNT(*)::int as total_sessions,
@@ -1516,6 +1538,8 @@ router.get('/:username/details', authenticateToken, requireTenant, requireRole([
         SELECT experience_points FROM retail_manager_game_sessions WHERE user_id = $1
         UNION ALL
         SELECT experience_points FROM entrepreneur_game_sessions WHERE user_id = $1
+        UNION ALL
+        SELECT experience_points FROM insurance_manager_game_sessions WHERE user_id = $1
       )
       SELECT 
         COUNT(*)::int as total_sessions,

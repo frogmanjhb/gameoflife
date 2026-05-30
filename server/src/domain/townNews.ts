@@ -21,8 +21,16 @@ export function hasGraphicDesignerJob(jobName: string | null | undefined): boole
   return (jobName || '').toLowerCase().trim().includes('graphic designer');
 }
 
+export function hasEntrepreneurJob(jobName: string | null | undefined): boolean {
+  return (jobName || '').toLowerCase().trim().includes('entrepreneur');
+}
+
 export function canSubmitTownNews(jobName: string | null | undefined): boolean {
-  return hasJournalistJob(jobName) || hasGraphicDesignerJob(jobName);
+  return (
+    hasJournalistJob(jobName) ||
+    hasGraphicDesignerJob(jobName) ||
+    hasEntrepreneurJob(jobName)
+  );
 }
 
 export function estimateImageBytes(imageData: string): number {

@@ -1,6 +1,11 @@
 /** Total professional fees (FM + architects + civil engineers) = 5% of plot price */
 export const TOTAL_PROFESSIONAL_FEE_RATE = 0.05;
 
+export const FM_LAND_REVIEW_XP = 10;
+export const LAND_ENGINEER_REVIEW_XP = 50;
+/** @deprecated Use LAND_ENGINEER_REVIEW_XP */
+export const CIVIL_ENGINEER_LAND_REVIEW_XP = LAND_ENGINEER_REVIEW_XP;
+
 export const ACTIVE_PURCHASE_STATUSES = [
   'pending_fm',
   'pending_engineer',

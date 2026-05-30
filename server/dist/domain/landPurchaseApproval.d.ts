@@ -1,5 +1,9 @@
 /** Total professional fees (FM + architects + civil engineers) = 5% of plot price */
 export declare const TOTAL_PROFESSIONAL_FEE_RATE = 0.05;
+export declare const FM_LAND_REVIEW_XP = 10;
+export declare const LAND_ENGINEER_REVIEW_XP = 50;
+/** @deprecated Use LAND_ENGINEER_REVIEW_XP */
+export declare const CIVIL_ENGINEER_LAND_REVIEW_XP = 50;
 export declare const ACTIVE_PURCHASE_STATUSES: readonly ["pending_fm", "pending_engineer", "pending_teacher"];
 export type LandPurchaseStatus = 'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied';
 export declare function hasArchitectJob(jobName: string | null | undefined): boolean;

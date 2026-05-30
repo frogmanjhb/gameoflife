@@ -9,6 +9,7 @@ const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
 const contentApproval_1 = require("../domain/contentApproval");
 const townNews_1 = require("../domain/townNews");
+const townNewsWidgets_1 = require("../domain/townNewsWidgets");
 const router = (0, express_1.Router)();
 function displayName(user) {
     const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
@@ -34,7 +35,7 @@ router.get('/pending', auth_1.authenticateToken, tenant_1.requireTenant, (0, aut
             return res.status(503).json({ error: 'Content submissions are not available yet. Please try again later.' });
         }
         const schoolId = req.schoolId ?? req.user?.school_id ?? null;
-        const newsStories = await database_prod_1.default.query(`SELECT s.id, s.headline, s.body, s.image_data, s.town_class, s.status, s.created_at,
+        const newsStories = await database_prod_1.default.query(`SELECT s.id, s.headline, s.body, s.image_data, s.widgets, s.town_class, s.status, s.created_at,
               u.username AS submitter_username, u.first_name AS submitter_first_name, u.last_name AS submitter_last_name
        FROM town_news_stories s
        JOIN users u ON u.id = s.journalist_user_id
@@ -51,6 +52,7 @@ router.get('/pending', auth_1.authenticateToken, tenant_1.requireTenant, (0, aut
             headline: row.headline,
             body: row.body,
             image_data: row.image_data ?? null,
+            widgets: (0, townNewsWidgets_1.parseTownNewsWidgetsFromDb)(row.widgets),
             town_class: row.town_class,
             status: row.status,
             created_at: row.created_at,

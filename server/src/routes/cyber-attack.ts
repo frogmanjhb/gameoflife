@@ -284,7 +284,8 @@ router.get('/my-status', authenticateToken, async (req: AuthenticatedRequest, re
     const cyberInsuranceCoversRepair = await hasActiveApprovedCyberInsurance(req.user.id);
     const brokerRequired = await classRequiresBrokerApproval(
       req.user.school_id ?? null,
-      req.user.class ?? null
+      req.user.class ?? null,
+      req.user.id
     );
 
     res.json({
@@ -385,7 +386,8 @@ router.post('/call-it', authenticateToken, async (req: AuthenticatedRequest, res
     const hasCyberInsurance = await hasActiveApprovedCyberInsurance(req.user.id);
     const brokerRequired = await classRequiresBrokerApproval(
       req.user.school_id ?? null,
-      req.user.class ?? null
+      req.user.class ?? null,
+      req.user.id
     );
 
     if (hasCyberInsurance && brokerRequired) {

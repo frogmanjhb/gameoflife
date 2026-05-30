@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Loader2 } from 'lucide-react';
 import { attendanceApi } from '../services/api';
 import { AttendanceRegisterStatus } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AttendanceRegisterPanelProps {
   jobName: string;
 }
 
 const AttendanceRegisterPanel: React.FC<AttendanceRegisterPanelProps> = ({ jobName }) => {
+  const { refreshProfile } = useAuth();
   const isNurse = jobName.toLowerCase().trim().includes('nurse');
   const isDoctor = jobName.toLowerCase().trim().includes('doctor');
   const isHealthStaff = isNurse || isDoctor;
@@ -70,6 +72,7 @@ const AttendanceRegisterPanel: React.FC<AttendanceRegisterPanelProps> = ({ jobNa
         `Register submitted. ${res.data.absent_count} absent. +${res.data.experience_points} XP.${xpMsg}`
       );
       await fetchStatus();
+      await refreshProfile();
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||

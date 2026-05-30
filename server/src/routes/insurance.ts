@@ -67,7 +67,8 @@ router.get('/quote', authenticateToken, requireTenant, async (req: Authenticated
     const perTypePerWeek = Math.round(salary * INSURANCE_RATE * 100) / 100;
     const brokerRequired = await classRequiresBrokerApproval(
       req.user.school_id ?? null,
-      req.user.class ?? null
+      req.user.class ?? null,
+      req.user.id
     );
     const enabledTypes = await getEnabledInsuranceTypes(req.user.school_id ?? null);
     const typeSettings = await getInsuranceTypeSettings(req.user.school_id ?? null);
@@ -168,7 +169,8 @@ router.post(
 
       const brokerRequired = await classRequiresBrokerApproval(
         req.user.school_id ?? null,
-        req.user.class ?? null
+        req.user.class ?? null,
+        req.user.id
       );
       const status = brokerRequired ? 'pending_broker' : 'approved';
       const weekStart = brokerRequired ? null : todayInSA();

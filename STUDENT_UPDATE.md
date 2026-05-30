@@ -116,7 +116,8 @@ Architect · Accountant · Software Engineer · Marketing Manager · Graphic Des
 
 - Play the **Business Builder** challenge game.  
 - Submit **business proposals** for teacher approval.  
-- If approved, follow the instructions on your job page to run your town business.
+- If approved, follow the instructions on your job page to run your town business.  
+- Post to the **Town News Board** (headline, story, optional photo) — same as Journalist and Graphic Designer; teacher approves before it goes live. Optional **widgets**: story badge, headline style, colour bar, emoji strip (up to 5).
 
 ### 👮 Junior Police Lieutenant
 
@@ -133,7 +134,9 @@ Architect · Accountant · Software Engineer · Marketing Manager · Graphic Des
 ### 📊 Junior Chartered Accountant
 
 - Some classmates are **assigned to you** for financial oversight.  
-- Review and **approve certain transfers** that need accountant sign-off.  
+- **Click a client’s name** on My Job to see their balance, transaction history, and recent activity (read-only).  
+- Submit **advice and suggestions** for each client — each submission earns **10 XP** and **R500** (from the town treasury).  
+- Review and **approve certain transfers** that need accountant sign-off (1 XP per approval).  
 - Play the **Accountant** challenge game.
 
 ### 🩺 Junior Doctor & 💉 Assistant Nurse
@@ -176,7 +179,7 @@ Architect · Accountant · Software Engineer · Marketing Manager · Graphic Des
 |--------|-------------------|
 | **Five Minute Lessons** | Vote on lesson ideas. Teachers and Assistant Teachers can suggest new ones. |
 | **Code Board** | See town codes and announcements posted by certain roles. |
-| **Town News** | Read news written by journalists and other town roles. |
+| **Town News** | Read (and for some jobs, post) news with optional badges, styles, colour bars, and emojis. |
 | **Insurance** | Apply for health insurance; claims may need your Insurance Manager's approval. |
 | **Attendance & sick notes** | If absent, submit a sick note. HR, Financial Manager, or Lawyer may review it. |
 

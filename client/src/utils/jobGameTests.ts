@@ -23,6 +23,7 @@ export const JOB_GAME_TEST_LIST: { key: JobGameTestKey; label: string }[] = [
   { key: 'doctor', label: 'Doctor' },
   { key: 'retailManager', label: 'Retail Manager' },
   { key: 'entrepreneur', label: 'Entrepreneur' },
+  { key: 'insuranceManager', label: 'Insurance Manager' },
 ];
 
 export type JobGameTestKey = typeof JOB_GAME_TEST_LIST[number]['key'];

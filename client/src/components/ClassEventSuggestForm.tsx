@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { Loader2, Send } from 'lucide-react';
 import { classEventsApi } from '../services/api';
 import { ClassEventTiming } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 const ClassEventSuggestForm: React.FC = () => {
+  const { refreshProfile } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [timing, setTiming] = useState<ClassEventTiming>('during_class');
@@ -53,6 +55,7 @@ const ClassEventSuggestForm: React.FC = () => {
       setTitle('');
       setDescription('');
       setRemaining(res.data.remaining_suggestions);
+      await refreshProfile();
       setTimeout(() => setSuccess(''), 5000);
     } catch (err: unknown) {
       setError(

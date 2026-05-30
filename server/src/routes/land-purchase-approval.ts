@@ -9,6 +9,8 @@ import {
   calculateEngineerFeeShare,
   calculateFmFee,
   calculateTotalEngineerFee,
+  FM_LAND_REVIEW_XP,
+  LAND_ENGINEER_REVIEW_XP,
   isLandEngineerJob,
   RequiredEngineer,
 } from '../domain/landPurchaseApproval';
@@ -369,10 +371,11 @@ router.put('/purchase-requests/:id/fm-review',
         [req.user!.id]
       );
       const userRow = userRowResult.rows[0];
+      const currentLevel = Number.isInteger(userRow?.job_level) ? userRow.job_level : 1;
       const currentXP = typeof userRow?.job_experience_points === 'number' ? userRow.job_experience_points : 0;
-      const newXP = currentXP + 1;
-      let newLevel = userRow?.job_level || 1;
-      for (let level = newLevel; level < 10; level++) {
+      const newXP = currentXP + FM_LAND_REVIEW_XP;
+      let newLevel = currentLevel;
+      for (let level = currentLevel; level < 10; level++) {
         if (newXP >= getXPForLevel(level + 1)) newLevel = level + 1;
         else break;
       }
@@ -393,6 +396,8 @@ router.put('/purchase-requests/:id/fm-review',
         request: updated,
         fee_paid: fmFee,
         cost_breakdown: affordability,
+        experience_points: FM_LAND_REVIEW_XP,
+        new_level: newLevel > currentLevel ? newLevel : null,
       });
     } catch (error) {
       await client.query('ROLLBACK');
@@ -550,6 +555,30 @@ router.put('/purchase-requests/:id/engineer-review',
         );
       }
 
+      let engineerXpAwarded = 0;
+      let engineerNewLevel: number | null = null;
+      if (isLandEngineerJob(reviewer.job_name)) {
+        const engineerUserResult = await client.query(
+          'SELECT job_level, job_experience_points FROM users WHERE id = $1 FOR UPDATE',
+          [req.user!.id]
+        );
+        const engineerUser = engineerUserResult.rows[0];
+        const currentLevel = Number.isInteger(engineerUser?.job_level) ? engineerUser.job_level : 1;
+        const currentXP = typeof engineerUser?.job_experience_points === 'number' ? engineerUser.job_experience_points : 0;
+        const newXP = currentXP + LAND_ENGINEER_REVIEW_XP;
+        let newLevel = currentLevel;
+        for (let level = currentLevel; level < 10; level++) {
+          if (newXP >= getXPForLevel(level + 1)) newLevel = level + 1;
+          else break;
+        }
+        await client.query(
+          'UPDATE users SET job_experience_points = $1, job_level = $2 WHERE id = $3',
+          [newXP, newLevel, req.user!.id]
+        );
+        engineerXpAwarded = LAND_ENGINEER_REVIEW_XP;
+        engineerNewLevel = newLevel > currentLevel ? newLevel : null;
+      }
+
       await client.query('COMMIT');
 
       const updatedRow = await database.get(`${purchaseRequestSelect} WHERE lpr.id = $1`, [requestId]);
@@ -561,6 +590,8 @@ router.put('/purchase-requests/:id/engineer-review',
           : `Approved — you received ${feeShare > 0 ? `R${feeShare}` : 'no fee'}. Waiting for other engineers.`,
         request: updated,
         fee_paid: feeShare,
+        experience_points: engineerXpAwarded,
+        new_level: engineerNewLevel,
       });
     } catch (error) {
       await client.query('ROLLBACK');

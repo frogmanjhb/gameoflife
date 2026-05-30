@@ -1,0 +1,1 @@
+{"version":3,"file":"businessProposals.d.ts","sourceRoot":"","sources":["../../src/domain/businessProposals.ts"],"names":[],"mappings":"AAGA,eAAO,MAAM,mBAAmB,KAAK,CAAC;AAEtC,wBAAgB,kBAAkB,CAAC,OAAO,EAAE,MAAM,GAAG,IAAI,GAAG,SAAS,GAAG,OAAO,CAE9E;AAED,wBAAsB,uBAAuB,CAC3C,MAAM,EAAE,MAAM,GACb,OAAO,CAAC;IAAE,iBAAiB,EAAE,MAAM,CAAC;IAAC,SAAS,EAAE,MAAM,GAAG,IAAI,CAAA;CAAE,CAAC,CAqBlE"}

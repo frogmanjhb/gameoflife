@@ -42,7 +42,7 @@ router.get('/quote', auth_1.authenticateToken, tenant_1.requireTenant, async (re
         }
         const salary = await getStudentSalary(req.user.id);
         const perTypePerWeek = Math.round(salary * insurance_1.INSURANCE_RATE * 100) / 100;
-        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null);
+        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null, req.user.id);
         const enabledTypes = await (0, insurance_1.getEnabledInsuranceTypes)(req.user.school_id ?? null);
         const typeSettings = await (0, insurance_1.getInsuranceTypeSettings)(req.user.school_id ?? null);
         res.json({
@@ -125,7 +125,7 @@ router.post('/purchase', auth_1.authenticateToken, tenant_1.requireTenant, [
                 error: `Insufficient balance. You need ${totalCost.toFixed(2)} but have ${balance.toFixed(2)}.`,
             });
         }
-        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null);
+        const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null, req.user.id);
         const status = brokerRequired ? 'pending_broker' : 'approved';
         const weekStart = brokerRequired ? null : (0, insurance_1.todayInSA)();
         const schoolId = req.user.school_id ?? null;

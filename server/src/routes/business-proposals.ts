@@ -3,14 +3,13 @@ import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { requireTenant } from '../middleware/tenant';
 import { requireRole } from '../middleware/auth';
+import {
+  awardProposalApprovalXp,
+  hasEntrepreneurJob,
+  PROPOSAL_APPROVE_XP,
+} from '../domain/businessProposals';
 
 const router = Router();
-
-const ENTREPRENEUR_JOB_NAME = 'entrepreneur – town business founder';
-
-function hasEntrepreneurJob(jobName: string | null | undefined): boolean {
-  return (jobName || '').toLowerCase().trim() === ENTREPRENEUR_JOB_NAME;
-}
 
 // Submit a business proposal (students with Entrepreneur job only)
 router.post('/', authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
@@ -33,7 +32,6 @@ router.post('/', authenticateToken, requireRole(['student']), async (req: Authen
     }
     const payloadObj = payload && typeof payload === 'object' ? payload : {};
 
-    // One active proposal per user: pending or approved. If they already have pending, reject; if approved, they can submit another (new business).
     const existing = await database.get(
       `SELECT id, status FROM business_proposals WHERE user_id = $1 AND status = 'pending' LIMIT 1`,
       [userId]
@@ -125,12 +123,22 @@ router.put('/:id', authenticateToken, requireTenant, requireRole(['teacher']), a
       return res.status(400).json({ error: 'Proposal has already been reviewed' });
     }
 
+    let reward: { experience_points: number; new_level: number | null } | null = null;
+    if (status === 'approved') {
+      reward = await awardProposalApprovalXp(proposal.user_id);
+    }
+
     await database.run(
       `UPDATE business_proposals SET status = $1, reviewed_at = CURRENT_TIMESTAMP, reviewed_by = $2, denial_reason = $3 WHERE id = $4`,
       [status, req.user?.id ?? null, status === 'denied' ? (denial_reason || null) : null, id]
     );
     const updated = await database.get('SELECT * FROM business_proposals WHERE id = $1', [id]);
-    res.json(updated);
+    res.json({
+      ...updated,
+      proposal_xp_reward: PROPOSAL_APPROVE_XP,
+      experience_points: reward?.experience_points ?? 0,
+      new_level: reward?.new_level ?? null,
+    });
   } catch (error) {
     console.error('Update business proposal error:', error);
     res.status(500).json({ error: 'Internal server error' });

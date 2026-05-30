@@ -9,6 +9,7 @@ const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
 const lawyer_assignments_1 = require("../domain/lawyer-assignments");
+const police_fines_1 = require("../domain/police-fines");
 const router = (0, express_1.Router)();
 const LIST_SELECT = `
   r.*,
@@ -81,7 +82,7 @@ router.post('/', auth_1.authenticateToken, tenant_1.requireTenant, async (req, r
         if (!user)
             return res.status(401).json({ error: 'Unauthorised' });
         const studentRow = await getPoliceStudent(user.id);
-        if (!studentRow || !(studentRow.job_name || '').toLowerCase().includes('police lieutenant')) {
+        if (!studentRow || !(0, police_fines_1.hasPoliceLieutenantJob)(studentRow.job_name)) {
             return res.status(403).json({ error: 'Only the Police Lieutenant may submit fines/bonuses' });
         }
         const { type, target_username, description, amount, teacher_initials } = req.body;
@@ -120,10 +121,16 @@ router.post('/', auth_1.authenticateToken, tenant_1.requireTenant, async (req, r
             schoolId,
             townClass,
         ]);
+        const xpResult = await (0, police_fines_1.awardPoliceSubmitXp)(user.id);
         const msg = initialStatus === 'pending_lawyer'
             ? `${type === 'fine' ? 'Fine' : 'Bonus'} submitted for lawyer review, then teacher approval`
             : `${type === 'fine' ? 'Fine' : 'Bonus'} submitted for teacher approval (no lawyer assigned to this student)`;
-        return res.status(201).json({ message: msg });
+        return res.status(201).json({
+            message: msg,
+            experience_points: xpResult.experience_points,
+            new_level: xpResult.new_level,
+            submit_xp: police_fines_1.POLICE_FINE_BONUS_SUBMIT_XP,
+        });
     }
     catch (err) {
         console.error('police-fines-bonuses POST error:', err);
@@ -224,7 +231,13 @@ router.post('/:id/lawyer-approve', auth_1.authenticateToken, tenant_1.requireTen
              lawyer_notes = $2,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $3`, [user.id, lawyerNotes, requestId]);
-        return res.json({ message: 'Sent to teacher for final approval' });
+        const xpResult = await (0, police_fines_1.awardLawyerFineReviewXp)(user.id);
+        return res.json({
+            message: 'Sent to teacher for final approval',
+            experience_points: xpResult.experience_points,
+            new_level: xpResult.new_level,
+            review_xp: police_fines_1.LAWYER_FINE_REVIEW_XP,
+        });
     }
     catch (err) {
         console.error('police-fines-bonuses lawyer-approve error:', err);
@@ -263,7 +276,13 @@ router.post('/:id/lawyer-deny', auth_1.authenticateToken, tenant_1.requireTenant
              reviewed_at = CURRENT_TIMESTAMP,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $3`, [user.id, lawyerNotes, requestId]);
-        return res.json({ message: 'Request denied by lawyer' });
+        const xpResult = await (0, police_fines_1.awardLawyerFineReviewXp)(user.id);
+        return res.json({
+            message: 'Request denied by lawyer',
+            experience_points: xpResult.experience_points,
+            new_level: xpResult.new_level,
+            review_xp: police_fines_1.LAWYER_FINE_REVIEW_XP,
+        });
     }
     catch (err) {
         console.error('police-fines-bonuses lawyer-deny error:', err);
@@ -311,7 +330,13 @@ router.post('/:id/dispute', auth_1.authenticateToken, tenant_1.requireTenant, [
              lawyer_disputed_at = CURRENT_TIMESTAMP,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $4`, [disputeReason, lawyerNotes, user.id, requestId]);
-        return res.json({ message: 'Fine disputed — returned to Police for more evidence' });
+        const xpResult = await (0, police_fines_1.awardLawyerFineReviewXp)(user.id);
+        return res.json({
+            message: 'Fine disputed — returned to Police for more evidence',
+            experience_points: xpResult.experience_points,
+            new_level: xpResult.new_level,
+            review_xp: police_fines_1.LAWYER_FINE_REVIEW_XP,
+        });
     }
     catch (err) {
         console.error('police-fines-bonuses dispute error:', err);

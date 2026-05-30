@@ -7,6 +7,16 @@ import { TransferRequest, DepositRequest, WithdrawRequest, TransactionWithDetail
 import { getXPForLevel } from './jobs';
 
 import { getAccountantContext } from '../domain/accountant-assignments';
+import {
+  ADVICE_EARNINGS_REWARD,
+  ADVICE_XP_REWARD,
+  MAX_ADVICE_LENGTH,
+  MIN_ADVICE_LENGTH,
+  payAdviceReward,
+  resolveAccountantClient,
+  sanitizeAdvice,
+  tablesReady as accountantAdviceTablesReady,
+} from '../domain/accountant-advice';
 
 // Helper function to check if student can make transactions
 async function checkStudentCanTransact(userId: number): Promise<{ canTransact: boolean; reason?: string }> {
@@ -452,8 +462,9 @@ router.get('/my-approvals/assignments', authenticateToken, requireRole(['student
     const placeholders = userIds.map((_, idx) => `$${idx + 1}`).join(', ');
     const students = await database.query(
       `
-      SELECT u.id, u.username, u.first_name, u.last_name, u.class
+      SELECT u.id, u.username, u.first_name, u.last_name, u.class, j.name AS job_name
       FROM users u
+      LEFT JOIN jobs j ON u.job_id = j.id
       WHERE u.id IN (${placeholders})
       ORDER BY u.class NULLS LAST, u.last_name NULLS LAST, u.first_name NULLS LAST, u.username
       `,
@@ -1229,5 +1240,211 @@ router.get('/unemployed-students', authenticateToken, requireRole(['teacher']), 
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Chartered Accountant: read-only client financial details
+router.get(
+  '/accountant-clients/:username/details',
+  authenticateToken,
+  requireRole(['student']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+
+      let resolved;
+      try {
+        resolved = await resolveAccountantClient(req.user.id, req.params.username);
+      } catch (err: unknown) {
+        const code = err instanceof Error ? err.message : '';
+        if (code === 'NOT_ACCOUNTANT') {
+          return res.status(403).json({ error: 'Only Chartered Accountants can view client details' });
+        }
+        if (code === 'CLIENT_NOT_FOUND') {
+          return res.status(404).json({ error: 'Student not found' });
+        }
+        if (code === 'CLIENT_IS_ACCOUNTANT') {
+          return res.status(400).json({ error: 'Peer accountants are not financial advice clients' });
+        }
+        if (code === 'NOT_YOUR_CLIENT') {
+          return res.status(403).json({ error: 'This student is not assigned to you' });
+        }
+        throw err;
+      }
+
+      const { client } = resolved;
+      const student = await database.get(
+        `SELECT u.id, u.username, u.first_name, u.last_name, u.class, u.job_level, u.job_experience_points,
+                j.name AS job_name,
+                a.account_number, a.balance, a.updated_at AS last_activity
+         FROM users u
+         LEFT JOIN jobs j ON u.job_id = j.id
+         LEFT JOIN accounts a ON a.user_id = u.id
+         WHERE u.id = $1`,
+        [client.id]
+      );
+
+      const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [client.id]);
+      let transactions: TransactionWithDetails[] = [];
+      if (account) {
+        transactions = await database.query(
+          `SELECT t.*,
+                  fu.username AS from_username,
+                  fu.first_name AS from_first_name,
+                  fu.last_name AS from_last_name,
+                  tu.username AS to_username,
+                  tu.first_name AS to_first_name,
+                  tu.last_name AS to_last_name
+           FROM transactions t
+           LEFT JOIN accounts fa ON t.from_account_id = fa.id
+           LEFT JOIN users fu ON fa.user_id = fu.id
+           LEFT JOIN accounts ta ON t.to_account_id = ta.id
+           LEFT JOIN users tu ON ta.user_id = tu.id
+           WHERE t.from_account_id = $1 OR t.to_account_id = $2
+           ORDER BY t.created_at DESC`,
+          [account.id, account.id]
+        );
+      }
+
+      const loans = await database.query(
+        `SELECT l.*, COALESCE(SUM(lp.amount), 0) AS total_paid
+         FROM loans l
+         LEFT JOIN loan_payments lp ON l.id = lp.loan_id
+         WHERE l.borrower_id = $1
+         GROUP BY l.id
+         ORDER BY l.created_at DESC`,
+        [client.id]
+      );
+
+      let priorAdvice: { id: number; advice_text: string; created_at: string }[] = [];
+      if (await accountantAdviceTablesReady()) {
+        priorAdvice = await database.query(
+          `SELECT id, advice_text, created_at
+           FROM accountant_client_advice
+           WHERE accountant_user_id = $1 AND client_user_id = $2
+           ORDER BY created_at DESC
+           LIMIT 10`,
+          [req.user.id, client.id]
+        );
+      }
+
+      res.json({
+        student,
+        transactions,
+        loans,
+        prior_advice: priorAdvice,
+        advice_xp_reward: ADVICE_XP_REWARD,
+        advice_earnings_reward: ADVICE_EARNINGS_REWARD,
+      });
+    } catch (error) {
+      console.error('Get accountant client details error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// Chartered Accountant: submit advice for a client (10 XP + R500 from treasury)
+router.post(
+  '/accountant-clients/:username/advice',
+  [
+    body('advice')
+      .trim()
+      .isLength({ min: MIN_ADVICE_LENGTH, max: MAX_ADVICE_LENGTH })
+      .withMessage(`Advice must be between ${MIN_ADVICE_LENGTH} and ${MAX_ADVICE_LENGTH} characters`),
+  ],
+  authenticateToken,
+  requireRole(['student']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      if (!(await accountantAdviceTablesReady())) {
+        return res.status(503).json({ error: 'Accountant advice is not available yet. Ask your teacher to run the database migration.' });
+      }
+
+      let resolved;
+      try {
+        resolved = await resolveAccountantClient(req.user.id, req.params.username);
+      } catch (err: unknown) {
+        const code = err instanceof Error ? err.message : '';
+        if (code === 'NOT_ACCOUNTANT') {
+          return res.status(403).json({ error: 'Only Chartered Accountants can submit client advice' });
+        }
+        if (code === 'CLIENT_NOT_FOUND') {
+          return res.status(404).json({ error: 'Student not found' });
+        }
+        if (code === 'CLIENT_IS_ACCOUNTANT') {
+          return res.status(400).json({ error: 'Peer accountants are not financial advice clients' });
+        }
+        if (code === 'NOT_YOUR_CLIENT') {
+          return res.status(403).json({ error: 'This student is not assigned to you' });
+        }
+        throw err;
+      }
+
+      const adviceText = sanitizeAdvice(String(req.body.advice || ''));
+      if (adviceText.length < MIN_ADVICE_LENGTH) {
+        return res.status(400).json({ error: `Advice must be at least ${MIN_ADVICE_LENGTH} characters` });
+      }
+
+      const { accountant, client } = resolved;
+      const townClass = accountant.class || client.class;
+      if (!townClass) {
+        return res.status(400).json({ error: 'Town class is required to pay advice rewards' });
+      }
+
+      const schoolId = accountant.school_id ?? client.school_id ?? null;
+
+      const dbClient = await database.pool.connect();
+      try {
+        await dbClient.query('BEGIN');
+
+        await dbClient.query(
+          `INSERT INTO accountant_client_advice (accountant_user_id, client_user_id, school_id, town_class, advice_text)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [req.user.id, client.id, schoolId, townClass, adviceText]
+        );
+
+        await dbClient.query('COMMIT');
+      } catch (error) {
+        await dbClient.query('ROLLBACK');
+        throw error;
+      } finally {
+        dbClient.release();
+      }
+
+      let reward;
+      try {
+        reward = await payAdviceReward(req.user.id, req.user.username || '', townClass, schoolId);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.message === 'TREASURY_INSUFFICIENT') {
+          return res.status(400).json({
+            error: 'Advice was saved but the town treasury cannot cover the R500 reward right now. Ask your teacher.',
+          });
+        }
+        throw err;
+      }
+
+      res.json({
+        message: `Advice submitted. You earned ${reward.experience_points} XP and R${reward.earnings}.`,
+        experience_points: reward.experience_points,
+        earnings: reward.earnings,
+        new_level: reward.new_level,
+        advice_xp_reward: ADVICE_XP_REWARD,
+        advice_earnings_reward: ADVICE_EARNINGS_REWARD,
+      });
+    } catch (error) {
+      console.error('Submit accountant client advice error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
 
 export default router;
