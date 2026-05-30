@@ -34,7 +34,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const fetchProfile = async () => {
     try {
       const response = await api.get('/auth/profile');
-      setUser(response.data.user);
+      const profileUser = {
+        ...response.data.user,
+        impersonated_by: response.data.impersonated_by ?? null,
+        impersonated_by_username: response.data.impersonated_by_username ?? null,
+        allow_teacher_impersonation: response.data.allow_teacher_impersonation ?? false,
+      };
+      setUser(profileUser);
       setAccount(response.data.account);
     } catch (error) {
       console.error('Failed to fetch profile:', error);
@@ -125,11 +131,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    sessionStorage.removeItem('teacherToken');
     sessionStorage.removeItem('student_header_color_index'); // Reset random header color for next login
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
     setAccount(null);
   };
+
+  const impersonateStudent = async (studentId: number) => {
+    const teacherToken = localStorage.getItem('token');
+    if (teacherToken) {
+      sessionStorage.setItem('teacherToken', teacherToken);
+    }
+    const response = await api.post('/auth/impersonate', { student_id: studentId });
+    const { token, user: studentUser, account: studentAccount } = response.data;
+    localStorage.setItem('token', token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    setUser({
+      ...studentUser,
+      impersonated_by: response.data.impersonated_by ?? null,
+      impersonated_by_username: response.data.impersonated_by_username ?? null,
+    });
+    setAccount(studentAccount);
+    window.location.href = '/';
+  };
+
+  const stopImpersonating = () => {
+    const teacherToken = sessionStorage.getItem('teacherToken');
+    if (!teacherToken) return;
+    sessionStorage.removeItem('teacherToken');
+    localStorage.setItem('token', teacherToken);
+    api.defaults.headers.common['Authorization'] = `Bearer ${teacherToken}`;
+    window.location.href = '/';
+  };
+
+  const isImpersonating = Boolean(user?.impersonated_by);
 
   const value: AuthContextType = {
     user,
@@ -138,6 +174,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     refreshProfile,
+    impersonateStudent,
+    stopImpersonating,
+    isImpersonating,
     loading
   };
 

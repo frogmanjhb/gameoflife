@@ -34,7 +34,7 @@ interface TownStats {
 const TILE_ORDER_STORAGE_KEY = 'teacherDashboardTileOrder';
 
 const TeacherDashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const { enabledPlugins, plugins, loading: pluginsLoading, refreshPlugins } = usePlugins();
   const { currentTown, currentTownClass, allTowns, announcements, loading: townLoading, setCurrentTownClass, refreshAnnouncements } = useTown();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs' | 'students' | 'pending' | 'shop' | 'submissions'>('dashboard');
@@ -147,6 +147,9 @@ const TeacherDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+    if (user?.role === 'teacher') {
+      refreshProfile();
+    }
   }, []);
 
   const fetchData = async () => {

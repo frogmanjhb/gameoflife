@@ -1000,6 +1000,7 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
             total_job_challenge_sessions: jobStats?.total_sessions ?? 0,
             total_job_challenge_xp: jobStats?.total_xp ?? 0
         };
+        const earningsProfile = await (0, studentEarningsProfile_1.buildStudentEarningsProfile)(account.user_id);
         res.json({
             account: {
                 account_number: account.account_number,
@@ -1038,7 +1039,8 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
             jobApplications,
             suggestions,
             bugReports,
-            stats
+            stats,
+            earnings_profile: earningsProfile
         });
     }
     catch (error) {
@@ -1300,6 +1302,7 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
             total_job_challenge_sessions: jobStats?.total_sessions ?? 0,
             total_job_challenge_xp: jobStats?.total_xp ?? 0
         };
+        const earningsProfile = await (0, studentEarningsProfile_1.buildStudentEarningsProfile)(student.id);
         res.json({
             student,
             transactions,
@@ -1312,7 +1315,8 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
             jobApplications,
             suggestions,
             bugReports,
-            stats
+            stats,
+            earnings_profile: earningsProfile
         });
     }
     catch (error) {

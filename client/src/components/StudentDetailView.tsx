@@ -3,12 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   User, Briefcase, Home, CreditCard, TrendingUp, TrendingDown, DollarSign, Plus, Minus,
   ArrowLeft, MapPin, Gamepad2, Pizza, ShoppingBag, FileText, Calendar,
-  Clock, CheckCircle, XCircle, AlertCircle, Loader, Building2, Shield, Users, UserPlus, Scale
+  Clock, CheckCircle, XCircle, AlertCircle, Loader, Building2, Shield, Users, UserPlus, Scale, UserCheck
 } from 'lucide-react';
 import api, { jobsApi, studentsAccountantApi, studentsLawyerApi } from '../services/api';
 import type { AccountantAssignmentStudent, AccountantAssignableStudent, LawyerAssignableStudent } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { getDisplayJobTitle } from '../utils/jobDisplay';
+import StudentEarningsBreakdown, { formatProfileCurrency } from './StudentEarningsBreakdown';
+import { StudentEarningsProfile } from '../types';
 
 interface StudentDetail {
   id?: number;
@@ -161,6 +163,7 @@ interface StudentDetailData {
   suggestions: SuggestionItem[];
   bugReports: BugReportItem[];
   stats: Stats;
+  earnings_profile?: StudentEarningsProfile | null;
 }
 
 const StudentDetailView: React.FC = () => {
@@ -172,8 +175,11 @@ const StudentDetailView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'loans' | 'property' | 'activities'>('overview');
-  const { user } = useAuth();
+  const { user, impersonateStudent } = useAuth();
   const isTeacher = user?.role === 'teacher';
+  const canImpersonate = isTeacher && user?.allow_teacher_impersonation;
+  const [impersonateLoading, setImpersonateLoading] = useState(false);
+  const [impersonateError, setImpersonateError] = useState('');
 
   // Teacher add/remove actions (shown under "Transfer Activity" in the overview tab)
   const [actionLoading, setActionLoading] = useState(false);
@@ -482,7 +488,7 @@ const StudentDetailView: React.FC = () => {
     );
   }
 
-  const { account, student, transactions, loans, landParcels, mathGameSessions, pizzaContributions, shopPurchases, insurancePurchases = [], jobApplications, suggestions, bugReports, stats } = data;
+  const { account, student, transactions, loans, landParcels, mathGameSessions, pizzaContributions, shopPurchases, insurancePurchases = [], jobApplications, suggestions, bugReports, stats, earnings_profile } = data;
   
   // Handle orphaned accounts (account without student)
   const displayStudent = student || (account ? {
@@ -848,6 +854,32 @@ const StudentDetailView: React.FC = () => {
               <ArrowLeft className="h-5 w-5" />
               <span>Back to Dashboard</span>
             </button>
+            {canImpersonate && student?.id && (
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  disabled={impersonateLoading}
+                  onClick={async () => {
+                    if (!student?.id) return;
+                    setImpersonateError('');
+                    setImpersonateLoading(true);
+                    try {
+                      await impersonateStudent(student.id);
+                    } catch (err: any) {
+                      setImpersonateError(err.response?.data?.error || err.message || 'Failed to switch to student');
+                      setImpersonateLoading(false);
+                    }
+                  }}
+                  className="btn-primary flex items-center gap-2 disabled:opacity-50"
+                >
+                  <UserCheck className="h-4 w-4" />
+                  {impersonateLoading ? 'Switching...' : 'Test as this student'}
+                </button>
+                {impersonateError && (
+                  <p className="text-sm text-red-600 max-w-xs text-right">{impersonateError}</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -898,8 +930,11 @@ const StudentDetailView: React.FC = () => {
               <span className="text-xs font-medium">Total Earned</span>
             </div>
             <p className="text-2xl font-bold text-green-600">
-              {formatCurrency(stats.total_deposits + stats.total_math_earnings)}
+              {formatCurrency(earnings_profile?.money.total_earned ?? stats.total_math_earnings + (stats.total_wordle_earnings ?? 0))}
             </p>
+            {earnings_profile && (
+              <p className="text-xs text-gray-500 mt-1">Chores, games, salary &amp; tasks</p>
+            )}
           </div>
 
           <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
@@ -934,6 +969,10 @@ const StudentDetailView: React.FC = () => {
             <p className="text-xs text-gray-500 mt-1">{stats.active_loans} active</p>
           </div>
         </div>
+
+        {earnings_profile && (
+          <StudentEarningsBreakdown profile={earnings_profile} />
+        )}
 
         {/* Job Info */}
         {displayStudent.job_name && (
@@ -1245,14 +1284,20 @@ const StudentDetailView: React.FC = () => {
                         <span className="text-sm text-gray-600">Total Transactions</span>
                         <span className="font-semibold text-gray-900">{stats.total_transactions}</span>
                       </div>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-600">Chores Games Played</span>
-                        <span className="font-semibold text-gray-900">{stats.math_games_played}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-600">Chores Game Earnings</span>
-                        <span className="font-semibold text-green-600">{formatCurrency(stats.total_math_earnings)}</span>
-                      </div>
+                      {earnings_profile && (
+                        <>
+                          <div className="flex items-center justify-between p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                            <span className="text-sm text-gray-600">Total Job XP</span>
+                            <span className="font-semibold text-indigo-700">{earnings_profile.xp.total} XP</span>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-100">
+                            <span className="text-sm text-gray-600">Tracked earnings</span>
+                            <span className="font-semibold text-green-700">
+                              {formatProfileCurrency(earnings_profile.money.total_earned)}
+                            </span>
+                          </div>
+                        </>
+                      )}
                       <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <span className="text-sm text-gray-600">Pizza Contributions</span>
                         <span className="font-semibold text-orange-600">{formatCurrency(stats.pizza_contributions_total)}</span>
@@ -1261,28 +1306,14 @@ const StudentDetailView: React.FC = () => {
                         <span className="text-sm text-gray-600">Shop Purchases</span>
                         <span className="font-semibold text-blue-600">{formatCurrency(stats.shop_purchases_total)}</span>
                       </div>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-600">Wordle Games Played</span>
-                        <span className="font-semibold text-gray-900">{stats.total_wordle_games ?? 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-600">Wordle Earnings</span>
-                        <span className="font-semibold text-green-600">
-                          {formatCurrency(stats.total_wordle_earnings ?? 0)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-600">Wordle Job XP</span>
-                        <span className="font-semibold text-indigo-600">{stats.total_wordle_xp ?? 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-600">Job Challenges Played</span>
-                        <span className="font-semibold text-gray-900">{stats.total_job_challenge_sessions ?? 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-600">Job Challenge XP</span>
-                        <span className="font-semibold text-purple-600">{stats.total_job_challenge_xp ?? 0}</span>
-                      </div>
+                      {(stats.insurance_purchases_total ?? 0) > 0 && (
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <span className="text-sm text-gray-600">Insurance Purchases</span>
+                          <span className="font-semibold text-purple-600">
+                            {formatCurrency(stats.insurance_purchases_total ?? 0)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 

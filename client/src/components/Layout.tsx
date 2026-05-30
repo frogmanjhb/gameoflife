@@ -12,7 +12,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, isImpersonating, stopImpersonating } = useAuth();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -36,6 +36,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {isImpersonating && user && (
+        <div className="bg-amber-500 text-amber-950 px-4 py-2">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-sm font-medium">
+            <span>
+              Testing as <strong>{user.first_name} {user.last_name}</strong> (@{user.username})
+              {user.impersonated_by_username ? ` — teacher: ${user.impersonated_by_username}` : ''}
+            </span>
+            <button
+              type="button"
+              onClick={stopImpersonating}
+              className="rounded-md bg-amber-950 px-3 py-1 text-amber-50 hover:bg-amber-900 transition-colors"
+            >
+              Exit to teacher
+            </button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

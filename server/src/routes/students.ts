@@ -1242,6 +1242,8 @@ router.get('/account/:accountNumber/details', authenticateToken, requireTenant, 
       total_job_challenge_xp: jobStats?.total_xp ?? 0
     };
 
+    const earningsProfile = await buildStudentEarningsProfile(account.user_id);
+
     res.json({
       account: {
         account_number: account.account_number,
@@ -1280,7 +1282,8 @@ router.get('/account/:accountNumber/details', authenticateToken, requireTenant, 
       jobApplications,
       suggestions,
       bugReports,
-      stats
+      stats,
+      earnings_profile: earningsProfile
     });
   } catch (error) {
     console.error('Get account details error:', error);
@@ -1580,6 +1583,8 @@ router.get('/:username/details', authenticateToken, requireTenant, requireRole([
       total_job_challenge_xp: jobStats?.total_xp ?? 0
     };
 
+    const earningsProfile = await buildStudentEarningsProfile(student.id);
+
     res.json({
       student,
       transactions,
@@ -1592,7 +1597,8 @@ router.get('/:username/details', authenticateToken, requireTenant, requireRole([
       jobApplications,
       suggestions,
       bugReports,
-      stats
+      stats,
+      earnings_profile: earningsProfile
     });
   } catch (error) {
     console.error('Get student details error:', error);

@@ -47,6 +47,7 @@
     "migrate:town-news-widgets": "node run-sql-migration.js migrations/096_add_town_news_widgets.sql",
     "migrate:accountant-client-advice": "node run-sql-migration.js migrations/097_add_accountant_client_advice.sql",
     "migrate:insurance-manager-game": "node run-sql-migration.js migrations/098_add_insurance_manager_game_tables.sql",
+    "seed:test-school": "node seed-test-school.js",
     "verify:job-xp-wiring": "node scripts/verify-job-xp-wiring.js"
   },
   "dependencies": {

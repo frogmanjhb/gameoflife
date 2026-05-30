@@ -4,19 +4,20 @@ import database from '../database/database-prod';
 import { User } from '../types';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const verboseAuth = process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1';
 
 export interface AuthenticatedRequest extends Request {
   user?: User;
   schoolId?: number | null;
+  impersonatedBy?: number;
 }
 
 export interface JWTPayload {
   userId: number;
   schoolId: number | null;
   role: 'student' | 'teacher' | 'super_admin';
+  impersonatedBy?: number;
 }
-
-const verboseAuth = process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1';
 
 export const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
@@ -46,6 +47,7 @@ export const authenticateToken = async (req: AuthenticatedRequest, res: Response
     if (verboseAuth) console.log('✅ User authenticated:', user.username, 'Role:', user.role, 'School:', user.school_id);
     req.user = user;
     req.schoolId = user.school_id || null;
+    req.impersonatedBy = decoded.impersonatedBy;
     next();
   } catch (error) {
     if (verboseAuth) console.log('❌ Token verification failed:', error);

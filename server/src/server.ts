@@ -1180,6 +1180,17 @@ async function initializeDatabase() {
     }
 
     try {
+      const migrationPath = join(__dirname, '..', 'migrations', '096_add_town_news_widgets.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Town news widgets migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Town news widgets migration may have already been applied:', migrationError);
+    }
+
+    try {
       const migrationPath = join(__dirname, '..', 'migrations', '092_add_content_submission_approval.sql');
       if (existsSync(migrationPath)) {
         const migrationSQL = readFileSync(migrationPath, 'utf8');

@@ -7,7 +7,7 @@ import {
   Users, User, Search, Plus, Minus, CheckCircle, XCircle, Filter, CreditCard, FileText,
   ArrowUpRight, ArrowDownLeft, Banknote, ToggleLeft, ToggleRight, Briefcase, Settings, Clock
 } from 'lucide-react';
-import api, { treasuryApi, policeFinesBonusesApi, PoliceFineBonus } from '../../services/api';
+import api, { treasuryApi, policeFinesBonusesApi, PoliceFineBonus, transactionsApi } from '../../services/api';
 import { Transaction, Loan, Student } from '../../types';
 import TransferForm from '../TransferForm';
 import LoanForm from '../LoanForm';
@@ -758,12 +758,48 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
           {/* Pending Transfers Tab */}
           {activeTab === 'transfers' && (
             <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Student Transfer Requests
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Students request transfers to classmates. Approve or deny each request.
-              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Student Transfer Requests
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Students request transfers to classmates. Approve or deny each request.
+                  </p>
+                </div>
+                {pendingTransfers.filter(pt => pt.status === 'pending').length > 0 && (
+                  <button
+                    onClick={async () => {
+                      const pendingCount = pendingTransfers.filter(pt => pt.status === 'pending').length;
+                      if (!window.confirm(`Approve all ${pendingCount} pending transfer request${pendingCount !== 1 ? 's' : ''}?`)) {
+                        return;
+                      }
+                      setError('');
+                      setSuccess('');
+                      setActionLoading(true);
+                      try {
+                        const res = await transactionsApi.approveAllPendingTransfers();
+                        const { message, failed } = res.data;
+                        if (failed.length > 0) {
+                          setError(`${message}. ${failed.length} request${failed.length !== 1 ? 's' : ''} could not be approved.`);
+                        } else {
+                          setSuccess(message);
+                        }
+                        fetchData();
+                      } catch (err: any) {
+                        setError(err.response?.data?.error || 'Failed to approve all transfers');
+                      } finally {
+                        setActionLoading(false);
+                      }
+                    }}
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2 shrink-0"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    <span>Approve All ({pendingTransfers.filter(pt => pt.status === 'pending').length})</span>
+                  </button>
+                )}
+              </div>
               {pendingTransfers.filter(pt => pt.status === 'pending').length === 0 ? (
                 <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
                   <Send className="h-12 w-12 text-gray-300 mx-auto mb-4" />

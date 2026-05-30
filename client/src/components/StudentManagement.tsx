@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Minus, DollarSign, User, Search, Users, Trash2, AlertTriangle, ChevronDown, ChevronUp, Copy, RefreshCw, Eye } from 'lucide-react';
+import { Plus, Minus, DollarSign, User, Search, Users, Trash2, AlertTriangle, ChevronDown, ChevronUp, Copy, RefreshCw, Eye, UserCheck } from 'lucide-react';
 import api, { jobsApi } from '../services/api';
 import { Student } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 interface StudentManagementProps {
   students: Student[];
@@ -11,6 +12,8 @@ interface StudentManagementProps {
 
 const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdate }) => {
   const navigate = useNavigate();
+  const { user, impersonateStudent } = useAuth();
+  const canImpersonate = user?.role === 'teacher' && user?.allow_teacher_impersonation;
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showDepositForm, setShowDepositForm] = useState(false);
   const [showWithdrawForm, setShowWithdrawForm] = useState(false);
@@ -34,6 +37,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const [showAddXpForm, setShowAddXpForm] = useState(false);
   const [showRemoveXpForm, setShowRemoveXpForm] = useState(false);
   const [xpFormData, setXpFormData] = useState({ amount: '' });
+  const [impersonateLoadingId, setImpersonateLoadingId] = useState<number | null>(null);
 
   // Group students by class
   const studentsByClass = useMemo(() => {
@@ -680,6 +684,26 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
+              {canImpersonate && (
+                <button
+                  type="button"
+                  disabled={impersonateLoadingId === student.id}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setImpersonateLoadingId(student.id);
+                    try {
+                      await impersonateStudent(student.id);
+                    } catch (err: any) {
+                      setImpersonateLoadingId(null);
+                      setError(err.response?.data?.error || err.message || 'Failed to switch to student');
+                    }
+                  }}
+                  className="w-full mt-2 btn-primary text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <UserCheck className="h-4 w-4" />
+                  {impersonateLoadingId === student.id ? 'Switching...' : 'Test as this student'}
+                </button>
+              )}
             </div>
           )})}
         </div>

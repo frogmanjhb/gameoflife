@@ -19,6 +19,9 @@ export interface User {
   rules_agreed_at?: string | null;
   account_frozen?: boolean;
   game_start_date?: string | null;
+  impersonated_by?: number | null;
+  impersonated_by_username?: string | null;
+  allow_teacher_impersonation?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -47,6 +50,25 @@ export interface StudentEarningsProfile {
     wordle_games: number;
     job_challenge_sessions: number;
   };
+  xp_history: StudentEarningsActivityItem[];
+  money_history: StudentEarningsActivityItem[];
+}
+
+export type EarningsActivitySource =
+  | 'wordle'
+  | 'math_chores'
+  | 'job_challenge_game'
+  | 'salary'
+  | 'job_task';
+
+export interface StudentEarningsActivityItem {
+  id: string;
+  source: EarningsActivitySource;
+  label: string;
+  detail?: string;
+  xp?: number;
+  money?: number;
+  occurred_at: string;
 }
 
 export interface Account {
@@ -118,6 +140,9 @@ export interface AuthContextType {
   register: (username: string, password: string, role: 'student' | 'teacher', schoolId: number, first_name?: string, last_name?: string, studentClass?: string, email?: string) => Promise<any>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
+  impersonateStudent: (studentId: number) => Promise<void>;
+  stopImpersonating: () => void;
+  isImpersonating: boolean;
   loading: boolean;
 }
 

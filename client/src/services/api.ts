@@ -851,6 +851,11 @@ export const transactionsApi = {
   getHistory: (): Promise<{ data: import('../types').Transaction[] }> => {
     return api.get('/transactions/history');
   },
+  approveAllPendingTransfers: (): Promise<{
+    data: { message: string; approved: number; failed: { id: number; error: string }[] };
+  }> => {
+    return api.post('/transactions/pending-transfers/approve-all');
+  },
   getAccountantAssignments: (): Promise<{ data: AccountantAssignmentStudent[] }> => {
     return api.get('/transactions/my-approvals/assignments');
   },
