@@ -26,7 +26,8 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
     if (!rules) {
       if (schoolId !== null) {
         await database.run(
-          'INSERT INTO town_rules (town_class, rules, school_id) VALUES ($1, NULL, $2) RETURNING id',
+          `INSERT INTO town_rules (town_class, rules, school_id) VALUES ($1, NULL, $2)
+           ON CONFLICT ON CONSTRAINT town_rules_town_class_school_unique DO NOTHING`,
           [town_class, schoolId]
         );
       } else {
@@ -95,7 +96,8 @@ router.put('/',
       } else {
         if (schoolId !== null) {
           await database.run(
-            'INSERT INTO town_rules (town_class, rules, school_id) VALUES ($1, $2, $3) RETURNING id',
+            `INSERT INTO town_rules (town_class, rules, school_id) VALUES ($1, $2, $3)
+             ON CONFLICT ON CONSTRAINT town_rules_town_class_school_unique DO NOTHING`,
             [town_class, rules || null, schoolId]
           );
         } else {

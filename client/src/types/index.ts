@@ -1325,6 +1325,58 @@ export interface AccountantClientAdviceSubmitResponse {
   advice_earnings_reward: number;
 }
 
+export interface AccountantSalaryClientStatus {
+  id: number;
+  username: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  class?: string | null;
+  job_name?: string | null;
+  gross_salary?: number | null;
+  net_salary?: number | null;
+  paid_this_week: boolean;
+  paid_by_accountant_username?: string | null;
+  can_pay: boolean;
+  ineligible_reason?: string | null;
+}
+
+export interface AccountantSalaryPaymentRecord {
+  id: number;
+  student_user_id: number;
+  student_username: string;
+  student_first_name?: string | null;
+  student_last_name?: string | null;
+  gross_salary: number;
+  tax_amount: number;
+  net_salary: number;
+  job_name?: string | null;
+  week_start: string;
+  paid_at: string;
+}
+
+export interface AccountantSalaryDashboardResponse {
+  week_start: string;
+  week_end: string;
+  payment_xp_reward: number;
+  payment_earnings_reward: number;
+  clients: AccountantSalaryClientStatus[];
+  payment_history: AccountantSalaryPaymentRecord[];
+}
+
+export interface AccountantSalaryPaymentSubmitResponse {
+  message: string;
+  gross_salary: number;
+  tax_amount: number;
+  net_salary: number;
+  job_name: string;
+  experience_points: number;
+  earnings: number;
+  new_level: number | null;
+  week_start: string;
+  payment_xp_reward: number;
+  payment_earnings_reward: number;
+}
+
 export interface AccountantAssignmentLink {
   accountant_user_id: number;
   accountant_username: string;

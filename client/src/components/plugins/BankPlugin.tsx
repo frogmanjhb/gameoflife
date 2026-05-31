@@ -5,9 +5,9 @@ import { Navigate } from 'react-router-dom';
 import { 
   Wallet, Send, DollarSign, History, TrendingUp, AlertCircle,
   Users, User, Search, Plus, Minus, CheckCircle, XCircle, Filter, CreditCard, FileText,
-  ArrowUpRight, ArrowDownLeft, Banknote, ToggleLeft, ToggleRight, Briefcase, Settings, Clock
+  ArrowUpRight, ArrowDownLeft, Banknote, ToggleLeft, ToggleRight, Briefcase, Settings, Clock, Scale
 } from 'lucide-react';
-import api, { treasuryApi, policeFinesBonusesApi, PoliceFineBonus, transactionsApi } from '../../services/api';
+import api, { treasuryApi, policeFinesBonusesApi, PoliceFineBonus, transactionsApi, lawsuitsApi, StudentLawsuit } from '../../services/api';
 import { Transaction, Loan, Student } from '../../types';
 import TransferForm from '../TransferForm';
 import LoanForm from '../LoanForm';
@@ -36,12 +36,18 @@ interface PendingTransfer {
 }
 
 const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
-  const [activeTab, setActiveTab] = useState<'payments' | 'loans' | 'transfers' | 'fines-bonuses' | 'activity'>('payments');
+  const { plugins } = usePlugins();
+  const courtEnabled = plugins.some((p) => p.route_path === '/court' && p.enabled);
+  const [activeTab, setActiveTab] = useState<'payments' | 'loans' | 'transfers' | 'fines-bonuses' | 'lawsuits' | 'activity'>('payments');
   const [students, setStudents] = useState<Student[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pendingTransfers, setPendingTransfers] = useState<PendingTransfer[]>([]);
   const [pendingFinesBonuses, setPendingFinesBonuses] = useState<PoliceFineBonus[]>([]);
+  const [pendingLawsuits, setPendingLawsuits] = useState<StudentLawsuit[]>([]);
+  const [lawsuitAwardDraft, setLawsuitAwardDraft] = useState<Record<number, string>>({});
+  const [lawsuitInitialsDraft, setLawsuitInitialsDraft] = useState<Record<number, string>>({});
+  const [lawsuitDenialDraft, setLawsuitDenialDraft] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   
   // Filters
@@ -73,22 +79,24 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
   useEffect(() => {
     fetchData();
     fetchBankSettings();
-  }, []);
+  }, [courtEnabled]);
 
   const fetchData = async () => {
     try {
-      const [studentsRes, loansRes, transactionsRes, pendingTransfersRes, pfbRes] = await Promise.all([
+      const [studentsRes, loansRes, transactionsRes, pendingTransfersRes, pfbRes, lawsuitsRes] = await Promise.all([
         api.get('/students'),
         api.get('/loans'),
         api.get('/transactions/history'),
         api.get('/transactions/pending-transfers'),
         policeFinesBonusesApi.getPending().catch(() => ({ data: [] })),
+        courtEnabled ? lawsuitsApi.getPendingTeacher().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       ]);
       setStudents(studentsRes.data);
       setLoans(loansRes.data);
       setTransactions(transactionsRes.data);
       setPendingTransfers(pendingTransfersRes.data);
       setPendingFinesBonuses(pfbRes.data);
+      setPendingLawsuits(lawsuitsRes.data);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -242,13 +250,14 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
     const activeLoans = filteredLoans.filter(l => l.status === 'active').length;
     const pendingTransfersCount = pendingTransfers.filter(pt => pt.status === 'pending').length;
     const pendingFinesBonusesCount = pendingFinesBonuses.length;
+    const pendingLawsuitsCount = pendingLawsuits.length;
     const recentTransactions = filteredTransactions.filter(t => {
       const date = new Date(t.created_at);
       const now = new Date();
       return (now.getTime() - date.getTime()) < 7 * 24 * 60 * 60 * 1000; // Last 7 days
     }).length;
-    return { totalBalance, pendingLoans, activeLoans, pendingTransfersCount, pendingFinesBonusesCount, recentTransactions, studentCount: relevantStudents.length };
-  }, [students, filteredLoans, filteredTransactions, selectedClass, studentsByClass, pendingTransfers, pendingFinesBonuses]);
+    return { totalBalance, pendingLoans, activeLoans, pendingTransfersCount, pendingFinesBonusesCount, pendingLawsuitsCount, recentTransactions, studentCount: relevantStudents.length };
+  }, [students, filteredLoans, filteredTransactions, selectedClass, studentsByClass, pendingTransfers, pendingFinesBonuses, pendingLawsuits]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount);
@@ -554,6 +563,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
               { id: 'loans', label: 'Loans', icon: CreditCard },
               { id: 'transfers', label: 'Pending Transfers', icon: Send, badge: stats.pendingTransfersCount },
               { id: 'fines-bonuses', label: 'Fines & Bonuses', icon: AlertCircle, badge: stats.pendingFinesBonusesCount },
+              ...(courtEnabled ? [{ id: 'lawsuits' as const, label: 'Lawsuits', icon: Scale, badge: stats.pendingLawsuitsCount }] : []),
               { id: 'activity', label: 'Activity', icon: History }
             ].map(({ id, label, icon: Icon, badge }) => (
               <button
@@ -993,6 +1003,131 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                         >
                           <XCircle className="h-4 w-4" />
                           <span>Deny</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'lawsuits' && courtEnabled && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Pending Lawsuits</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Final teacher approval for damages and lawyer fees. Review jury verdict and counsel opinions in Court plugin.
+                </p>
+              </div>
+              {pendingLawsuits.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
+                  <Scale className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No pending lawsuits</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pendingLawsuits.map((ls) => (
+                    <div key={ls.id} className="rounded-xl p-4 border bg-indigo-50 border-indigo-200">
+                      <p className="font-semibold">
+                        Case #{ls.id}: {ls.plaintiff_username} vs {ls.defendant_username}
+                      </p>
+                      <p className="text-sm text-gray-700">Claim R{Number(ls.claim_amount).toFixed(2)} · {ls.description}</p>
+                      {ls.jury_verdict && (
+                        <p className="text-sm text-indigo-800 mt-1">
+                          Jury: {ls.jury_verdict} ({ls.jury_guilty_votes}-{ls.jury_not_guilty_votes})
+                        </p>
+                      )}
+                      {ls.jury_skipped_reason && (
+                        <p className="text-xs text-amber-700">Jury skipped: {ls.jury_skipped_reason}</p>
+                      )}
+                      {ls.escrow_held_at && (
+                        <p className="text-xs text-gray-600 mt-1">
+                          Escrow: R{Number(ls.escrow_amount ?? 10000).toFixed(2)} held for plaintiff counsel
+                        </p>
+                      )}
+                      {ls.linked_action_type && (
+                        <p className="text-xs text-indigo-700 mt-1">
+                          Linked: {ls.linked_action_type} #{ls.linked_action_id}
+                        </p>
+                      )}
+                      {ls.hr_recommended_amount != null && (
+                        <p className="text-sm text-gray-600">HR settlement: R{Number(ls.hr_recommended_amount).toFixed(2)}</p>
+                      )}
+                      {ls.plaintiff_lawyer_notes && (
+                        <p className="text-xs text-gray-600 mt-1">Plaintiff counsel: {ls.plaintiff_lawyer_notes}</p>
+                      )}
+                      {ls.defendant_lawyer_notes && (
+                        <p className="text-xs text-gray-600">Defense counsel: {ls.defendant_lawyer_notes}</p>
+                      )}
+                      <div className="flex flex-wrap gap-2 mt-3 items-end">
+                        <input
+                          type="number"
+                          placeholder="Award R"
+                          className="input-field text-sm w-28"
+                          value={lawsuitAwardDraft[ls.id] ?? String(ls.hr_recommended_amount ?? ls.claim_amount ?? '')}
+                          onChange={(e) => setLawsuitAwardDraft({ ...lawsuitAwardDraft, [ls.id]: e.target.value })}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Initials"
+                          maxLength={10}
+                          className="input-field text-sm w-20"
+                          value={lawsuitInitialsDraft[ls.id] || ''}
+                          onChange={(e) => setLawsuitInitialsDraft({ ...lawsuitInitialsDraft, [ls.id]: e.target.value.toUpperCase() })}
+                        />
+                        <button
+                          type="button"
+                          disabled={actionLoading}
+                          className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm"
+                          onClick={async () => {
+                            setActionLoading(true);
+                            try {
+                              await lawsuitsApi.approve(ls.id, {
+                                awarded_amount: parseFloat(lawsuitAwardDraft[ls.id] || '0'),
+                                teacher_initials: lawsuitInitialsDraft[ls.id] || '',
+                              });
+                              setSuccess('Lawsuit approved');
+                              fetchData();
+                            } catch (err: unknown) {
+                              const e = err as { response?: { data?: { error?: string } } };
+                              setError(e.response?.data?.error || 'Failed to approve');
+                            } finally {
+                              setActionLoading(false);
+                            }
+                          }}
+                        >
+                          Approve
+                        </button>
+                        <input
+                          type="text"
+                          placeholder="Denial reason"
+                          className="input-field text-sm flex-1 min-w-[120px]"
+                          value={lawsuitDenialDraft[ls.id] || ''}
+                          onChange={(e) => setLawsuitDenialDraft({ ...lawsuitDenialDraft, [ls.id]: e.target.value })}
+                        />
+                        <button
+                          type="button"
+                          disabled={actionLoading}
+                          className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm"
+                          onClick={async () => {
+                            setActionLoading(true);
+                            try {
+                              await lawsuitsApi.deny(ls.id, {
+                                teacher_initials: lawsuitInitialsDraft[ls.id] || '',
+                                denial_reason: lawsuitDenialDraft[ls.id] || 'Denied',
+                              });
+                              setSuccess('Lawsuit denied');
+                              fetchData();
+                            } catch (err: unknown) {
+                              const e = err as { response?: { data?: { error?: string } } };
+                              setError(e.response?.data?.error || 'Failed to deny');
+                            } finally {
+                              setActionLoading(false);
+                            }
+                          }}
+                        >
+                          Deny
                         </button>
                       </div>
                     </div>

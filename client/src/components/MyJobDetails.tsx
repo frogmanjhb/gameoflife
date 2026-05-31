@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, doctorIllnessApi, cyberAttackApi, retailManagerGameApi, entrepreneurGameApi, insuranceManagerGameApi, transactionsApi, policeFinesBonusesApi, insuranceApi, InsuranceBrokerPendingRequest, InsuranceBrokerPendingClaim, InsuranceBrokerPendingCyberClaim, PoliceFineBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, CyberAttackEngineerStatus, RetailManagerGameStatus, EntrepreneurGameStatus, InsuranceManagerGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer } from '../types';
+import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, CyberAttackEngineerStatus, RetailManagerGameStatus, EntrepreneurGameStatus, InsuranceManagerGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer, AccountantSalaryDashboardResponse } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
 import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../utils/jobDisplay';
 import ArchitectGameModal from './jobchallenges/ArchitectGameModal';
@@ -39,6 +39,7 @@ import EntrepreneurBusinessProposalModal from './jobchallenges/EntrepreneurBusin
 import EntrepreneurApprovedInstructions from './jobchallenges/EntrepreneurApprovedInstructions';
 import AttendanceRegisterPanel from './AttendanceRegisterPanel';
 import SickNoteApprovalPanel from './SickNoteApprovalPanel';
+import LawsuitJobPanels from './LawsuitJobPanels';
 import CodeBoardPanel from './CodeBoardPanel';
 import TownNewsPanel from './TownNewsPanel';
 
@@ -118,6 +119,12 @@ const MyJobDetails: React.FC = () => {
   const [accountantApprovalsLoading, setAccountantApprovalsLoading] = useState(false);
   const [accountantApprovalsError, setAccountantApprovalsError] = useState<string | null>(null);
   const [isAccountantApprovalsOpen, setIsAccountantApprovalsOpen] = useState(false);
+  const [isAccountantSalaryOpen, setIsAccountantSalaryOpen] = useState(false);
+  const [accountantSalaryDashboard, setAccountantSalaryDashboard] = useState<AccountantSalaryDashboardResponse | null>(null);
+  const [accountantSalaryLoading, setAccountantSalaryLoading] = useState(false);
+  const [accountantSalaryError, setAccountantSalaryError] = useState<string | null>(null);
+  const [accountantSalarySuccess, setAccountantSalarySuccess] = useState<string | null>(null);
+  const [accountantSalaryPayingUsername, setAccountantSalaryPayingUsername] = useState<string | null>(null);
 
   const isAccountantPeer = (student: AccountantAssignmentStudent) =>
     (student.job_name || '').toLowerCase().includes('accountant');
@@ -524,6 +531,40 @@ const MyJobDetails: React.FC = () => {
       setAccountantApprovalsError(err.response?.data?.error || 'Failed to load approvals');
     } finally {
       setAccountantApprovalsLoading(false);
+    }
+  };
+
+  const fetchAccountantSalaryDashboard = async () => {
+    try {
+      setAccountantSalaryLoading(true);
+      setAccountantSalaryError(null);
+      setAccountantSalarySuccess(null);
+      const response = await transactionsApi.getAccountantSalaryDashboard();
+      setAccountantSalaryDashboard(response.data);
+    } catch (err: any) {
+      setAccountantSalaryDashboard(null);
+      setAccountantSalaryError(err.response?.data?.error || 'Failed to load salary payments');
+    } finally {
+      setAccountantSalaryLoading(false);
+    }
+  };
+
+  const handlePayAccountantClientSalary = async (username: string, displayName: string) => {
+    setAccountantSalaryPayingUsername(username);
+    setAccountantSalaryError(null);
+    setAccountantSalarySuccess(null);
+    try {
+      const response = await transactionsApi.payAccountantClientSalary(username);
+      const data = response.data;
+      setAccountantSalarySuccess(
+        `Paid ${displayName} R${Number(data.net_salary).toFixed(2)}. You earned ${data.experience_points} XP + R${Number(data.earnings).toFixed(2)}.`
+      );
+      await fetchAccountantSalaryDashboard();
+      await refreshProfile();
+    } catch (err: any) {
+      setAccountantSalaryError(err.response?.data?.error || `Failed to pay salary for ${displayName}`);
+    } finally {
+      setAccountantSalaryPayingUsername(null);
     }
   };
 
@@ -1028,6 +1069,11 @@ const MyJobDetails: React.FC = () => {
           (job?.name || '').toLowerCase().trim().includes('financial manager') ||
           (job?.name || '').toLowerCase().trim().includes('lawyer')) && (
           <SickNoteApprovalPanel jobName={job?.name || ''} />
+        )}
+
+        {((job?.name || '').toLowerCase().trim().includes('hr director') ||
+          (job?.name || '').toLowerCase().trim().includes('lawyer')) && (
+          <LawsuitJobPanels jobName={job?.name || ''} />
         )}
 
         {/* Daily & Weekly Duties */}
@@ -3118,21 +3164,35 @@ const MyJobDetails: React.FC = () => {
                     <h3 className="text-md font-semibold text-gray-900">People You Are Responsible For</h3>
                     <p className="text-xs text-gray-600">
                       Click a student&apos;s name to review their transactions and submit advice (10 XP + R500 per submission).
+                      Pay each assigned student&apos;s weekly salary individually (3 XP + R300 per payment).
                       Transfers from assigned students and one peer accountant need your approval (1 XP each).
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAccountantApprovalsOpen(true);
-                    fetchAccountantApprovals();
-                  }}
-                  className="btn-primary flex items-center gap-2"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  <span>Open Approvals</span>
-                </button>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAccountantSalaryOpen(true);
+                      fetchAccountantSalaryDashboard();
+                    }}
+                    className="btn-secondary flex items-center justify-center gap-2"
+                  >
+                    <DollarSign className="h-4 w-4" />
+                    <span>Pay weekly salaries</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAccountantApprovalsOpen(true);
+                      fetchAccountantApprovals();
+                    }}
+                    className="btn-primary flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    <span>Open Approvals</span>
+                  </button>
+                </div>
               </div>
               {accountantAssignmentsLoading && (
                 <div className="flex items-center gap-2 text-gray-600">
@@ -3377,6 +3437,161 @@ const MyJobDetails: React.FC = () => {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chartered Accountant – Weekly Salaries Modal */}
+      {(job?.name || '').toLowerCase().trim().includes('accountant') && isAccountantSalaryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-emerald-600" />
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Pay Weekly Salaries</h2>
+                  <p className="text-xs text-gray-600">
+                    Pay each assigned student separately. Each successful payment earns you 3 XP + R300.
+                    {accountantSalaryDashboard
+                      ? ` Week: ${accountantSalaryDashboard.week_start} to ${accountantSalaryDashboard.week_end}.`
+                      : null}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAccountantSalaryOpen(false)}
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                Close
+              </button>
+            </div>
+            <div className="px-6 py-4 flex-1 overflow-y-auto space-y-4">
+              {accountantSalaryLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                </div>
+              )}
+              {accountantSalaryError && !accountantSalaryLoading && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center gap-2 text-sm text-red-700">
+                  <AlertCircle className="h-5 w-5" />
+                  <span>{accountantSalaryError}</span>
+                </div>
+              )}
+              {accountantSalarySuccess && !accountantSalaryLoading && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 text-sm text-emerald-800">
+                  {accountantSalarySuccess}
+                </div>
+              )}
+              {!accountantSalaryLoading && accountantSalaryDashboard && (
+                <>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-2">Assigned students</h3>
+                    {accountantSalaryDashboard.clients.filter((c) => !c.ineligible_reason?.includes('Accountants')).length === 0 ? (
+                      <p className="text-sm text-gray-500">No salary clients assigned to you.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {accountantSalaryDashboard.clients
+                          .filter((client) => client.ineligible_reason !== 'Accountants are not salary clients')
+                          .map((client) => {
+                            const displayName =
+                              client.first_name && client.last_name
+                                ? `${client.first_name} ${client.last_name}`
+                                : client.username;
+                            const isPaying = accountantSalaryPayingUsername === client.username;
+                            return (
+                              <div
+                                key={client.id}
+                                className="bg-gray-50 border border-gray-200 rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+                              >
+                                <div>
+                                  <p className="font-semibold text-gray-900">{displayName}</p>
+                                  <p className="text-sm text-gray-600">
+                                    {client.job_name || 'No job'}
+                                    {client.net_salary != null
+                                      ? ` • Net R${Number(client.net_salary).toFixed(2)}`
+                                      : ''}
+                                  </p>
+                                  {client.paid_this_week && (
+                                    <p className="text-xs text-amber-700 mt-1">
+                                      Paid this week
+                                      {client.paid_by_accountant_username
+                                        ? ` by ${client.paid_by_accountant_username}`
+                                        : ''}
+                                    </p>
+                                  )}
+                                  {!client.can_pay && client.ineligible_reason && !client.paid_this_week && (
+                                    <p className="text-xs text-gray-500 mt-1">{client.ineligible_reason}</p>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={!client.can_pay || isPaying || accountantSalaryPayingUsername !== null}
+                                  onClick={() => handlePayAccountantClientSalary(client.username, displayName)}
+                                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                                >
+                                  {isPaying ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      <span>Paying...</span>
+                                    </>
+                                  ) : client.paid_this_week ? (
+                                    <span>Paid</span>
+                                  ) : (
+                                    <span>Pay salary</span>
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-2">Payment record</h3>
+                    {accountantSalaryDashboard.payment_history.length === 0 ? (
+                      <p className="text-sm text-gray-500">No salary payments made yet.</p>
+                    ) : (
+                      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-gray-50 text-left text-gray-600">
+                            <tr>
+                              <th className="px-3 py-2 font-medium">Student</th>
+                              <th className="px-3 py-2 font-medium">Job</th>
+                              <th className="px-3 py-2 font-medium text-right">Net</th>
+                              <th className="px-3 py-2 font-medium">Week</th>
+                              <th className="px-3 py-2 font-medium">Paid</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {accountantSalaryDashboard.payment_history.map((payment) => {
+                              const studentName =
+                                payment.student_first_name && payment.student_last_name
+                                  ? `${payment.student_first_name} ${payment.student_last_name}`
+                                  : payment.student_username;
+                              return (
+                                <tr key={payment.id}>
+                                  <td className="px-3 py-2 text-gray-900">{studentName}</td>
+                                  <td className="px-3 py-2 text-gray-600">{payment.job_name || '—'}</td>
+                                  <td className="px-3 py-2 text-right text-gray-900">
+                                    R{Number(payment.net_salary).toFixed(2)}
+                                  </td>
+                                  <td className="px-3 py-2 text-gray-600">{payment.week_start}</td>
+                                  <td className="px-3 py-2 text-gray-600">
+                                    {new Date(payment.paid_at).toLocaleString()}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           </div>

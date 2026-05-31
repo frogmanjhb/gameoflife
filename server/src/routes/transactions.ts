@@ -17,6 +17,13 @@ import {
   sanitizeAdvice,
   tablesReady as accountantAdviceTablesReady,
 } from '../domain/accountant-advice';
+import {
+  getAccountantSalaryDashboard,
+  payClientWeeklySalary,
+  SALARY_PAYMENT_EARNINGS_REWARD,
+  SALARY_PAYMENT_XP_REWARD,
+  tablesReady as accountantSalaryTablesReady,
+} from '../domain/accountant-salary-payments';
 
 // Helper function to check if student can make transactions
 async function checkStudentCanTransact(userId: number): Promise<{ canTransact: boolean; reason?: string }> {
@@ -1538,6 +1545,102 @@ router.post(
       });
     } catch (error) {
       console.error('Submit accountant client advice error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// Chartered Accountant: weekly salary payments dashboard
+router.get(
+  '/accountant-salary-payments',
+  authenticateToken,
+  requireRole(['student']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+
+      if (!(await accountantSalaryTablesReady())) {
+        return res.status(503).json({ error: 'Salary payment feature is not available yet' });
+      }
+
+      let dashboard;
+      try {
+        dashboard = await getAccountantSalaryDashboard(req.user.id);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.message === 'NOT_ACCOUNTANT') {
+          return res.status(403).json({ error: 'Only Chartered Accountants can pay weekly salaries' });
+        }
+        throw err;
+      }
+
+      res.json(dashboard);
+    } catch (error) {
+      console.error('Get accountant salary payments error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// Chartered Accountant: pay weekly salary to one assigned client
+router.post(
+  '/accountant-salary-payments/:username',
+  authenticateToken,
+  requireRole(['student']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+
+      if (!(await accountantSalaryTablesReady())) {
+        return res.status(503).json({ error: 'Salary payment feature is not available yet' });
+      }
+
+      const { username } = req.params;
+
+      let result;
+      try {
+        result = await payClientWeeklySalary(req.user.id, username);
+      } catch (err: unknown) {
+        if (!(err instanceof Error)) {
+          throw err;
+        }
+        switch (err.message) {
+          case 'NOT_ACCOUNTANT':
+            return res.status(403).json({ error: 'Only Chartered Accountants can pay weekly salaries' });
+          case 'CLIENT_NOT_FOUND':
+            return res.status(404).json({ error: 'Student not found' });
+          case 'NOT_YOUR_CLIENT':
+            return res.status(403).json({ error: 'This student is not assigned to you' });
+          case 'CLIENT_IS_ACCOUNTANT':
+            return res.status(400).json({ error: 'You cannot pay salary to another accountant' });
+          case 'ALREADY_PAID_THIS_WEEK':
+            return res.status(400).json({ error: 'This student has already been paid this week (Mon–Sun)' });
+          case 'NO_JOB':
+            return res.status(400).json({ error: 'Student has no job assigned' });
+          case 'NO_ACCOUNT':
+            return res.status(400).json({ error: 'Student has no bank account' });
+          case 'NO_TOWN_CLASS':
+            return res.status(400).json({ error: 'Town class is not set' });
+          case 'TOWN_NOT_FOUND':
+            return res.status(404).json({ error: 'Town settings not found' });
+          case 'TREASURY_INSUFFICIENT':
+            return res.status(400).json({ error: 'Town treasury has insufficient funds for this salary payment' });
+          default:
+            throw err;
+        }
+      }
+
+      res.json({
+        message: 'Weekly salary paid successfully',
+        ...result,
+        payment_xp_reward: SALARY_PAYMENT_XP_REWARD,
+        payment_earnings_reward: SALARY_PAYMENT_EARNINGS_REWARD,
+      });
+    } catch (error) {
+      console.error('Pay accountant client salary error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

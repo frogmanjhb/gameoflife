@@ -879,6 +879,14 @@ export const transactionsApi = {
   ): Promise<{ data: import('../types').AccountantClientAdviceSubmitResponse }> => {
     return api.post(`/transactions/accountant-clients/${encodeURIComponent(username)}/advice`, { advice });
   },
+  getAccountantSalaryDashboard: (): Promise<{ data: import('../types').AccountantSalaryDashboardResponse }> => {
+    return api.get('/transactions/accountant-salary-payments');
+  },
+  payAccountantClientSalary: (
+    username: string
+  ): Promise<{ data: import('../types').AccountantSalaryPaymentSubmitResponse }> => {
+    return api.post(`/transactions/accountant-salary-payments/${encodeURIComponent(username)}`);
+  },
 };
 
 export interface PoliceFineBonus {
@@ -1272,7 +1280,148 @@ export const teacherAnalyticsApi = {
     if (params?.time_range) queryParams.append('time_range', params.time_range);
     const queryString = queryParams.toString();
     return api.get(`/teacher-analytics/student-logins${queryString ? `?${queryString}` : ''}`);
-  }
+  },
+};
+
+export interface ProceedingsStep {
+  key: string;
+  label: string;
+  state: 'complete' | 'current' | 'pending' | 'skipped';
+  summary?: string;
+  detail?: string;
+  at?: string | null;
+  waiting_message?: string;
+}
+
+export interface StudentLawsuit {
+  id: number;
+  school_id: number | null;
+  town_class: string;
+  plaintiff_user_id: number;
+  defendant_user_id: number;
+  plaintiff_username: string;
+  plaintiff_first_name?: string | null;
+  plaintiff_last_name?: string | null;
+  defendant_username: string;
+  defendant_first_name?: string | null;
+  defendant_last_name?: string | null;
+  claim_amount: number;
+  awarded_amount?: number | null;
+  description: string;
+  rule_reference: string;
+  linked_action_type?: string | null;
+  linked_action_id?: number | null;
+  status: string;
+  defendant_response?: string | null;
+  escrow_amount?: number | null;
+  escrow_held_at?: string | null;
+  plaintiff_lawyer_acceptance?: string;
+  lawyer_conflict?: boolean;
+  hr_notes?: string | null;
+  hr_outcome?: string | null;
+  hr_recommended_amount?: number | null;
+  plaintiff_lawyer_opinion?: string | null;
+  plaintiff_lawyer_notes?: string | null;
+  plaintiff_lawyer_reviewed_at?: string | null;
+  defendant_lawyer_opinion?: string | null;
+  defendant_lawyer_notes?: string | null;
+  defendant_lawyer_reviewed_at?: string | null;
+  jury_verdict?: string | null;
+  jury_guilty_votes?: number;
+  jury_not_guilty_votes?: number;
+  jury_skipped_reason?: string | null;
+  teacher_initials?: string | null;
+  denial_reason?: string | null;
+  created_at: string;
+  updated_at: string;
+  proceedings_timeline?: ProceedingsStep[];
+  my_vote?: string | null;
+}
+
+export interface LinkableAction {
+  type: string;
+  id: number;
+  label: string;
+  created_at: string;
+}
+
+export const lawsuitsApi = {
+  file: (data: {
+    defendant_username: string;
+    claim_amount: number;
+    description: string;
+    rule_reference: string;
+    linked_action_type?: string;
+    linked_action_id?: number;
+  }): Promise<{ data: StudentLawsuit }> => api.post('/lawsuits', data),
+
+  getMyCases: (scope: 'current' | 'past' = 'current'): Promise<{ data: StudentLawsuit[] }> =>
+    api.get(`/lawsuits/my-cases?scope=${scope}`),
+
+  getSchoolCases: (scope: 'current' | 'past' = 'current', townClass?: string): Promise<{ data: StudentLawsuit[] }> => {
+    const params = new URLSearchParams({ scope });
+    if (townClass) params.append('town_class', townClass);
+    return api.get(`/lawsuits/school-cases?${params.toString()}`);
+  },
+
+  getCase: (id: number): Promise<{ data: StudentLawsuit }> => api.get(`/lawsuits/${id}`),
+
+  getPendingTeacher: (): Promise<{ data: StudentLawsuit[] }> =>
+    api.get('/lawsuits?status=pending_teacher'),
+
+  withdraw: (id: number): Promise<{ data: { message: string } }> => api.post(`/lawsuits/${id}/withdraw`),
+
+  defendantResponse: (id: number, response: string): Promise<{ data: { message: string } }> =>
+    api.post(`/lawsuits/${id}/defendant-response`, { response }),
+
+  getHrQueue: (): Promise<{ data: StudentLawsuit[] }> => api.get('/lawsuits/hr-queue'),
+
+  hrReview: (
+    id: number,
+    data: {
+      outcome: 'resolved_no_damages' | 'settlement_recommended' | 'escalated';
+      hr_notes: string;
+      hr_recommended_amount?: number;
+      plaintiff_consents_settlement?: boolean;
+      defendant_consents_settlement?: boolean;
+    }
+  ): Promise<{ data: { message: string; experience_points?: number; new_level?: number | null } }> =>
+    api.post(`/lawsuits/${id}/hr-review`, data),
+
+  getLawyerQueue: (): Promise<{
+    data: { plaintiff_clients: StudentLawsuit[]; defendant_clients: StudentLawsuit[] };
+  }> => api.get('/lawsuits/lawyer-queue'),
+
+  lawyerAccept: (id: number): Promise<{ data: { message: string } }> => api.post(`/lawsuits/${id}/lawyer-accept`),
+
+  lawyerDecline: (id: number): Promise<{ data: { message: string } }> => api.post(`/lawsuits/${id}/lawyer-decline`),
+
+  lawyerOpinion: (
+    id: number,
+    data: { opinion: string; legal_notes: string }
+  ): Promise<{ data: { message: string; experience_points?: number; new_level?: number | null } }> =>
+    api.post(`/lawsuits/${id}/lawyer-opinion`, data),
+
+  getJuryDuty: (): Promise<{ data: StudentLawsuit[] }> => api.get('/lawsuits/jury-duty'),
+
+  juryVote: (
+    id: number,
+    vote: 'guilty' | 'not_guilty'
+  ): Promise<{ data: { message: string; jury_complete: boolean; experience_points?: number; new_level?: number | null } }> =>
+    api.post(`/lawsuits/${id}/jury-vote`, { vote }),
+
+  approve: (
+    id: number,
+    data: { awarded_amount: number; teacher_initials: string; teacher_notes?: string }
+  ): Promise<{ data: { message: string; awarded_amount: number } }> => api.post(`/lawsuits/${id}/approve`, data),
+
+  deny: (
+    id: number,
+    data: { teacher_initials: string; denial_reason: string }
+  ): Promise<{ data: { message: string } }> => api.post(`/lawsuits/${id}/deny`, data),
+
+  getLinkableActions: (defendantUsername: string): Promise<{ data: { actions: LinkableAction[] } }> =>
+    api.get(`/lawsuits/linkable-actions?defendant_username=${encodeURIComponent(defendantUsername)}`),
 };
 
 export default api;
