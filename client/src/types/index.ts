@@ -130,6 +130,7 @@ export interface Student {
   last_activity: string;
   job_id?: number;
   job_name?: string;
+  job_level?: number;
   job_salary?: number;
 }
 

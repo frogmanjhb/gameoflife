@@ -1,7 +1,7 @@
 import database from '../database/database-prod';
 import { getXPForLevel } from '../routes/jobs';
 import { hasHrDirectorJob } from './attendance';
-import { getLawyerIdsForStudent, hasLawyerJob } from './lawyer-assignments';
+import { getClassLawyerRoster, getLawyerIdsForStudent, hasLawyerJob } from './lawyer-assignments';
 import { hasPoliceLieutenantJob } from './police-fines';
 import { isTownClass, TownClass } from './townScope';
 
@@ -146,17 +146,37 @@ export async function resolveLawyerSetup(
   lawyerConflict: boolean;
   plaintiffAcceptance: 'pending' | 'not_required';
 }> {
+  const { lawyerIds } = await getClassLawyerRoster(townClass, schoolId);
   const plaintiffLawyerIds = await getLawyerIdsForStudent(plaintiffUserId, townClass, schoolId);
   const defendantLawyerIds = await getLawyerIdsForStudent(defendantUserId, townClass, schoolId);
   const plaintiffLawyerId = plaintiffLawyerIds[0] ?? null;
   const defendantLawyerId = defendantLawyerIds[0] ?? null;
   const shared =
     plaintiffLawyerId != null && defendantLawyerId != null && plaintiffLawyerId === defendantLawyerId;
+
+  if (shared && lawyerIds.length === 1) {
+    return {
+      plaintiffLawyerId,
+      defendantLawyerId: plaintiffLawyerId,
+      lawyerConflict: false,
+      plaintiffAcceptance: 'pending',
+    };
+  }
+
+  if (shared) {
+    return {
+      plaintiffLawyerId: null,
+      defendantLawyerId: null,
+      lawyerConflict: true,
+      plaintiffAcceptance: 'not_required',
+    };
+  }
+
   return {
-    plaintiffLawyerId: shared ? null : plaintiffLawyerId,
-    defendantLawyerId: shared ? null : defendantLawyerId,
-    lawyerConflict: shared,
-    plaintiffAcceptance: shared || !plaintiffLawyerId ? 'not_required' : 'pending',
+    plaintiffLawyerId,
+    defendantLawyerId,
+    lawyerConflict: false,
+    plaintiffAcceptance: !plaintiffLawyerId ? 'not_required' : 'pending',
   };
 }
 
@@ -698,15 +718,23 @@ export function buildProceedingsTimeline(
       at: (row.plaintiff_lawyer_reviewed_at as string) || (row.plaintiff_lawyer_declined_at as string) || null,
       summary: row.lawyer_conflict
         ? 'Conflict of interest — same lawyer for both sides'
-        : row.plaintiff_lawyer_acceptance === 'not_required'
-          ? 'No assigned lawyer'
-          : row.plaintiff_lawyer_acceptance === 'declined'
-            ? 'Lawyer declined'
-            : row.plaintiff_lawyer_opinion
-              ? String(row.plaintiff_lawyer_opinion).replace(/_/g, ' ')
-              : row.plaintiff_lawyer_acceptance === 'accepted'
-                ? 'Accepted — awaiting opinion'
-                : 'Awaiting accept/decline',
+        : row.plaintiff_lawyer_id &&
+            row.defendant_lawyer_id &&
+            row.plaintiff_lawyer_id === row.defendant_lawyer_id
+          ? row.plaintiff_lawyer_opinion
+            ? String(row.plaintiff_lawyer_opinion).replace(/_/g, ' ')
+            : row.plaintiff_lawyer_acceptance === 'accepted'
+              ? 'Single town lawyer — awaiting plaintiff opinion'
+              : 'Single town lawyer — awaiting accept'
+          : row.plaintiff_lawyer_acceptance === 'not_required'
+            ? 'No assigned lawyer'
+            : row.plaintiff_lawyer_acceptance === 'declined'
+              ? 'Lawyer declined'
+              : row.plaintiff_lawyer_opinion
+                ? String(row.plaintiff_lawyer_opinion).replace(/_/g, ' ')
+                : row.plaintiff_lawyer_acceptance === 'accepted'
+                  ? 'Accepted — awaiting opinion'
+                  : 'Awaiting accept/decline',
       detail: row.plaintiff_lawyer_notes as string | undefined,
     },
     {
@@ -718,9 +746,15 @@ export function buildProceedingsTimeline(
         ? 'Skipped — conflict of interest'
         : !row.defendant_lawyer_id
           ? 'No assigned lawyer'
-          : row.defendant_lawyer_opinion
-            ? String(row.defendant_lawyer_opinion).replace(/_/g, ' ')
-            : 'Awaiting defense opinion',
+          : row.plaintiff_lawyer_id &&
+              row.defendant_lawyer_id &&
+              row.plaintiff_lawyer_id === row.defendant_lawyer_id
+            ? row.defendant_lawyer_opinion
+              ? String(row.defendant_lawyer_opinion).replace(/_/g, ' ')
+              : 'Single town lawyer — awaiting defense opinion'
+            : row.defendant_lawyer_opinion
+              ? String(row.defendant_lawyer_opinion).replace(/_/g, ' ')
+              : 'Awaiting defense opinion',
       detail: row.defendant_lawyer_notes as string | undefined,
     },
     {

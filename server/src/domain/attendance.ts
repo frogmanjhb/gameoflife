@@ -55,6 +55,19 @@ export async function townHasDoctor(schoolId: number | null, townClass: string):
   return !!row;
 }
 
+export async function townHasHrDirector(schoolId: number | null, townClass: string): Promise<boolean> {
+  const row = await database.get(
+    `SELECT 1 FROM users u
+     JOIN jobs j ON u.job_id = j.id
+     WHERE u.role = 'student' AND u.status = 'approved'
+       AND u.class = $1 AND u.school_id IS NOT DISTINCT FROM $2
+       AND LOWER(j.name) LIKE '%hr director%'
+     LIMIT 1`,
+    [townClass, schoolId]
+  );
+  return !!row;
+}
+
 export type RegisterSubmitterRole = 'nurse' | 'doctor' | null;
 
 export async function resolveRegisterSubmitterRole(

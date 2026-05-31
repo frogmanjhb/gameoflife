@@ -4,7 +4,7 @@ import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { requireTenant } from '../middleware/tenant';
 import { getLawyerClientIds, hasLawyerJob } from '../domain/lawyer-assignments';
-import { hasHrDirectorJob } from '../domain/attendance';
+import { hasHrDirectorJob, townHasHrDirector } from '../domain/attendance';
 import {
   awardJobXp,
   buildProceedingsTimeline,
@@ -54,9 +54,11 @@ async function enrichCase(row: Record<string, unknown>) {
     'SELECT vote, voted_at FROM lawsuit_jury_assignments WHERE lawsuit_id = $1 ORDER BY id',
     [row.id]
   );
+  const townHasHr = await townHasHrDirector(row.school_id as number | null, row.town_class as string);
   return {
     ...row,
     proceedings_timeline: buildProceedingsTimeline(row, jury),
+    teacher_hr_required: row.status === 'pending_hr' && !townHasHr,
   };
 }
 
@@ -504,11 +506,14 @@ router.post('/:id/hr-review', authenticateToken, requireTenant, async (req: Auth
   try {
     if (!(await requireCourtEnabled(req, res))) return;
     const user = req.user;
-    const student = await database.get(
-      `SELECT u.*, j.name AS job_name FROM users u LEFT JOIN jobs j ON u.job_id = j.id WHERE u.id = $1`,
-      [user?.id]
-    );
-    if (!hasHrDirectorJob(student?.job_name)) {
+    const isTeacher = user?.role === 'teacher' || user?.role === 'super_admin';
+    const student = isTeacher
+      ? null
+      : await database.get(
+          `SELECT u.*, j.name AS job_name FROM users u LEFT JOIN jobs j ON u.job_id = j.id WHERE u.id = $1`,
+          [user?.id]
+        );
+    if (!isTeacher && !hasHrDirectorJob(student?.job_name)) {
       return res.status(403).json({ error: 'Only HR Director can mediate' });
     }
 
@@ -526,7 +531,16 @@ router.post('/:id/hr-review', authenticateToken, requireTenant, async (req: Auth
     if (!row || row.status !== 'pending_hr') {
       return res.status(400).json({ error: 'Case is not pending HR mediation' });
     }
-    if (row.town_class !== student.class) {
+
+    if (isTeacher) {
+      const schoolId = req.schoolId ?? user?.school_id ?? null;
+      if (row.school_id !== schoolId && user?.role !== 'super_admin') {
+        return res.status(403).json({ error: 'Case is not in your school' });
+      }
+      if (await townHasHrDirector(row.school_id, row.town_class)) {
+        return res.status(403).json({ error: 'This town has an HR Director — student HR handles mediation' });
+      }
+    } else if (row.town_class !== student?.class) {
       return res.status(403).json({ error: 'Case is not in your town class' });
     }
 
@@ -585,11 +599,11 @@ router.post('/:id/hr-review', authenticateToken, requireTenant, async (req: Auth
       await refundEscrowIfHeld(lawsuitId);
     }
 
-    const xp = await awardJobXp(user!.id, HR_MEDIATION_XP);
+    const xp = isTeacher ? null : await awardJobXp(user!.id, HR_MEDIATION_XP);
     return res.json({
       message: 'HR review recorded',
-      experience_points: xp.experience_points,
-      new_level: xp.new_level,
+      experience_points: xp?.experience_points,
+      new_level: xp?.new_level,
     });
   } catch (err) {
     console.error('lawsuits hr-review error:', err);
@@ -667,7 +681,7 @@ router.post('/:id/lawyer-opinion', authenticateToken, requireTenant, async (req:
 
     let xpResult: { experience_points?: number; new_level?: number | null } = {};
 
-    if (isPlaintiffLawyer) {
+    if (isPlaintiffLawyer && !row.plaintiff_lawyer_reviewed_at) {
       if (row.plaintiff_lawyer_acceptance !== 'accepted') {
         return res.status(400).json({ error: 'You must accept the case before submitting an opinion' });
       }
@@ -680,7 +694,7 @@ router.post('/:id/lawyer-opinion', authenticateToken, requireTenant, async (req:
          WHERE id = $3`,
         [opinion, legal_notes.trim(), lawsuitId]
       );
-    } else {
+    } else if (isDefendantLawyer && !row.defendant_lawyer_reviewed_at) {
       await database.query(
         `UPDATE student_lawsuits SET
            defendant_lawyer_opinion = $1,
@@ -695,6 +709,8 @@ router.post('/:id/lawyer-opinion', authenticateToken, requireTenant, async (req:
       } catch (e) {
         return res.status(400).json({ error: e instanceof Error ? e.message : 'Failed to pay defense fee' });
       }
+    } else {
+      return res.status(400).json({ error: 'No pending legal opinion for you on this case' });
     }
 
     await tryAdvanceToJury(lawsuitId);

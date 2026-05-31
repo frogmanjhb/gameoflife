@@ -4,6 +4,7 @@ import { Plus, Minus, DollarSign, User, Search, Users, Trash2, AlertTriangle, Ch
 import api, { jobsApi } from '../services/api';
 import { Student } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { getDisplayJobTitle } from '../utils/jobDisplay';
 
 interface StudentManagementProps {
   students: Student[];
@@ -28,7 +29,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'surname' | 'balance'>('surname');
+  const [sortBy, setSortBy] = useState<'surname' | 'balance' | 'job'>('surname');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [expandedStudents, setExpandedStudents] = useState<Set<number>>(new Set());
   const [studentPasswords, setStudentPasswords] = useState<Record<number, string>>({});
@@ -86,6 +87,17 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
           const balB = Number(b.s.balance) || 0;
           const diff = balA - balB;
           if (diff !== 0) return diff * dir;
+        } else if (sortBy === 'job') {
+          const jobA = getDisplayJobTitle(a.s.job_name, a.s.job_level).toLowerCase();
+          const jobB = getDisplayJobTitle(b.s.job_name, b.s.job_level).toLowerCase();
+          const hasJobA = Boolean(jobA);
+          const hasJobB = Boolean(jobB);
+          if (hasJobA !== hasJobB) return hasJobA ? -1 : 1;
+          if (jobA !== jobB) return jobA.localeCompare(jobB) * dir;
+
+          const lastA = (a.s.last_name || '').toLowerCase();
+          const lastB = (b.s.last_name || '').toLowerCase();
+          if (lastA !== lastB) return lastA.localeCompare(lastB) * dir;
         } else {
           const lastA = (a.s.last_name || '').toLowerCase();
           const lastB = (b.s.last_name || '').toLowerCase();
@@ -338,10 +350,11 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
           <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Sort by</label>
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as 'surname' | 'balance')}
+            onChange={(e) => setSortBy(e.target.value as 'surname' | 'balance' | 'job')}
             className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
           >
             <option value="surname">Surname</option>
+            <option value="job">Job</option>
             <option value="balance">Bank balance</option>
           </select>
           <button
@@ -469,6 +482,11 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                         : student.username
                       }
                     </h3>
+                    {student.job_name && (
+                      <p className="text-sm text-gray-700 truncate" title={getDisplayJobTitle(student.job_name, student.job_level)}>
+                        {getDisplayJobTitle(student.job_name, student.job_level)}
+                      </p>
+                    )}
                     <p className="text-sm text-gray-500 truncate">@{student.username}</p>
                     <div className="flex items-center space-x-2 mt-1 flex-wrap">
                       <span className="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded-full">

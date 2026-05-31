@@ -1317,6 +1317,7 @@ export interface StudentLawsuit {
   escrow_held_at?: string | null;
   plaintiff_lawyer_acceptance?: string;
   lawyer_conflict?: boolean;
+  teacher_hr_required?: boolean;
   hr_notes?: string | null;
   hr_outcome?: string | null;
   hr_recommended_amount?: number | null;

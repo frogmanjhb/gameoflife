@@ -39,7 +39,9 @@ const COURT_RULES = [
   {
     title: 'Court process',
     items: [
-      '1. Plaintiff files → 2. HR mediation → 3. Lawyers (plaintiff accept + both opinions) → 4. Jury (if escalated) → 5. Teacher approval in Bank.',
+      '1. Plaintiff files → 2. HR mediation (or teacher if no HR Director) → 3. Lawyers (plaintiff accept + both opinions) → 4. Jury (if escalated) → 5. Teacher approval in Bank.',
+      'If your town has no HR Director, the teacher mediates the HR step in Court.',
+      'When only one lawyer serves the town, they may represent both plaintiff and defendant.',
       'HR may resolve without damages, settle by agreement (skips jury), or escalate to full court.',
       'Plaintiff lawyer accept holds R10,000 escrow; paid to lawyer on teacher close (+20 XP).',
       'Defense lawyer earns R5,000 from town treasury + 15 XP when submitting their opinion.',
@@ -100,6 +102,8 @@ const CourtPlugin: React.FC = () => {
   });
   const [linkableActions, setLinkableActions] = useState<LinkableAction[]>([]);
   const [defendantResponse, setDefendantResponse] = useState('');
+  const [teacherHrNotes, setTeacherHrNotes] = useState('');
+  const [teacherSettlementAmount, setTeacherSettlementAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchCases = useCallback(async () => {
@@ -150,6 +154,8 @@ const CourtPlugin: React.FC = () => {
       const res = await lawsuitsApi.getCase(c.id);
       setSelectedCase(res.data);
       setDefendantResponse(res.data.defendant_response || '');
+      setTeacherHrNotes('');
+      setTeacherSettlementAmount('');
     } catch {
       setSelectedCase(c);
     }
@@ -176,7 +182,7 @@ const CourtPlugin: React.FC = () => {
             }
           : {}),
       });
-      setSuccess('Lawsuit filed — awaiting HR mediation');
+      setSuccess('Lawsuit filed — awaiting mediation');
       setFileForm({
         defendant_username: '',
         claim_amount: '',
@@ -542,6 +548,9 @@ const CourtPlugin: React.FC = () => {
                         {displayName(c.defendant_username, c.defendant_first_name, c.defendant_last_name)}
                       </p>
                       <p className="text-sm text-gray-600">Claim R{Number(c.claim_amount).toFixed(2)} · {c.town_class}</p>
+                      {isTeacher && c.teacher_hr_required && (
+                        <p className="text-xs text-amber-700 mt-1">Awaiting your HR mediation</p>
+                      )}
                     </div>
                     <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 capitalize">
                       {c.status.replace(/_/g, ' ')}
@@ -566,6 +575,111 @@ const CourtPlugin: React.FC = () => {
                     timeline={selectedCase.proceedings_timeline}
                     mode={tab === 'past' ? 'past' : 'current'}
                   />
+                )}
+
+                {isTeacher && selectedCase.teacher_hr_required && tab === 'current' && (
+                  <div className="border-t pt-4 space-y-2">
+                    <p className="text-sm font-medium text-gray-800">
+                      HR mediation required — no HR Director in {selectedCase.town_class}
+                    </p>
+                    {selectedCase.defendant_response && (
+                      <p className="text-xs text-gray-600">Defendant response: {selectedCase.defendant_response}</p>
+                    )}
+                    <textarea
+                      className="input-field w-full text-sm"
+                      rows={3}
+                      placeholder="Mediation notes (required)"
+                      value={teacherHrNotes}
+                      onChange={(e) => setTeacherHrNotes(e.target.value)}
+                    />
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <button
+                        type="button"
+                        className="text-xs px-3 py-1.5 bg-gray-600 text-white rounded"
+                        disabled={submitting || !teacherHrNotes.trim()}
+                        onClick={async () => {
+                          setSubmitting(true);
+                          setError(null);
+                          try {
+                            await lawsuitsApi.hrReview(selectedCase.id, {
+                              outcome: 'resolved_no_damages',
+                              hr_notes: teacherHrNotes.trim(),
+                            });
+                            setSuccess('Case resolved without damages');
+                            openCaseDetail(selectedCase);
+                            fetchCases();
+                          } catch (err: unknown) {
+                            const e = err as { response?: { data?: { error?: string } } };
+                            setError(e.response?.data?.error || 'Failed to record mediation');
+                          } finally {
+                            setSubmitting(false);
+                          }
+                        }}
+                      >
+                        Resolve (no damages)
+                      </button>
+                      <input
+                        type="number"
+                        placeholder="Settlement R"
+                        className="input-field text-xs w-28 py-1"
+                        value={teacherSettlementAmount}
+                        onChange={(e) => setTeacherSettlementAmount(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded"
+                        disabled={submitting || !teacherHrNotes.trim() || !teacherSettlementAmount}
+                        onClick={async () => {
+                          setSubmitting(true);
+                          setError(null);
+                          try {
+                            await lawsuitsApi.hrReview(selectedCase.id, {
+                              outcome: 'settlement_recommended',
+                              hr_notes: teacherHrNotes.trim(),
+                              hr_recommended_amount: parseFloat(teacherSettlementAmount),
+                              plaintiff_consents_settlement: true,
+                              defendant_consents_settlement: true,
+                            });
+                            setSuccess('Settlement sent to Bank for approval');
+                            openCaseDetail(selectedCase);
+                            fetchCases();
+                          } catch (err: unknown) {
+                            const e = err as { response?: { data?: { error?: string } } };
+                            setError(e.response?.data?.error || 'Failed to record settlement');
+                          } finally {
+                            setSubmitting(false);
+                          }
+                        }}
+                      >
+                        Settle → Bank
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded"
+                        disabled={submitting || !teacherHrNotes.trim()}
+                        onClick={async () => {
+                          setSubmitting(true);
+                          setError(null);
+                          try {
+                            await lawsuitsApi.hrReview(selectedCase.id, {
+                              outcome: 'escalated',
+                              hr_notes: teacherHrNotes.trim(),
+                            });
+                            setSuccess('Escalated to lawyers and jury');
+                            openCaseDetail(selectedCase);
+                            fetchCases();
+                          } catch (err: unknown) {
+                            const e = err as { response?: { data?: { error?: string } } };
+                            setError(e.response?.data?.error || 'Failed to escalate case');
+                          } finally {
+                            setSubmitting(false);
+                          }
+                        }}
+                      >
+                        Escalate to court
+                      </button>
+                    </div>
+                  </div>
                 )}
 
                 {myRole === 'defendant' &&
