@@ -26,6 +26,11 @@ import {
   SALARY_PAYMENT_XP_REWARD,
   tablesReady as accountantSalaryTablesReady,
 } from '../domain/accountant-salary-payments';
+import {
+  dailyTransferLimitReason,
+  getStudentTransferLimitStatusForUser,
+  STUDENT_TRANSFER_DAILY_LIMIT,
+} from '../domain/student-transfer-limit';
 
 // Helper function to check if student can make transactions
 async function checkStudentCanTransact(userId: number): Promise<{ canTransact: boolean; reason?: string }> {
@@ -241,6 +246,11 @@ router.post('/transfer', [
     const canTransactResult = await checkStudentCanTransact(req.user.id);
     if (!canTransactResult.canTransact) {
       return res.status(400).json({ error: canTransactResult.reason });
+    }
+
+    const transferLimitStatus = await getStudentTransferLimitStatusForUser(req.user.id);
+    if (!transferLimitStatus.canRequestTransfer) {
+      return res.status(400).json({ error: dailyTransferLimitReason() });
     }
 
     // Parse and validate transfer amount early
@@ -1134,7 +1144,17 @@ router.get('/can-transact', authenticateToken, requireRole(['student']), async (
     }
 
     const result = await checkStudentCanTransact(req.user.id);
-    res.json(result);
+    const transferLimitStatus = await getStudentTransferLimitStatusForUser(req.user.id);
+
+    if (result.canTransact && !transferLimitStatus.canRequestTransfer) {
+      return res.json({
+        canTransact: false,
+        reason: `You have used all ${STUDENT_TRANSFER_DAILY_LIMIT} transfer requests for today. You can request more tomorrow.`,
+        ...transferLimitStatus,
+      });
+    }
+
+    res.json({ ...result, ...transferLimitStatus });
   } catch (error) {
     console.error('Can transact check error:', error);
     res.status(500).json({ error: 'Internal server error' });

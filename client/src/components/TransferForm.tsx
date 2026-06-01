@@ -17,6 +17,8 @@ interface Classmate {
 interface CanTransactResult {
   canTransact: boolean;
   reason?: string;
+  transfer_daily_limit?: number;
+  transfers_remaining_today?: number;
 }
 
 interface PendingTransfer {
@@ -92,6 +94,8 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
 
       setSuccess('Transfer request submitted. Awaiting teacher approval.');
       setFormData({ to_username: '', amount: '', description: '' });
+      const canTransactRes = await api.get('/transactions/can-transact');
+      setCanTransact(canTransactRes.data);
       fetchPendingTransfers();
       onSuccess();
     } catch (err: any) {
@@ -153,6 +157,11 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Transfer Money</h2>
         <p className="text-gray-600">Request a transfer to another student. Your teacher must approve it.</p>
+        {canTransact?.transfers_remaining_today != null && canTransact.transfer_daily_limit != null && (
+          <p className="text-sm text-gray-500 mt-2">
+            {canTransact.transfers_remaining_today} of {canTransact.transfer_daily_limit} transfer requests remaining today
+          </p>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -242,7 +251,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || (canTransact?.transfers_remaining_today === 0)}
           className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Submitting...' : 'Request Transfer'}
@@ -272,6 +281,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
           <li>• Select a student from any class to send money to</li>
           <li>• Add a description (required) so both parties know what the transfer is for</li>
           <li>• Transfer requests require teacher approval before the money moves</li>
+          <li>• You can request up to 3 student transfers per day</li>
           <li>• Pay off any outstanding loans before making transfers</li>
         </ul>
       </div>
