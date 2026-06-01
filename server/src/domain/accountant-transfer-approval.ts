@@ -1,74 +1,54 @@
-import database from '../database/database-prod';
 import { getXPForLevel } from '../routes/jobs';
 
-export const POLICE_FINE_BONUS_SUBMIT_XP = 5;
-export const LAWYER_FINE_REVIEW_XP = 10;
-export const POLICE_BONUS_APPROVAL_EARNINGS = 1000;
+export const TRANSFER_APPROVAL_XP_REWARD = 1;
+export const TRANSFER_APPROVAL_EARNINGS_REWARD = 500;
 
 type TxClient = {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
 };
 
-export function hasPoliceLieutenantJob(jobName: string | null | undefined): boolean {
-  return (jobName || '').toLowerCase().trim().includes('police lieutenant');
-}
-
-async function awardJobXp(
+export async function payTransferApprovalReward(
+  client: TxClient,
   userId: number,
-  xpAmount: number
-): Promise<{ experience_points: number; new_level: number | null }> {
-  const currentUser = await database.get(
-    'SELECT job_level, job_experience_points FROM users WHERE id = $1',
+  username: string,
+  townClass: string,
+  schoolId: number | null
+): Promise<{
+  experience_points: number;
+  earnings: number;
+  new_level: number | null;
+}> {
+  const userRowResult = await client.query(
+    'SELECT job_level, job_experience_points FROM users WHERE id = $1 FOR UPDATE',
     [userId]
   );
-  const currentLevel = currentUser?.job_level || 1;
-  const currentXP = currentUser?.job_experience_points || 0;
-  const newXP = currentXP + xpAmount;
+  const userRow = userRowResult.rows[0] || {};
+  const currentLevel = Number.isInteger(userRow.job_level) ? (userRow.job_level as number) : 1;
+  const currentXP =
+    typeof userRow.job_experience_points === 'number' ? userRow.job_experience_points : 0;
+  const newXP = currentXP + TRANSFER_APPROVAL_XP_REWARD;
   let newLevel = currentLevel;
   for (let level = currentLevel; level < 10; level++) {
     if (newXP >= getXPForLevel(level + 1)) newLevel = level + 1;
     else break;
   }
-  await database.query(
+
+  await client.query(
     'UPDATE users SET job_experience_points = $1, job_level = $2 WHERE id = $3',
     [newXP, newLevel, userId]
   );
-  return {
-    experience_points: xpAmount,
-    new_level: newLevel > currentLevel ? newLevel : null,
-  };
-}
-
-export async function awardPoliceSubmitXp(
-  userId: number
-): Promise<{ experience_points: number; new_level: number | null }> {
-  return awardJobXp(userId, POLICE_FINE_BONUS_SUBMIT_XP);
-}
-
-export async function awardLawyerFineReviewXp(
-  userId: number
-): Promise<{ experience_points: number; new_level: number | null }> {
-  return awardJobXp(userId, LAWYER_FINE_REVIEW_XP);
-}
-
-export async function payPoliceBonusApprovalReward(
-  client: TxClient,
-  policeUserId: number,
-  policeUsername: string,
-  townClass: string,
-  schoolId: number | null
-): Promise<{ earnings: number }> {
-  if (POLICE_BONUS_APPROVAL_EARNINGS <= 0) {
-    return { earnings: 0 };
-  }
 
   const accountResult = await client.query(
     'SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE',
-    [policeUserId]
+    [userId]
   );
   const account = accountResult.rows[0];
-  if (!account) {
-    return { earnings: 0 };
+  if (!account || TRANSFER_APPROVAL_EARNINGS_REWARD <= 0) {
+    return {
+      experience_points: TRANSFER_APPROVAL_XP_REWARD,
+      earnings: 0,
+      new_level: newLevel > currentLevel ? newLevel : null,
+    };
   }
 
   const townResult =
@@ -83,19 +63,19 @@ export async function payPoliceBonusApprovalReward(
         );
   const townRow = townResult.rows[0];
   const treasuryBalance = parseFloat(String(townRow?.treasury_balance ?? '0'));
-  if (!townRow || treasuryBalance < POLICE_BONUS_APPROVAL_EARNINGS) {
+  if (!townRow || treasuryBalance < TRANSFER_APPROVAL_EARNINGS_REWARD) {
     throw new Error('TREASURY_INSUFFICIENT');
   }
 
   if (schoolId != null) {
     await client.query(
       'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
-      [POLICE_BONUS_APPROVAL_EARNINGS, townClass, schoolId]
+      [TRANSFER_APPROVAL_EARNINGS_REWARD, townClass, schoolId]
     );
   } else {
     await client.query(
       'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
-      [POLICE_BONUS_APPROVAL_EARNINGS, townClass]
+      [TRANSFER_APPROVAL_EARNINGS_REWARD, townClass]
     );
   }
 
@@ -104,21 +84,25 @@ export async function payPoliceBonusApprovalReward(
     [
       schoolId,
       townClass,
-      POLICE_BONUS_APPROVAL_EARNINGS,
+      TRANSFER_APPROVAL_EARNINGS_REWARD,
       'withdrawal',
-      `Police bonus submission payout to ${policeUsername}`,
-      policeUserId,
+      `Accountant transfer approval payout to ${username}`,
+      userId,
     ]
   );
   await client.query(
     'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-    [POLICE_BONUS_APPROVAL_EARNINGS, account.id]
+    [TRANSFER_APPROVAL_EARNINGS_REWARD, account.id]
   );
   await client.query(
     `INSERT INTO transactions (to_account_id, amount, transaction_type, description)
      VALUES ($1, $2, 'deposit', $3)`,
-    [account.id, POLICE_BONUS_APPROVAL_EARNINGS, 'POLICE_BONUS_SUBMISSION_EARN']
+    [account.id, TRANSFER_APPROVAL_EARNINGS_REWARD, 'ACCOUNTANT_TRANSFER_APPROVAL_EARN']
   );
 
-  return { earnings: POLICE_BONUS_APPROVAL_EARNINGS };
+  return {
+    experience_points: TRANSFER_APPROVAL_XP_REWARD,
+    earnings: TRANSFER_APPROVAL_EARNINGS_REWARD,
+    new_level: newLevel > currentLevel ? newLevel : null,
+  };
 }

@@ -3,9 +3,10 @@ import { getXPForLevel } from '../routes/jobs';
 import {
   ABSENT_NO_SICK_NOTE_PAY_FACTOR,
   getAbsentWithoutSickNoteStudentIds,
+  hasDoctorJob,
 } from './attendance';
+import { applyDoctorEarningsMultiplier, syncDoctorReputation } from './doctor-reputation';
 import { getAccountantContext, hasAccountantJob } from './accountant-assignments';
-import { resolveAccountantClient } from './accountant-advice';
 
 export const SALARY_PAYMENT_XP_REWARD = 3;
 export const SALARY_PAYMENT_EARNINGS_REWARD = 300;
@@ -166,8 +167,16 @@ export async function getAccountantSalaryDashboard(accountantUserId: number): Pr
     ])
   );
 
+  const clientIds = [...context.responsibleStudentIds];
+  if (
+    context.supervisedAccountantId != null &&
+    !clientIds.includes(context.supervisedAccountantId)
+  ) {
+    clientIds.push(context.supervisedAccountantId);
+  }
+
   const clients: AccountantSalaryClientStatus[] = [];
-  for (const studentId of context.responsibleStudentIds) {
+  for (const studentId of clientIds) {
     const student = await database.get(
       `SELECT u.id, u.username, u.first_name, u.last_name, u.class, j.name AS job_name
        FROM users u
@@ -176,24 +185,6 @@ export async function getAccountantSalaryDashboard(accountantUserId: number): Pr
       [studentId]
     );
     if (!student) continue;
-
-    if (hasAccountantJob(student.job_name)) {
-      clients.push({
-        id: student.id,
-        username: student.username,
-        first_name: student.first_name,
-        last_name: student.last_name,
-        class: student.class,
-        job_name: student.job_name,
-        gross_salary: null,
-        net_salary: null,
-        paid_this_week: false,
-        paid_by_accountant_username: null,
-        can_pay: false,
-        ineligible_reason: 'Accountants are not salary clients',
-      });
-      continue;
-    }
 
     const salaryInfo = await getStudentSalaryInfo(studentId);
     const paidThisWeek = paidMap.has(studentId);
@@ -362,6 +353,59 @@ async function payAccountantReward(
   };
 }
 
+export async function resolveAccountantSalaryClient(
+  accountantUserId: number,
+  clientUsername: string
+): Promise<{
+  accountant: { id: number; class: string | null; school_id: number | null };
+  client: {
+    id: number;
+    username: string;
+    first_name: string | null;
+    last_name: string | null;
+    class: string | null;
+    school_id: number | null;
+    job_name: string | null;
+  };
+}> {
+  const context = await getAccountantContext(accountantUserId);
+  const client = await database.get(
+    `SELECT u.id, u.username, u.first_name, u.last_name, u.class, u.school_id, j.name AS job_name
+     FROM users u
+     LEFT JOIN jobs j ON u.job_id = j.id
+     WHERE u.username = $1 AND u.role = 'student'`,
+    [clientUsername]
+  );
+
+  if (!client) {
+    throw new Error('CLIENT_NOT_FOUND');
+  }
+
+  const isAssignedStudent = context.responsibleStudentIds.includes(client.id);
+  const isSupervisedAccountant =
+    hasAccountantJob(client.job_name) && client.id === context.supervisedAccountantId;
+
+  if (!isAssignedStudent && !isSupervisedAccountant) {
+    throw new Error('NOT_YOUR_CLIENT');
+  }
+
+  if (hasAccountantJob(client.job_name) && !isSupervisedAccountant) {
+    throw new Error('CLIENT_IS_ACCOUNTANT');
+  }
+
+  const accountantSchool = context.accountant.school_id ?? null;
+  const clientSchool = client.school_id ?? null;
+  if (accountantSchool !== null && clientSchool !== accountantSchool) {
+    throw new Error('NOT_YOUR_CLIENT');
+  }
+
+  if (context.accountant.class && client.class && context.accountant.class !== client.class) {
+    throw new Error('NOT_YOUR_CLIENT');
+  }
+
+  return { accountant: context.accountant, client };
+}
+
 export async function payClientWeeklySalary(
   accountantUserId: number,
   clientUsername: string
@@ -379,12 +423,10 @@ export async function payClientWeeklySalary(
     throw new Error('TABLES_NOT_READY');
   }
 
-  const resolved = await resolveAccountantClient(accountantUserId, clientUsername);
-  const { accountant, client } = resolved;
-
-  if (hasAccountantJob(client.job_name)) {
-    throw new Error('CLIENT_IS_ACCOUNTANT');
-  }
+  const { accountant, client } = await resolveAccountantSalaryClient(
+    accountantUserId,
+    clientUsername
+  );
 
   const townClass = accountant.class || client.class;
   if (!townClass) {
@@ -434,6 +476,15 @@ export async function payClientWeeklySalary(
   if (absentWithoutSickNote) {
     grossSalary = grossSalary * ABSENT_NO_SICK_NOTE_PAY_FACTOR;
   }
+  let doctorReputationReduced = false;
+  if (hasDoctorJob(salaryRow.job_name)) {
+    const doctorRep = await syncDoctorReputation(client.id);
+    const reputationSalary = applyDoctorEarningsMultiplier(grossSalary, doctorRep.current);
+    if (reputationSalary < grossSalary) {
+      doctorReputationReduced = true;
+      grossSalary = reputationSalary;
+    }
+  }
 
   let taxRate = 0;
   let taxAmount = 0;
@@ -463,14 +514,15 @@ export async function payClientWeeklySalary(
       [netSalary, salaryRow.account_id]
     );
 
+    const salaryReductions: string[] = [];
+    if (absentWithoutSickNote) salaryReductions.push('absent without sick note');
+    if (doctorReputationReduced) salaryReductions.push('low doctor reputation');
+    const reducedNote =
+      salaryReductions.length > 0 ? `; reduced — ${salaryReductions.join('; ')}` : '';
     const salaryDescription =
       town.tax_enabled
-        ? absentWithoutSickNote
-          ? `Salary for ${salaryRow.job_name} (paid by Chartered Accountant; reduced — absent without sick note: R${grossSalary.toFixed(2)} - ${taxRate}% tax = R${netSalary.toFixed(2)})`
-          : `Salary for ${salaryRow.job_name} (paid by Chartered Accountant: R${grossSalary.toFixed(2)} - ${taxRate}% tax = R${netSalary.toFixed(2)})`
-        : absentWithoutSickNote
-          ? `Salary for ${salaryRow.job_name} (paid by Chartered Accountant; reduced — absent without sick note)`
-          : `Salary for ${salaryRow.job_name} (paid by Chartered Accountant)`;
+        ? `Salary for ${salaryRow.job_name} (paid by Chartered Accountant${reducedNote}: R${grossSalary.toFixed(2)} - ${taxRate}% tax = R${netSalary.toFixed(2)})`
+        : `Salary for ${salaryRow.job_name} (paid by Chartered Accountant${reducedNote})`;
 
     await clientConn.query(
       'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',

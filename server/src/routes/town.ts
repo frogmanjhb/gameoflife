@@ -5,7 +5,9 @@ import { authenticateToken, AuthenticatedRequest, requireRole } from '../middlew
 import {
   ABSENT_NO_SICK_NOTE_PAY_FACTOR,
   getAbsentWithoutSickNoteStudentIds,
+  hasDoctorJob,
 } from '../domain/attendance';
+import { applyDoctorEarningsMultiplier, syncDoctorReputation } from '../domain/doctor-reputation';
 
 const router = Router();
 
@@ -599,7 +601,16 @@ router.post('/pay-salaries/:class',
         if (absentWithoutSickNote) {
           salary = salary * ABSENT_NO_SICK_NOTE_PAY_FACTOR;
         }
-        
+        let doctorReputationReduced = false;
+        if (hasDoctorJob(student.job_name)) {
+          const doctorRep = await syncDoctorReputation(student.id);
+          const reputationSalary = applyDoctorEarningsMultiplier(salary, doctorRep.current);
+          if (reputationSalary < salary) {
+            doctorReputationReduced = true;
+            salary = reputationSalary;
+          }
+        }
+
         // Calculate tax if enabled
         let taxInfo = { taxRate: 0, taxAmount: 0, netAmount: salary };
         if (town.tax_enabled) {
@@ -615,6 +626,7 @@ router.post('/pay-salaries/:class',
           gross_salary: salary,
           original_gross_salary: parseFloat(student.salary) || 0,
           absent_without_sick_note: absentWithoutSickNote,
+          doctor_reputation_reduced: doctorReputationReduced,
           tax_rate: taxInfo.taxRate,
           tax_amount: taxInfo.taxAmount,
           net_salary: taxInfo.netAmount
@@ -646,17 +658,20 @@ router.post('/pay-salaries/:class',
             );
 
             // Record salary transaction
+            const salaryDescription = (() => {
+              const reductions: string[] = [];
+              if (payment.absent_without_sick_note) reductions.push('absent without sick note');
+              if (payment.doctor_reputation_reduced) reductions.push('low doctor reputation');
+              const reducedSuffix =
+                reductions.length > 0 ? ` (reduced — ${reductions.join('; ')})` : '';
+              if (town.tax_enabled) {
+                return `Salary for ${payment.job_name}${reducedSuffix}: R${payment.gross_salary} - ${payment.tax_rate}% tax = R${payment.net_salary}`;
+              }
+              return `Salary for ${payment.job_name}${reducedSuffix}`;
+            })();
             await client.query(
               'INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
-              [payment.account_id, payment.net_salary, 'salary', 
-               town.tax_enabled 
-                 ? payment.absent_without_sick_note
-                   ? `Salary for ${payment.job_name} (reduced — absent without sick note: R${payment.gross_salary} - ${payment.tax_rate}% tax = R${payment.net_salary})`
-                   : `Salary for ${payment.job_name} (R${payment.gross_salary} - ${payment.tax_rate}% tax = R${payment.net_salary})`
-                 : payment.absent_without_sick_note
-                   ? `Salary for ${payment.job_name} (reduced — absent without sick note)`
-                   : `Salary for ${payment.job_name}`
-              ]
+              [payment.account_id, payment.net_salary, 'salary', salaryDescription]
             );
 
             // Record tax transaction if tax was applied

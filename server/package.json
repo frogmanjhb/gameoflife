@@ -50,6 +50,7 @@
     "migrate:accountant-salary-payments": "node run-sql-migration.js migrations/099_add_accountant_salary_payments.sql",
     "migrate:student-lawsuits": "node run-sql-migration.js migrations/100_student_lawsuits.sql",
     "migrate:town-rules-school-unique": "node run-sql-migration.js migrations/101_town_rules_school_unique.sql",
+    "migrate:doctor-reputation": "node run-sql-migration.js migrations/102_add_doctor_reputation.sql",
     "seed:test-school": "node seed-test-school.js",
     "verify:job-xp-wiring": "node scripts/verify-job-xp-wiring.js"
   },

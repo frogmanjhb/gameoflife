@@ -314,6 +314,7 @@ export const doctorIllnessApi = {
         assigned_at: string;
       };
       remaining_today: number;
+      reputation?: import('../types').DoctorReputationStatus;
     };
   }> => api.post('/doctor-illness/assign'),
   getMyStatus: (): Promise<{ data: DoctorIllnessMyStatus }> => api.get('/doctor-illness/my-status'),

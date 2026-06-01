@@ -563,9 +563,11 @@ router.put(
       await payHealthInsuranceClinicClaim(
         client,
         assignmentId,
+        assignment.assigned_by_user_id,
         doctorAccount.id,
         cureFee,
-        assignment.illness_type
+        assignment.illness_type,
+        { townClass: assignment.town_class, schoolId: assignment.school_id ?? null }
       );
       await client.query(
         `UPDATE doctor_illness_assignments

@@ -759,6 +759,7 @@ export interface NurseGameSubmitRequest {
 export interface DoctorGameStatus {
   remaining_plays: number;
   daily_limit: number;
+  reputation?: DoctorReputationStatus | null;
   high_scores: { easy: number; medium: number; hard: number; extreme: number };
   recent_sessions: Array<{
     id: number;
@@ -815,11 +816,20 @@ export interface DoctorIllnessPendingCure {
   cure_requested_at: string;
 }
 
+export interface DoctorReputationStatus {
+  current: number;
+  max: number;
+  earnings_multiplier: number;
+  earnings_percent: number;
+  penalty_label: string | null;
+}
+
 export interface DoctorIllnessDoctorStatus {
   remaining_today: number;
   daily_limit: number;
   cure_fee: number;
   cure_approve_xp: number;
+  reputation?: DoctorReputationStatus | null;
   pending_cures: DoctorIllnessPendingCure[];
   recent_assignments: Array<{
     id: number;

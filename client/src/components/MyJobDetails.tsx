@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, doctorIllnessApi, cyberAttackApi, retailManagerGameApi, entrepreneurGameApi, insuranceManagerGameApi, transactionsApi, policeFinesBonusesApi, insuranceApi, InsuranceBrokerPendingRequest, InsuranceBrokerPendingClaim, InsuranceBrokerPendingCyberClaim, PoliceFineBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, CyberAttackEngineerStatus, RetailManagerGameStatus, EntrepreneurGameStatus, InsuranceManagerGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer, AccountantSalaryDashboardResponse } from '../types';
+import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, DoctorReputationStatus, CyberAttackEngineerStatus, RetailManagerGameStatus, EntrepreneurGameStatus, InsuranceManagerGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer, AccountantSalaryDashboardResponse } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
 import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../utils/jobDisplay';
 import ArchitectGameModal from './jobchallenges/ArchitectGameModal';
@@ -42,6 +42,45 @@ import SickNoteApprovalPanel from './SickNoteApprovalPanel';
 import LawsuitJobPanels from './LawsuitJobPanels';
 import CodeBoardPanel from './CodeBoardPanel';
 import TownNewsPanel from './TownNewsPanel';
+
+function DoctorReputationBar({ reputation }: { reputation: DoctorReputationStatus }) {
+  const fillPercent =
+    reputation.max > 0 ? Math.min(100, Math.round((reputation.current / reputation.max) * 100)) : 0;
+  const barColor =
+    reputation.current >= 15
+      ? 'bg-emerald-600'
+      : reputation.current >= 10
+        ? 'bg-amber-500'
+        : reputation.current >= 5
+          ? 'bg-orange-500'
+          : 'bg-red-600';
+
+  return (
+    <div className="mb-4 rounded-lg border border-emerald-200 bg-white/90 p-4">
+      <div className="flex items-center justify-between text-sm mb-2">
+        <span className="font-semibold text-gray-900">Doctor reputation</span>
+        <span className="font-bold text-gray-800">
+          {reputation.current} / {reputation.max}
+        </span>
+      </div>
+      <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+        <div
+          className={`${barColor} h-3 rounded-full transition-all`}
+          style={{ width: `${fillPercent}%` }}
+        />
+      </div>
+      <p className="text-xs text-gray-600">
+        Making classmates sick costs 2 reputation. You recover +1 each civic day (resets 4:00).
+        Below 15: earn 25% less · below 10: 50% less · below 5: 75% less.
+      </p>
+      {reputation.penalty_label && (
+        <p className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+          {reputation.penalty_label} (currently {reputation.earnings_percent}% of normal pay)
+        </p>
+      )}
+    </div>
+  );
+}
 
 const MyJobDetails: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
@@ -118,6 +157,7 @@ const MyJobDetails: React.FC = () => {
   const [accountantApprovals, setAccountantApprovals] = useState<AccountantPendingTransfer[]>([]);
   const [accountantApprovalsLoading, setAccountantApprovalsLoading] = useState(false);
   const [accountantApprovalsError, setAccountantApprovalsError] = useState<string | null>(null);
+  const [accountantApprovalsSuccess, setAccountantApprovalsSuccess] = useState<string | null>(null);
   const [isAccountantApprovalsOpen, setIsAccountantApprovalsOpen] = useState(false);
   const [isAccountantSalaryOpen, setIsAccountantSalaryOpen] = useState(false);
   const [accountantSalaryDashboard, setAccountantSalaryDashboard] = useState<AccountantSalaryDashboardResponse | null>(null);
@@ -524,6 +564,7 @@ const MyJobDetails: React.FC = () => {
     try {
       setAccountantApprovalsLoading(true);
       setAccountantApprovalsError(null);
+      setAccountantApprovalsSuccess(null);
       const response = await transactionsApi.getAccountantApprovals();
       setAccountantApprovals(response.data || []);
     } catch (err: any) {
@@ -732,6 +773,11 @@ const MyJobDetails: React.FC = () => {
       setDoctorIllnessSuccess(
         `${a.patient_display_name} caught ${a.illness_name}. (${response.data.remaining_today} slots left today)`
       );
+      if (response.data.reputation) {
+        setDoctorIllnessStatus((prev) =>
+          prev ? { ...prev, reputation: response.data.reputation } : prev
+        );
+      }
       await fetchDoctorIllnessStatus();
     } catch (err: any) {
       setDoctorIllnessError(err.response?.data?.error || 'Could not assign illness');
@@ -1122,7 +1168,7 @@ const MyJobDetails: React.FC = () => {
               {isPoliceJob && (
                 <div className="mt-3 border-t border-gray-200 pt-3">
                   <p className="text-xs text-gray-500">
-                    Log fines and bonuses for classmates (with evidence). Each submission earns +5 XP. Requests go to the lawyer (if assigned), then teacher approval in the Bank plugin.
+                    Log fines and bonuses for classmates (with evidence). Each submission earns +5 XP. When a teacher approves a bonus you submitted, you earn R1000 from the town treasury. Requests go to the lawyer (if assigned), then teacher approval in the Bank plugin.
                   </p>
                 </div>
               )}
@@ -2706,6 +2752,9 @@ const MyJobDetails: React.FC = () => {
         {user?.role === 'student' && (job?.name || '').toLowerCase().trim().includes('doctor') && (
           <div className="pt-6 border-t border-gray-200">
             <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-6 border border-emerald-200">
+              {doctorIllnessStatus?.reputation && (
+                <DoctorReputationBar reputation={doctorIllnessStatus.reputation} />
+              )}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">Town Clinic — Random Illness</h3>
@@ -3008,6 +3057,9 @@ const MyJobDetails: React.FC = () => {
         {(job?.name || '').toLowerCase().trim().includes('doctor') && (
           <div className="pt-6 border-t border-gray-200">
             <div className="bg-gradient-to-r from-indigo-50 to-sky-50 rounded-lg p-6 border border-indigo-200">
+              {doctorGameStatus?.reputation && (
+                <DoctorReputationBar reputation={doctorGameStatus.reputation} />
+              )}
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
@@ -3348,7 +3400,7 @@ const MyJobDetails: React.FC = () => {
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Transfer Approvals</h2>
                   <p className="text-xs text-gray-600">
-                    Review and approve or deny transfers from the students assigned to you. Each approval gives you 1 XP.
+                    Review and approve or deny transfers from students and your supervised accountant. Each approval gives you 1 XP and R500.
                   </p>
                 </div>
               </div>
@@ -3370,6 +3422,11 @@ const MyJobDetails: React.FC = () => {
                 <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center gap-2 text-sm text-red-700">
                   <AlertCircle className="h-5 w-5" />
                   <span>{accountantApprovalsError}</span>
+                </div>
+              )}
+              {accountantApprovalsSuccess && !accountantApprovalsLoading && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 text-sm text-emerald-800">
+                  {accountantApprovalsSuccess}
                 </div>
               )}
               {!accountantApprovalsLoading && !accountantApprovalsError && accountantApprovals.length === 0 && (
@@ -3406,10 +3463,13 @@ const MyJobDetails: React.FC = () => {
                           type="button"
                           onClick={async () => {
                             try {
-                              await transactionsApi.approveAsAccountant(pt.id);
+                              const res = await transactionsApi.approveAsAccountant(pt.id);
                               setAccountantApprovals((prev) => prev.filter((x) => x.id !== pt.id));
+                              setAccountantApprovalsError(null);
+                              setAccountantApprovalsSuccess(res.data.message || 'Transfer approved.');
                               await refreshProfile();
                             } catch (err: any) {
+                              setAccountantApprovalsSuccess(null);
                               setAccountantApprovalsError(err.response?.data?.error || 'Failed to approve transfer');
                             }
                           }}
@@ -3453,7 +3513,7 @@ const MyJobDetails: React.FC = () => {
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Pay Weekly Salaries</h2>
                   <p className="text-xs text-gray-600">
-                    Pay each assigned student separately. Each successful payment earns you 3 XP + R300.
+                    Pay each assigned student or your supervised accountant separately. Each successful payment earns you 3 XP + R300.
                     {accountantSalaryDashboard
                       ? ` Week: ${accountantSalaryDashboard.week_start} to ${accountantSalaryDashboard.week_end}.`
                       : null}
@@ -3488,14 +3548,12 @@ const MyJobDetails: React.FC = () => {
               {!accountantSalaryLoading && accountantSalaryDashboard && (
                 <>
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-2">Assigned students</h3>
-                    {accountantSalaryDashboard.clients.filter((c) => !c.ineligible_reason?.includes('Accountants')).length === 0 ? (
+                    <h3 className="text-sm font-semibold text-gray-900 mb-2">Assigned clients</h3>
+                    {accountantSalaryDashboard.clients.length === 0 ? (
                       <p className="text-sm text-gray-500">No salary clients assigned to you.</p>
                     ) : (
                       <div className="space-y-2">
-                        {accountantSalaryDashboard.clients
-                          .filter((client) => client.ineligible_reason !== 'Accountants are not salary clients')
-                          .map((client) => {
+                        {accountantSalaryDashboard.clients.map((client) => {
                             const displayName =
                               client.first_name && client.last_name
                                 ? `${client.first_name} ${client.last_name}`

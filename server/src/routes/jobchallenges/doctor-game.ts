@@ -5,6 +5,7 @@ import { isDoublesDayEnabled } from '../../helpers/doubles-day';
 import { getXPForLevel } from '../jobs';
 import { JOB_CHALLENGES_DAILY_LIMIT, JOB_GAME_RECENT_COMPLETIONS_LIMIT } from './config';
 import { getElapsedMsSincePlayedAt } from './min-duration';
+import { getDoctorReputationIfDoctor, resolveDoctorNetEarnings } from '../../domain/doctor-reputation';
 
 const router = Router();
 
@@ -68,7 +69,14 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
     const recentSessions = await database.query(`
       SELECT * FROM doctor_game_sessions WHERE user_id = $1 ORDER BY played_at DESC LIMIT 5
     `, [userId]);
-    res.json({ remaining_plays: remainingPlays, daily_limit: dailyLimit, high_scores: highScoreMap, recent_sessions: recentSessions });
+    const reputation = await getDoctorReputationIfDoctor(userId, user.job_name);
+    res.json({
+      remaining_plays: remainingPlays,
+      daily_limit: dailyLimit,
+      high_scores: highScoreMap,
+      recent_sessions: recentSessions,
+      reputation,
+    });
   } catch (error) {
     console.error('Get doctor game status error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -198,6 +206,11 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     let totalEarnings = correct_answers * 1 * difficultyMultipliers[session.difficulty] * streakBonus;
     if (totalEarnings > MAX_EARNINGS_PER_GAME) totalEarnings = MAX_EARNINGS_PER_GAME;
     if (await isDoublesDayEnabled()) totalEarnings = totalEarnings * 2;
+    const { netAmount: reputationAdjustedEarnings, reputation } = await resolveDoctorNetEarnings(
+      userId,
+      totalEarnings
+    );
+    totalEarnings = reputationAdjustedEarnings;
     await database.query(`
       UPDATE doctor_game_sessions 
       SET score = $1, correct_answers = $2, total_problems = $3, experience_points = $4, earnings = $5
@@ -267,7 +280,8 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       earnings: totalEarnings,
       experience_points: totalXP,
       new_level: newLevel > currentLevel ? newLevel : null,
-      isNewHighScore: !currentHighScore || score > currentHighScore.high_score
+      isNewHighScore: !currentHighScore || score > currentHighScore.high_score,
+      reputation,
     });
   } catch (error) {
     console.error('Submit doctor game error:', error);

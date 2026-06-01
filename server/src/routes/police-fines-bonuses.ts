@@ -9,7 +9,9 @@ import {
   awardLawyerFineReviewXp,
   hasPoliceLieutenantJob,
   LAWYER_FINE_REVIEW_XP,
+  POLICE_BONUS_APPROVAL_EARNINGS,
   POLICE_FINE_BONUS_SUBMIT_XP,
+  payPoliceBonusApprovalReward,
 } from '../domain/police-fines';
 
 const router = Router();
@@ -543,8 +545,47 @@ router.post(
         [user.id, requestId]
       );
 
+      let policeEarnings = 0;
+      if (pfr.type === 'bonus') {
+        const policeUser = await client.query(
+          'SELECT id, username, class FROM users WHERE id = $1',
+          [pfr.submitted_by_id]
+        );
+        const police = policeUser.rows[0];
+        const townClass = (pfr.class as string) || (police?.class as string);
+        if (!townClass) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Town class is not set for this bonus request' });
+        }
+        try {
+          const reward = await payPoliceBonusApprovalReward(
+            client,
+            pfr.submitted_by_id,
+            (police?.username as string) || 'police',
+            townClass,
+            pfr.school_id ?? null
+          );
+          policeEarnings = reward.earnings;
+        } catch (rewardErr: unknown) {
+          if (rewardErr instanceof Error && rewardErr.message === 'TREASURY_INSUFFICIENT') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              error: `Bonus cannot be approved: town treasury needs at least R${POLICE_BONUS_APPROVAL_EARNINGS} to pay the Police Lieutenant.`,
+            });
+          }
+          throw rewardErr;
+        }
+      }
+
       await client.query('COMMIT');
-      return res.json({ message: `${pfr.type === 'fine' ? 'Fine' : 'Bonus'} approved and applied` });
+      const baseMessage = `${pfr.type === 'fine' ? 'Fine' : 'Bonus'} approved and applied`;
+      return res.json({
+        message:
+          policeEarnings > 0
+            ? `${baseMessage}. Police Lieutenant earned R${policeEarnings.toFixed(2)}.`
+            : baseMessage,
+        police_earnings: policeEarnings > 0 ? policeEarnings : undefined,
+      });
     } catch (err) {
       await client.query('ROLLBACK');
       console.error('police-fines-bonuses approve error:', err);

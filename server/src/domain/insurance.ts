@@ -1,5 +1,6 @@
 import database from '../database/database-prod';
 import { getXPForLevel } from '../routes/jobs';
+import { resolveDoctorNetEarnings } from './doctor-reputation';
 
 export const INSURANCE_RATE = 0.05;
 export const INSURANCE_BROKER_EARNINGS = 500;
@@ -207,23 +208,47 @@ type Queryable = {
 export async function payHealthInsuranceClinicClaim(
   executor: Queryable,
   assignmentId: number,
+  doctorUserId: number,
   doctorAccountId: number,
   cureFee: number,
-  illnessType: string
+  illnessType: string,
+  opts?: { townClass?: string | null; schoolId?: number | null }
 ): Promise<void> {
+  const { netAmount: doctorPay, reputation } = await resolveDoctorNetEarnings(doctorUserId, cureFee);
+  const withheld = Math.round((cureFee - doctorPay) * 100) / 100;
+
   await executor.query(
     'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-    [cureFee, doctorAccountId]
+    [doctorPay, doctorAccountId]
   );
+  const description =
+    reputation.penalty_label && withheld > 0
+      ? `Health insurance claim — ${illnessType} clinic fee (R${doctorPay.toFixed(2)} after reputation penalty)`
+      : `Health insurance claim — ${illnessType} clinic fee (awaiting doctor approval)`;
   await executor.query(
     `INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description)
      VALUES (NULL, $1, $2, 'insurance', $3)`,
-    [
-      doctorAccountId,
-      cureFee,
-      `Health insurance claim — ${illnessType} clinic fee (awaiting doctor approval)`,
-    ]
+    [doctorAccountId, doctorPay, description]
   );
+
+  if (withheld > 0 && opts?.townClass) {
+    if (opts.schoolId != null) {
+      await executor.query(
+        'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
+        [withheld, opts.townClass, opts.schoolId]
+      );
+    } else {
+      await executor.query(
+        'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
+        [withheld, opts.townClass]
+      );
+    }
+    await executor.query(
+      `INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by)
+       VALUES ($1, $2, $3, 'deposit', $4, $5)`,
+      [opts.schoolId ?? null, opts.townClass, withheld, 'Doctor clinic reputation withholding (insurance)', doctorUserId]
+    );
+  }
   await executor.query(
     `UPDATE doctor_illness_assignments
      SET cure_requested_at = CURRENT_TIMESTAMP,

@@ -13,6 +13,11 @@ import {
   DoctorIllnessType,
 } from '../domain/doctor-illness';
 import { hasActiveApprovedHealthInsurance, classRequiresBrokerApproval, payHealthInsuranceClinicClaim } from '../domain/insurance';
+import {
+  decrementDoctorReputationOnAssign,
+  getDoctorReputationIfDoctor,
+  resolveDoctorNetEarnings,
+} from '../domain/doctor-reputation';
 
 const router = Router();
 
@@ -79,6 +84,7 @@ router.get('/doctor-status', authenticateToken, async (req: AuthenticatedRequest
     try {
       await database.query('SELECT 1 FROM doctor_illness_assignments LIMIT 1');
     } catch {
+      const reputation = await getDoctorReputationIfDoctor(userId, user.job_name);
       return res.json({
         remaining_today: DOCTOR_ILLNESS_DAILY_LIMIT,
         daily_limit: DOCTOR_ILLNESS_DAILY_LIMIT,
@@ -86,6 +92,7 @@ router.get('/doctor-status', authenticateToken, async (req: AuthenticatedRequest
         cure_approve_xp: DOCTOR_CURE_APPROVE_XP,
         pending_cures: [],
         recent_assignments: [],
+        reputation,
       });
     }
 
@@ -116,11 +123,14 @@ router.get('/doctor-status', authenticateToken, async (req: AuthenticatedRequest
       [userId]
     );
 
+    const reputation = await getDoctorReputationIfDoctor(userId, user.job_name);
+
     res.json({
       remaining_today: Math.max(0, DOCTOR_ILLNESS_DAILY_LIMIT - used),
       daily_limit: DOCTOR_ILLNESS_DAILY_LIMIT,
       cure_fee: DOCTOR_CURE_FEE,
       cure_approve_xp: DOCTOR_CURE_APPROVE_XP,
+      reputation,
       pending_cures: pendingCures.map((r: Record<string, unknown>) => {
         const type = r.illness_type as DoctorIllnessType;
         const meta = DOCTOR_ILLNESS_META[type];
@@ -225,6 +235,7 @@ router.post('/assign', authenticateToken, async (req: AuthenticatedRequest, res:
     );
     const row = inserted[0];
     const meta = DOCTOR_ILLNESS_META[illnessType];
+    const reputation = await decrementDoctorReputationOnAssign(doctorId);
 
     res.json({
       success: true,
@@ -237,6 +248,7 @@ router.post('/assign', authenticateToken, async (req: AuthenticatedRequest, res:
         assigned_at: row.assigned_at,
       },
       remaining_today: Math.max(0, DOCTOR_ILLNESS_DAILY_LIMIT - used - 1),
+      reputation,
     });
   } catch (error) {
     console.error('Doctor illness assign error:', error);
@@ -383,8 +395,24 @@ router.post('/see-doctor', authenticateToken, async (req: AuthenticatedRequest, 
       return res.status(400).json({ error: 'Doctor bank account not found for payment' });
     }
 
+    const { netAmount: doctorClinicPay, reputation: doctorRep } = await resolveDoctorNetEarnings(
+      row.assigned_by_user_id,
+      cureFee
+    );
+    const clinicWithheld = Math.round((cureFee - doctorClinicPay) * 100) / 100;
+    const townClass = req.user.class ?? null;
+    const schoolId = req.user.school_id ?? null;
+
     if (hasHealthInsurance) {
-      await payHealthInsuranceClinicClaim(database, row.id, doctorAccount.id, cureFee, row.illness_type);
+      await payHealthInsuranceClinicClaim(
+        database,
+        row.id,
+        row.assigned_by_user_id,
+        doctorAccount.id,
+        cureFee,
+        row.illness_type,
+        { townClass, schoolId }
+      );
     } else {
       const patientAccount = await database.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
       if (!patientAccount) {
@@ -401,17 +429,40 @@ router.post('/see-doctor', authenticateToken, async (req: AuthenticatedRequest, 
       );
       await database.query(
         'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [cureFee, doctorAccount.id]
+        [doctorClinicPay, doctorAccount.id]
       );
+      if (clinicWithheld > 0 && townClass) {
+        if (schoolId != null) {
+          await database.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
+            [clinicWithheld, townClass, schoolId]
+          );
+        } else {
+          await database.query(
+            'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
+            [clinicWithheld, townClass]
+          );
+        }
+        await database.query(
+          `INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by)
+           VALUES ($1, $2, $3, 'deposit', $4, $5)`,
+          [
+            schoolId,
+            townClass,
+            clinicWithheld,
+            'Doctor clinic reputation withholding',
+            row.assigned_by_user_id,
+          ]
+        );
+      }
+      const transferDescription =
+        doctorRep.penalty_label && clinicWithheld > 0
+          ? `Clinic visit fee — ${row.illness_type} (doctor paid R${doctorClinicPay.toFixed(2)} after reputation penalty)`
+          : `Clinic visit fee — ${row.illness_type} (awaiting doctor approval)`;
       await database.query(
         `INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description)
          VALUES ($1, $2, $3, 'transfer', $4)`,
-        [
-          patientAccount.id,
-          doctorAccount.id,
-          cureFee,
-          `Clinic visit fee — ${row.illness_type} (awaiting doctor approval)`,
-        ]
+        [patientAccount.id, doctorAccount.id, doctorClinicPay, transferDescription]
       );
       await database.query(
         `UPDATE doctor_illness_assignments

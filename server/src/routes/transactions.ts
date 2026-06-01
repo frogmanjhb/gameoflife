@@ -4,9 +4,11 @@ import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { requireTenant } from '../middleware/tenant';
 import { TransferRequest, DepositRequest, WithdrawRequest, TransactionWithDetails } from '../types';
-import { getXPForLevel } from './jobs';
-
 import { getAccountantContext } from '../domain/accountant-assignments';
+import {
+  payTransferApprovalReward,
+  TRANSFER_APPROVAL_EARNINGS_REWARD,
+} from '../domain/accountant-transfer-approval';
 import {
   ADVICE_EARNINGS_REWARD,
   ADVICE_XP_REWARD,
@@ -581,7 +583,7 @@ router.get('/my-approvals/assignments', authenticateToken, requireRole(['student
   }
 });
 
-// Chartered Accountant: Approve a pending transfer they are responsible for (awards 1 XP)
+// Chartered Accountant: Approve a pending transfer they are responsible for (1 XP + R500 from treasury)
 router.post('/my-approvals/:id/approve', authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -698,37 +700,42 @@ router.post('/my-approvals/:id/approve', authenticateToken, requireRole(['studen
         [req.user.id, transferId]
       );
 
-      // Award 1 XP to the approving accountant
-      const userRowResult = await client.query(
-        'SELECT job_level, job_experience_points FROM users WHERE id = $1 FOR UPDATE',
-        [accountant.id]
-      );
-      const userRow = userRowResult.rows[0] || {};
-      const currentLevel = Number.isInteger(userRow.job_level) ? userRow.job_level : 1;
-      const currentXP = typeof userRow.job_experience_points === 'number' ? userRow.job_experience_points : 0;
-      const xpDelta = 1;
-      const newXP = currentXP + xpDelta;
-      let newLevel = currentLevel;
-      for (let level = currentLevel; level < 10; level++) {
-        const xpForNextLevel = getXPForLevel(level + 1);
-        if (newXP >= xpForNextLevel) {
-          newLevel = level + 1;
-        } else {
-          break;
-        }
+      const townClass = accountant.class;
+      if (!townClass) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Town class is not set for your account' });
       }
 
-      await client.query(
-        'UPDATE users SET job_experience_points = $1, job_level = $2 WHERE id = $3',
-        [newXP, newLevel, accountant.id]
-      );
+      const accountantUser = await database.get('SELECT username FROM users WHERE id = $1', [
+        accountant.id,
+      ]);
+
+      let reward;
+      try {
+        reward = await payTransferApprovalReward(
+          client,
+          accountant.id,
+          accountantUser?.username || 'accountant',
+          townClass,
+          accountant.school_id ?? null
+        );
+      } catch (rewardErr: unknown) {
+        if (rewardErr instanceof Error && rewardErr.message === 'TREASURY_INSUFFICIENT') {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: `Transfer cannot be approved: town treasury needs at least R${TRANSFER_APPROVAL_EARNINGS_REWARD} for your approval fee.`,
+          });
+        }
+        throw rewardErr;
+      }
 
       await client.query('COMMIT');
 
       res.json({
-        message: 'Transfer approved successfully. You earned 1 XP.',
-        xp_awarded: xpDelta,
-        new_level: newLevel > currentLevel ? newLevel : null
+        message: `Transfer approved successfully. You earned ${reward.experience_points} XP and R${reward.earnings.toFixed(2)}.`,
+        xp_awarded: reward.experience_points,
+        earnings: reward.earnings,
+        new_level: reward.new_level,
       });
     } catch (error) {
       await client.query('ROLLBACK');
@@ -1615,7 +1622,9 @@ router.post(
           case 'NOT_YOUR_CLIENT':
             return res.status(403).json({ error: 'This student is not assigned to you' });
           case 'CLIENT_IS_ACCOUNTANT':
-            return res.status(400).json({ error: 'You cannot pay salary to another accountant' });
+            return res.status(400).json({
+              error: 'You can only pay salary to your supervised accountant, not other accountants',
+            });
           case 'ALREADY_PAID_THIS_WEEK':
             return res.status(400).json({ error: 'This student has already been paid this week (Mon–Sun)' });
           case 'NO_JOB':

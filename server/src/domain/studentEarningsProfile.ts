@@ -168,6 +168,12 @@ function classifyTransaction(description: string): { source: EarningsActivitySou
   if (d === 'ACCOUNTANT_CLIENT_ADVICE_EARN') {
     return { source: 'job_task', label: 'Accountant client advice' };
   }
+  if (d === 'ACCOUNTANT_TRANSFER_APPROVAL_EARN') {
+    return { source: 'job_task', label: 'Transfer approval fee' };
+  }
+  if (d === 'POLICE_BONUS_SUBMISSION_EARN') {
+    return { source: 'job_task', label: 'Police bonus submission fee' };
+  }
   if (/^Town News story:/i.test(d)) {
     return { source: 'job_task', label: 'Town news story approved' };
   }
@@ -202,6 +208,8 @@ function isTrackedEarningTransaction(description: string): boolean {
     d === 'CLASS_EVENT_SUGGESTION_EARN' ||
     d === 'FIVE_MINUTE_LESSON_EARN' ||
     d === 'ACCOUNTANT_CLIENT_ADVICE_EARN' ||
+    d === 'ACCOUNTANT_TRANSFER_APPROVAL_EARN' ||
+    d === 'POLICE_BONUS_SUBMISSION_EARN' ||
     /^Code Board/i.test(d) ||
     /^Insurance /i.test(d) ||
     /^Police bonus/i.test(d) ||
@@ -288,6 +296,8 @@ async function buildStudentEarningsActivity(
          OR t.description = 'CLASS_EVENT_SUGGESTION_EARN'
          OR t.description = 'FIVE_MINUTE_LESSON_EARN'
          OR t.description = 'ACCOUNTANT_CLIENT_ADVICE_EARN'
+         OR t.description = 'ACCOUNTANT_TRANSFER_APPROVAL_EARN'
+         OR t.description = 'POLICE_BONUS_SUBMISSION_EARN'
          OR t.description ILIKE 'Code Board%'
          OR t.description ILIKE 'Insurance %'
          OR t.description ILIKE 'Police bonus%'
@@ -304,7 +314,10 @@ async function buildStudentEarningsActivity(
     const { source, label } = classifyTransaction(row.description);
     const detail =
       row.description === label || row.description === 'CLASS_EVENT_SUGGESTION_EARN' ||
-      row.description === 'FIVE_MINUTE_LESSON_EARN' || row.description === 'ACCOUNTANT_CLIENT_ADVICE_EARN'
+      row.description === 'FIVE_MINUTE_LESSON_EARN' ||
+      row.description === 'ACCOUNTANT_CLIENT_ADVICE_EARN' ||
+      row.description === 'ACCOUNTANT_TRANSFER_APPROVAL_EARN' ||
+      row.description === 'POLICE_BONUS_SUBMISSION_EARN'
         ? undefined
         : row.description;
     moneyItems.push({
@@ -375,6 +388,8 @@ export async function buildStudentEarningsProfile(userId: number): Promise<Stude
          OR t.description = 'CLASS_EVENT_SUGGESTION_EARN'
          OR t.description = 'FIVE_MINUTE_LESSON_EARN'
          OR t.description = 'ACCOUNTANT_CLIENT_ADVICE_EARN'
+         OR t.description = 'ACCOUNTANT_TRANSFER_APPROVAL_EARN'
+         OR t.description = 'POLICE_BONUS_SUBMISSION_EARN'
          OR t.description ILIKE 'Code Board%'
          OR t.description ILIKE 'Insurance %'
          OR t.description ILIKE 'Police bonus%'
