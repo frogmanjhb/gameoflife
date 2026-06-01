@@ -824,6 +824,15 @@ export interface DoctorReputationStatus {
   penalty_label: string | null;
 }
 
+export interface PoliceReputationStatus {
+  current: number;
+  max: number;
+  earnings_multiplier: number;
+  earnings_percent: number;
+  penalty_label: string | null;
+  bonus_label: string | null;
+}
+
 export interface DoctorIllnessDoctorStatus {
   remaining_today: number;
   daily_limit: number;

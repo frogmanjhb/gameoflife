@@ -4,7 +4,7 @@ import { hasDoctorJob } from './attendance';
 
 export const DOCTOR_REPUTATION_START = 20;
 export const DOCTOR_REPUTATION_MAX = 20;
-export const DOCTOR_REPUTATION_ASSIGN_PENALTY = 2;
+export const DOCTOR_REPUTATION_ASSIGN_PENALTY = 3;
 export const DOCTOR_REPUTATION_DAILY_GAIN = 1;
 
 const MS_PER_CIVIC_DAY = 24 * 60 * 60 * 1000;
@@ -20,9 +20,9 @@ export interface DoctorReputationStatus {
 export function getDoctorEarningsMultiplier(reputation: number): number {
   const rep = Math.max(0, Math.floor(reputation));
   if (rep >= 15) return 1;
-  if (rep >= 10) return 0.75;
-  if (rep >= 5) return 0.5;
-  return 0.25;
+  if (rep >= 10) return 0.65;
+  if (rep >= 5) return 0.4;
+  return 0.2;
 }
 
 export function buildDoctorReputationStatus(reputation: number): DoctorReputationStatus {
@@ -30,12 +30,12 @@ export function buildDoctorReputationStatus(reputation: number): DoctorReputatio
   const earnings_multiplier = getDoctorEarningsMultiplier(current);
   const earnings_percent = Math.round(earnings_multiplier * 100);
   let penalty_label: string | null = null;
-  if (earnings_multiplier <= 0.25) {
-    penalty_label = 'Critical reputation — you earn 75% less';
-  } else if (earnings_multiplier <= 0.5) {
-    penalty_label = 'Poor reputation — you earn 50% less';
-  } else if (earnings_multiplier <= 0.75) {
-    penalty_label = 'Low reputation — you earn 25% less';
+  if (current < 5) {
+    penalty_label = 'Critical reputation — you earn 80% less';
+  } else if (current < 10) {
+    penalty_label = 'Poor reputation — you earn 60% less';
+  } else if (current < 15) {
+    penalty_label = 'Low reputation — you earn 35% less';
   }
   return {
     current,

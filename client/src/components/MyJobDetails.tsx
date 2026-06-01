@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import api, { jobsApi, businessProposalsApi, architectGameApi, accountantGameApi, softwareEngineerGameApi, marketingManagerGameApi, graphicDesignerGameApi, journalistGameApi, eventPlannerGameApi, financialManagerGameApi, hrDirectorGameApi, policeLieutenantGameApi, lawyerGameApi, townPlannerGameApi, electricalEngineerGameApi, civilEngineerGameApi, principalGameApi, teacherGameApi, nurseGameApi, doctorGameApi, doctorIllnessApi, cyberAttackApi, retailManagerGameApi, entrepreneurGameApi, insuranceManagerGameApi, transactionsApi, policeFinesBonusesApi, insuranceApi, InsuranceBrokerPendingRequest, InsuranceBrokerPendingClaim, InsuranceBrokerPendingCyberClaim, PoliceFineBonus } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, DoctorReputationStatus, CyberAttackEngineerStatus, RetailManagerGameStatus, EntrepreneurGameStatus, InsuranceManagerGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer, AccountantSalaryDashboardResponse } from '../types';
+import { Job, ArchitectGameStatus, AccountantGameStatus, SoftwareEngineerGameStatus, MarketingManagerGameStatus, GraphicDesignerGameStatus, JournalistGameStatus, EventPlannerGameStatus, FinancialManagerGameStatus, HRDirectorGameStatus, PoliceLieutenantGameStatus, LawyerGameStatus, TownPlannerGameStatus, ElectricalEngineerGameStatus, CivilEngineerGameStatus, PrincipalGameStatus, TeacherGameStatus, NurseGameStatus, DoctorGameStatus, DoctorIllnessDoctorStatus, DoctorReputationStatus, PoliceReputationStatus, CyberAttackEngineerStatus, RetailManagerGameStatus, EntrepreneurGameStatus, InsuranceManagerGameStatus, AccountantAssignmentStudent, AccountantPendingTransfer, AccountantSalaryDashboardResponse } from '../types';
 import { getXPProgress } from '../utils/jobProgression';
 import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../utils/jobDisplay';
 import ArchitectGameModal from './jobchallenges/ArchitectGameModal';
@@ -43,6 +43,53 @@ import LawsuitJobPanels from './LawsuitJobPanels';
 import CodeBoardPanel from './CodeBoardPanel';
 import TownNewsPanel from './TownNewsPanel';
 
+function PoliceReputationBar({ reputation }: { reputation: PoliceReputationStatus }) {
+  const fillPercent =
+    reputation.max > 0 ? Math.min(100, Math.round((reputation.current / reputation.max) * 100)) : 0;
+  const barColor =
+    reputation.current >= 20
+      ? 'bg-blue-700'
+      : reputation.current >= 15
+        ? 'bg-emerald-600'
+        : reputation.current >= 10
+          ? 'bg-amber-500'
+          : reputation.current >= 5
+            ? 'bg-orange-500'
+            : 'bg-red-600';
+
+  return (
+    <div className="mb-4 rounded-lg border border-blue-200 bg-white/90 p-4">
+      <div className="flex items-center justify-between text-sm mb-2">
+        <span className="font-semibold text-gray-900">Police reputation</span>
+        <span className="font-bold text-gray-800">
+          {reputation.current} / {reputation.max}
+        </span>
+      </div>
+      <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+        <div
+          className={`${barColor} h-3 rounded-full transition-all`}
+          style={{ width: `${fillPercent}%` }}
+        />
+      </div>
+      <p className="text-xs text-gray-600">
+        Submitting a fine costs 1 reputation; submitting a bonus adds 2. You recover +1 each civic day
+        (resets 4:00). Below 15: earn 25% less · below 10: 50% less · below 5: 75% less. At 20: +25%
+        on fine and bonus pay from the treasury.
+      </p>
+      {reputation.bonus_label && (
+        <p className="text-xs font-medium text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mt-2">
+          {reputation.bonus_label}
+        </p>
+      )}
+      {reputation.penalty_label && (
+        <p className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+          {reputation.penalty_label} (currently {reputation.earnings_percent}% of normal pay)
+        </p>
+      )}
+    </div>
+  );
+}
+
 function DoctorReputationBar({ reputation }: { reputation: DoctorReputationStatus }) {
   const fillPercent =
     reputation.max > 0 ? Math.min(100, Math.round((reputation.current / reputation.max) * 100)) : 0;
@@ -70,8 +117,8 @@ function DoctorReputationBar({ reputation }: { reputation: DoctorReputationStatu
         />
       </div>
       <p className="text-xs text-gray-600">
-        Making classmates sick costs 2 reputation. You recover +1 each civic day (resets 4:00).
-        Below 15: earn 25% less · below 10: 50% less · below 5: 75% less.
+        Making classmates sick costs 3 reputation. You recover +1 each civic day (resets 4:00).
+        Below 15: earn 35% less · below 10: 60% less · below 5: 80% less.
       </p>
       {reputation.penalty_label && (
         <p className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
@@ -187,6 +234,7 @@ const MyJobDetails: React.FC = () => {
   const [policeSelectedUsername, setPoliceSelectedUsername] = useState('');
   const [policeHistory, setPoliceHistory] = useState<PoliceFineBonus[]>([]);
   const [policeHistoryLoading, setPoliceHistoryLoading] = useState(false);
+  const [policeReputation, setPoliceReputation] = useState<PoliceReputationStatus | null>(null);
   const [policeEvidenceDraft, setPoliceEvidenceDraft] = useState<Record<number, string>>({});
   const [policeEvidenceSubmitting, setPoliceEvidenceSubmitting] = useState<number | null>(null);
   const [lawyerQueue, setLawyerQueue] = useState<PoliceFineBonus[]>([]);
@@ -246,6 +294,15 @@ const MyJobDetails: React.FC = () => {
     }
   };
 
+  const refreshPoliceStatus = async () => {
+    try {
+      const res = await policeFinesBonusesApi.getStatus();
+      setPoliceReputation(res.data.reputation ?? null);
+    } catch {
+      setPoliceReputation(null);
+    }
+  };
+
   useEffect(() => {
     if (!isPoliceJob) return;
     const load = async () => {
@@ -265,6 +322,7 @@ const MyJobDetails: React.FC = () => {
   useEffect(() => {
     if (!isPoliceJob) return;
     refreshPoliceHistory();
+    refreshPoliceStatus();
   }, [isPoliceJob]);
 
   useEffect(() => {
@@ -1168,7 +1226,10 @@ const MyJobDetails: React.FC = () => {
               {isPoliceJob && (
                 <div className="mt-3 border-t border-gray-200 pt-3">
                   <p className="text-xs text-gray-500">
-                    Log fines and bonuses for classmates (with evidence). Each submission earns +5 XP. When a teacher approves a bonus you submitted, you earn R1000 from the town treasury. Requests go to the lawyer (if assigned), then teacher approval in the Bank plugin.
+                    Log fines and bonuses for classmates (with evidence). Each submission earns +5 XP. When a
+                    teacher approves a fine you submitted, you earn R1000 from the town treasury; an approved
+                    bonus pays R3000 (both adjusted by reputation). Requests go to the lawyer (if assigned),
+                    then teacher approval in the Bank plugin.
                   </p>
                 </div>
               )}
@@ -1186,6 +1247,7 @@ const MyJobDetails: React.FC = () => {
           {/* Police – Fines & Bonuses History */}
           {isPoliceJob && (
             <div className="mt-5">
+              {policeReputation && <PoliceReputationBar reputation={policeReputation} />}
               <h4 className="text-md font-semibold text-gray-900 mb-3 flex items-center gap-2">
                 <ClipboardList className="h-4 w-4 text-gray-500" />
                 Fines &amp; Bonuses History
@@ -1462,6 +1524,9 @@ const MyJobDetails: React.FC = () => {
                         setPoliceAmount('');
                         setPoliceDescription('');
                         setPoliceTeacherInitials('');
+                        if (response.data.reputation) {
+                          setPoliceReputation(response.data.reputation);
+                        }
                         await refreshProfile();
                         policeFinesBonusesApi.getMyHistory().then((r) => setPoliceHistory(r.data || [])).catch(() => {});
                       } catch (err: any) {

@@ -1,9 +1,11 @@
 import database from '../database/database-prod';
 import { getXPForLevel } from '../routes/jobs';
+import { resolvePoliceNetEarnings } from './police-reputation';
 
 export const POLICE_FINE_BONUS_SUBMIT_XP = 5;
 export const LAWYER_FINE_REVIEW_XP = 10;
-export const POLICE_BONUS_APPROVAL_EARNINGS = 1000;
+export const POLICE_BONUS_APPROVAL_EARNINGS = 3000;
+export const POLICE_FINE_APPROVAL_EARNINGS = 1000;
 
 type TxClient = {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
@@ -51,14 +53,22 @@ export async function awardLawyerFineReviewXp(
   return awardJobXp(userId, LAWYER_FINE_REVIEW_XP);
 }
 
-export async function payPoliceBonusApprovalReward(
+async function payPoliceApprovalRewardFromTreasury(
   client: TxClient,
   policeUserId: number,
   policeUsername: string,
   townClass: string,
-  schoolId: number | null
+  schoolId: number | null,
+  grossEarnings: number,
+  treasuryDescription: string,
+  transactionDescription: string
 ): Promise<{ earnings: number }> {
-  if (POLICE_BONUS_APPROVAL_EARNINGS <= 0) {
+  if (grossEarnings <= 0) {
+    return { earnings: 0 };
+  }
+
+  const { netAmount: payout, reputation } = await resolvePoliceNetEarnings(policeUserId, grossEarnings);
+  if (payout <= 0) {
     return { earnings: 0 };
   }
 
@@ -83,42 +93,87 @@ export async function payPoliceBonusApprovalReward(
         );
   const townRow = townResult.rows[0];
   const treasuryBalance = parseFloat(String(townRow?.treasury_balance ?? '0'));
-  if (!townRow || treasuryBalance < POLICE_BONUS_APPROVAL_EARNINGS) {
+  if (!townRow || treasuryBalance < payout) {
     throw new Error('TREASURY_INSUFFICIENT');
   }
 
   if (schoolId != null) {
     await client.query(
       'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
-      [POLICE_BONUS_APPROVAL_EARNINGS, townClass, schoolId]
+      [payout, townClass, schoolId]
     );
   } else {
     await client.query(
       'UPDATE town_settings SET treasury_balance = treasury_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
-      [POLICE_BONUS_APPROVAL_EARNINGS, townClass]
+      [payout, townClass]
     );
   }
+
+  const repNote =
+    reputation.current >= 20
+      ? ' (peak reputation +25%)'
+      : reputation.earnings_multiplier < 1
+        ? ` (${reputation.earnings_percent}% reputation pay)`
+        : '';
 
   await client.query(
     'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
     [
       schoolId,
       townClass,
-      POLICE_BONUS_APPROVAL_EARNINGS,
+      payout,
       'withdrawal',
-      `Police bonus submission payout to ${policeUsername}`,
+      `${treasuryDescription}${repNote}`,
       policeUserId,
     ]
   );
   await client.query(
     'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-    [POLICE_BONUS_APPROVAL_EARNINGS, account.id]
+    [payout, account.id]
   );
   await client.query(
     `INSERT INTO transactions (to_account_id, amount, transaction_type, description)
      VALUES ($1, $2, 'deposit', $3)`,
-    [account.id, POLICE_BONUS_APPROVAL_EARNINGS, 'POLICE_BONUS_SUBMISSION_EARN']
+    [account.id, payout, transactionDescription]
   );
 
-  return { earnings: POLICE_BONUS_APPROVAL_EARNINGS };
+  return { earnings: payout };
+}
+
+export async function payPoliceBonusApprovalReward(
+  client: TxClient,
+  policeUserId: number,
+  policeUsername: string,
+  townClass: string,
+  schoolId: number | null
+): Promise<{ earnings: number }> {
+  return payPoliceApprovalRewardFromTreasury(
+    client,
+    policeUserId,
+    policeUsername,
+    townClass,
+    schoolId,
+    POLICE_BONUS_APPROVAL_EARNINGS,
+    `Police bonus submission payout to ${policeUsername}`,
+    'POLICE_BONUS_SUBMISSION_EARN'
+  );
+}
+
+export async function payPoliceFineApprovalReward(
+  client: TxClient,
+  policeUserId: number,
+  policeUsername: string,
+  townClass: string,
+  schoolId: number | null
+): Promise<{ earnings: number }> {
+  return payPoliceApprovalRewardFromTreasury(
+    client,
+    policeUserId,
+    policeUsername,
+    townClass,
+    schoolId,
+    POLICE_FINE_APPROVAL_EARNINGS,
+    `Police fine submission payout to ${policeUsername}`,
+    'POLICE_FINE_SUBMISSION_EARN'
+  );
 }

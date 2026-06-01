@@ -928,8 +928,23 @@ export const policeFinesBonusesApi = {
     description: string;
     amount: number;
     teacher_initials: string;
-  }): Promise<{ data: { message: string; experience_points?: number; new_level?: number | null; submit_xp?: number } }> =>
-    api.post('/police-fines-bonuses', data),
+  }): Promise<{
+    data: {
+      message: string;
+      experience_points?: number;
+      new_level?: number | null;
+      submit_xp?: number;
+      reputation?: import('../types').PoliceReputationStatus;
+    };
+  }> => api.post('/police-fines-bonuses', data),
+
+  getStatus: (): Promise<{
+    data: {
+      reputation: import('../types').PoliceReputationStatus | null;
+      bonus_approval_earnings: number;
+      fine_approval_earnings: number;
+    };
+  }> => api.get('/police-fines-bonuses/status'),
 
   getPending: (): Promise<{ data: PoliceFineBonus[] }> =>
     api.get('/police-fines-bonuses?status=pending_teacher'),
