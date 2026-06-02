@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { ExternalLink, Loader2, Star } from 'lucide-react';
+import { ExternalLink, Loader2, Star, Trash2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlugins } from '../../contexts/PluginContext';
 import { useTown } from '../../contexts/TownContext';
@@ -65,6 +65,25 @@ const CodeBoardPlugin: React.FC = () => {
     }
   };
 
+  const handleRemove = async (appId: number, title: string) => {
+    if (!window.confirm(`Remove "${title}" from the Code Board? This cannot be undone.`)) return;
+    try {
+      setActionAppId(appId);
+      setFeedback(null);
+      setError(null);
+      await codeBoardApi.deleteApp(appId);
+      setFeedback(`"${title}" was removed from the Code Board.`);
+      await fetchApps();
+    } catch (err: unknown) {
+      setError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+          'Failed to remove app'
+      );
+    } finally {
+      setActionAppId(null);
+    }
+  };
+
   const handleOpen = async (appId: number) => {
     try {
       setActionAppId(appId);
@@ -100,6 +119,7 @@ const CodeBoardPlugin: React.FC = () => {
   }
 
   const isStudent = user?.role === 'student';
+  const isTeacher = user?.role === 'teacher';
 
   return (
     <div className="space-y-6">
@@ -199,6 +219,17 @@ const CodeBoardPlugin: React.FC = () => {
                       <ExternalLink className="h-4 w-4" />
                       Open app
                     </a>
+                  )}
+                  {isTeacher && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(app.id, app.title)}
+                      disabled={busy}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-sm font-semibold disabled:opacity-50 ml-auto"
+                    >
+                      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      Remove
+                    </button>
                   )}
                 </div>
               </div>
