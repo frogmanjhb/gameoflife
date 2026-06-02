@@ -3280,9 +3280,9 @@ const MyJobDetails: React.FC = () => {
                   <div>
                     <h3 className="text-md font-semibold text-gray-900">People You Are Responsible For</h3>
                     <p className="text-xs text-gray-600">
-                      Click a student&apos;s name to review their transactions and submit advice (10 XP + R500 per submission).
-                      Pay each assigned student&apos;s weekly salary individually (3 XP + R300 per payment).
-                      Transfers from assigned students and one peer accountant need your approval (1 XP each).
+                      Click a name to review transactions and submit advice (10 XP + R500 per submission).
+                      Pay each person&apos;s weekly salary individually (3 XP + R300 per payment), including assigned accountant peers.
+                      Approve transfers from everyone listed below (1 XP + R500 each).
                     </p>
                   </div>
                 </div>
@@ -3336,25 +3336,20 @@ const MyJobDetails: React.FC = () => {
                                 peer ? 'bg-amber-500' : 'bg-emerald-500'
                               }`}
                             />
-                            {peer ? (
-                              <span>
-                                {formatAssignmentStudentName(student)}
-                                <span className="text-gray-500 text-xs ml-2">(Accountant — transfer approvals only)</span>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/accountant-client/${student.username}`)}
-                                className="text-emerald-700 hover:text-emerald-900 hover:underline font-medium text-left"
-                              >
-                                {formatAssignmentStudentName(student)}
-                                {student.class ? (
-                                  <span className="text-gray-500 text-xs ml-2 font-normal">
-                                    ({student.class})
-                                  </span>
-                                ) : null}
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/accountant-client/${student.username}`)}
+                              className="text-emerald-700 hover:text-emerald-900 hover:underline font-medium text-left"
+                            >
+                              {formatAssignmentStudentName(student)}
+                              {peer ? (
+                                <span className="text-gray-500 text-xs ml-2 font-normal">(Accountant peer)</span>
+                              ) : student.class ? (
+                                <span className="text-gray-500 text-xs ml-2 font-normal">
+                                  ({student.class})
+                                </span>
+                              ) : null}
+                            </button>
                           </li>
                         );
                       })}
@@ -3465,7 +3460,7 @@ const MyJobDetails: React.FC = () => {
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Transfer Approvals</h2>
                   <p className="text-xs text-gray-600">
-                    Review and approve or deny transfers from students and your supervised accountant. Each approval gives you 1 XP and R500.
+                    Review and approve or deny transfers from your assigned students and accountant peers. Each approval gives you 1 XP and R500.
                   </p>
                 </div>
               </div>
@@ -3578,7 +3573,7 @@ const MyJobDetails: React.FC = () => {
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Pay Weekly Salaries</h2>
                   <p className="text-xs text-gray-600">
-                    Pay each assigned student or your supervised accountant separately. Each successful payment earns you 3 XP + R300.
+                    Pay each assigned student or accountant peer separately. Each successful payment earns you 3 XP + R300.
                     {accountantSalaryDashboard
                       ? ` Week: ${accountantSalaryDashboard.week_start} to ${accountantSalaryDashboard.week_end}.`
                       : null}

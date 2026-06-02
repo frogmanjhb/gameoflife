@@ -4,7 +4,7 @@ import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { requireTenant } from '../middleware/tenant';
 import { TransferRequest, DepositRequest, WithdrawRequest, TransactionWithDetails } from '../types';
-import { getAccountantContext } from '../domain/accountant-assignments';
+import { getAccountantContext, getManagedClientUserIds } from '../domain/accountant-assignments';
 import {
   payTransferApprovalReward,
   TRANSFER_APPROVAL_EARNINGS_REWARD,
@@ -512,17 +512,13 @@ router.get('/my-approvals', authenticateToken, requireRole(['student']), async (
       throw err;
     }
 
-    const { responsibleStudentIds, supervisedAccountantId } = context;
-    const fromUserIds: number[] = [...responsibleStudentIds];
-    if (supervisedAccountantId && !fromUserIds.includes(supervisedAccountantId)) {
-      fromUserIds.push(supervisedAccountantId);
-    }
+    const managedClientIds = getManagedClientUserIds(context);
 
-    if (!fromUserIds.length) {
+    if (!managedClientIds.length) {
       return res.json([]);
     }
 
-    const placeholders = fromUserIds.map((_, idx) => `$${idx + 1}`).join(', ');
+    const placeholders = managedClientIds.map((_, idx) => `$${idx + 1}`).join(', ');
     const pending = await database.query(
       `
       SELECT pt.*,
@@ -537,7 +533,7 @@ router.get('/my-approvals', authenticateToken, requireRole(['student']), async (
         AND pt.from_user_id IN (${placeholders})
       ORDER BY pt.created_at DESC
       `,
-      fromUserIds
+      managedClientIds
     );
 
     res.json(pending);
@@ -564,17 +560,13 @@ router.get('/my-approvals/assignments', authenticateToken, requireRole(['student
       throw err;
     }
 
-    const { responsibleStudentIds, supervisedAccountantId } = context;
-    const userIds: number[] = [...responsibleStudentIds];
-    if (supervisedAccountantId && !userIds.includes(supervisedAccountantId)) {
-      userIds.push(supervisedAccountantId);
-    }
+    const managedClientIds = getManagedClientUserIds(context);
 
-    if (!userIds.length) {
+    if (!managedClientIds.length) {
       return res.json([]);
     }
 
-    const placeholders = userIds.map((_, idx) => `$${idx + 1}`).join(', ');
+    const placeholders = managedClientIds.map((_, idx) => `$${idx + 1}`).join(', ');
     const students = await database.query(
       `
       SELECT u.id, u.username, u.first_name, u.last_name, u.class, j.name AS job_name
@@ -583,7 +575,7 @@ router.get('/my-approvals/assignments', authenticateToken, requireRole(['student
       WHERE u.id IN (${placeholders})
       ORDER BY u.class NULLS LAST, u.last_name NULLS LAST, u.first_name NULLS LAST, u.username
       `,
-      userIds
+      managedClientIds
     );
 
     res.json(students);
@@ -615,11 +607,9 @@ router.post('/my-approvals/:id/approve', authenticateToken, requireRole(['studen
       throw err;
     }
 
-    const { accountant, responsibleStudentIds } = context;
-    const { supervisedAccountantId } = context;
-    const hasAnyResponsibility =
-      responsibleStudentIds.length > 0 || supervisedAccountantId !== null;
-    if (!hasAnyResponsibility) {
+    const { accountant } = context;
+    const managedClientIds = getManagedClientUserIds(context);
+    if (!managedClientIds.length) {
       return res.status(403).json({ error: 'No assigned students or accountants to approve transfers for' });
     }
 
@@ -653,7 +643,7 @@ router.post('/my-approvals/:id/approve', authenticateToken, requireRole(['studen
         return res.status(400).json({ error: `Transfer request is already ${pending.status}` });
       }
 
-      if (!responsibleStudentIds.includes(pending.from_user_id) && pending.from_user_id !== supervisedAccountantId) {
+      if (!managedClientIds.includes(pending.from_user_id)) {
         await client.query('ROLLBACK');
         return res.status(403).json({ error: 'You are not responsible for this transfer' });
       }
@@ -788,11 +778,9 @@ router.post('/my-approvals/:id/deny', [
       throw err;
     }
 
-    const { accountant, responsibleStudentIds } = context;
-    const { supervisedAccountantId } = context;
-    const hasAnyResponsibility =
-      responsibleStudentIds.length > 0 || supervisedAccountantId !== null;
-    if (!hasAnyResponsibility) {
+    const { accountant } = context;
+    const managedClientIds = getManagedClientUserIds(context);
+    if (!managedClientIds.length) {
       return res.status(403).json({ error: 'No assigned students or accountants to review transfers for' });
     }
 
@@ -826,7 +814,7 @@ router.post('/my-approvals/:id/deny', [
         return res.status(400).json({ error: `Transfer request is already ${pending.status}` });
       }
 
-      if (!responsibleStudentIds.includes(pending.from_user_id) && pending.from_user_id !== supervisedAccountantId) {
+      if (!managedClientIds.includes(pending.from_user_id)) {
         await client.query('ROLLBACK');
         return res.status(403).json({ error: 'You are not responsible for this transfer' });
       }
@@ -1394,7 +1382,7 @@ router.get(
           return res.status(404).json({ error: 'Student not found' });
         }
         if (code === 'CLIENT_IS_ACCOUNTANT') {
-          return res.status(400).json({ error: 'Peer accountants are not financial advice clients' });
+          return res.status(400).json({ error: 'This accountant is not assigned to you' });
         }
         if (code === 'NOT_YOUR_CLIENT') {
           return res.status(403).json({ error: 'This student is not assigned to you' });
@@ -1511,7 +1499,7 @@ router.post(
           return res.status(404).json({ error: 'Student not found' });
         }
         if (code === 'CLIENT_IS_ACCOUNTANT') {
-          return res.status(400).json({ error: 'Peer accountants are not financial advice clients' });
+          return res.status(400).json({ error: 'This accountant is not assigned to you' });
         }
         if (code === 'NOT_YOUR_CLIENT') {
           return res.status(403).json({ error: 'This student is not assigned to you' });
@@ -1642,9 +1630,7 @@ router.post(
           case 'NOT_YOUR_CLIENT':
             return res.status(403).json({ error: 'This student is not assigned to you' });
           case 'CLIENT_IS_ACCOUNTANT':
-            return res.status(400).json({
-              error: 'You can only pay salary to your supervised accountant, not other accountants',
-            });
+            return res.status(403).json({ error: 'This accountant is not assigned to you' });
           case 'ALREADY_PAID_THIS_WEEK':
             return res.status(400).json({ error: 'This student has already been paid this week (Mon–Sun)' });
           case 'NO_JOB':

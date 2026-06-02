@@ -1,6 +1,6 @@
 import database from '../database/database-prod';
 import { getXPForLevel } from '../routes/jobs';
-import { getAccountantContext, hasAccountantJob } from './accountant-assignments';
+import { getAccountantContext, isManagedClient } from './accountant-assignments';
 
 export const ADVICE_XP_REWARD = 10;
 export const ADVICE_EARNINGS_REWARD = 500;
@@ -48,11 +48,7 @@ export async function resolveAccountantClient(
     throw new Error('CLIENT_NOT_FOUND');
   }
 
-  if (hasAccountantJob(client.job_name)) {
-    throw new Error('CLIENT_IS_ACCOUNTANT');
-  }
-
-  if (!context.responsibleStudentIds.includes(client.id)) {
+  if (!isManagedClient(context, client.id)) {
     throw new Error('NOT_YOUR_CLIENT');
   }
 

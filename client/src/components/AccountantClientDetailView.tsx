@@ -129,6 +129,7 @@ const AccountantClientDetailView: React.FC = () => {
 
   const { student, transactions, loans, prior_advice, advice_xp_reward, advice_earnings_reward } = data;
   const clientUsername = student.username;
+  const isAccountantPeer = (student.job_name || '').toLowerCase().includes('accountant');
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -147,7 +148,10 @@ const AccountantClientDetailView: React.FC = () => {
             @{student.username}
             {student.class ? ` · ${student.class}` : ''}
           </p>
-          <p className="text-xs text-emerald-700 mt-1">Read-only client view · Chartered Accountant</p>
+          <p className="text-xs text-emerald-700 mt-1">
+            Read-only client view · Chartered Accountant
+            {isAccountantPeer ? ' · Accountant peer' : ''}
+          </p>
         </div>
         <div className="max-w-4xl mx-auto px-4 flex gap-1 border-t border-gray-100">
           {(['overview', 'transactions', 'advice'] as const).map((tab) => (

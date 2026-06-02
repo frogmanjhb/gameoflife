@@ -8,6 +8,7 @@ import {
   classUsesManualAccountantAssignments,
   getAccountantContext,
   getClassAccountantRoster,
+  getManagedClientUserIds,
   getManualClientRows,
   hasAccountantJob,
   seedManualAssignmentsFromAutoSplit,
@@ -744,10 +745,7 @@ router.get(
         clients = await getManualClientRows(student.id, className, schoolId);
       } else {
         const context = await getAccountantContext(student.id);
-        const userIds = [...context.responsibleStudentIds];
-        if (context.supervisedAccountantId && !userIds.includes(context.supervisedAccountantId)) {
-          userIds.push(context.supervisedAccountantId);
-        }
+        const userIds = getManagedClientUserIds(context);
         if (!userIds.length) {
           clients = [];
         } else {

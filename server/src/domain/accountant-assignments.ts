@@ -10,6 +10,22 @@ export interface AccountantContext {
   supervisedAccountantId: number | null;
 }
 
+/** Students and accountant peers this accountant may manage (advice, salary, transfer approvals). */
+export function getManagedClientUserIds(context: AccountantContext): number[] {
+  const ids = [...context.responsibleStudentIds];
+  if (
+    context.supervisedAccountantId != null &&
+    !ids.includes(context.supervisedAccountantId)
+  ) {
+    ids.push(context.supervisedAccountantId);
+  }
+  return ids;
+}
+
+export function isManagedClient(context: AccountantContext, clientUserId: number): boolean {
+  return getManagedClientUserIds(context).includes(clientUserId);
+}
+
 async function tableExists(): Promise<boolean> {
   try {
     await database.query('SELECT 1 FROM accountant_student_assignments LIMIT 1');

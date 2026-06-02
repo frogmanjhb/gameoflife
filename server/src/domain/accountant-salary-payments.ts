@@ -6,7 +6,11 @@ import {
   hasDoctorJob,
 } from './attendance';
 import { applyDoctorEarningsMultiplier, syncDoctorReputation } from './doctor-reputation';
-import { getAccountantContext, hasAccountantJob } from './accountant-assignments';
+import {
+  getAccountantContext,
+  getManagedClientUserIds,
+  isManagedClient,
+} from './accountant-assignments';
 
 export const SALARY_PAYMENT_XP_REWARD = 3;
 export const SALARY_PAYMENT_EARNINGS_REWARD = 300;
@@ -167,13 +171,7 @@ export async function getAccountantSalaryDashboard(accountantUserId: number): Pr
     ])
   );
 
-  const clientIds = [...context.responsibleStudentIds];
-  if (
-    context.supervisedAccountantId != null &&
-    !clientIds.includes(context.supervisedAccountantId)
-  ) {
-    clientIds.push(context.supervisedAccountantId);
-  }
+  const clientIds = getManagedClientUserIds(context);
 
   const clients: AccountantSalaryClientStatus[] = [];
   for (const studentId of clientIds) {
@@ -381,16 +379,8 @@ export async function resolveAccountantSalaryClient(
     throw new Error('CLIENT_NOT_FOUND');
   }
 
-  const isAssignedStudent = context.responsibleStudentIds.includes(client.id);
-  const isSupervisedAccountant =
-    hasAccountantJob(client.job_name) && client.id === context.supervisedAccountantId;
-
-  if (!isAssignedStudent && !isSupervisedAccountant) {
+  if (!isManagedClient(context, client.id)) {
     throw new Error('NOT_YOUR_CLIENT');
-  }
-
-  if (hasAccountantJob(client.job_name) && !isSupervisedAccountant) {
-    throw new Error('CLIENT_IS_ACCOUNTANT');
   }
 
   const accountantSchool = context.accountant.school_id ?? null;
