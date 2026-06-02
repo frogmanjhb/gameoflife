@@ -17,8 +17,18 @@ import {
 } from '../domain/townNewsWidgets';
 import { resolveViewerTownClass, viewerTownClassError } from '../domain/townScope';
 import { ContentSubmissionStatus } from '../domain/contentApproval';
+import { POPUP_AD_COST } from '../domain/townNewsPopup';
 
 const router = Router();
+
+async function popupsTableReady(): Promise<boolean> {
+  try {
+    await database.query('SELECT 1 FROM town_news_popups LIMIT 1');
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function tablesReady(): Promise<boolean> {
   try {
@@ -260,6 +270,253 @@ router.delete('/stories/:id', authenticateToken, async (req: AuthenticatedReques
     res.json({ success: true });
   } catch (error) {
     console.error('Town news delete error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+function mapPopupRow(row: {
+  id: number;
+  headline: string;
+  body: string;
+  image_data?: string | null;
+  created_at: string;
+  status?: ContentSubmissionStatus;
+  denial_reason?: string | null;
+  payment_charged?: boolean;
+}) {
+  return {
+    id: row.id,
+    headline: row.headline,
+    body: row.body,
+    image_data: row.image_data ?? null,
+    created_at: row.created_at,
+    status: row.status ?? 'approved',
+    denial_reason: row.denial_reason ?? null,
+    payment_charged: row.payment_charged ?? false,
+  };
+}
+
+// GET /popups/manage — contributor view of login pop-up ads
+router.get('/popups/manage', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const contributor = await requireTownNewsContributor(req, res);
+    if (!contributor) return;
+    if (!(await popupsTableReady())) {
+      return res.status(503).json({ error: 'Login pop-up ads are not available yet. Please try again later.' });
+    }
+
+    const schoolId = contributor.school_id ?? null;
+    const rows = schoolId != null
+      ? await database.query(
+          `SELECT id, headline, body, image_data, status, denial_reason, payment_charged, created_at
+           FROM town_news_popups
+           WHERE school_id = $1 AND town_class = $2 AND creator_user_id = $3
+           ORDER BY created_at DESC`,
+          [schoolId, contributor.class, contributor.id]
+        )
+      : await database.query(
+          `SELECT id, headline, body, image_data, status, denial_reason, payment_charged, created_at
+           FROM town_news_popups
+           WHERE school_id IS NULL AND town_class = $1 AND creator_user_id = $2
+           ORDER BY created_at DESC`,
+          [contributor.class, contributor.id]
+        );
+
+    res.json({
+      popups: rows.map((row: Parameters<typeof mapPopupRow>[0]) => mapPopupRow(row)),
+      popup_ad_cost: POPUP_AD_COST,
+    });
+  } catch (error) {
+    console.error('Town news popups manage error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /popups/active — undismissed approved pop-up for the logged-in student
+router.get('/popups/active', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'student') {
+      return res.json({ popup: null });
+    }
+    if (!(await popupsTableReady())) {
+      return res.json({ popup: null });
+    }
+    if (!isTownClass(req.user.class)) {
+      return res.json({ popup: null });
+    }
+
+    const schoolId = req.user.school_id ?? null;
+    const townClass = req.user.class;
+    const userId = req.user.id;
+
+    const row = schoolId != null
+      ? await database.get(
+          `SELECT p.id, p.headline, p.body, p.image_data, p.created_at
+           FROM town_news_popups p
+           WHERE p.school_id = $1 AND p.town_class = $2 AND p.status = 'approved'
+             AND NOT EXISTS (
+               SELECT 1 FROM town_news_popup_dismissals d
+               WHERE d.popup_id = p.id AND d.user_id = $3
+             )
+           ORDER BY p.reviewed_at DESC NULLS LAST, p.created_at DESC
+           LIMIT 1`,
+          [schoolId, townClass, userId]
+        )
+      : await database.get(
+          `SELECT p.id, p.headline, p.body, p.image_data, p.created_at
+           FROM town_news_popups p
+           WHERE p.school_id IS NULL AND p.town_class = $1 AND p.status = 'approved'
+             AND NOT EXISTS (
+               SELECT 1 FROM town_news_popup_dismissals d
+               WHERE d.popup_id = p.id AND d.user_id = $2
+             )
+           ORDER BY p.reviewed_at DESC NULLS LAST, p.created_at DESC
+           LIMIT 1`,
+          [townClass, userId]
+        );
+
+    res.json({ popup: row ? mapPopupRow(row) : null });
+  } catch (error) {
+    console.error('Town news active popup error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /popups — submit login pop-up ad (pending teacher approval)
+router.post('/popups', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const contributor = await requireTownNewsContributor(req, res);
+    if (!contributor) return;
+    if (!(await popupsTableReady())) {
+      return res.status(503).json({ error: 'Login pop-up ads are not available yet. Please try again later.' });
+    }
+
+    const headline = sanitizeHeadline(req.body?.headline);
+    const body = sanitizeBody(req.body?.body);
+    const imageRaw = req.body?.image_data;
+    let image_data: string | null = null;
+
+    if (imageRaw != null && imageRaw !== '') {
+      image_data = sanitizeOptionalImage(imageRaw);
+      if (!image_data) {
+        return res.status(400).json({ error: 'Please upload a valid image (JPEG, PNG, WebP, or GIF under 2 MB)' });
+      }
+    }
+
+    if (!headline) {
+      return res.status(400).json({ error: 'Please provide a headline' });
+    }
+    if (!body) {
+      return res.status(400).json({ error: 'Please write your advertisement message' });
+    }
+
+    const schoolId = contributor.school_id ?? null;
+    const townClass = contributor.class;
+
+    const rows = await database.query(
+      `INSERT INTO town_news_popups (school_id, town_class, creator_user_id, headline, body, image_data, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+       RETURNING id, headline, body, image_data, status, denial_reason, payment_charged, created_at`,
+      [schoolId, townClass, contributor.id, headline, body, image_data]
+    );
+
+    res.status(201).json({
+      popup: mapPopupRow(rows[0]),
+      message: `Pop-up submitted for teacher approval. R${POPUP_AD_COST.toLocaleString()} will be charged from your account once approved.`,
+    });
+  } catch (error) {
+    console.error('Town news popup submit error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /popups/:id/dismiss — student closes a pop-up
+router.post('/popups/:id/dismiss', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'student') {
+      return res.status(403).json({ error: 'Only students can dismiss pop-ups' });
+    }
+    if (!(await popupsTableReady())) {
+      return res.status(503).json({ error: 'Login pop-up ads are not available yet. Please try again later.' });
+    }
+
+    const popupId = parseInt(String(req.params.id), 10);
+    if (Number.isNaN(popupId)) {
+      return res.status(400).json({ error: 'Invalid pop-up id' });
+    }
+
+    const schoolId = req.user.school_id ?? null;
+    const townClass = req.user.class;
+    if (!isTownClass(townClass)) {
+      return res.status(400).json({ error: 'Your account must be assigned to a town class (6A, 6B, or 6C)' });
+    }
+
+    const popup = schoolId != null
+      ? await database.get(
+          `SELECT id FROM town_news_popups
+           WHERE id = $1 AND school_id = $2 AND town_class = $3 AND status = 'approved'`,
+          [popupId, schoolId, townClass]
+        )
+      : await database.get(
+          `SELECT id FROM town_news_popups
+           WHERE id = $1 AND school_id IS NULL AND town_class = $2 AND status = 'approved'`,
+          [popupId, townClass]
+        );
+    if (!popup) {
+      return res.status(404).json({ error: 'Pop-up not found' });
+    }
+
+    await database.run(
+      `INSERT INTO town_news_popup_dismissals (popup_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (popup_id, user_id) DO NOTHING`,
+      [popupId, req.user.id]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Town news popup dismiss error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /popups/:id — contributor removes own pending or denied pop-up
+router.delete('/popups/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const contributor = await requireTownNewsContributor(req, res);
+    if (!contributor) return;
+    if (!(await popupsTableReady())) {
+      return res.status(503).json({ error: 'Login pop-up ads are not available yet. Please try again later.' });
+    }
+
+    const popupId = parseInt(String(req.params.id), 10);
+    if (Number.isNaN(popupId)) {
+      return res.status(400).json({ error: 'Invalid pop-up id' });
+    }
+
+    const schoolId = contributor.school_id ?? null;
+    const existing = schoolId != null
+      ? await database.get(
+          `SELECT id, status FROM town_news_popups
+           WHERE id = $1 AND school_id = $2 AND town_class = $3 AND creator_user_id = $4`,
+          [popupId, schoolId, contributor.class, contributor.id]
+        )
+      : await database.get(
+          `SELECT id, status FROM town_news_popups
+           WHERE id = $1 AND school_id IS NULL AND town_class = $2 AND creator_user_id = $3`,
+          [popupId, contributor.class, contributor.id]
+        );
+    if (!existing) {
+      return res.status(404).json({ error: 'Pop-up not found or you cannot delete it' });
+    }
+    if (existing.status === 'approved') {
+      return res.status(400).json({ error: 'Approved pop-ups cannot be removed' });
+    }
+
+    await database.run('DELETE FROM town_news_popups WHERE id = $1', [popupId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Town news popup delete error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

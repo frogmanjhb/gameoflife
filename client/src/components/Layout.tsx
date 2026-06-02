@@ -6,6 +6,7 @@ import ProfileBadge from './ProfileBadge';
 import StudentIllnessOverlay from './StudentIllnessOverlay';
 import StudentCyberAttackOverlay from './StudentCyberAttackOverlay';
 import SickNoteModal from './SickNoteModal';
+import StudentLoginPopupModal from './StudentLoginPopupModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -188,6 +189,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         {user?.role === 'student' && !user?.account_frozen && <StudentIllnessOverlay />}
         {user?.role === 'student' && !user?.account_frozen && <StudentCyberAttackOverlay />}
+        {user?.role === 'student' && !user?.account_frozen && <StudentLoginPopupModal />}
         {user?.role === 'student' && !user?.account_frozen && <SickNoteModal />}
 
         {/* Frozen account overlay - blocks entire system for students with frozen accounts */}

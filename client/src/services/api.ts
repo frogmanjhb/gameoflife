@@ -24,7 +24,7 @@ import {
   DoctorIllnessMyStatus, DoctorIllnessDoctorStatus,
   AttendanceRegisterStatus, AttendanceMySickNote, SickNoteQueueStatus,
   CodeBoardManageStatus, CodeBoardPublicView, CodeBoardAppItem,
-  TownNewsManageStatus, TownNewsPublicView, TownNewsStory,
+  TownNewsManageStatus, TownNewsPublicView, TownNewsStory, TownNewsPopup, TownNewsPopupManageStatus, TownNewsActivePopup,
   ContentSubmissionsPending,
   ClassEventVotingStatus, ClassEventTiming, ClassEventItem,
   FiveMinuteLessonsStatus, FiveMinuteLessonItem,
@@ -1184,6 +1184,24 @@ export const townNewsApi = {
   }> => api.post('/town-news/stories', data),
   deleteStory: (id: number): Promise<{ data: { success: boolean } }> =>
     api.delete(`/town-news/stories/${id}`),
+  getPopupsManage: (): Promise<{ data: TownNewsPopupManageStatus }> =>
+    api.get('/town-news/popups/manage'),
+  getActivePopup: (): Promise<{ data: TownNewsActivePopup }> =>
+    api.get('/town-news/popups/active'),
+  submitPopup: (data: {
+    headline: string;
+    body: string;
+    image_data?: string;
+  }): Promise<{
+    data: {
+      popup: TownNewsPopup;
+      message: string;
+    };
+  }> => api.post('/town-news/popups', data),
+  dismissPopup: (id: number): Promise<{ data: { success: boolean } }> =>
+    api.post(`/town-news/popups/${id}/dismiss`),
+  deletePopup: (id: number): Promise<{ data: { success: boolean } }> =>
+    api.delete(`/town-news/popups/${id}`),
 };
 
 export const contentSubmissionsApi = {
@@ -1193,6 +1211,11 @@ export const contentSubmissionsApi = {
     data: { status: 'approved' | 'denied'; denial_reason?: string }
   ): Promise<{ data: { success: boolean; status: string } }> =>
     api.post(`/content-submissions/news/${id}/review`, data),
+  reviewNewsPopup: (
+    id: number,
+    data: { status: 'approved' | 'denied'; denial_reason?: string }
+  ): Promise<{ data: { success: boolean; status: string } }> =>
+    api.post(`/content-submissions/popups/${id}/review`, data),
   reviewCodeApp: (
     id: number,
     data: { status: 'approved' | 'denied'; denial_reason?: string }

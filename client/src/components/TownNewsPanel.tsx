@@ -4,6 +4,7 @@ import { ImagePlus, Loader2, Send, Trash2 } from 'lucide-react';
 import { townNewsApi } from '../services/api';
 import { TownNewsManageStatus, TownNewsStory, ContentSubmissionStatus, TownNewsWidgets } from '../types';
 import TownNewsStoryCard from './TownNewsStoryCard';
+import TownNewsPopupPanel from './TownNewsPopupPanel';
 import {
   EMPTY_TOWN_NEWS_WIDGETS,
   TOWN_NEWS_ACCENT_OPTIONS,
@@ -484,6 +485,7 @@ const TownNewsPanel: React.FC = () => {
           </div>
         )}
       </div>
+      <TownNewsPopupPanel />
     </div>
   );
 };

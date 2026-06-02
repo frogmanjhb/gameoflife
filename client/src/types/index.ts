@@ -1074,6 +1074,38 @@ export interface TownNewsPublicView {
   stories: TownNewsStory[];
 }
 
+export interface TownNewsPopup {
+  id: number;
+  headline: string;
+  body: string;
+  image_data?: string | null;
+  created_at: string;
+  status?: ContentSubmissionStatus;
+  denial_reason?: string | null;
+  payment_charged?: boolean;
+}
+
+export interface TownNewsPopupManageStatus {
+  popups: TownNewsPopup[];
+  popup_ad_cost: number;
+}
+
+export interface TownNewsActivePopup {
+  popup: TownNewsPopup | null;
+}
+
+export interface PendingNewsPopupSubmission {
+  id: number;
+  headline: string;
+  body: string;
+  image_data?: string | null;
+  town_class: string;
+  status: ContentSubmissionStatus;
+  created_at: string;
+  submitter_name: string;
+  submitter_username: string;
+}
+
 export interface PendingNewsStorySubmission {
   id: number;
   headline: string;
@@ -1100,10 +1132,12 @@ export interface PendingCodeAppSubmission {
 
 export interface ContentSubmissionsPending {
   news_stories: PendingNewsStorySubmission[];
+  news_popups: PendingNewsPopupSubmission[];
   code_apps: PendingCodeAppSubmission[];
   pending_count: number;
   story_xp_reward: number;
   story_earnings_reward: number;
+  popup_ad_cost: number;
 }
 
 export type ClassEventTiming = 'before_class' | 'after_class' | 'during_class';
