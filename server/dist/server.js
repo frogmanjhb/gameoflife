@@ -63,6 +63,7 @@ const wordle_leaderboard_1 = __importDefault(require("./routes/wordle-leaderboar
 const suggestions_bugs_1 = __importDefault(require("./routes/suggestions-bugs"));
 const disasters_1 = __importDefault(require("./routes/disasters"));
 const police_fines_bonuses_1 = __importDefault(require("./routes/police-fines-bonuses"));
+const lawsuits_1 = __importDefault(require("./routes/lawsuits"));
 const admin_1 = __importDefault(require("./routes/admin"));
 const super_admin_1 = __importDefault(require("./routes/super-admin"));
 const teacher_analytics_1 = __importDefault(require("./routes/teacher-analytics"));
@@ -218,6 +219,7 @@ app.use('/api/wordle-leaderboard', wordle_leaderboard_1.default);
 app.use('/api/suggestions-bugs', suggestions_bugs_1.default);
 app.use('/api/disasters', disasters_1.default);
 app.use('/api/police-fines-bonuses', police_fines_bonuses_1.default);
+app.use('/api/lawsuits', lawsuits_1.default);
 app.use('/api/teacher-analytics', teacher_analytics_1.default);
 app.use('/api/admin', admin_1.default);
 app.use('/api/admin', super_admin_1.default);
@@ -1156,6 +1158,17 @@ async function initializeDatabase() {
         }
         catch (migrationError) {
             console.log('⚠️ Town news board migration may have already been applied:', migrationError);
+        }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '096_add_town_news_widgets.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Town news widgets migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Town news widgets migration may have already been applied:', migrationError);
         }
         try {
             const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '092_add_content_submission_approval.sql');

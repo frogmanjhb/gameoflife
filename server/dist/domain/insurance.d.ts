@@ -33,7 +33,10 @@ export declare function hasActiveApprovedCyberInsurance(userId: number): Promise
 type Queryable = {
     query: (text: string, params?: unknown[]) => Promise<unknown>;
 };
-export declare function payHealthInsuranceClinicClaim(executor: Queryable, assignmentId: number, doctorAccountId: number, cureFee: number, illnessType: string): Promise<void>;
+export declare function payHealthInsuranceClinicClaim(executor: Queryable, assignmentId: number, doctorUserId: number, doctorAccountId: number, cureFee: number, illnessType: string, opts?: {
+    townClass?: string | null;
+    schoolId?: number | null;
+}): Promise<void>;
 export declare function payCyberInsuranceRepairClaim(executor: Queryable, assignmentId: number, engineerAccountId: number, repairFee: number, attackType: string): Promise<void>;
 export declare function awardInsuranceBroker(executor: Queryable, brokerUserId: number, brokerUsername: string, schoolId: number | null, townClass: string | null, earningsLabel: string): Promise<{
     earnings: number;

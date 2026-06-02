@@ -10,6 +10,7 @@ const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
 const lawyer_assignments_1 = require("../domain/lawyer-assignments");
 const police_fines_1 = require("../domain/police-fines");
+const police_reputation_1 = require("../domain/police-reputation");
 const router = (0, express_1.Router)();
 const LIST_SELECT = `
   r.*,
@@ -122,6 +123,7 @@ router.post('/', auth_1.authenticateToken, tenant_1.requireTenant, async (req, r
             townClass,
         ]);
         const xpResult = await (0, police_fines_1.awardPoliceSubmitXp)(user.id);
+        const reputation = await (0, police_reputation_1.adjustPoliceReputationOnSubmit)(user.id, type);
         const msg = initialStatus === 'pending_lawyer'
             ? `${type === 'fine' ? 'Fine' : 'Bonus'} submitted for lawyer review, then teacher approval`
             : `${type === 'fine' ? 'Fine' : 'Bonus'} submitted for teacher approval (no lawyer assigned to this student)`;
@@ -130,11 +132,33 @@ router.post('/', auth_1.authenticateToken, tenant_1.requireTenant, async (req, r
             experience_points: xpResult.experience_points,
             new_level: xpResult.new_level,
             submit_xp: police_fines_1.POLICE_FINE_BONUS_SUBMIT_XP,
+            reputation,
         });
     }
     catch (err) {
         console.error('police-fines-bonuses POST error:', err);
         return res.status(500).json({ error: 'Failed to submit request' });
+    }
+});
+router.get('/status', auth_1.authenticateToken, tenant_1.requireTenant, async (req, res) => {
+    try {
+        const user = req.user;
+        if (!user)
+            return res.status(401).json({ error: 'Unauthorised' });
+        const studentRow = await getPoliceStudent(user.id);
+        if (!studentRow || !(0, police_fines_1.hasPoliceLieutenantJob)(studentRow.job_name)) {
+            return res.status(403).json({ error: 'Only the Police Lieutenant may view this status' });
+        }
+        const reputation = await (0, police_reputation_1.getPoliceReputationIfPolice)(user.id, studentRow.job_name);
+        return res.json({
+            reputation,
+            bonus_approval_earnings: police_fines_1.POLICE_BONUS_APPROVAL_EARNINGS,
+            fine_approval_earnings: police_fines_1.POLICE_FINE_APPROVAL_EARNINGS,
+        });
+    }
+    catch (err) {
+        console.error('police-fines-bonuses status error:', err);
+        return res.status(500).json({ error: 'Failed to fetch police status' });
     }
 });
 router.get('/my-history', auth_1.authenticateToken, tenant_1.requireTenant, async (req, res) => {
@@ -417,8 +441,42 @@ router.post('/:id/approve', auth_1.authenticateToken, tenant_1.requireTenant, (0
         await client.query(`UPDATE police_fine_bonus_requests
          SET status = 'approved', reviewed_by_id = $1, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
          WHERE id = $2`, [user.id, requestId]);
+        let policeEarnings = 0;
+        if (pfr.type === 'bonus' || pfr.type === 'fine') {
+            const policeUser = await client.query('SELECT id, username, class FROM users WHERE id = $1', [pfr.submitted_by_id]);
+            const police = policeUser.rows[0];
+            const townClass = pfr.class || police?.class;
+            if (!townClass) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({
+                    error: `Town class is not set for this ${pfr.type === 'fine' ? 'fine' : 'bonus'} request`,
+                });
+            }
+            const grossRequired = pfr.type === 'bonus' ? police_fines_1.POLICE_BONUS_APPROVAL_EARNINGS : police_fines_1.POLICE_FINE_APPROVAL_EARNINGS;
+            try {
+                const reward = pfr.type === 'bonus'
+                    ? await (0, police_fines_1.payPoliceBonusApprovalReward)(client, pfr.submitted_by_id, police?.username || 'police', townClass, pfr.school_id ?? null)
+                    : await (0, police_fines_1.payPoliceFineApprovalReward)(client, pfr.submitted_by_id, police?.username || 'police', townClass, pfr.school_id ?? null);
+                policeEarnings = reward.earnings;
+            }
+            catch (rewardErr) {
+                if (rewardErr instanceof Error && rewardErr.message === 'TREASURY_INSUFFICIENT') {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({
+                        error: `${pfr.type === 'fine' ? 'Fine' : 'Bonus'} cannot be approved: town treasury needs enough funds to pay the Police Lieutenant (up to R${grossRequired}, before reputation).`,
+                    });
+                }
+                throw rewardErr;
+            }
+        }
         await client.query('COMMIT');
-        return res.json({ message: `${pfr.type === 'fine' ? 'Fine' : 'Bonus'} approved and applied` });
+        const baseMessage = `${pfr.type === 'fine' ? 'Fine' : 'Bonus'} approved and applied`;
+        return res.json({
+            message: policeEarnings > 0
+                ? `${baseMessage}. Police Lieutenant earned R${policeEarnings.toFixed(2)}.`
+                : baseMessage,
+            police_earnings: policeEarnings > 0 ? policeEarnings : undefined,
+        });
     }
     catch (err) {
         await client.query('ROLLBACK');

@@ -10,7 +10,7 @@ export type StudentTransferLimitStatus = {
 };
 
 export async function countStudentTransferRequestsToday(fromUserId: number): Promise<number> {
-  const row = await database.get<{ count: number }>(
+  const row = await database.get(
     `SELECT COUNT(*)::int AS count
      FROM pending_transfers
      WHERE from_user_id = $1

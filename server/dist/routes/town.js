@@ -8,6 +8,7 @@ const express_validator_1 = require("express-validator");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const attendance_1 = require("../domain/attendance");
+const doctor_reputation_1 = require("../domain/doctor-reputation");
 const router = (0, express_1.Router)();
 // Helper function to calculate progressive tax rate based on salary
 async function calculateProgressiveTax(salary) {
@@ -470,6 +471,15 @@ router.post('/pay-salaries/:class', auth_1.authenticateToken, (0, auth_1.require
             if (absentWithoutSickNote) {
                 salary = salary * attendance_1.ABSENT_NO_SICK_NOTE_PAY_FACTOR;
             }
+            let doctorReputationReduced = false;
+            if ((0, attendance_1.hasDoctorJob)(student.job_name)) {
+                const doctorRep = await (0, doctor_reputation_1.syncDoctorReputation)(student.id);
+                const reputationSalary = (0, doctor_reputation_1.applyDoctorEarningsMultiplier)(salary, doctorRep.current);
+                if (reputationSalary < salary) {
+                    doctorReputationReduced = true;
+                    salary = reputationSalary;
+                }
+            }
             // Calculate tax if enabled
             let taxInfo = { taxRate: 0, taxAmount: 0, netAmount: salary };
             if (town.tax_enabled) {
@@ -483,6 +493,7 @@ router.post('/pay-salaries/:class', auth_1.authenticateToken, (0, auth_1.require
                 gross_salary: salary,
                 original_gross_salary: parseFloat(student.salary) || 0,
                 absent_without_sick_note: absentWithoutSickNote,
+                doctor_reputation_reduced: doctorReputationReduced,
                 tax_rate: taxInfo.taxRate,
                 tax_amount: taxInfo.taxAmount,
                 net_salary: taxInfo.netAmount
@@ -506,15 +517,19 @@ router.post('/pay-salaries/:class', auth_1.authenticateToken, (0, auth_1.require
                     // Pay net salary to student
                     await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [payment.net_salary, payment.account_id]);
                     // Record salary transaction
-                    await client.query('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [payment.account_id, payment.net_salary, 'salary',
-                        town.tax_enabled
-                            ? payment.absent_without_sick_note
-                                ? `Salary for ${payment.job_name} (reduced — absent without sick note: R${payment.gross_salary} - ${payment.tax_rate}% tax = R${payment.net_salary})`
-                                : `Salary for ${payment.job_name} (R${payment.gross_salary} - ${payment.tax_rate}% tax = R${payment.net_salary})`
-                            : payment.absent_without_sick_note
-                                ? `Salary for ${payment.job_name} (reduced — absent without sick note)`
-                                : `Salary for ${payment.job_name}`
-                    ]);
+                    const salaryDescription = (() => {
+                        const reductions = [];
+                        if (payment.absent_without_sick_note)
+                            reductions.push('absent without sick note');
+                        if (payment.doctor_reputation_reduced)
+                            reductions.push('low doctor reputation');
+                        const reducedSuffix = reductions.length > 0 ? ` (reduced — ${reductions.join('; ')})` : '';
+                        if (town.tax_enabled) {
+                            return `Salary for ${payment.job_name}${reducedSuffix}: R${payment.gross_salary} - ${payment.tax_rate}% tax = R${payment.net_salary}`;
+                        }
+                        return `Salary for ${payment.job_name}${reducedSuffix}`;
+                    })();
+                    await client.query('INSERT INTO transactions (to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)', [payment.account_id, payment.net_salary, 'salary', salaryDescription]);
                     // Record tax transaction if tax was applied
                     if (town.tax_enabled && payment.tax_amount > 0) {
                         await client.query(`INSERT INTO tax_transactions 

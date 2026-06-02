@@ -8,9 +8,11 @@ const express_validator_1 = require("express-validator");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
-const jobs_1 = require("./jobs");
 const accountant_assignments_1 = require("../domain/accountant-assignments");
+const accountant_transfer_approval_1 = require("../domain/accountant-transfer-approval");
 const accountant_advice_1 = require("../domain/accountant-advice");
+const accountant_salary_payments_1 = require("../domain/accountant-salary-payments");
+const student_transfer_limit_1 = require("../domain/student-transfer-limit");
 // Helper function to check if student can make transactions
 async function checkStudentCanTransact(userId) {
     // Check if student has negative balance
@@ -33,6 +35,62 @@ async function checkStudentCanTransact(userId) {
         };
     }
     return { canTransact: true };
+}
+async function executeTeacherTransferApproval(pending, schoolId, reviewerId) {
+    if (pending.status !== 'pending') {
+        return {
+            success: false,
+            error: `Transfer request is already ${pending.status}`,
+            httpStatus: 400,
+        };
+    }
+    if (pending.from_school_id !== schoolId || pending.to_school_id !== schoolId) {
+        return {
+            success: false,
+            error: 'You can only approve transfers within your school',
+            httpStatus: 403,
+        };
+    }
+    const transferAmount = parseFloat(String(pending.amount));
+    const description = pending.description || `Transfer to ${pending.to_username ?? 'student'}`;
+    const client = await database_prod_1.default.pool.connect();
+    try {
+        await client.query('BEGIN');
+        const fromAccountResult = await client.query('SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE', [pending.from_user_id]);
+        const fromAccount = fromAccountResult.rows[0];
+        if (!fromAccount) {
+            await client.query('ROLLBACK');
+            return { success: false, error: 'Sender account not found', httpStatus: 404 };
+        }
+        const senderBalance = parseFloat(fromAccount.balance);
+        if (isNaN(senderBalance) || senderBalance < transferAmount) {
+            await client.query('ROLLBACK');
+            return {
+                success: false,
+                error: 'Sender has insufficient funds. Transfer cannot be approved.',
+                httpStatus: 400,
+            };
+        }
+        const toAccountResult = await client.query('SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE', [pending.to_user_id]);
+        const toAccount = toAccountResult.rows[0];
+        if (!toAccount) {
+            await client.query('ROLLBACK');
+            return { success: false, error: 'Recipient account not found', httpStatus: 404 };
+        }
+        await client.query('UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [transferAmount, fromAccount.id]);
+        await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [transferAmount, toAccount.id]);
+        await client.query('INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4, $5)', [fromAccount.id, toAccount.id, transferAmount, 'transfer', description]);
+        await client.query(`UPDATE pending_transfers SET status = 'approved', reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [reviewerId, pending.id]);
+        await client.query('COMMIT');
+        return { success: true };
+    }
+    catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    }
+    finally {
+        client.release();
+    }
 }
 const router = (0, express_1.Router)();
 // Get transaction history
@@ -113,6 +171,10 @@ router.post('/transfer', [
         const canTransactResult = await checkStudentCanTransact(req.user.id);
         if (!canTransactResult.canTransact) {
             return res.status(400).json({ error: canTransactResult.reason });
+        }
+        const transferLimitStatus = await (0, student_transfer_limit_1.getStudentTransferLimitStatusForUser)(req.user.id);
+        if (!transferLimitStatus.canRequestTransfer) {
+            return res.status(400).json({ error: (0, student_transfer_limit_1.dailyTransferLimitReason)() });
         }
         // Parse and validate transfer amount early
         const transferAmount = parseFloat(amount.toString());
@@ -197,6 +259,55 @@ router.get('/my-pending-transfers', auth_1.authenticateToken, (0, auth_1.require
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+// Teacher: Approve all pending transfers (school-scoped)
+router.post('/pending-transfers/approve-all', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const schoolId = req.user?.school_id ?? req.schoolId ?? null;
+        if (schoolId == null) {
+            return res.status(403).json({ error: 'School context required' });
+        }
+        if (!req.user?.id) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        const pendingList = await database_prod_1.default.query(`
+      SELECT pt.*,
+        fu.school_id as from_school_id,
+        tu.school_id as to_school_id,
+        tu.username as to_username
+      FROM pending_transfers pt
+      JOIN users fu ON pt.from_user_id = fu.id
+      JOIN users tu ON pt.to_user_id = tu.id
+      WHERE pt.status = 'pending' AND fu.school_id = $1 AND tu.school_id = $1
+      ORDER BY pt.created_at ASC
+    `, [schoolId]);
+        if (pendingList.length === 0) {
+            return res.json({
+                message: 'No pending transfers to approve',
+                approved: 0,
+                failed: [],
+            });
+        }
+        const failed = [];
+        let approved = 0;
+        for (const pending of pendingList) {
+            const result = await executeTeacherTransferApproval(pending, schoolId, req.user.id);
+            if (result.success) {
+                approved += 1;
+            }
+            else {
+                failed.push({ id: pending.id, error: result.error });
+            }
+        }
+        const message = failed.length === 0
+            ? `Approved ${approved} transfer${approved !== 1 ? 's' : ''} successfully`
+            : `Approved ${approved} transfer${approved !== 1 ? 's' : ''}; ${failed.length} could not be approved`;
+        res.json({ message, approved, failed });
+    }
+    catch (error) {
+        console.error('Approve all transfers error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 // Teacher: Approve pending transfer
 router.post('/pending-transfers/:id/approve', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {
@@ -208,8 +319,11 @@ router.post('/pending-transfers/:id/approve', auth_1.authenticateToken, tenant_1
         if (schoolId == null) {
             return res.status(403).json({ error: 'School context required' });
         }
+        if (!req.user?.id) {
+            return res.status(401).json({ error: 'User not found' });
+        }
         const pending = await database_prod_1.default.get(`
-      SELECT pt.*, fu.school_id as from_school_id, tu.school_id as to_school_id
+      SELECT pt.*, fu.school_id as from_school_id, tu.school_id as to_school_id, tu.username as to_username
       FROM pending_transfers pt
       JOIN users fu ON pt.from_user_id = fu.id
       JOIN users tu ON pt.to_user_id = tu.id
@@ -218,48 +332,11 @@ router.post('/pending-transfers/:id/approve', auth_1.authenticateToken, tenant_1
         if (!pending) {
             return res.status(404).json({ error: 'Transfer request not found' });
         }
-        if (pending.status !== 'pending') {
-            return res.status(400).json({ error: `Transfer request is already ${pending.status}` });
+        const result = await executeTeacherTransferApproval(pending, schoolId, req.user.id);
+        if (!result.success) {
+            return res.status(result.httpStatus).json({ error: result.error });
         }
-        if (pending.from_school_id !== schoolId || pending.to_school_id !== schoolId) {
-            return res.status(403).json({ error: 'You can only approve transfers within your school' });
-        }
-        const transferAmount = parseFloat(pending.amount);
-        const description = pending.description || `Transfer to ${pending.to_username}`;
-        const client = await database_prod_1.default.pool.connect();
-        try {
-            await client.query('BEGIN');
-            const fromAccountResult = await client.query('SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE', [pending.from_user_id]);
-            const fromAccount = fromAccountResult.rows[0];
-            if (!fromAccount) {
-                await client.query('ROLLBACK');
-                return res.status(404).json({ error: 'Sender account not found' });
-            }
-            const senderBalance = parseFloat(fromAccount.balance);
-            if (isNaN(senderBalance) || senderBalance < transferAmount) {
-                await client.query('ROLLBACK');
-                return res.status(400).json({ error: 'Sender has insufficient funds. Transfer cannot be approved.' });
-            }
-            const toAccountResult = await client.query('SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE', [pending.to_user_id]);
-            const toAccount = toAccountResult.rows[0];
-            if (!toAccount) {
-                await client.query('ROLLBACK');
-                return res.status(404).json({ error: 'Recipient account not found' });
-            }
-            await client.query('UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [transferAmount, fromAccount.id]);
-            await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [transferAmount, toAccount.id]);
-            await client.query('INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4, $5)', [fromAccount.id, toAccount.id, transferAmount, 'transfer', description]);
-            await client.query(`UPDATE pending_transfers SET status = 'approved', reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [req.user?.id, id]);
-            await client.query('COMMIT');
-            res.json({ message: 'Transfer approved successfully' });
-        }
-        catch (error) {
-            await client.query('ROLLBACK');
-            throw error;
-        }
-        finally {
-            client.release();
-        }
+        res.json({ message: 'Transfer approved successfully' });
     }
     catch (error) {
         console.error('Approve transfer error:', error);
@@ -392,7 +469,7 @@ router.get('/my-approvals/assignments', auth_1.authenticateToken, (0, auth_1.req
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// Chartered Accountant: Approve a pending transfer they are responsible for (awards 1 XP)
+// Chartered Accountant: Approve a pending transfer they are responsible for (1 XP + R500 from treasury)
 router.post('/my-approvals/:id/approve', auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
     try {
         if (!req.user) {
@@ -471,29 +548,33 @@ router.post('/my-approvals/:id/approve', auth_1.authenticateToken, (0, auth_1.re
             await client.query(`UPDATE pending_transfers
          SET status = 'approved', reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
          WHERE id = $2`, [req.user.id, transferId]);
-            // Award 1 XP to the approving accountant
-            const userRowResult = await client.query('SELECT job_level, job_experience_points FROM users WHERE id = $1 FOR UPDATE', [accountant.id]);
-            const userRow = userRowResult.rows[0] || {};
-            const currentLevel = Number.isInteger(userRow.job_level) ? userRow.job_level : 1;
-            const currentXP = typeof userRow.job_experience_points === 'number' ? userRow.job_experience_points : 0;
-            const xpDelta = 1;
-            const newXP = currentXP + xpDelta;
-            let newLevel = currentLevel;
-            for (let level = currentLevel; level < 10; level++) {
-                const xpForNextLevel = (0, jobs_1.getXPForLevel)(level + 1);
-                if (newXP >= xpForNextLevel) {
-                    newLevel = level + 1;
-                }
-                else {
-                    break;
-                }
+            const townClass = accountant.class;
+            if (!townClass) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Town class is not set for your account' });
             }
-            await client.query('UPDATE users SET job_experience_points = $1, job_level = $2 WHERE id = $3', [newXP, newLevel, accountant.id]);
+            const accountantUser = await database_prod_1.default.get('SELECT username FROM users WHERE id = $1', [
+                accountant.id,
+            ]);
+            let reward;
+            try {
+                reward = await (0, accountant_transfer_approval_1.payTransferApprovalReward)(client, accountant.id, accountantUser?.username || 'accountant', townClass, accountant.school_id ?? null);
+            }
+            catch (rewardErr) {
+                if (rewardErr instanceof Error && rewardErr.message === 'TREASURY_INSUFFICIENT') {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({
+                        error: `Transfer cannot be approved: town treasury needs at least R${accountant_transfer_approval_1.TRANSFER_APPROVAL_EARNINGS_REWARD} for your approval fee.`,
+                    });
+                }
+                throw rewardErr;
+            }
             await client.query('COMMIT');
             res.json({
-                message: 'Transfer approved successfully. You earned 1 XP.',
-                xp_awarded: xpDelta,
-                new_level: newLevel > currentLevel ? newLevel : null
+                message: `Transfer approved successfully. You earned ${reward.experience_points} XP and R${reward.earnings.toFixed(2)}.`,
+                xp_awarded: reward.experience_points,
+                earnings: reward.earnings,
+                new_level: reward.new_level,
             });
         }
         catch (error) {
@@ -801,7 +882,15 @@ router.get('/can-transact', auth_1.authenticateToken, (0, auth_1.requireRole)(['
             return res.status(401).json({ error: 'User not found' });
         }
         const result = await checkStudentCanTransact(req.user.id);
-        res.json(result);
+        const transferLimitStatus = await (0, student_transfer_limit_1.getStudentTransferLimitStatusForUser)(req.user.id);
+        if (result.canTransact && !transferLimitStatus.canRequestTransfer) {
+            return res.json({
+                canTransact: false,
+                reason: `You have used all ${student_transfer_limit_1.STUDENT_TRANSFER_DAILY_LIMIT} transfer requests for today. You can request more tomorrow.`,
+                ...transferLimitStatus,
+            });
+        }
+        res.json({ ...result, ...transferLimitStatus });
     }
     catch (error) {
         console.error('Can transact check error:', error);
@@ -1135,6 +1224,89 @@ router.post('/accountant-clients/:username/advice', [
     }
     catch (error) {
         console.error('Submit accountant client advice error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Chartered Accountant: weekly salary payments dashboard
+router.get('/accountant-salary-payments', auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        if (!(await (0, accountant_salary_payments_1.tablesReady)())) {
+            return res.status(503).json({ error: 'Salary payment feature is not available yet' });
+        }
+        let dashboard;
+        try {
+            dashboard = await (0, accountant_salary_payments_1.getAccountantSalaryDashboard)(req.user.id);
+        }
+        catch (err) {
+            if (err instanceof Error && err.message === 'NOT_ACCOUNTANT') {
+                return res.status(403).json({ error: 'Only Chartered Accountants can pay weekly salaries' });
+            }
+            throw err;
+        }
+        res.json(dashboard);
+    }
+    catch (error) {
+        console.error('Get accountant salary payments error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Chartered Accountant: pay weekly salary to one assigned client
+router.post('/accountant-salary-payments/:username', auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        if (!(await (0, accountant_salary_payments_1.tablesReady)())) {
+            return res.status(503).json({ error: 'Salary payment feature is not available yet' });
+        }
+        const { username } = req.params;
+        let result;
+        try {
+            result = await (0, accountant_salary_payments_1.payClientWeeklySalary)(req.user.id, username);
+        }
+        catch (err) {
+            if (!(err instanceof Error)) {
+                throw err;
+            }
+            switch (err.message) {
+                case 'NOT_ACCOUNTANT':
+                    return res.status(403).json({ error: 'Only Chartered Accountants can pay weekly salaries' });
+                case 'CLIENT_NOT_FOUND':
+                    return res.status(404).json({ error: 'Student not found' });
+                case 'NOT_YOUR_CLIENT':
+                    return res.status(403).json({ error: 'This student is not assigned to you' });
+                case 'CLIENT_IS_ACCOUNTANT':
+                    return res.status(400).json({
+                        error: 'You can only pay salary to your supervised accountant, not other accountants',
+                    });
+                case 'ALREADY_PAID_THIS_WEEK':
+                    return res.status(400).json({ error: 'This student has already been paid this week (Mon–Sun)' });
+                case 'NO_JOB':
+                    return res.status(400).json({ error: 'Student has no job assigned' });
+                case 'NO_ACCOUNT':
+                    return res.status(400).json({ error: 'Student has no bank account' });
+                case 'NO_TOWN_CLASS':
+                    return res.status(400).json({ error: 'Town class is not set' });
+                case 'TOWN_NOT_FOUND':
+                    return res.status(404).json({ error: 'Town settings not found' });
+                case 'TREASURY_INSUFFICIENT':
+                    return res.status(400).json({ error: 'Town treasury has insufficient funds for this salary payment' });
+                default:
+                    throw err;
+            }
+        }
+        res.json({
+            message: 'Weekly salary paid successfully',
+            ...result,
+            payment_xp_reward: accountant_salary_payments_1.SALARY_PAYMENT_XP_REWARD,
+            payment_earnings_reward: accountant_salary_payments_1.SALARY_PAYMENT_EARNINGS_REWARD,
+        });
+    }
+    catch (error) {
+        console.error('Pay accountant client salary error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

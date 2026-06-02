@@ -352,11 +352,71 @@ router.get('/profile', auth_1.authenticateToken, async (req, res) => {
         }
         res.json({
             user: userWithJob,
-            account
+            account,
+            impersonated_by: req.impersonatedBy ?? null,
+            impersonated_by_username: req.impersonatedBy
+                ? (await database_prod_1.default.get('SELECT username FROM users WHERE id = $1', [req.impersonatedBy]))?.username ?? null
+                : null,
+            allow_teacher_impersonation: req.user.role === 'teacher'
+                ? (userWithJob?.school_id
+                    ? (await database_prod_1.default.get('SELECT settings FROM schools WHERE id = $1', [userWithJob.school_id]))?.settings?.allow_teacher_impersonation === true
+                    : false)
+                : false,
         });
     }
     catch (error) {
         console.error('Profile error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Teacher impersonates a student (test schools only)
+router.post('/impersonate', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), [(0, express_validator_1.body)('student_id').isInt().withMessage('Student ID is required')], async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const teacher = req.user;
+        const schoolId = teacher.school_id;
+        if (!schoolId) {
+            return res.status(400).json({ error: 'Teacher must belong to a school' });
+        }
+        const school = await database_prod_1.default.get('SELECT settings FROM schools WHERE id = $1 AND archived = false', [schoolId]);
+        if (!school?.settings?.allow_teacher_impersonation) {
+            return res.status(403).json({ error: 'Student impersonation is not enabled for this school' });
+        }
+        const { student_id } = req.body;
+        const student = await database_prod_1.default.get(`SELECT * FROM users WHERE id = $1 AND role = 'student' AND school_id = $2 AND status = 'approved'`, [student_id, schoolId]);
+        if (!student) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        const tokenPayload = {
+            userId: student.id,
+            schoolId: student.school_id,
+            role: 'student',
+            impersonatedBy: teacher.id,
+        };
+        const token = jsonwebtoken_1.default.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
+        const account = await database_prod_1.default.get('SELECT * FROM accounts WHERE user_id = $1', [student.id]);
+        const userWithJob = await database_prod_1.default.get(`SELECT u.*,
+                j.name as job_name,
+                j.description as job_description,
+                j.requirements as job_requirements,
+                j.company_name as job_company_name,
+                j.location as job_location
+         FROM users u
+         LEFT JOIN jobs j ON u.job_id = j.id
+         WHERE u.id = $1`, [student.id]);
+        res.json({
+            token,
+            user: userWithJob,
+            account,
+            impersonated_by: teacher.id,
+            impersonated_by_username: teacher.username,
+        });
+    }
+    catch (error) {
+        console.error('Impersonate error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

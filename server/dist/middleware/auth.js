@@ -32,6 +32,7 @@ const authenticateToken = async (req, res, next) => {
             console.log('✅ User authenticated:', user.username, 'Role:', user.role, 'School:', user.school_id);
         req.user = user;
         req.schoolId = user.school_id || null;
+        req.impersonatedBy = decoded.impersonatedBy;
         next();
     }
     catch (error) {

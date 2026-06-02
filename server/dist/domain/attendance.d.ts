@@ -12,6 +12,7 @@ export declare function hasDoctorJob(jobName: string | null | undefined): boolea
 export declare function hasHrDirectorJob(jobName: string | null | undefined): boolean;
 export declare function townHasNurse(schoolId: number | null, townClass: string): Promise<boolean>;
 export declare function townHasDoctor(schoolId: number | null, townClass: string): Promise<boolean>;
+export declare function townHasHrDirector(schoolId: number | null, townClass: string): Promise<boolean>;
 export type RegisterSubmitterRole = 'nurse' | 'doctor' | null;
 export declare function resolveRegisterSubmitterRole(schoolId: number | null, townClass: string): Promise<RegisterSubmitterRole>;
 export interface SickNoteReviewer {

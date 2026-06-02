@@ -10,6 +10,7 @@ const doubles_day_1 = require("../../helpers/doubles-day");
 const jobs_1 = require("../jobs");
 const config_1 = require("./config");
 const min_duration_1 = require("./min-duration");
+const doctor_reputation_1 = require("../../domain/doctor-reputation");
 const router = (0, express_1.Router)();
 function hasDoctorJob(jobName) {
     return (jobName || '').toLowerCase().trim().includes('doctor');
@@ -74,7 +75,14 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
         const recentSessions = await database_prod_1.default.query(`
       SELECT * FROM doctor_game_sessions WHERE user_id = $1 ORDER BY played_at DESC LIMIT 5
     `, [userId]);
-        res.json({ remaining_plays: remainingPlays, daily_limit: dailyLimit, high_scores: highScoreMap, recent_sessions: recentSessions });
+        const reputation = await (0, doctor_reputation_1.getDoctorReputationIfDoctor)(userId, user.job_name);
+        res.json({
+            remaining_plays: remainingPlays,
+            daily_limit: dailyLimit,
+            high_scores: highScoreMap,
+            recent_sessions: recentSessions,
+            reputation,
+        });
     }
     catch (error) {
         console.error('Get doctor game status error:', error);
@@ -220,6 +228,8 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
             totalEarnings = MAX_EARNINGS_PER_GAME;
         if (await (0, doubles_day_1.isDoublesDayEnabled)())
             totalEarnings = totalEarnings * 2;
+        const { netAmount: reputationAdjustedEarnings, reputation } = await (0, doctor_reputation_1.resolveDoctorNetEarnings)(userId, totalEarnings);
+        totalEarnings = reputationAdjustedEarnings;
         await database_prod_1.default.query(`
       UPDATE doctor_game_sessions 
       SET score = $1, correct_answers = $2, total_problems = $3, experience_points = $4, earnings = $5
@@ -280,7 +290,8 @@ router.post('/submit', auth_1.authenticateToken, async (req, res) => {
             earnings: totalEarnings,
             experience_points: totalXP,
             new_level: newLevel > currentLevel ? newLevel : null,
-            isNewHighScore: !currentHighScore || score > currentHighScore.high_score
+            isNewHighScore: !currentHighScore || score > currentHighScore.high_score,
+            reputation,
         });
     }
     catch (error) {

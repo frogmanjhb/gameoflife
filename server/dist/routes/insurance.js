@@ -425,7 +425,7 @@ router.put('/broker/claims/:assignmentId/review', auth_1.authenticateToken, tena
             return res.status(400).json({ error: 'Doctor bank account not found for insurance payment' });
         }
         const cureFee = parseFloat(String(assignment.cure_fee ?? 0));
-        await (0, insurance_1.payHealthInsuranceClinicClaim)(client, assignmentId, doctorAccount.id, cureFee, assignment.illness_type);
+        await (0, insurance_1.payHealthInsuranceClinicClaim)(client, assignmentId, assignment.assigned_by_user_id, doctorAccount.id, cureFee, assignment.illness_type, { townClass: assignment.town_class, schoolId: assignment.school_id ?? null });
         await client.query(`UPDATE doctor_illness_assignments
          SET insurance_claim_reviewed_by = $1,
              insurance_claim_reviewed_at = CURRENT_TIMESTAMP

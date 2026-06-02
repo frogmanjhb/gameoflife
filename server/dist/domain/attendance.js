@@ -9,6 +9,7 @@ exports.hasDoctorJob = hasDoctorJob;
 exports.hasHrDirectorJob = hasHrDirectorJob;
 exports.townHasNurse = townHasNurse;
 exports.townHasDoctor = townHasDoctor;
+exports.townHasHrDirector = townHasHrDirector;
 exports.resolveRegisterSubmitterRole = resolveRegisterSubmitterRole;
 exports.resolveSickNoteReviewer = resolveSickNoteReviewer;
 exports.userCanSubmitRegister = userCanSubmitRegister;
@@ -52,6 +53,15 @@ async function townHasDoctor(schoolId, townClass) {
      WHERE u.role = 'student' AND u.status = 'approved'
        AND u.class = $1 AND u.school_id IS NOT DISTINCT FROM $2
        AND LOWER(j.name) LIKE '%doctor%'
+     LIMIT 1`, [townClass, schoolId]);
+    return !!row;
+}
+async function townHasHrDirector(schoolId, townClass) {
+    const row = await database_prod_1.default.get(`SELECT 1 FROM users u
+     JOIN jobs j ON u.job_id = j.id
+     WHERE u.role = 'student' AND u.status = 'approved'
+       AND u.class = $1 AND u.school_id IS NOT DISTINCT FROM $2
+       AND LOWER(j.name) LIKE '%hr director%'
      LIMIT 1`, [townClass, schoolId]);
     return !!row;
 }

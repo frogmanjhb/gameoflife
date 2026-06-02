@@ -22,7 +22,8 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
         // If no rules exist, create an empty entry for this school/class
         if (!rules) {
             if (schoolId !== null) {
-                await database_prod_1.default.run('INSERT INTO town_rules (town_class, rules, school_id) VALUES ($1, NULL, $2) RETURNING id', [town_class, schoolId]);
+                await database_prod_1.default.run(`INSERT INTO town_rules (town_class, rules, school_id) VALUES ($1, NULL, $2)
+           ON CONFLICT ON CONSTRAINT town_rules_town_class_school_unique DO NOTHING`, [town_class, schoolId]);
             }
             else {
                 await database_prod_1.default.run('INSERT INTO town_rules (town_class, rules) VALUES ($1, NULL) RETURNING id', [town_class]);
@@ -66,7 +67,8 @@ router.put('/', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), 
         }
         else {
             if (schoolId !== null) {
-                await database_prod_1.default.run('INSERT INTO town_rules (town_class, rules, school_id) VALUES ($1, $2, $3) RETURNING id', [town_class, rules || null, schoolId]);
+                await database_prod_1.default.run(`INSERT INTO town_rules (town_class, rules, school_id) VALUES ($1, $2, $3)
+             ON CONFLICT ON CONSTRAINT town_rules_town_class_school_unique DO NOTHING`, [town_class, rules || null, schoolId]);
             }
             else {
                 await database_prod_1.default.run('INSERT INTO town_rules (town_class, rules) VALUES ($1, $2) RETURNING id', [town_class, rules || null]);

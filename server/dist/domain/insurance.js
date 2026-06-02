@@ -25,6 +25,7 @@ exports.payCyberInsuranceRepairClaim = payCyberInsuranceRepairClaim;
 exports.awardInsuranceBroker = awardInsuranceBroker;
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const jobs_1 = require("../routes/jobs");
+const doctor_reputation_1 = require("./doctor-reputation");
 exports.INSURANCE_RATE = 0.05;
 exports.INSURANCE_BROKER_EARNINGS = 500;
 exports.INSURANCE_BROKER_XP = 5;
@@ -158,14 +159,25 @@ async function hasActiveApprovedInsuranceOfType(userId, insuranceType) {
      ORDER BY created_at DESC`, [userId, insuranceType]);
     return rows.some((p) => isPolicyEffectivelyActive(p.status, p.week_start_date, p.weeks, today));
 }
-async function payHealthInsuranceClinicClaim(executor, assignmentId, doctorAccountId, cureFee, illnessType) {
-    await executor.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [cureFee, doctorAccountId]);
+async function payHealthInsuranceClinicClaim(executor, assignmentId, doctorUserId, doctorAccountId, cureFee, illnessType, opts) {
+    const { netAmount: doctorPay, reputation } = await (0, doctor_reputation_1.resolveDoctorNetEarnings)(doctorUserId, cureFee);
+    const withheld = Math.round((cureFee - doctorPay) * 100) / 100;
+    await executor.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [doctorPay, doctorAccountId]);
+    const description = reputation.penalty_label && withheld > 0
+        ? `Health insurance claim — ${illnessType} clinic fee (R${doctorPay.toFixed(2)} after reputation penalty)`
+        : `Health insurance claim — ${illnessType} clinic fee (awaiting doctor approval)`;
     await executor.query(`INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type, description)
-     VALUES (NULL, $1, $2, 'insurance', $3)`, [
-        doctorAccountId,
-        cureFee,
-        `Health insurance claim — ${illnessType} clinic fee (awaiting doctor approval)`,
-    ]);
+     VALUES (NULL, $1, $2, 'insurance', $3)`, [doctorAccountId, doctorPay, description]);
+    if (withheld > 0 && opts?.townClass) {
+        if (opts.schoolId != null) {
+            await executor.query('UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [withheld, opts.townClass, opts.schoolId]);
+        }
+        else {
+            await executor.query('UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [withheld, opts.townClass]);
+        }
+        await executor.query(`INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by)
+       VALUES ($1, $2, $3, 'deposit', $4, $5)`, [opts.schoolId ?? null, opts.townClass, withheld, 'Doctor clinic reputation withholding (insurance)', doctorUserId]);
+    }
     await executor.query(`UPDATE doctor_illness_assignments
      SET cure_requested_at = CURRENT_TIMESTAMP,
          cure_paid_at = CURRENT_TIMESTAMP,
