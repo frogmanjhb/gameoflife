@@ -142,7 +142,7 @@ function classifyTransaction(description) {
     if (/^Code Board/i.test(d)) {
         return { source: 'job_task', label: 'Code Board reward' };
     }
-    if (/^Insurance /i.test(d)) {
+    if (/^Insurance /i.test(d) || d === 'INSURANCE_BROKER_EARN') {
         return { source: 'job_task', label: 'Insurance broker work' };
     }
     if (/^Cyber repair/i.test(d)) {
@@ -163,6 +163,7 @@ function isTrackedEarningTransaction(description) {
         d === 'FIVE_MINUTE_LESSON_EARN' ||
         d === 'ACCOUNTANT_CLIENT_ADVICE_EARN' ||
         d === 'ACCOUNTANT_TRANSFER_APPROVAL_EARN' ||
+        d === 'INSURANCE_BROKER_EARN' ||
         d === 'POLICE_BONUS_SUBMISSION_EARN' ||
         d === 'POLICE_FINE_SUBMISSION_EARN' ||
         /^Code Board/i.test(d) ||
@@ -243,6 +244,7 @@ async function buildStudentEarningsActivity(userId) {
          OR t.description = 'POLICE_FINE_SUBMISSION_EARN'
          OR t.description ILIKE 'Code Board%'
          OR t.description ILIKE 'Insurance %'
+         OR t.description = 'INSURANCE_BROKER_EARN'
          OR t.description ILIKE 'Police bonus%'
          OR t.description ILIKE 'Cyber repair%'
          OR t.description ILIKE 'Tender%'
@@ -315,6 +317,7 @@ async function buildStudentEarningsProfile(userId) {
          OR t.description = 'POLICE_FINE_SUBMISSION_EARN'
          OR t.description ILIKE 'Code Board%'
          OR t.description ILIKE 'Insurance %'
+         OR t.description = 'INSURANCE_BROKER_EARN'
          OR t.description ILIKE 'Police bonus%'
          OR t.description ILIKE 'Cyber repair%'
          OR t.description ILIKE 'Tender%'

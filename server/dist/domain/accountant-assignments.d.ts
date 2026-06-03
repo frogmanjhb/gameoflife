@@ -9,6 +9,9 @@ export interface AccountantContext {
     responsibleStudentIds: number[];
     supervisedAccountantId: number | null;
 }
+/** Students and accountant peers this accountant may manage (advice, salary, transfer approvals). */
+export declare function getManagedClientUserIds(context: AccountantContext): number[];
+export declare function isManagedClient(context: AccountantContext, clientUserId: number): boolean;
 export declare function classUsesManualAccountantAssignments(schoolId: number | null, townClass: string): Promise<boolean>;
 export declare function getClassAccountantRoster(className: string, schoolId: number | null): Promise<{
     accountantIds: number[];

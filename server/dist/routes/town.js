@@ -142,6 +142,41 @@ router.put('/settings/:id', auth_1.authenticateToken, (0, auth_1.requireRole)(['
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+// Hide older transactions in UI/API for this town (does not delete database rows)
+router.post('/settings/:id/clear-transaction-history', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const townId = parseInt(req.params.id, 10);
+        if (isNaN(townId)) {
+            return res.status(400).json({ error: 'Invalid town ID' });
+        }
+        const town = await database_prod_1.default.get('SELECT * FROM town_settings WHERE id = $1', [townId]);
+        if (!town) {
+            return res.status(404).json({ error: 'Town not found' });
+        }
+        const teacherSchoolId = req.user?.school_id ?? req.schoolId ?? null;
+        if (town.school_id !== teacherSchoolId) {
+            return res.status(403).json({ error: 'You can only update towns in your school' });
+        }
+        await database_prod_1.default.run(`UPDATE town_settings
+         SET transaction_history_cleared_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`, [townId]);
+        const updated = await database_prod_1.default.get('SELECT * FROM town_settings WHERE id = $1', [townId]);
+        res.json({
+            message: 'Visible transaction history cleared for this town. Database records were not deleted.',
+            town: updated,
+        });
+    }
+    catch (error) {
+        console.error('Failed to clear visible transaction history:', error);
+        const pgCode = error && typeof error === 'object' && 'code' in error ? error.code : '';
+        if (pgCode === '42703') {
+            return res.status(500).json({
+                error: 'Database migration required. Run migrate:transaction-history-cleared-at on Railway.',
+            });
+        }
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 // Get treasury info for a town (teachers only)
 router.get('/treasury/:class', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {

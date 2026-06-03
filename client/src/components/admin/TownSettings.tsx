@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TownSettings as TownSettingsType } from '../../types';
 import { useTown } from '../../contexts/TownContext';
 import api, { treasuryApi } from '../../services/api';
-import { Save, ToggleLeft, ToggleRight, Wallet, AlertTriangle, Home, Gamepad2 } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Wallet, AlertTriangle, Home, Gamepad2, History } from 'lucide-react';
 
 const TownSettings: React.FC = () => {
   const { allTowns, refreshTown } = useTown();
@@ -12,6 +12,7 @@ const TownSettings: React.FC = () => {
   const [savingJobGame, setSavingJobGame] = useState(false);
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetting, setResetting] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
   
   // Bank settings (global settings)
   const [bankSettings, setBankSettings] = useState<Record<string, string>>({});
@@ -302,6 +303,62 @@ const TownSettings: React.FC = () => {
               <p className="text-xs text-gray-400 mt-2">
                 Set to 0 to disable job challenge games for this town. Default is 3.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear visible transaction history (per town) */}
+      {selectedTown && (
+        <div className="bg-white rounded-xl shadow-sm border border-sky-200 p-6">
+          <div className="flex items-start space-x-3">
+            <div className="p-2 rounded-lg bg-sky-100">
+              <History className="h-5 w-5 text-sky-700" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-lg font-semibold text-gray-900">Transaction history display</h4>
+              <p className="text-sm text-gray-600 mt-1">
+                Clear visible transaction history for{' '}
+                <span className="font-medium">{selectedTown.town_name}</span> (Class {selectedTown.class}).
+                Older transactions stay in the database but are hidden in the Bank and student views so pages load faster.
+                New transactions after you clear will still appear.
+              </p>
+              {selectedTown.transaction_history_cleared_at && (
+                <p className="text-xs text-sky-700 mt-2">
+                  Last cleared:{' '}
+                  {new Date(selectedTown.transaction_history_cleared_at).toLocaleString('en-ZA', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  })}
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={clearingHistory || selectedTownId == null}
+                onClick={async () => {
+                  if (selectedTownId == null) return;
+                  const ok = window.confirm(
+                    `Clear visible transaction history for ${selectedTown.town_name}?\n\nThis does not delete any database records. Students and teachers will only see transactions from now on until new activity builds up.`
+                  );
+                  if (!ok) return;
+
+                  setClearingHistory(true);
+                  try {
+                    const response = await treasuryApi.clearVisibleTransactionHistory(selectedTownId);
+                    await refreshTown();
+                    window.dispatchEvent(new CustomEvent('transaction-history-cleared'));
+                    alert(response.data.message);
+                  } catch (err: unknown) {
+                    const axiosErr = err as { response?: { data?: { error?: string } } };
+                    alert(axiosErr.response?.data?.error || 'Failed to clear visible transaction history');
+                  } finally {
+                    setClearingHistory(false);
+                  }
+                }}
+                className="mt-4 px-4 py-2 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-700 transition-colors disabled:opacity-50"
+              >
+                {clearingHistory ? 'Clearing...' : 'Clear visible transaction history'}
+              </button>
             </div>
           </div>
         </div>

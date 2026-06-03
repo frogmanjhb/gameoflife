@@ -4,6 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.hasAccountantJob = hasAccountantJob;
+exports.getManagedClientUserIds = getManagedClientUserIds;
+exports.isManagedClient = isManagedClient;
 exports.classUsesManualAccountantAssignments = classUsesManualAccountantAssignments;
 exports.getClassAccountantRoster = getClassAccountantRoster;
 exports.seedManualAssignmentsFromAutoSplit = seedManualAssignmentsFromAutoSplit;
@@ -12,6 +14,18 @@ exports.getManualClientRows = getManualClientRows;
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 function hasAccountantJob(jobName) {
     return (jobName || '').toLowerCase().includes('accountant');
+}
+/** Students and accountant peers this accountant may manage (advice, salary, transfer approvals). */
+function getManagedClientUserIds(context) {
+    const ids = [...context.responsibleStudentIds];
+    if (context.supervisedAccountantId != null &&
+        !ids.includes(context.supervisedAccountantId)) {
+        ids.push(context.supervisedAccountantId);
+    }
+    return ids;
+}
+function isManagedClient(context, clientUserId) {
+    return getManagedClientUserIds(context).includes(clientUserId);
 }
 async function tableExists() {
     try {

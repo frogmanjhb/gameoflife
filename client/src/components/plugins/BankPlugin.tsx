@@ -81,6 +81,14 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
     fetchBankSettings();
   }, [courtEnabled]);
 
+  useEffect(() => {
+    const onHistoryCleared = () => {
+      fetchData();
+    };
+    window.addEventListener('transaction-history-cleared', onHistoryCleared);
+    return () => window.removeEventListener('transaction-history-cleared', onHistoryCleared);
+  }, [courtEnabled]);
+
   const fetchData = async () => {
     try {
       const [studentsRes, loansRes, transactionsRes, pendingTransfersRes, pfbRes, lawsuitsRes] = await Promise.all([
@@ -1583,6 +1591,14 @@ const StudentBankView: React.FC<StudentBankViewProps> = ({ bankPlugin }) => {
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const onHistoryCleared = () => {
+      fetchData();
+    };
+    window.addEventListener('transaction-history-cleared', onHistoryCleared);
+    return () => window.removeEventListener('transaction-history-cleared', onHistoryCleared);
   }, []);
 
   const fetchData = async () => {

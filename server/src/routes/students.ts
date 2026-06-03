@@ -22,6 +22,7 @@ import {
   seedManualAssignmentsFromAutoSplit as seedLawyerAssignmentsFromAutoSplit,
 } from '../domain/lawyer-assignments';
 import { buildStudentEarningsProfile } from '../domain/studentEarningsProfile';
+import { studentTownTransactionVisibilitySql } from '../domain/transaction-history-visibility';
 
 const router = Router();
 
@@ -1032,8 +1033,22 @@ router.get('/account/:accountNumber/details', authenticateToken, requireTenant, 
       });
     }
 
+    const detailSchoolId = account.user_school_id ?? schoolId ?? null;
+    const detailClass = account.class;
+    const detailAccountParams: unknown[] = [account.account_id, account.account_id];
+    const detailVisibility =
+      detailClass && ['6A', '6B', '6C'].includes(detailClass)
+        ? studentTownTransactionVisibilitySql(
+            detailSchoolId,
+            detailClass,
+            detailAccountParams.length + 1,
+            detailAccountParams.length + 2
+          )
+        : { fragment: '', params: [] as unknown[] };
+
     // Get all transactions
-    const transactions = await database.query(`
+    const transactions = await database.query(
+      `
       SELECT 
         t.*,
         fu.username as from_username,
@@ -1047,9 +1062,12 @@ router.get('/account/:accountNumber/details', authenticateToken, requireTenant, 
       LEFT JOIN users fu ON fa.user_id = fu.id
       LEFT JOIN accounts ta ON t.to_account_id = ta.id
       LEFT JOIN users tu ON ta.user_id = tu.id
-      WHERE t.from_account_id = $1 OR t.to_account_id = $2
+      WHERE (t.from_account_id = $1 OR t.to_account_id = $2)
+      ${detailVisibility.fragment}
       ORDER BY t.created_at DESC
-    `, [account.account_id, account.account_id]);
+    `,
+      [...detailAccountParams, ...detailVisibility.params]
+    );
 
     // Get loans
     const loans = await database.query(`
@@ -1335,7 +1353,21 @@ router.get('/:username/details', authenticateToken, requireTenant, requireRole([
     // Get all transactions
     let transactions = [];
     if (account) {
-      transactions = await database.query(`
+      const detailSchoolId = student.school_id ?? req.schoolId ?? null;
+      const detailClass = student.class;
+      const detailAccountParams: unknown[] = [account.id, account.id];
+      const detailVisibility =
+        detailClass && ['6A', '6B', '6C'].includes(detailClass)
+          ? studentTownTransactionVisibilitySql(
+              detailSchoolId,
+              detailClass,
+              detailAccountParams.length + 1,
+              detailAccountParams.length + 2
+            )
+          : { fragment: '', params: [] as unknown[] };
+
+      transactions = await database.query(
+        `
         SELECT 
           t.*,
           fu.username as from_username,
@@ -1349,9 +1381,12 @@ router.get('/:username/details', authenticateToken, requireTenant, requireRole([
         LEFT JOIN users fu ON fa.user_id = fu.id
         LEFT JOIN accounts ta ON t.to_account_id = ta.id
         LEFT JOIN users tu ON ta.user_id = tu.id
-        WHERE t.from_account_id = $1 OR t.to_account_id = $2
+        WHERE (t.from_account_id = $1 OR t.to_account_id = $2)
+        ${detailVisibility.fragment}
         ORDER BY t.created_at DESC
-      `, [account.id, account.id]);
+      `,
+        [...detailAccountParams, ...detailVisibility.params]
+      );
     }
 
     // Get loans

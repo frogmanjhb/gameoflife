@@ -13,6 +13,7 @@ import {
   classRequiresBrokerApproval,
   getClassInsuranceBrokers,
   awardInsuranceBroker,
+  purchaseBatchAlreadyRewarded,
   payHealthInsuranceClinicClaim,
   payCyberInsuranceRepairClaim,
   calculateTeacherRefundAmount,
@@ -348,15 +349,26 @@ router.put(
            WHERE id = $3`,
           [weekStart, req.user.id, requestId]
         );
-        let brokerReward = { earnings: 0, experience_points: 0, new_level: null as number | null };
+        let brokerReward = { earnings: 0, experience_points: 0, new_level: null as number | null, reward_skipped_reason: null as string | null };
         try {
+          const batchAlreadyRewarded = await purchaseBatchAlreadyRewarded(
+            client,
+            req.user.id,
+            purchase.user_id as number,
+            purchase.created_at as string | Date,
+            requestId
+          );
           brokerReward = await awardInsuranceBroker(
             client,
             req.user.id,
             reviewer.username,
             reviewer.school_id ?? null,
             reviewer.class,
-            'Insurance purchase approval'
+            'Insurance purchase approval',
+            {
+              referenceAmount: parseFloat(String(purchase.total_cost)),
+              purchaseBatchAlreadyRewarded: batchAlreadyRewarded,
+            }
           );
         } catch (rewardError) {
           await client.query('ROLLBACK');
@@ -373,6 +385,7 @@ router.put(
           earnings: brokerReward.earnings,
           experience_points: brokerReward.experience_points,
           new_level: brokerReward.new_level,
+          reward_skipped_reason: brokerReward.reward_skipped_reason,
         });
       }
 
@@ -577,7 +590,7 @@ router.put(
         [req.user.id, assignmentId]
       );
 
-      let brokerReward = { earnings: 0, experience_points: 0, new_level: null as number | null };
+      let brokerReward = { earnings: 0, experience_points: 0, new_level: null as number | null, reward_skipped_reason: null as string | null };
       try {
         brokerReward = await awardInsuranceBroker(
           client,
@@ -585,7 +598,8 @@ router.put(
           reviewer.username,
           reviewer.school_id ?? null,
           reviewer.class,
-          'Insurance clinic claim approval'
+          'Insurance clinic claim approval',
+          { referenceAmount: cureFee }
         );
       } catch (rewardError) {
         await client.query('ROLLBACK');
@@ -603,6 +617,7 @@ router.put(
         earnings: brokerReward.earnings,
         experience_points: brokerReward.experience_points,
         new_level: brokerReward.new_level,
+        reward_skipped_reason: brokerReward.reward_skipped_reason,
       });
     } catch (error) {
       await client.query('ROLLBACK');
@@ -766,7 +781,7 @@ router.put(
         [req.user.id, assignmentId]
       );
 
-      let brokerReward = { earnings: 0, experience_points: 0, new_level: null as number | null };
+      let brokerReward = { earnings: 0, experience_points: 0, new_level: null as number | null, reward_skipped_reason: null as string | null };
       try {
         brokerReward = await awardInsuranceBroker(
           client,
@@ -774,7 +789,8 @@ router.put(
           reviewer.username,
           reviewer.school_id ?? null,
           reviewer.class,
-          'Insurance cyber repair claim approval'
+          'Insurance cyber repair claim approval',
+          { referenceAmount: repairFee }
         );
       } catch (rewardError) {
         await client.query('ROLLBACK');
@@ -792,6 +808,7 @@ router.put(
         earnings: brokerReward.earnings,
         experience_points: brokerReward.experience_points,
         new_level: brokerReward.new_level,
+        reward_skipped_reason: brokerReward.reward_skipped_reason,
       });
     } catch (error) {
       await client.query('ROLLBACK');

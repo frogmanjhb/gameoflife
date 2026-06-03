@@ -12,6 +12,7 @@ const tenant_1 = require("../middleware/tenant");
 const accountant_assignments_1 = require("../domain/accountant-assignments");
 const lawyer_assignments_1 = require("../domain/lawyer-assignments");
 const studentEarningsProfile_1 = require("../domain/studentEarningsProfile");
+const transaction_history_visibility_1 = require("../domain/transaction-history-visibility");
 const router = (0, express_1.Router)();
 // TEMPORARY: Diagnose student data issues (teachers only, same school)
 router.get('/diagnose/:searchTerm', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
@@ -592,10 +593,7 @@ router.get('/:username/accountant-assignments', auth_1.authenticateToken, tenant
         }
         else {
             const context = await (0, accountant_assignments_1.getAccountantContext)(student.id);
-            const userIds = [...context.responsibleStudentIds];
-            if (context.supervisedAccountantId && !userIds.includes(context.supervisedAccountantId)) {
-                userIds.push(context.supervisedAccountantId);
-            }
+            const userIds = (0, accountant_assignments_1.getManagedClientUserIds)(context);
             if (!userIds.length) {
                 clients = [];
             }
@@ -819,6 +817,12 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
                 }
             });
         }
+        const detailSchoolId = account.user_school_id ?? schoolId ?? null;
+        const detailClass = account.class;
+        const detailAccountParams = [account.account_id, account.account_id];
+        const detailVisibility = detailClass && ['6A', '6B', '6C'].includes(detailClass)
+            ? (0, transaction_history_visibility_1.studentTownTransactionVisibilitySql)(detailSchoolId, detailClass, detailAccountParams.length + 1, detailAccountParams.length + 2)
+            : { fragment: '', params: [] };
         // Get all transactions
         const transactions = await database_prod_1.default.query(`
       SELECT 
@@ -834,9 +838,10 @@ router.get('/account/:accountNumber/details', auth_1.authenticateToken, tenant_1
       LEFT JOIN users fu ON fa.user_id = fu.id
       LEFT JOIN accounts ta ON t.to_account_id = ta.id
       LEFT JOIN users tu ON ta.user_id = tu.id
-      WHERE t.from_account_id = $1 OR t.to_account_id = $2
+      WHERE (t.from_account_id = $1 OR t.to_account_id = $2)
+      ${detailVisibility.fragment}
       ORDER BY t.created_at DESC
-    `, [account.account_id, account.account_id]);
+    `, [...detailAccountParams, ...detailVisibility.params]);
         // Get loans
         const loans = await database_prod_1.default.query(`
       SELECT 
@@ -1089,6 +1094,12 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
         // Get all transactions
         let transactions = [];
         if (account) {
+            const detailSchoolId = student.school_id ?? req.schoolId ?? null;
+            const detailClass = student.class;
+            const detailAccountParams = [account.id, account.id];
+            const detailVisibility = detailClass && ['6A', '6B', '6C'].includes(detailClass)
+                ? (0, transaction_history_visibility_1.studentTownTransactionVisibilitySql)(detailSchoolId, detailClass, detailAccountParams.length + 1, detailAccountParams.length + 2)
+                : { fragment: '', params: [] };
             transactions = await database_prod_1.default.query(`
         SELECT 
           t.*,
@@ -1103,9 +1114,10 @@ router.get('/:username/details', auth_1.authenticateToken, tenant_1.requireTenan
         LEFT JOIN users fu ON fa.user_id = fu.id
         LEFT JOIN accounts ta ON t.to_account_id = ta.id
         LEFT JOIN users tu ON ta.user_id = tu.id
-        WHERE t.from_account_id = $1 OR t.to_account_id = $2
+        WHERE (t.from_account_id = $1 OR t.to_account_id = $2)
+        ${detailVisibility.fragment}
         ORDER BY t.created_at DESC
-      `, [account.id, account.id]);
+      `, [...detailAccountParams, ...detailVisibility.params]);
         }
         // Get loans
         const loans = await database_prod_1.default.query(`

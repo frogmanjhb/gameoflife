@@ -9,6 +9,7 @@ const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
 const contentApproval_1 = require("../domain/contentApproval");
 const townNews_1 = require("../domain/townNews");
+const townNewsPopup_1 = require("../domain/townNewsPopup");
 const townNewsWidgets_1 = require("../domain/townNewsWidgets");
 const router = (0, express_1.Router)();
 function displayName(user) {
@@ -19,6 +20,15 @@ async function tablesReady() {
     try {
         await database_prod_1.default.query('SELECT 1 FROM town_news_stories LIMIT 1');
         await database_prod_1.default.query('SELECT 1 FROM code_board_apps LIMIT 1');
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+async function popupsTableReady() {
+    try {
+        await database_prod_1.default.query('SELECT 1 FROM town_news_popups LIMIT 1');
         return true;
     }
     catch {
@@ -47,6 +57,15 @@ router.get('/pending', auth_1.authenticateToken, tenant_1.requireTenant, (0, aut
        JOIN users u ON u.id = a.engineer_user_id
        WHERE ${schoolFilterClause('a', 1)} AND a.status = 'pending'
        ORDER BY a.created_at ASC`, [schoolId]);
+        let newsPopups = [];
+        if (await popupsTableReady()) {
+            newsPopups = await database_prod_1.default.query(`SELECT p.id, p.headline, p.body, p.image_data, p.town_class, p.status, p.created_at,
+                u.username AS submitter_username, u.first_name AS submitter_first_name, u.last_name AS submitter_last_name
+         FROM town_news_popups p
+         JOIN users u ON u.id = p.creator_user_id
+         WHERE ${schoolFilterClause('p', 1)} AND p.status = 'pending'
+         ORDER BY p.created_at ASC`, [schoolId]);
+        }
         const mapNews = newsStories.map((row) => ({
             id: row.id,
             headline: row.headline,
@@ -77,12 +96,29 @@ router.get('/pending', auth_1.authenticateToken, tenant_1.requireTenant, (0, aut
             }),
             submitter_username: row.submitter_username,
         }));
+        const mapPopups = newsPopups.map((row) => ({
+            id: row.id,
+            headline: row.headline,
+            body: row.body,
+            image_data: row.image_data ?? null,
+            town_class: row.town_class,
+            status: row.status,
+            created_at: row.created_at,
+            submitter_name: displayName({
+                username: row.submitter_username,
+                first_name: row.submitter_first_name,
+                last_name: row.submitter_last_name,
+            }),
+            submitter_username: row.submitter_username,
+        }));
         res.json({
             news_stories: mapNews,
+            news_popups: mapPopups,
             code_apps: mapApps,
-            pending_count: mapNews.length + mapApps.length,
+            pending_count: mapNews.length + mapPopups.length + mapApps.length,
             story_xp_reward: townNews_1.STORY_XP_REWARD,
             story_earnings_reward: townNews_1.STORY_EARNINGS_REWARD,
+            popup_ad_cost: townNewsPopup_1.POPUP_AD_COST,
         });
     }
     catch (error) {
@@ -135,6 +171,64 @@ router.post('/news/:id/review', auth_1.authenticateToken, tenant_1.requireTenant
     }
     catch (error) {
         console.error('Review news story error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// POST /popups/:id/review — approve or deny a login pop-up ad
+router.post('/popups/:id/review', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        if (!(await popupsTableReady())) {
+            return res.status(503).json({ error: 'Login pop-up ads are not available yet. Please try again later.' });
+        }
+        const popupId = parseInt(String(req.params.id), 10);
+        if (Number.isNaN(popupId)) {
+            return res.status(400).json({ error: 'Invalid pop-up id' });
+        }
+        const { status, denial_reason } = req.body ?? {};
+        if (!(0, contentApproval_1.isReviewStatus)(status)) {
+            return res.status(400).json({ error: 'status must be approved or denied' });
+        }
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        const popup = await database_prod_1.default.get(`SELECT p.*, u.username AS creator_username
+       FROM town_news_popups p
+       JOIN users u ON u.id = p.creator_user_id
+       WHERE p.id = $1 AND ${schoolFilterClause('p', 2)}`, [popupId, schoolId]);
+        if (!popup) {
+            return res.status(404).json({ error: 'Pop-up not found' });
+        }
+        if (popup.status !== 'pending') {
+            return res.status(400).json({ error: 'Pop-up has already been reviewed' });
+        }
+        if (status === 'approved') {
+            try {
+                await (0, townNewsPopup_1.chargePopupAdFee)(popup.creator_user_id, popup.creator_username, popup.town_class, popup.school_id ?? null, popup.headline);
+            }
+            catch (err) {
+                if (err instanceof Error && err.message === 'INSUFFICIENT_FUNDS') {
+                    return res.status(400).json({
+                        error: `The student does not have enough funds (R${townNewsPopup_1.POPUP_AD_COST.toLocaleString()} required). They must top up before you can approve.`,
+                    });
+                }
+                if (err instanceof Error && err.message === 'NO_ACCOUNT') {
+                    return res.status(400).json({ error: 'The student does not have a bank account.' });
+                }
+                throw err;
+            }
+        }
+        await database_prod_1.default.run(`UPDATE town_news_popups
+       SET status = $1, reviewed_at = CURRENT_TIMESTAMP, reviewed_by = $2, denial_reason = $3,
+           payment_charged = $4
+       WHERE id = $5`, [
+            status,
+            req.user?.id ?? null,
+            status === 'denied' ? (denial_reason || null) : null,
+            status === 'approved',
+            popupId,
+        ]);
+        res.json({ success: true, status });
+    }
+    catch (error) {
+        console.error('Review news popup error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

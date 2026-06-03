@@ -231,12 +231,12 @@ router.post('/apps', auth_1.authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// DELETE /apps/:id — software engineer removes own app
+// DELETE /apps/:id — software engineer removes own app; teacher removes any app in their school
 router.delete('/apps/:id', auth_1.authenticateToken, async (req, res) => {
     try {
-        const engineer = await requireSoftwareEngineer(req, res);
-        if (!engineer)
-            return;
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
         if (!(await tablesReady())) {
             return res.status(503).json({ error: 'Code board feature not available yet. Please try again later.' });
         }
@@ -244,6 +244,19 @@ router.delete('/apps/:id', auth_1.authenticateToken, async (req, res) => {
         if (Number.isNaN(appId)) {
             return res.status(400).json({ error: 'Invalid app id' });
         }
+        if (req.user.role === 'teacher') {
+            const schoolId = req.user.school_id ?? null;
+            const existing = await database_prod_1.default.get(`SELECT id FROM code_board_apps
+         WHERE id = $1 AND ((school_id = $2) OR ($2 IS NULL AND school_id IS NULL))`, [appId, schoolId]);
+            if (!existing) {
+                return res.status(404).json({ error: 'App not found or you cannot delete it' });
+            }
+            await database_prod_1.default.run('DELETE FROM code_board_apps WHERE id = $1', [appId]);
+            return res.json({ success: true });
+        }
+        const engineer = await requireSoftwareEngineer(req, res);
+        if (!engineer)
+            return;
         const schoolId = engineer.school_id ?? null;
         const existing = schoolId != null
             ? await database_prod_1.default.get('SELECT id FROM code_board_apps WHERE id = $1 AND school_id = $2 AND town_class = $3 AND engineer_user_id = $4', [appId, schoolId, engineer.class, engineer.id])

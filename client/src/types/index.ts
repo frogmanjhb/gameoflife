@@ -1232,6 +1232,7 @@ export interface TownSettings {
   job_game_daily_limit?: number;
   show_mayor_job_card?: boolean;
   treasury_balance: number;
+  transaction_history_cleared_at?: string | null;
   created_at: string;
   updated_at: string;
 }

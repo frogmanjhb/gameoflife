@@ -107,11 +107,7 @@ async function getAccountantSalaryDashboard(accountantUserId) {
         r.student_user_id,
         r.accountant_username,
     ]));
-    const clientIds = [...context.responsibleStudentIds];
-    if (context.supervisedAccountantId != null &&
-        !clientIds.includes(context.supervisedAccountantId)) {
-        clientIds.push(context.supervisedAccountantId);
-    }
+    const clientIds = (0, accountant_assignments_1.getManagedClientUserIds)(context);
     const clients = [];
     for (const studentId of clientIds) {
         const student = await database_prod_1.default.get(`SELECT u.id, u.username, u.first_name, u.last_name, u.class, j.name AS job_name
@@ -260,13 +256,8 @@ async function resolveAccountantSalaryClient(accountantUserId, clientUsername) {
     if (!client) {
         throw new Error('CLIENT_NOT_FOUND');
     }
-    const isAssignedStudent = context.responsibleStudentIds.includes(client.id);
-    const isSupervisedAccountant = (0, accountant_assignments_1.hasAccountantJob)(client.job_name) && client.id === context.supervisedAccountantId;
-    if (!isAssignedStudent && !isSupervisedAccountant) {
+    if (!(0, accountant_assignments_1.isManagedClient)(context, client.id)) {
         throw new Error('NOT_YOUR_CLIENT');
-    }
-    if ((0, accountant_assignments_1.hasAccountantJob)(client.job_name) && !isSupervisedAccountant) {
-        throw new Error('CLIENT_IS_ACCOUNTANT');
     }
     const accountantSchool = context.accountant.school_id ?? null;
     const clientSchool = client.school_id ?? null;

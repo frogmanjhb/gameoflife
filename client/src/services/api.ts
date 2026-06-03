@@ -844,7 +844,14 @@ export const treasuryApi = {
   // Toggle tax for a town
   toggleTax: (townClass: string, enabled: boolean): Promise<{ data: { message: string; town: TownSettings } }> => {
     return api.post(`/town/toggle-tax/${townClass}`, { enabled });
-  }
+  },
+
+  /** Hide older transactions in API/UI for this town; does not delete database rows */
+  clearVisibleTransactionHistory: (
+    townId: number
+  ): Promise<{ data: { message: string; town: TownSettings } }> => {
+    return api.post(`/town/settings/${townId}/clear-transaction-history`);
+  },
 };
 
 // Transactions API methods

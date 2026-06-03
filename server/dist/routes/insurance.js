@@ -264,9 +264,13 @@ router.put('/broker/requests/:id/review', auth_1.authenticateToken, tenant_1.req
                reviewed_at = CURRENT_TIMESTAMP,
                denial_reason = NULL
            WHERE id = $3`, [weekStart, req.user.id, requestId]);
-            let brokerReward = { earnings: 0, experience_points: 0, new_level: null };
+            let brokerReward = { earnings: 0, experience_points: 0, new_level: null, reward_skipped_reason: null };
             try {
-                brokerReward = await (0, insurance_1.awardInsuranceBroker)(client, req.user.id, reviewer.username, reviewer.school_id ?? null, reviewer.class, 'Insurance purchase approval');
+                const batchAlreadyRewarded = await (0, insurance_1.purchaseBatchAlreadyRewarded)(client, req.user.id, purchase.user_id, purchase.created_at, requestId);
+                brokerReward = await (0, insurance_1.awardInsuranceBroker)(client, req.user.id, reviewer.username, reviewer.school_id ?? null, reviewer.class, 'Insurance purchase approval', {
+                    referenceAmount: parseFloat(String(purchase.total_cost)),
+                    purchaseBatchAlreadyRewarded: batchAlreadyRewarded,
+                });
             }
             catch (rewardError) {
                 await client.query('ROLLBACK');
@@ -283,6 +287,7 @@ router.put('/broker/requests/:id/review', auth_1.authenticateToken, tenant_1.req
                 earnings: brokerReward.earnings,
                 experience_points: brokerReward.experience_points,
                 new_level: brokerReward.new_level,
+                reward_skipped_reason: brokerReward.reward_skipped_reason,
             });
         }
         const refundAmount = parseFloat(String(purchase.total_cost));
@@ -430,9 +435,9 @@ router.put('/broker/claims/:assignmentId/review', auth_1.authenticateToken, tena
          SET insurance_claim_reviewed_by = $1,
              insurance_claim_reviewed_at = CURRENT_TIMESTAMP
          WHERE id = $2`, [req.user.id, assignmentId]);
-        let brokerReward = { earnings: 0, experience_points: 0, new_level: null };
+        let brokerReward = { earnings: 0, experience_points: 0, new_level: null, reward_skipped_reason: null };
         try {
-            brokerReward = await (0, insurance_1.awardInsuranceBroker)(client, req.user.id, reviewer.username, reviewer.school_id ?? null, reviewer.class, 'Insurance clinic claim approval');
+            brokerReward = await (0, insurance_1.awardInsuranceBroker)(client, req.user.id, reviewer.username, reviewer.school_id ?? null, reviewer.class, 'Insurance clinic claim approval', { referenceAmount: cureFee });
         }
         catch (rewardError) {
             await client.query('ROLLBACK');
@@ -449,6 +454,7 @@ router.put('/broker/claims/:assignmentId/review', auth_1.authenticateToken, tena
             earnings: brokerReward.earnings,
             experience_points: brokerReward.experience_points,
             new_level: brokerReward.new_level,
+            reward_skipped_reason: brokerReward.reward_skipped_reason,
         });
     }
     catch (error) {
@@ -569,9 +575,9 @@ router.put('/broker/cyber-claims/:assignmentId/review', auth_1.authenticateToken
          SET insurance_claim_reviewed_by = $1,
              insurance_claim_reviewed_at = CURRENT_TIMESTAMP
          WHERE id = $2`, [req.user.id, assignmentId]);
-        let brokerReward = { earnings: 0, experience_points: 0, new_level: null };
+        let brokerReward = { earnings: 0, experience_points: 0, new_level: null, reward_skipped_reason: null };
         try {
-            brokerReward = await (0, insurance_1.awardInsuranceBroker)(client, req.user.id, reviewer.username, reviewer.school_id ?? null, reviewer.class, 'Insurance cyber repair claim approval');
+            brokerReward = await (0, insurance_1.awardInsuranceBroker)(client, req.user.id, reviewer.username, reviewer.school_id ?? null, reviewer.class, 'Insurance cyber repair claim approval', { referenceAmount: repairFee });
         }
         catch (rewardError) {
             await client.query('ROLLBACK');
@@ -588,6 +594,7 @@ router.put('/broker/cyber-claims/:assignmentId/review', auth_1.authenticateToken
             earnings: brokerReward.earnings,
             experience_points: brokerReward.experience_points,
             new_level: brokerReward.new_level,
+            reward_skipped_reason: brokerReward.reward_skipped_reason,
         });
     }
     catch (error) {

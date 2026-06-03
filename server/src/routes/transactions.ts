@@ -30,6 +30,10 @@ import {
   getStudentTransferLimitStatusForUser,
   STUDENT_TRANSFER_DAILY_LIMIT,
 } from '../domain/student-transfer-limit';
+import {
+  studentTownTransactionVisibilitySql,
+  teacherSchoolTransactionVisibilitySql,
+} from '../domain/transaction-history-visibility';
 
 // Helper function to check if student can make transactions
 async function checkStudentCanTransact(userId: number): Promise<{ canTransact: boolean; reason?: string }> {
@@ -178,8 +182,22 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
         return res.status(404).json({ error: 'Account not found' });
       }
 
+      const studentClass = req.user.class;
+      const schoolId = req.user.school_id ?? req.schoolId ?? null;
+      const accountParams: unknown[] = [account.id, account.id];
+      const visibility =
+        studentClass && ['6A', '6B', '6C'].includes(studentClass)
+          ? studentTownTransactionVisibilitySql(
+              schoolId,
+              studentClass,
+              accountParams.length + 1,
+              accountParams.length + 2
+            )
+          : { fragment: '', params: [] as unknown[] };
+
       // Get all transactions for this account
-      transactions = await database.query(`
+      transactions = await database.query(
+        `
         SELECT 
           t.*,
           fu.username as from_username,
@@ -189,9 +207,12 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
         LEFT JOIN users fu ON fa.user_id = fu.id
         LEFT JOIN accounts ta ON t.to_account_id = ta.id
         LEFT JOIN users tu ON ta.user_id = tu.id
-        WHERE t.from_account_id = $1 OR t.to_account_id = $2
+        WHERE (t.from_account_id = $1 OR t.to_account_id = $2)
+        ${visibility.fragment}
         ORDER BY t.created_at DESC
-      `, [account.id, account.id]);
+      `,
+        [...accountParams, ...visibility.params]
+      );
       
       console.log('📊 Found transactions for student:', transactions.length);
     } else {
@@ -201,7 +222,9 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
         ? '(fa.user_id IS NULL OR fu.school_id = $1) AND (ta.user_id IS NULL OR tu.school_id = $1)'
         : '(fa.user_id IS NULL OR fu.school_id IS NULL) AND (ta.user_id IS NULL OR tu.school_id IS NULL)';
       const params = schoolId !== null ? [schoolId] : [];
-      transactions = await database.query(`
+      const visibility = teacherSchoolTransactionVisibilitySql(schoolId, params.length + 1);
+      transactions = await database.query(
+        `
         SELECT 
           t.*,
           fu.username as from_username,
@@ -212,8 +235,11 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
         LEFT JOIN accounts ta ON t.to_account_id = ta.id
         LEFT JOIN users tu ON ta.user_id = tu.id
         WHERE ${schoolCondition}
+        ${visibility.fragment}
         ORDER BY t.created_at DESC
-      `, params);
+      `,
+        [...params, ...visibility.params]
+      );
     }
 
     res.json(transactions);
@@ -1484,6 +1510,19 @@ router.get(
       const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [client.id]);
       let transactions: TransactionWithDetails[] = [];
       if (account) {
+        const clientSchoolId = client.school_id ?? req.user.school_id ?? req.schoolId ?? null;
+        const clientClass = client.class;
+        const accountParams: unknown[] = [account.id, account.id];
+        const visibility =
+          clientClass && ['6A', '6B', '6C'].includes(clientClass)
+            ? studentTownTransactionVisibilitySql(
+                clientSchoolId,
+                clientClass,
+                accountParams.length + 1,
+                accountParams.length + 2
+              )
+            : { fragment: '', params: [] as unknown[] };
+
         transactions = await database.query(
           `SELECT t.*,
                   fu.username AS from_username,
@@ -1497,9 +1536,10 @@ router.get(
            LEFT JOIN users fu ON fa.user_id = fu.id
            LEFT JOIN accounts ta ON t.to_account_id = ta.id
            LEFT JOIN users tu ON ta.user_id = tu.id
-           WHERE t.from_account_id = $1 OR t.to_account_id = $2
+           WHERE (t.from_account_id = $1 OR t.to_account_id = $2)
+           ${visibility.fragment}
            ORDER BY t.created_at DESC`,
-          [account.id, account.id]
+          [...accountParams, ...visibility.params]
         );
       }
 
@@ -1619,7 +1659,9 @@ router.post(
 
       let reward;
       try {
-        reward = await payAdviceReward(req.user.id, req.user.username || '', townClass, schoolId);
+        reward = await payAdviceReward(req.user.id, req.user.username || '', townClass, schoolId, {
+          clientUserId: client.id,
+        });
       } catch (err: unknown) {
         if (err instanceof Error && err.message === 'TREASURY_INSUFFICIENT') {
           return res.status(400).json({
@@ -1629,11 +1671,17 @@ router.post(
         throw err;
       }
 
+      const rewardSuffix =
+        reward.earnings > 0
+          ? `You earned ${reward.experience_points} XP and R${reward.earnings}.`
+          : reward.reward_skipped_reason || 'No reward earned for this advice.';
+
       res.json({
-        message: `Advice submitted. You earned ${reward.experience_points} XP and R${reward.earnings}.`,
+        message: `Advice submitted. ${rewardSuffix}`,
         experience_points: reward.experience_points,
         earnings: reward.earnings,
         new_level: reward.new_level,
+        reward_skipped_reason: reward.reward_skipped_reason,
         advice_xp_reward: ADVICE_XP_REWARD,
         advice_earnings_reward: ADVICE_EARNINGS_REWARD,
       });
