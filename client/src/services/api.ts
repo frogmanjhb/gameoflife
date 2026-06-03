@@ -857,6 +857,11 @@ export const transactionsApi = {
   }> => {
     return api.post('/transactions/pending-transfers/approve-all');
   },
+  denyAllPendingTransfers: (): Promise<{
+    data: { message: string; denied: number; failed: { id: number; error: string }[] };
+  }> => {
+    return api.post('/transactions/pending-transfers/deny-all');
+  },
   getAccountantAssignments: (): Promise<{ data: AccountantAssignmentStudent[] }> => {
     return api.get('/transactions/my-approvals/assignments');
   },

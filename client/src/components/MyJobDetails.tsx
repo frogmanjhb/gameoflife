@@ -3282,7 +3282,7 @@ const MyJobDetails: React.FC = () => {
                     <p className="text-xs text-gray-600">
                       Click a name to review transactions and submit advice (10 XP + R500 per submission).
                       Pay each person&apos;s weekly salary individually (3 XP + R300 per payment), including assigned accountant peers.
-                      Approve transfers from everyone listed below (1 XP + R500 each).
+                      Approve transfers from everyone listed below. Rewards apply only to transfers of R50+ (max R500, capped at transfer amount), up to 10 rewarded approvals per day.
                     </p>
                   </div>
                 </div>
@@ -3460,7 +3460,7 @@ const MyJobDetails: React.FC = () => {
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Transfer Approvals</h2>
                   <p className="text-xs text-gray-600">
-                    Review and approve or deny transfers from your assigned students and accountant peers. Each approval gives you 1 XP and R500.
+                    Review and approve or deny transfers from your assigned students and accountant peers. Rewards apply only to transfers of R50+ (max R500, capped at transfer amount), up to 10 rewarded approvals per day.
                   </p>
                 </div>
               </div>

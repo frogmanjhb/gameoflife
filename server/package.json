@@ -53,6 +53,9 @@
     "migrate:doctor-reputation": "node run-sql-migration.js migrations/102_add_doctor_reputation.sql",
     "migrate:police-reputation": "node run-sql-migration.js migrations/103_add_police_reputation.sql",
     "migrate:town-news-popups": "node run-sql-migration.js migrations/104_add_town_news_popups.sql",
+    "migrate:accountant-transfer-reward-reversals": "node run-sql-migration.js migrations/105_accountant_transfer_reward_reversals.sql",
+    "audit:accountant-transfer-exploit": "node scripts/audit-reverse-accountant-transfer-rewards.js --audit",
+    "reverse:accountant-transfer-exploit": "node scripts/audit-reverse-accountant-transfer-rewards.js --apply",
     "seed:test-school": "node seed-test-school.js",
     "verify:job-xp-wiring": "node scripts/verify-job-xp-wiring.js"
   },

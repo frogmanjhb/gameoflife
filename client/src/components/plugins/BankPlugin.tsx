@@ -778,36 +778,68 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                   </p>
                 </div>
                 {pendingTransfers.filter(pt => pt.status === 'pending').length > 0 && (
-                  <button
-                    onClick={async () => {
-                      const pendingCount = pendingTransfers.filter(pt => pt.status === 'pending').length;
-                      if (!window.confirm(`Approve all ${pendingCount} pending transfer request${pendingCount !== 1 ? 's' : ''}?`)) {
-                        return;
-                      }
-                      setError('');
-                      setSuccess('');
-                      setActionLoading(true);
-                      try {
-                        const res = await transactionsApi.approveAllPendingTransfers();
-                        const { message, failed } = res.data;
-                        if (failed.length > 0) {
-                          setError(`${message}. ${failed.length} request${failed.length !== 1 ? 's' : ''} could not be approved.`);
-                        } else {
-                          setSuccess(message);
+                  <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                    <button
+                      onClick={async () => {
+                        const pendingCount = pendingTransfers.filter(pt => pt.status === 'pending').length;
+                        if (!window.confirm(`Approve all ${pendingCount} pending transfer request${pendingCount !== 1 ? 's' : ''}?`)) {
+                          return;
                         }
-                        fetchData();
-                      } catch (err: any) {
-                        setError(err.response?.data?.error || 'Failed to approve all transfers');
-                      } finally {
-                        setActionLoading(false);
-                      }
-                    }}
-                    disabled={actionLoading}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2 shrink-0"
-                  >
-                    <CheckCircle className="h-4 w-4" />
-                    <span>Approve All ({pendingTransfers.filter(pt => pt.status === 'pending').length})</span>
-                  </button>
+                        setError('');
+                        setSuccess('');
+                        setActionLoading(true);
+                        try {
+                          const res = await transactionsApi.approveAllPendingTransfers();
+                          const { message, failed } = res.data;
+                          if (failed.length > 0) {
+                            setError(`${message}. ${failed.length} request${failed.length !== 1 ? 's' : ''} could not be approved.`);
+                          } else {
+                            setSuccess(message);
+                          }
+                          fetchData();
+                        } catch (err: any) {
+                          setError(err.response?.data?.error || 'Failed to approve all transfers');
+                        } finally {
+                          setActionLoading(false);
+                        }
+                      }}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      <span>Approve All ({pendingTransfers.filter(pt => pt.status === 'pending').length})</span>
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const pendingCount = pendingTransfers.filter(pt => pt.status === 'pending').length;
+                        if (!window.confirm(`Deny all ${pendingCount} pending transfer request${pendingCount !== 1 ? 's' : ''}?`)) {
+                          return;
+                        }
+                        setError('');
+                        setSuccess('');
+                        setActionLoading(true);
+                        try {
+                          const res = await transactionsApi.denyAllPendingTransfers();
+                          const { message, failed } = res.data;
+                          if (failed.length > 0) {
+                            setError(`${message}. ${failed.length} request${failed.length !== 1 ? 's' : ''} could not be denied.`);
+                          } else {
+                            setSuccess(message);
+                          }
+                          fetchData();
+                        } catch (err: any) {
+                          setError(err.response?.data?.error || 'Failed to deny all transfers');
+                        } finally {
+                          setActionLoading(false);
+                        }
+                      }}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      <span>Deny All ({pendingTransfers.filter(pt => pt.status === 'pending').length})</span>
+                    </button>
+                  </div>
                 )}
               </div>
               {pendingTransfers.filter(pt => pt.status === 'pending').length === 0 ? (
