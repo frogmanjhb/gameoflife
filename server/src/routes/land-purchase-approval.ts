@@ -409,11 +409,10 @@ router.put('/purchase-requests/:id/fm-review',
   }
 );
 
-// PUT /purchase-requests/:id/engineer-review — Architect or Civil Engineer approves/denies
+// PUT /purchase-requests/:id/engineer-review — Architect or Civil Engineer approves only
 router.put('/purchase-requests/:id/engineer-review',
   authenticateToken,
-  body('status').isIn(['approved', 'denied']),
-  body('denial_reason').optional().isString(),
+  body('status').isIn(['approved']),
   async (req: AuthenticatedRequest, res: Response) => {
     const client = await database.pool.connect();
     try {
@@ -427,7 +426,6 @@ router.put('/purchase-requests/:id/engineer-review',
       }
 
       const requestId = parseInt(req.params.id, 10);
-      const { status, denial_reason } = req.body;
 
       const reviewer = await getUserWithJob(req.user!.id);
       if (!reviewer || !isLandEngineerJob(reviewer.job_name)) {
@@ -468,24 +466,6 @@ router.put('/purchase-requests/:id/engineer-review',
       }
 
       await client.query('BEGIN');
-
-      if (status === 'denied') {
-        await client.query(
-          `UPDATE land_purchase_requests
-           SET status = 'denied',
-               denial_reason = $1,
-               reviewed_by = $2,
-               reviewed_at = CURRENT_TIMESTAMP,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $3`,
-          [denial_reason || `Denied by ${reviewer.job_name}`, req.user!.id, requestId]
-        );
-        await client.query('COMMIT');
-        const updated = await enrichPurchaseRequestWithEngineers(
-          (await database.get(`${purchaseRequestSelect} WHERE lpr.id = $1`, [requestId]))!
-        );
-        return res.json({ message: 'Purchase request denied', request: updated });
-      }
 
       const offeredPrice = Number(purchaseRequest.offered_price) || 0;
       const feeShare = calculateEngineerFeeShare(offeredPrice, requiredEngineers.length);

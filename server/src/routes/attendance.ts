@@ -6,9 +6,11 @@ import { getXPForLevel } from './jobs';
 import {
   ABSENT_NO_SICK_NOTE_PAY_FACTOR,
   ATTENDANCE_REGISTER_XP,
+  ATTENDANCE_WEEKEND_DISABLED_REASON,
   AttendanceEntryStatus,
   SICK_NOTE_APPROVE_XP,
   getTodayRegisterId,
+  isAttendanceRegisterDayEnabled,
   resolveRegisterSubmitterRole,
   resolveSickNoteReviewer,
   reviewerRoleLabel,
@@ -100,8 +102,11 @@ router.get('/register-status', authenticateToken, async (req: AuthenticatedReque
 
     const students = await fetchTownStudents(schoolId, townClass);
     const todayRegisterId = await getTodayRegisterId(schoolId, townClass);
+    const registerDayEnabled = isAttendanceRegisterDayEnabled();
     const canSubmit =
-      submitterRole !== null && userCanSubmitRegister(user?.job_name, submitterRole);
+      registerDayEnabled &&
+      submitterRole !== null &&
+      userCanSubmitRegister(user?.job_name, submitterRole);
 
     let todayEntries: { student_user_id: number; status: AttendanceEntryStatus }[] = [];
     if (todayRegisterId) {
@@ -115,6 +120,7 @@ router.get('/register-status', authenticateToken, async (req: AuthenticatedReque
       can_submit: canSubmit && !todayRegisterId,
       submitter_role: submitterRole,
       already_submitted_today: !!todayRegisterId,
+      register_day_enabled: registerDayEnabled,
       submit_xp: ATTENDANCE_REGISTER_XP,
       pay_penalty_factor: ABSENT_NO_SICK_NOTE_PAY_FACTOR,
       students: students.map((s: Record<string, unknown>) => ({
@@ -123,15 +129,17 @@ router.get('/register-status', authenticateToken, async (req: AuthenticatedReque
         display_name: displayName(s as { username: string; first_name?: string; last_name?: string }),
       })),
       today_entries: todayEntries,
-      reason: !submitterRole
-        ? 'Your town needs a Nurse or Doctor to take daily register.'
-        : !canSubmit
-          ? submitterRole === 'nurse'
-            ? 'Only the town Nurse can submit register while a Nurse is employed.'
-            : 'Only the town Doctor can submit register (no Nurse in town).'
-          : todayRegisterId
-            ? 'Register already submitted for today.'
-            : null,
+      reason: !registerDayEnabled
+        ? ATTENDANCE_WEEKEND_DISABLED_REASON
+        : !submitterRole
+          ? 'Your town needs a Nurse or Doctor to take daily register.'
+          : !canSubmit
+            ? submitterRole === 'nurse'
+              ? 'Only the town Nurse can submit register while a Nurse is employed.'
+              : 'Only the town Doctor can submit register (no Nurse in town).'
+            : todayRegisterId
+              ? 'Register already submitted for today.'
+              : null,
     });
   } catch (error) {
     console.error('Attendance register-status error:', error);
@@ -159,6 +167,10 @@ router.post(
 
       if (!(await tablesReady())) {
         return res.status(503).json({ error: 'Attendance register is not available yet.' });
+      }
+
+      if (!isAttendanceRegisterDayEnabled()) {
+        return res.status(400).json({ error: ATTENDANCE_WEEKEND_DISABLED_REASON });
       }
 
       const schoolId = req.user.school_id ?? null;

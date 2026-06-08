@@ -907,6 +907,7 @@ export interface AttendanceRegisterStatus {
   can_submit: boolean;
   submitter_role: 'nurse' | 'doctor' | null;
   already_submitted_today: boolean;
+  register_day_enabled?: boolean;
   submit_xp: number;
   pay_penalty_factor: number;
   students: AttendanceRegisterStudent[];

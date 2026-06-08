@@ -88,7 +88,8 @@ const AttendanceRegisterPanel: React.FC<AttendanceRegisterPanelProps> = ({ jobNa
   const showPanel =
     (isNurse && status?.submitter_role === 'nurse') ||
     (isDoctor && status?.submitter_role === 'doctor') ||
-    status?.already_submitted_today;
+    status?.already_submitted_today ||
+    status?.register_day_enabled === false;
 
   if (!showPanel && !loading) return null;
 
@@ -101,7 +102,7 @@ const AttendanceRegisterPanel: React.FC<AttendanceRegisterPanelProps> = ({ jobNa
         <div>
           <h3 className="text-lg font-bold text-gray-900">Daily Register Check</h3>
           <p className="text-sm text-gray-600 mt-1">
-            Mark every student as present or absent. Submit once per day for {status?.submit_xp ?? 20} XP.
+            Mark every student as present or absent. Submit once per weekday for {status?.submit_xp ?? 20} XP.
           </p>
         </div>
       </div>
@@ -125,7 +126,7 @@ const AttendanceRegisterPanel: React.FC<AttendanceRegisterPanelProps> = ({ jobNa
             </p>
           )}
 
-          {status.students.length > 0 && (
+          {status.students.length > 0 && status.register_day_enabled !== false && (
             <ul className="divide-y divide-gray-100 border border-gray-200 rounded-lg mb-4">
               {status.students.map((student) => (
                 <li

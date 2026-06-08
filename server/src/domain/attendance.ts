@@ -7,11 +7,29 @@ export const SICK_NOTE_APPROVE_XP = 10;
 /** Multiplier applied to gross salary when absent without submitting a sick note. */
 export const ABSENT_NO_SICK_NOTE_PAY_FACTOR = 0.5;
 
-/** Same day window as job challenge games (resets 04:00). */
+/** Same day window as job challenge games (resets 04:00 UTC). */
 export const ATTENDANCE_DAY_START_SQL = `
   CASE WHEN CURRENT_TIME < '04:00:00' THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '4 hours'
   ELSE CURRENT_DATE + INTERVAL '4 hours' END
 `;
+
+export const ATTENDANCE_WEEKEND_DISABLED_REASON =
+  'Attendance register is not available on weekends.';
+
+/** Game day for attendance (resets 04:00 UTC, same as job challenge games). */
+export function getAttendanceGameDay(date: Date = new Date()): Date {
+  const gameDay = new Date(date);
+  if (gameDay.getUTCHours() < 4) {
+    gameDay.setUTCDate(gameDay.getUTCDate() - 1);
+  }
+  return gameDay;
+}
+
+/** Nurse/Doctor register is weekdays only (Mon–Fri game days). */
+export function isAttendanceRegisterDayEnabled(date: Date = new Date()): boolean {
+  const dayOfWeek = getAttendanceGameDay(date).getUTCDay();
+  return dayOfWeek !== 0 && dayOfWeek !== 6;
+}
 
 export type AttendanceEntryStatus = 'present' | 'absent';
 export type SickNoteStatus = 'awaiting_submission' | 'pending_review' | 'approved' | 'denied';

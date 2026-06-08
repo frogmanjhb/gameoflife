@@ -687,15 +687,11 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
     }
   };
 
-  const handleEngineerReview = async (id: number, status: 'approved' | 'denied') => {
-    let denialReason: string | undefined;
-    if (status === 'denied') {
-      denialReason = prompt('Reason for denial (optional):') || undefined;
-    }
+  const handleEngineerReview = async (id: number) => {
     setActionLoading(id);
     setError('');
     try {
-      const res = await landApi.reviewEngineerPurchaseRequest(id, status, denialReason);
+      const res = await landApi.reviewEngineerPurchaseRequest(id, 'approved');
       const xpMsg = res.data.experience_points
         ? ` +${res.data.experience_points} XP${res.data.new_level ? ` — level ${res.data.new_level}!` : ''}.`
         : '';
@@ -1063,19 +1059,11 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => handleEngineerReview(request.id, 'approved')}
+                          onClick={() => handleEngineerReview(request.id)}
                           disabled={actionLoading === request.id}
                           className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50"
                         >
                           Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleEngineerReview(request.id, 'denied')}
-                          disabled={actionLoading === request.id}
-                          className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
-                        >
-                          Deny
                         </button>
                       </div>
                     </div>
