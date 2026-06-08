@@ -343,7 +343,7 @@ router.post('/apps', authenticateToken, async (req: AuthenticatedRequest, res: R
   }
 });
 
-// DELETE /apps/:id — software engineer removes own app; teacher removes any app in their school
+// DELETE /apps/:id — engineer removes own app; teacher removes student app in town
 router.delete('/apps/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -359,12 +359,25 @@ router.delete('/apps/:id', authenticateToken, async (req: AuthenticatedRequest, 
     }
 
     if (req.user.role === 'teacher') {
+      const townClass = resolveViewerTownClass(req.user, req.query.class);
+      if (!townClass) {
+        return res.status(400).json({ error: viewerTownClassError(req.user.role) });
+      }
+
       const schoolId = req.user.school_id ?? null;
-      const existing = await database.get(
-        `SELECT id FROM code_board_apps
-         WHERE id = $1 AND ((school_id = $2) OR ($2 IS NULL AND school_id IS NULL))`,
-        [appId, schoolId]
-      );
+      const existing = schoolId != null
+        ? await database.get(
+            `SELECT a.id FROM code_board_apps a
+             JOIN users u ON u.id = a.engineer_user_id
+             WHERE a.id = $1 AND a.school_id = $2 AND a.town_class = $3 AND u.role = 'student'`,
+            [appId, schoolId, townClass]
+          )
+        : await database.get(
+            `SELECT a.id FROM code_board_apps a
+             JOIN users u ON u.id = a.engineer_user_id
+             WHERE a.id = $1 AND a.school_id IS NULL AND a.town_class = $2 AND u.role = 'student'`,
+            [appId, townClass]
+          );
       if (!existing) {
         return res.status(404).json({ error: 'App not found or you cannot delete it' });
       }

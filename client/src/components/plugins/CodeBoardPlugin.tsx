@@ -16,6 +16,7 @@ const CodeBoardPlugin: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionAppId, setActionAppId] = useState<number | null>(null);
+  const [removingAppId, setRemovingAppId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const fetchApps = useCallback(async () => {
@@ -66,12 +67,15 @@ const CodeBoardPlugin: React.FC = () => {
   };
 
   const handleRemove = async (appId: number, title: string) => {
-    if (!window.confirm(`Remove "${title}" from the Code Board? This cannot be undone.`)) return;
+    if (!window.confirm(`Remove "${title}" from the Code Board?`)) return;
     try {
-      setActionAppId(appId);
+      setRemovingAppId(appId);
       setFeedback(null);
       setError(null);
-      await codeBoardApi.deleteApp(appId);
+      await codeBoardApi.deleteApp(
+        appId,
+        currentTownClass ? { class: currentTownClass } : undefined
+      );
       setFeedback(`"${title}" was removed from the Code Board.`);
       await fetchApps();
     } catch (err: unknown) {
@@ -80,7 +84,7 @@ const CodeBoardPlugin: React.FC = () => {
           'Failed to remove app'
       );
     } finally {
-      setActionAppId(null);
+      setRemovingAppId(null);
     }
   };
 
@@ -165,6 +169,7 @@ const CodeBoardPlugin: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {data.apps.map((app) => {
             const busy = actionAppId === app.id;
+            const removing = removingAppId === app.id;
             const canInteract = isStudent && !app.is_own_app;
 
             return (
@@ -172,13 +177,30 @@ const CodeBoardPlugin: React.FC = () => {
                 key={app.id}
                 className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col gap-4"
               >
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{app.title}</h3>
-                  <p className="text-sm text-gray-500 mt-0.5">by {app.engineer_name}</p>
-                  <p className="text-xs text-gray-400 mt-2">
-                    {app.star_count} star{app.star_count === 1 ? '' : 's'} · {app.click_count} click
-                    {app.click_count === 1 ? '' : 's'}
-                  </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900">{app.title}</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">by {app.engineer_name}</p>
+                    <p className="text-xs text-gray-400 mt-2">
+                      {app.star_count} star{app.star_count === 1 ? '' : 's'} · {app.click_count} click
+                      {app.click_count === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  {isTeacher && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(app.id, app.title)}
+                      disabled={removing || !currentTownClass}
+                      className="shrink-0 p-2 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                      title="Remove student app"
+                    >
+                      {removing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-2 mt-auto">
@@ -219,17 +241,6 @@ const CodeBoardPlugin: React.FC = () => {
                       <ExternalLink className="h-4 w-4" />
                       Open app
                     </a>
-                  )}
-                  {isTeacher && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemove(app.id, app.title)}
-                      disabled={busy}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-sm font-semibold disabled:opacity-50 ml-auto"
-                    >
-                      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                      Remove
-                    </button>
                   )}
                 </div>
               </div>

@@ -1164,7 +1164,8 @@ export const codeBoardApi = {
     api.get('/code-board/apps', { params }),
   postApp: (data: { title: string; url: string }): Promise<{ data: { app: CodeBoardAppItem; message: string } }> =>
     api.post('/code-board/apps', data),
-  deleteApp: (id: number): Promise<{ data: { success: boolean } }> => api.delete(`/code-board/apps/${id}`),
+  deleteApp: (id: number, params?: { class?: string }): Promise<{ data: { success: boolean } }> =>
+    api.delete(`/code-board/apps/${id}`, { params }),
   starApp: (id: number): Promise<{ data: { success: boolean; star_count: number; creator_xp: number; creator_earnings: number } }> =>
     api.post(`/code-board/apps/${id}/star`),
   clickApp: (id: number): Promise<{
@@ -1194,8 +1195,8 @@ export const townNewsApi = {
       message: string;
     };
   }> => api.post('/town-news/stories', data),
-  deleteStory: (id: number): Promise<{ data: { success: boolean } }> =>
-    api.delete(`/town-news/stories/${id}`),
+  deleteStory: (id: number, params?: { class?: string }): Promise<{ data: { success: boolean } }> =>
+    api.delete(`/town-news/stories/${id}`, { params }),
   getPopupsManage: (): Promise<{ data: TownNewsPopupManageStatus }> =>
     api.get('/town-news/popups/manage'),
   getActivePopup: (): Promise<{ data: TownNewsActivePopup }> =>

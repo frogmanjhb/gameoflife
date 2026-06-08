@@ -238,11 +238,12 @@ router.post('/stories', authenticateToken, async (req: AuthenticatedRequest, res
   }
 });
 
-// DELETE /stories/:id — contributor removes own story
+// DELETE /stories/:id — contributor removes own story; teacher removes student story in town
 router.delete('/stories/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const contributor = await requireTownNewsContributor(req, res);
-    if (!contributor) return;
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
     if (!(await tablesReady())) {
       return res.status(503).json({ error: 'Town News Board is not available yet. Please try again later.' });
     }
@@ -251,6 +252,37 @@ router.delete('/stories/:id', authenticateToken, async (req: AuthenticatedReques
     if (Number.isNaN(storyId)) {
       return res.status(400).json({ error: 'Invalid story id' });
     }
+
+    if (req.user.role === 'teacher') {
+      const townClass = resolveViewerTownClass(req.user, req.query.class);
+      if (!townClass) {
+        return res.status(400).json({ error: viewerTownClassError(req.user.role) });
+      }
+
+      const schoolId = req.user.school_id ?? null;
+      const existing = schoolId != null
+        ? await database.get(
+            `SELECT s.id FROM town_news_stories s
+             JOIN users u ON u.id = s.journalist_user_id
+             WHERE s.id = $1 AND s.school_id = $2 AND s.town_class = $3 AND u.role = 'student'`,
+            [storyId, schoolId, townClass]
+          )
+        : await database.get(
+            `SELECT s.id FROM town_news_stories s
+             JOIN users u ON u.id = s.journalist_user_id
+             WHERE s.id = $1 AND s.school_id IS NULL AND s.town_class = $2 AND u.role = 'student'`,
+            [storyId, townClass]
+          );
+      if (!existing) {
+        return res.status(404).json({ error: 'Story not found or you cannot delete it' });
+      }
+
+      await database.run('DELETE FROM town_news_stories WHERE id = $1', [storyId]);
+      return res.json({ success: true });
+    }
+
+    const contributor = await requireTownNewsContributor(req, res);
+    if (!contributor) return;
 
     const schoolId = contributor.school_id ?? null;
     const existing = schoolId != null
