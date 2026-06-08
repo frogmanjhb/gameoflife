@@ -5,6 +5,7 @@ import {
   STORY_EARNINGS_REWARD,
   STORY_XP_REWARD,
   canSubmitTownNews,
+  getStoryPostQuota,
   isTownClass,
   sanitizeBody,
   sanitizeHeadline,
@@ -153,10 +154,14 @@ router.get('/manage', authenticateToken, async (req: AuthenticatedRequest, res: 
           [contributor.class, contributor.id]
         );
 
+    const postQuota = await getStoryPostQuota(contributor.id);
+
     res.json({
       stories: rows.map((row: Parameters<typeof mapStoryRow>[0]) => mapStoryRow(row)),
       story_xp_reward: STORY_XP_REWARD,
       story_earnings_reward: STORY_EARNINGS_REWARD,
+      remaining_posts: postQuota.remaining_posts,
+      daily_post_limit: postQuota.daily_post_limit,
     });
   } catch (error) {
     console.error('Town news manage error:', error);
@@ -213,6 +218,13 @@ router.post('/stories', authenticateToken, async (req: AuthenticatedRequest, res
     }
     if (!body) {
       return res.status(400).json({ error: 'Please write your story' });
+    }
+
+    const postQuota = await getStoryPostQuota(contributor.id);
+    if (postQuota.remaining_posts <= 0) {
+      return res.status(400).json({
+        error: 'You have reached your daily limit of 2 Town News posts. Try again tomorrow.',
+      });
     }
 
     const widgets = sanitizeTownNewsWidgets(req.body?.widgets);

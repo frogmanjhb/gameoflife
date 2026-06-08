@@ -1068,6 +1068,8 @@ export interface TownNewsManageStatus {
   stories: TownNewsStory[];
   story_xp_reward: number;
   story_earnings_reward: number;
+  remaining_posts: number;
+  daily_post_limit: number;
 }
 
 export interface TownNewsPublicView {

@@ -144,7 +144,7 @@ const TownNewsPanel: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!headline.trim() || !body.trim()) return;
+    if (!headline.trim() || !body.trim() || postsExhausted) return;
 
     try {
       setActionLoading(true);
@@ -189,6 +189,10 @@ const TownNewsPanel: React.FC = () => {
     }
   };
 
+  const remainingPosts = status?.remaining_posts ?? 0;
+  const dailyPostLimit = status?.daily_post_limit ?? 2;
+  const postsExhausted = remainingPosts <= 0;
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-gray-600 py-4">
@@ -213,6 +217,9 @@ const TownNewsPanel: React.FC = () => {
               approved, you earn <strong>{status?.story_xp_reward ?? 20} XP</strong> and{' '}
               <strong>R{(status?.story_earnings_reward ?? 5000).toLocaleString()}</strong>.
             </p>
+            <p className="text-sm font-medium text-indigo-800 mt-2">
+              {remainingPosts} / {dailyPostLimit} posts remaining today
+            </p>
           </div>
           <Link to="/news" className="text-sm font-medium text-indigo-700 hover:underline">
             View Town News →
@@ -226,6 +233,12 @@ const TownNewsPanel: React.FC = () => {
           <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">{success}</p>
         )}
 
+        {postsExhausted && (
+          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+            You have used all {dailyPostLimit} Town News posts for today. Try again tomorrow.
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4 mb-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Headline</label>
@@ -236,7 +249,7 @@ const TownNewsPanel: React.FC = () => {
               onChange={(e) => setHeadline(e.target.value)}
               placeholder="e.g. Mayor announces new tax plan"
               maxLength={200}
-              disabled={actionLoading}
+              disabled={actionLoading || postsExhausted}
             />
           </div>
           <div>
@@ -248,7 +261,7 @@ const TownNewsPanel: React.FC = () => {
               onChange={(e) => setBody(e.target.value)}
               placeholder="Write your news article..."
               maxLength={8000}
-              disabled={actionLoading}
+              disabled={actionLoading || postsExhausted}
             />
           </div>
 
@@ -431,7 +444,7 @@ const TownNewsPanel: React.FC = () => {
 
           <button
             type="submit"
-            disabled={actionLoading || !headline.trim() || !body.trim()}
+            disabled={actionLoading || postsExhausted || !headline.trim() || !body.trim()}
             className="btn-primary flex items-center gap-2 disabled:opacity-50"
           >
             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

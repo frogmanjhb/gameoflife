@@ -3,6 +3,8 @@ import { getXPForLevel } from '../routes/jobs';
 
 export const STORY_XP_REWARD = 20;
 export const STORY_EARNINGS_REWARD = 5000;
+/** Max town news story submissions per contributor per day (resets at 4:00 AM server time). */
+export const TOWN_NEWS_DAILY_POST_LIMIT = 2;
 export const MAX_HEADLINE_LENGTH = 200;
 export const MAX_BODY_LENGTH = 8000;
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -31,6 +33,29 @@ export function canSubmitTownNews(jobName: string | null | undefined): boolean {
     hasGraphicDesignerJob(jobName) ||
     hasEntrepreneurJob(jobName)
   );
+}
+
+/** Count story rows created since the current civic day (4:00 AM boundary). */
+export async function countTodayStorySubmissions(journalistUserId: number): Promise<number> {
+  const rows = await database.query(
+    `SELECT COUNT(*)::int AS count FROM town_news_stories
+     WHERE journalist_user_id = $1
+     AND created_at >= (
+       CASE WHEN CURRENT_TIME < '04:00:00' THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '4 hours'
+       ELSE CURRENT_DATE + INTERVAL '4 hours' END
+     )`,
+    [journalistUserId]
+  );
+  return parseInt(String(rows[0]?.count ?? 0), 10);
+}
+
+export async function getStoryPostQuota(journalistUserId: number): Promise<{
+  remaining_posts: number;
+  daily_post_limit: number;
+}> {
+  const todayCount = await countTodayStorySubmissions(journalistUserId);
+  const remaining = Math.max(0, TOWN_NEWS_DAILY_POST_LIMIT - todayCount);
+  return { remaining_posts: remaining, daily_post_limit: TOWN_NEWS_DAILY_POST_LIMIT };
 }
 
 export function estimateImageBytes(imageData: string): number {
