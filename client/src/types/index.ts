@@ -1011,6 +1011,7 @@ export interface CodeBoardAppItem {
   id: number;
   title: string;
   url: string;
+  town_class?: '6A' | '6B' | '6C';
   star_count: number;
   click_count: number;
   created_at: string;

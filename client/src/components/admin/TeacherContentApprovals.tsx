@@ -29,6 +29,7 @@ const TeacherContentApprovals: React.FC<TeacherContentApprovalsProps> = ({ onUpd
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [bulkApproving, setBulkApproving] = useState<'news' | 'apps' | null>(null);
   const [denialDrafts, setDenialDrafts] = useState<Record<string, string>>({});
 
   const fetchPending = useCallback(async () => {
@@ -84,6 +85,38 @@ const TeacherContentApprovals: React.FC<TeacherContentApprovalsProps> = ({ onUpd
       );
     } finally {
       setReviewingId(null);
+    }
+  };
+
+  const handleApproveAll = async (type: 'news' | 'apps', count: number) => {
+    const label = type === 'news' ? 'Town News stor' : 'Code Board app';
+    const plural = count !== 1 ? (type === 'news' ? 'ies' : 's') : (type === 'news' ? 'y' : '');
+    if (!window.confirm(`Approve all ${count} pending ${label}${plural}?`)) {
+      return;
+    }
+    setBulkApproving(type);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res =
+        type === 'news'
+          ? await contentSubmissionsApi.approveAllNewsStories()
+          : await contentSubmissionsApi.approveAllCodeApps();
+      const { message, failed } = res.data;
+      if (failed.length > 0) {
+        setError(`${message}. ${failed.length} submission${failed.length !== 1 ? 's' : ''} could not be approved.`);
+      } else {
+        setSuccess(message);
+      }
+      await fetchPending();
+      onUpdate?.();
+    } catch (err: unknown) {
+      setError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+          `Failed to approve all ${type === 'news' ? 'news stories' : 'code board apps'}`
+      );
+    } finally {
+      setBulkApproving(null);
     }
   };
 
@@ -309,7 +342,22 @@ const TeacherContentApprovals: React.FC<TeacherContentApprovalsProps> = ({ onUpd
         <>
           {pendingNews.length > 0 && (
             <section className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Town News ({pendingNews.length})</h3>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-lg font-semibold text-gray-900">Town News ({pendingNews.length})</h3>
+                <button
+                  type="button"
+                  disabled={bulkApproving !== null || reviewingId !== null}
+                  onClick={() => handleApproveAll('news', pendingNews.length)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50"
+                >
+                  {bulkApproving === 'news' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle className="h-4 w-4" />
+                  )}
+                  Approve All ({pendingNews.length})
+                </button>
+              </div>
               {pendingNews.map(renderNewsCard)}
             </section>
           )}
@@ -321,7 +369,22 @@ const TeacherContentApprovals: React.FC<TeacherContentApprovalsProps> = ({ onUpd
           )}
           {pendingApps.length > 0 && (
             <section className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Code Board ({pendingApps.length})</h3>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-lg font-semibold text-gray-900">Code Board ({pendingApps.length})</h3>
+                <button
+                  type="button"
+                  disabled={bulkApproving !== null || reviewingId !== null}
+                  onClick={() => handleApproveAll('apps', pendingApps.length)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50"
+                >
+                  {bulkApproving === 'apps' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle className="h-4 w-4" />
+                  )}
+                  Approve All ({pendingApps.length})
+                </button>
+              </div>
               {pendingApps.map(renderAppCard)}
             </section>
           )}

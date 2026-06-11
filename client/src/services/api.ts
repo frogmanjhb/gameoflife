@@ -1219,6 +1219,12 @@ export const townNewsApi = {
 
 export const contentSubmissionsApi = {
   getPending: (): Promise<{ data: ContentSubmissionsPending }> => api.get('/content-submissions/pending'),
+  approveAllNewsStories: (): Promise<{
+    data: { message: string; approved: number; failed: { id: number; error: string }[] };
+  }> => api.post('/content-submissions/news/approve-all'),
+  approveAllCodeApps: (): Promise<{
+    data: { message: string; approved: number; failed: { id: number; error: string }[] };
+  }> => api.post('/content-submissions/apps/approve-all'),
   reviewNewsStory: (
     id: number,
     data: { status: 'approved' | 'denied'; denial_reason?: string }

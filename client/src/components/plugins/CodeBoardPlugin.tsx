@@ -3,13 +3,11 @@ import { Navigate } from 'react-router-dom';
 import { ExternalLink, Loader2, Star, Trash2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlugins } from '../../contexts/PluginContext';
-import { useTown } from '../../contexts/TownContext';
 import { codeBoardApi } from '../../services/api';
 import { CodeBoardPublicView } from '../../types';
 
 const CodeBoardPlugin: React.FC = () => {
   const { user } = useAuth();
-  const { currentTownClass } = useTown();
   const { plugins, loading: pluginsLoading } = usePlugins();
   const codeBoardPlugin = plugins.find((p) => p.route_path === '/code-board');
   const [data, setData] = useState<CodeBoardPublicView | null>(null);
@@ -20,17 +18,10 @@ const CodeBoardPlugin: React.FC = () => {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const fetchApps = useCallback(async () => {
-    if (user?.role === 'teacher' && !currentTownClass) {
-      setLoading(false);
-      setError('Select a town class from the dashboard to view the Code Board.');
-      return;
-    }
     try {
       setLoading(true);
       setError(null);
-      const res = await codeBoardApi.getApps(
-        currentTownClass ? { class: currentTownClass } : undefined
-      );
+      const res = await codeBoardApi.getApps();
       setData(res.data);
     } catch (err: unknown) {
       setError(
@@ -40,7 +31,7 @@ const CodeBoardPlugin: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.role, currentTownClass]);
+  }, []);
 
   useEffect(() => {
     if (!codeBoardPlugin?.enabled) return;
@@ -72,10 +63,7 @@ const CodeBoardPlugin: React.FC = () => {
       setRemovingAppId(appId);
       setFeedback(null);
       setError(null);
-      await codeBoardApi.deleteApp(
-        appId,
-        currentTownClass ? { class: currentTownClass } : undefined
-      );
+      await codeBoardApi.deleteApp(appId);
       setFeedback(`"${title}" was removed from the Code Board.`);
       await fetchApps();
     } catch (err: unknown) {
@@ -133,7 +121,7 @@ const CodeBoardPlugin: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold">Code Board</h1>
             <p className="text-blue-100">
-              Apps built by your town&apos;s software engineers — star your favourites and try them out
+              Apps built by software engineers across all towns — star your favourites and try them out
             </p>
           </div>
         </div>
@@ -162,7 +150,7 @@ const CodeBoardPlugin: React.FC = () => {
           <div className="text-5xl mb-4">💻</div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">No apps yet</h2>
           <p className="text-gray-600">
-            Your town&apos;s software engineers have not posted any apps yet.
+            No software engineers have posted any apps yet.
           </p>
         </div>
       ) : (
@@ -180,7 +168,10 @@ const CodeBoardPlugin: React.FC = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <h3 className="text-lg font-semibold text-gray-900">{app.title}</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">by {app.engineer_name}</p>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      by {app.engineer_name}
+                      {app.town_class ? ` · Town ${app.town_class}` : ''}
+                    </p>
                     <p className="text-xs text-gray-400 mt-2">
                       {app.star_count} star{app.star_count === 1 ? '' : 's'} · {app.click_count} click
                       {app.click_count === 1 ? '' : 's'}
@@ -190,7 +181,7 @@ const CodeBoardPlugin: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleRemove(app.id, app.title)}
-                      disabled={removing || !currentTownClass}
+                      disabled={removing}
                       className="shrink-0 p-2 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
                       title="Remove student app"
                     >

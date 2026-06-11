@@ -13,8 +13,6 @@ import {
   sanitizeTitle,
   sanitizeUrl,
 } from '../domain/codeBoard';
-import { resolveViewerTownClass, viewerTownClassError } from '../domain/townScope';
-
 const router = Router();
 
 async function tablesReady(): Promise<boolean> {
@@ -151,6 +149,7 @@ function mapAppRow(
     star_count: number;
     click_count: number;
     created_at: string;
+    town_class: string;
     status?: string;
     denial_reason?: string | null;
     engineer_user_id: number;
@@ -166,6 +165,7 @@ function mapAppRow(
     id: row.id,
     title: row.title,
     url: row.url,
+    town_class: row.town_class,
     star_count: row.star_count,
     click_count: row.click_count,
     created_at: row.created_at,
@@ -182,23 +182,22 @@ function mapAppRow(
   };
 }
 
-async function getAppsForTown(schoolId: number | null, townClass: string, viewerUserId: number | null) {
+async function getAppsForSchool(schoolId: number | null, viewerUserId: number | null) {
   const apps = schoolId != null
     ? await database.query(
         `SELECT a.*, u.username AS engineer_username, u.first_name AS engineer_first_name, u.last_name AS engineer_last_name
          FROM code_board_apps a
          JOIN users u ON u.id = a.engineer_user_id
-         WHERE a.school_id = $1 AND a.town_class = $2 AND a.status = 'approved'
-         ORDER BY a.created_at DESC`,
-        [schoolId, townClass]
+         WHERE a.school_id = $1 AND a.status = 'approved'
+         ORDER BY a.town_class, a.created_at DESC`,
+        [schoolId]
       )
     : await database.query(
         `SELECT a.*, u.username AS engineer_username, u.first_name AS engineer_first_name, u.last_name AS engineer_last_name
          FROM code_board_apps a
          JOIN users u ON u.id = a.engineer_user_id
-         WHERE a.school_id IS NULL AND a.town_class = $1 AND a.status = 'approved'
-         ORDER BY a.created_at DESC`,
-        [townClass]
+         WHERE a.school_id IS NULL AND a.status = 'approved'
+         ORDER BY a.town_class, a.created_at DESC`
       );
 
   let starredIds = new Set<number>();
@@ -272,13 +271,8 @@ router.get('/apps', authenticateToken, async (req: AuthenticatedRequest, res: Re
       return res.status(503).json({ error: 'Code board feature not available yet. Please try again later.' });
     }
 
-    const townClass = resolveViewerTownClass(req.user, req.query.class);
-    if (!townClass) {
-      return res.status(400).json({ error: viewerTownClassError(req.user.role) });
-    }
-
     const viewerUserId = req.user.role === 'student' ? req.user.id : null;
-    const apps = await getAppsForTown(req.user.school_id ?? null, townClass, viewerUserId);
+    const apps = await getAppsForSchool(req.user.school_id ?? null, viewerUserId);
 
     res.json({
       apps,
@@ -359,24 +353,19 @@ router.delete('/apps/:id', authenticateToken, async (req: AuthenticatedRequest, 
     }
 
     if (req.user.role === 'teacher') {
-      const townClass = resolveViewerTownClass(req.user, req.query.class);
-      if (!townClass) {
-        return res.status(400).json({ error: viewerTownClassError(req.user.role) });
-      }
-
       const schoolId = req.user.school_id ?? null;
       const existing = schoolId != null
         ? await database.get(
             `SELECT a.id FROM code_board_apps a
              JOIN users u ON u.id = a.engineer_user_id
-             WHERE a.id = $1 AND a.school_id = $2 AND a.town_class = $3 AND u.role = 'student'`,
-            [appId, schoolId, townClass]
+             WHERE a.id = $1 AND a.school_id = $2 AND u.role = 'student'`,
+            [appId, schoolId]
           )
         : await database.get(
             `SELECT a.id FROM code_board_apps a
              JOIN users u ON u.id = a.engineer_user_id
-             WHERE a.id = $1 AND a.school_id IS NULL AND a.town_class = $2 AND u.role = 'student'`,
-            [appId, townClass]
+             WHERE a.id = $1 AND a.school_id IS NULL AND u.role = 'student'`,
+            [appId]
           );
       if (!existing) {
         return res.status(404).json({ error: 'App not found or you cannot delete it' });
@@ -434,8 +423,8 @@ router.post('/apps/:id/star', authenticateToken, async (req: AuthenticatedReques
     if (!app) {
       return res.status(404).json({ error: 'App not found' });
     }
-    if (app.school_id !== (student.school_id ?? null) || app.town_class !== student.class) {
-      return res.status(403).json({ error: 'You can only star apps from your town' });
+    if (app.school_id !== (student.school_id ?? null)) {
+      return res.status(403).json({ error: 'You can only star apps from your school' });
     }
     if (app.engineer_user_id === student.id) {
       return res.status(400).json({ error: 'You cannot star your own app' });
@@ -515,8 +504,8 @@ router.post('/apps/:id/click', authenticateToken, async (req: AuthenticatedReque
     if (!app) {
       return res.status(404).json({ error: 'App not found' });
     }
-    if (app.school_id !== (student.school_id ?? null) || app.town_class !== student.class) {
-      return res.status(403).json({ error: 'You can only open apps from your town' });
+    if (app.school_id !== (student.school_id ?? null)) {
+      return res.status(403).json({ error: 'You can only open apps from your school' });
     }
     if (app.engineer_user_id === student.id) {
       return res.status(400).json({ error: 'You cannot earn click rewards on your own app' });

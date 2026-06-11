@@ -4,18 +4,20 @@ import { FileText, Loader2 } from 'lucide-react';
 import { attendanceApi } from '../services/api';
 import { AttendanceMySickNote } from '../types';
 
+const POLL_MS = 4000;
+
 const SickNoteModal: React.FC = () => {
   const [data, setData] = useState<AttendanceMySickNote | null>(null);
   const [explanation, setExplanation] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedNoteId, setDismissedNoteId] = useState<number | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
       const res = await attendanceApi.getMySickNote();
       setData(res.data);
-      if (!res.data.required) setDismissed(false);
+      if (!res.data.required) setDismissedNoteId(null);
     } catch {
       setData({ required: false });
     }
@@ -23,6 +25,8 @@ const SickNoteModal: React.FC = () => {
 
   useEffect(() => {
     fetchStatus();
+    const id = window.setInterval(fetchStatus, POLL_MS);
+    return () => window.clearInterval(id);
   }, [fetchStatus]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,7 +48,7 @@ const SickNoteModal: React.FC = () => {
     }
   };
 
-  if (!data?.required || !data.sick_note || dismissed) return null;
+  if (!data?.required || !data.sick_note || dismissedNoteId === data.sick_note.id) return null;
 
   const registerDate = new Date(data.sick_note.register_date).toLocaleDateString(undefined, {
     weekday: 'long',
@@ -113,7 +117,7 @@ const SickNoteModal: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setDismissed(true)}
+              onClick={() => setDismissedNoteId(data.sick_note!.id)}
               className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-200"
             >
               Remind me later

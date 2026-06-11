@@ -214,18 +214,16 @@ router.get('/purchase-requests/fm-queue', authenticateToken, async (req: Authent
            WHERE lpr.status = 'pending_fm'
              AND lp.town_class = $1
              AND lpr.school_id = $2
-             AND lpr.user_id != $3
            ORDER BY lpr.created_at ASC`,
-          [fm.class, schoolId, req.user!.id]
+          [fm.class, schoolId]
         )
       : await database.query(
           `${purchaseRequestSelect}
            WHERE lpr.status = 'pending_fm'
              AND lp.town_class = $1
              AND lpr.school_id IS NULL
-             AND lpr.user_id != $2
            ORDER BY lpr.created_at ASC`,
-          [fm.class, req.user!.id]
+          [fm.class]
         );
     const enriched = await Promise.all(rows.map((row) => enrichPurchaseRequestWithEngineers(row)));
     res.json(enriched);
@@ -271,9 +269,6 @@ router.put('/purchase-requests/:id/fm-review',
       }
       if ((reviewer.school_id ?? null) !== (purchaseRequest.school_id ?? null)) {
         return res.status(403).json({ error: 'You can only review purchases in your school' });
-      }
-      if (purchaseRequest.user_id === req.user!.id) {
-        return res.status(400).json({ error: 'You cannot approve your own purchase request' });
       }
 
       if (status === 'denied') {
