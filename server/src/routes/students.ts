@@ -7,16 +7,19 @@ import { requireTenant } from '../middleware/tenant';
 import {
   classUsesManualAccountantAssignments,
   getAccountantContext,
+  getAccountantIdsForStudent,
   getClassAccountantRoster,
   getManagedClientUserIds,
   getManualClientRows,
   hasAccountantJob,
   seedManualAssignmentsFromAutoSplit,
 } from '../domain/accountant-assignments';
+import { getDoctorIdsForStudent } from '../domain/doctor-assignments';
 import {
   classUsesManualLawyerAssignments,
   getClassLawyerRoster,
   getLawyerClientIds,
+  getLawyerIdsForStudent,
   getManualClientRows as getLawyerManualClientRows,
   hasLawyerJob,
   seedManualAssignmentsFromAutoSplit as seedLawyerAssignmentsFromAutoSplit,
@@ -150,6 +153,73 @@ router.get('/transfer-recipients', authenticateToken, async (req: AuthenticatedR
     res.json(recipients);
   } catch (error) {
     console.error('Get transfer recipients error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+function formatTownProfessionalRow(row: {
+  id: number;
+  username: string;
+  first_name: string | null;
+  last_name: string | null;
+}) {
+  const displayName =
+    [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || row.username;
+  return {
+    id: row.id,
+    username: row.username,
+    first_name: row.first_name,
+    last_name: row.last_name,
+    display_name: displayName,
+  };
+}
+
+async function fetchTownProfessionalsByIds(userIds: number[]) {
+  if (!userIds.length) return [];
+  const rows = await database.query(
+    `SELECT u.id, u.username, u.first_name, u.last_name
+     FROM users u
+     WHERE u.id = ANY($1::int[])
+     ORDER BY u.last_name NULLS LAST, u.first_name NULLS LAST, u.username`,
+    [userIds]
+  );
+  return rows.map(formatTownProfessionalRow);
+}
+
+// Student self-service: town accountant, lawyer(s), and doctor
+router.get('/me/town-professionals', authenticateToken, requireTenant, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'student') {
+      return res.status(403).json({ error: 'Only students can view their town professionals' });
+    }
+
+    const townClass = req.user.class;
+    if (!townClass) {
+      return res.json({ accountant: null, lawyers: [], doctor: null });
+    }
+
+    const schoolId = req.user.school_id ?? req.schoolId ?? null;
+    const studentId = req.user.id;
+
+    const [accountantIds, lawyerIds, doctorIds] = await Promise.all([
+      getAccountantIdsForStudent(studentId, townClass, schoolId),
+      getLawyerIdsForStudent(studentId, townClass, schoolId),
+      getDoctorIdsForStudent(studentId, townClass, schoolId),
+    ]);
+
+    const [accountants, lawyers, doctors] = await Promise.all([
+      fetchTownProfessionalsByIds(accountantIds),
+      fetchTownProfessionalsByIds(lawyerIds),
+      fetchTownProfessionalsByIds(doctorIds),
+    ]);
+
+    res.json({
+      accountant: accountants[0] ?? null,
+      lawyers,
+      doctor: doctors[0] ?? null,
+    });
+  } catch (error) {
+    console.error('Get student town professionals error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

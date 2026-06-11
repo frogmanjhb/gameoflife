@@ -170,6 +170,37 @@ export async function getAccountantContext(userId: number): Promise<AccountantCo
   };
 }
 
+export async function getAccountantIdsForStudent(
+  studentUserId: number,
+  townClass: string,
+  schoolId: number | null
+): Promise<number[]> {
+  const useManual = await classUsesManualAccountantAssignments(schoolId, townClass);
+  if (useManual) {
+    const rows = await database.query(
+      `SELECT accountant_user_id FROM accountant_student_assignments
+       WHERE student_user_id = $1 AND town_class = $2 AND school_id IS NOT DISTINCT FROM $3`,
+      [studentUserId, townClass, schoolId]
+    );
+    return rows.map((r: { accountant_user_id: number }) => r.accountant_user_id);
+  }
+
+  const { accountantIds, nonAccountantStudentIds } = await getClassAccountantRoster(townClass, schoolId);
+  if (!accountantIds.length) return [];
+
+  if (!nonAccountantStudentIds.includes(studentUserId)) {
+    if (!accountantIds.includes(studentUserId)) return [];
+    const auto = computeAutoSplit(studentUserId, accountantIds, nonAccountantStudentIds);
+    return auto.supervisedAccountantId != null ? [auto.supervisedAccountantId] : [];
+  }
+
+  return accountantIds.filter((accountantId) =>
+    computeAutoSplit(accountantId, accountantIds, nonAccountantStudentIds).responsibleStudentIds.includes(
+      studentUserId
+    )
+  );
+}
+
 export async function getManualClientRows(
   accountantUserId: number,
   className: string,

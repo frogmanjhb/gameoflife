@@ -11,6 +11,7 @@ import MyPropertyCard from './MyPropertyCard';
 import MyInsuranceCard from './MyInsuranceCard';
 import MyTendersCard from './MyTendersCard';
 import MyProgressCard from './MyProgressCard';
+import MyTownProfessionalsCard from './MyTownProfessionalsCard';
 import { Grid, CalendarDays } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, X } from 'lucide-react';
@@ -235,6 +236,7 @@ const StudentDashboard: React.FC = () => {
         <TownInfo town={currentTown} readOnly={true} />
         <AnnouncementsPanel announcements={announcements} />
         {canAccessPlugins && user?.role === 'student' && <MyProgressCard />}
+        {canAccessPlugins && user?.role === 'student' && <MyTownProfessionalsCard />}
         {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/jobs') && user && <MyJobCard user={user} />}
         {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/land') && <MyPropertyCard />}
         {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/insurance') && <MyInsuranceCard />}

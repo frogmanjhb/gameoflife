@@ -1139,6 +1139,8 @@ export const tendersApi = {
 export const studentsApi = {
   getMyEarningsProfile: (): Promise<{ data: import('../types').StudentEarningsProfile }> =>
     api.get('/students/me/earnings-profile'),
+  getMyTownProfessionals: (): Promise<{ data: import('../types').StudentTownProfessionals }> =>
+    api.get('/students/me/town-professionals'),
 };
 
 export const studentsAccountantApi = {

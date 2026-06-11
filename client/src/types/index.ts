@@ -54,6 +54,20 @@ export interface StudentEarningsProfile {
   money_history: StudentEarningsActivityItem[];
 }
 
+export interface TownProfessional {
+  id: number;
+  username: string;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string;
+}
+
+export interface StudentTownProfessionals {
+  accountant: TownProfessional | null;
+  lawyers: TownProfessional[];
+  doctor: TownProfessional | null;
+}
+
 export type EarningsActivitySource =
   | 'wordle'
   | 'math_chores'
