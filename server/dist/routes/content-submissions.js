@@ -126,6 +126,98 @@ router.get('/pending', auth_1.authenticateToken, tenant_1.requireTenant, (0, aut
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+// POST /news/approve-all — approve all pending news stories (school-scoped)
+router.post('/news/approve-all', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        if (!(await tablesReady())) {
+            return res.status(503).json({ error: 'Content submissions are not available yet. Please try again later.' });
+        }
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        const pendingStories = await database_prod_1.default.query(`SELECT s.*, u.username AS journalist_username
+       FROM town_news_stories s
+       JOIN users u ON u.id = s.journalist_user_id
+       WHERE ${schoolFilterClause('s', 1)} AND s.status = 'pending'
+       ORDER BY s.created_at ASC`, [schoolId]);
+        if (pendingStories.length === 0) {
+            return res.json({
+                message: 'No pending news stories to approve',
+                approved: 0,
+                failed: [],
+            });
+        }
+        const failed = [];
+        let approved = 0;
+        for (const story of pendingStories) {
+            try {
+                await (0, townNews_1.payStorySubmissionReward)(story.journalist_user_id, story.journalist_username, story.town_class, story.school_id ?? null, story.headline);
+                await database_prod_1.default.run(`UPDATE town_news_stories
+           SET status = 'approved', reviewed_at = CURRENT_TIMESTAMP, reviewed_by = $1, denial_reason = NULL
+           WHERE id = $2`, [req.user?.id ?? null, story.id]);
+                approved += 1;
+            }
+            catch (err) {
+                if (err instanceof Error && err.message === 'TREASURY_INSUFFICIENT') {
+                    failed.push({
+                        id: story.id,
+                        error: 'Town treasury has insufficient funds to pay the journalist.',
+                    });
+                }
+                else {
+                    failed.push({ id: story.id, error: 'Failed to approve story' });
+                }
+            }
+        }
+        const message = failed.length === 0
+            ? `Approved ${approved} news stor${approved !== 1 ? 'ies' : 'y'} successfully`
+            : `Approved ${approved} news stor${approved !== 1 ? 'ies' : 'y'}; ${failed.length} could not be approved`;
+        res.json({ message, approved, failed });
+    }
+    catch (error) {
+        console.error('Approve all news stories error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// POST /apps/approve-all — approve all pending code board apps (school-scoped)
+router.post('/apps/approve-all', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        if (!(await tablesReady())) {
+            return res.status(503).json({ error: 'Content submissions are not available yet. Please try again later.' });
+        }
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        const pendingApps = await database_prod_1.default.query(`SELECT a.id
+       FROM code_board_apps a
+       WHERE ${schoolFilterClause('a', 1)} AND a.status = 'pending'
+       ORDER BY a.created_at ASC`, [schoolId]);
+        if (pendingApps.length === 0) {
+            return res.json({
+                message: 'No pending code board apps to approve',
+                approved: 0,
+                failed: [],
+            });
+        }
+        const failed = [];
+        let approved = 0;
+        for (const app of pendingApps) {
+            try {
+                await database_prod_1.default.run(`UPDATE code_board_apps
+           SET status = 'approved', reviewed_at = CURRENT_TIMESTAMP, reviewed_by = $1, denial_reason = NULL
+           WHERE id = $2 AND status = 'pending'`, [req.user?.id ?? null, app.id]);
+                approved += 1;
+            }
+            catch {
+                failed.push({ id: app.id, error: 'Failed to approve app' });
+            }
+        }
+        const message = failed.length === 0
+            ? `Approved ${approved} code board app${approved !== 1 ? 's' : ''} successfully`
+            : `Approved ${approved} code board app${approved !== 1 ? 's' : ''}; ${failed.length} could not be approved`;
+        res.json({ message, approved, failed });
+    }
+    catch (error) {
+        console.error('Approve all code apps error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 // POST /news/:id/review — approve or deny a news story
 router.post('/news/:id/review', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
     try {

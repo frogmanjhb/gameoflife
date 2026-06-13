@@ -10,6 +10,7 @@ exports.classUsesManualAccountantAssignments = classUsesManualAccountantAssignme
 exports.getClassAccountantRoster = getClassAccountantRoster;
 exports.seedManualAssignmentsFromAutoSplit = seedManualAssignmentsFromAutoSplit;
 exports.getAccountantContext = getAccountantContext;
+exports.getAccountantIdsForStudent = getAccountantIdsForStudent;
 exports.getManualClientRows = getManualClientRows;
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 function hasAccountantJob(jobName) {
@@ -124,6 +125,24 @@ async function getAccountantContext(userId) {
         responsibleStudentIds: auto.responsibleStudentIds,
         supervisedAccountantId: auto.supervisedAccountantId
     };
+}
+async function getAccountantIdsForStudent(studentUserId, townClass, schoolId) {
+    const useManual = await classUsesManualAccountantAssignments(schoolId, townClass);
+    if (useManual) {
+        const rows = await database_prod_1.default.query(`SELECT accountant_user_id FROM accountant_student_assignments
+       WHERE student_user_id = $1 AND town_class = $2 AND school_id IS NOT DISTINCT FROM $3`, [studentUserId, townClass, schoolId]);
+        return rows.map((r) => r.accountant_user_id);
+    }
+    const { accountantIds, nonAccountantStudentIds } = await getClassAccountantRoster(townClass, schoolId);
+    if (!accountantIds.length)
+        return [];
+    if (!nonAccountantStudentIds.includes(studentUserId)) {
+        if (!accountantIds.includes(studentUserId))
+            return [];
+        const auto = computeAutoSplit(studentUserId, accountantIds, nonAccountantStudentIds);
+        return auto.supervisedAccountantId != null ? [auto.supervisedAccountantId] : [];
+    }
+    return accountantIds.filter((accountantId) => computeAutoSplit(accountantId, accountantIds, nonAccountantStudentIds).responsibleStudentIds.includes(studentUserId));
 }
 async function getManualClientRows(accountantUserId, className, schoolId) {
     return database_prod_1.default.query(`SELECT u.id, u.username, u.first_name, u.last_name, u.class

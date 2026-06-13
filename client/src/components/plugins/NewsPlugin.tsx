@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { usePlugins } from '../../contexts/PluginContext';
 import { useTown } from '../../contexts/TownContext';
 import { townNewsApi } from '../../services/api';
-import { TownNewsPublicView } from '../../types';
+import { TownNewsStory } from '../../types';
 import TownNewsStoryCard, { storyToCardProps } from '../TownNewsStoryCard';
 
 const NewsPlugin: React.FC = () => {
@@ -13,8 +13,10 @@ const NewsPlugin: React.FC = () => {
   const { user } = useAuth();
   const { currentTownClass } = useTown();
   const newsPlugin = plugins.find((p) => p.route_path === '/news');
-  const [data, setData] = useState<TownNewsPublicView | null>(null);
+  const [stories, setStories] = useState<TownNewsStory[]>([]);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [removingStoryId, setRemovingStoryId] = useState<number | null>(null);
@@ -31,7 +33,8 @@ const NewsPlugin: React.FC = () => {
       const res = await townNewsApi.getStories(
         currentTownClass ? { class: currentTownClass } : undefined
       );
-      setData(res.data);
+      setStories(res.data.stories);
+      setHasMore(res.data.has_more);
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
@@ -41,6 +44,28 @@ const NewsPlugin: React.FC = () => {
       setLoading(false);
     }
   }, [user?.role, currentTownClass]);
+
+  const loadMoreStories = useCallback(async () => {
+    if (!hasMore || loadingMore) return;
+    const oldestId = stories.length > 0 ? Math.min(...stories.map((story) => story.id)) : undefined;
+    try {
+      setLoadingMore(true);
+      setError(null);
+      const res = await townNewsApi.getStories({
+        ...(currentTownClass ? { class: currentTownClass } : {}),
+        ...(oldestId != null ? { before_id: oldestId } : { scope: 'older' }),
+      });
+      setStories((prev) => [...prev, ...res.data.stories]);
+      setHasMore(res.data.has_more);
+    } catch (err: unknown) {
+      setError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+          'Failed to load more stories'
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, loadingMore, stories, currentTownClass]);
 
   useEffect(() => {
     if (!newsPlugin?.enabled) return;
@@ -107,15 +132,38 @@ const NewsPlugin: React.FC = () => {
         </div>
       ) : error ? (
         <div className="bg-white rounded-xl shadow-sm border border-red-200 p-8 text-center text-red-700">{error}</div>
-      ) : !data?.stories.length ? (
+      ) : !stories.length ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
           <Newspaper className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">No stories yet</h2>
-          <p className="text-gray-600">No approved stories or posters have been published yet.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            {hasMore ? 'No stories today' : 'No stories yet'}
+          </h2>
+          <p className="text-gray-600">
+            {hasMore
+              ? 'No new stories have been published today. Load older posts below.'
+              : 'No approved stories or posters have been published yet.'}
+          </p>
+          {hasMore && (
+            <button
+              type="button"
+              onClick={loadMoreStories}
+              disabled={loadingMore}
+              className="btn-secondary mt-6"
+            >
+              {loadingMore ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading…
+                </span>
+              ) : (
+                'Load more'
+              )}
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
-          {data.stories.map((story) => {
+          {stories.map((story) => {
             const removing = removingStoryId === story.id;
             return (
               <div key={story.id} className="relative">
@@ -140,6 +188,25 @@ const NewsPlugin: React.FC = () => {
               </div>
             );
           })}
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={loadMoreStories}
+                disabled={loadingMore}
+                className="btn-secondary"
+              >
+                {loadingMore ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading…
+                  </span>
+                ) : (
+                  'Load more'
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

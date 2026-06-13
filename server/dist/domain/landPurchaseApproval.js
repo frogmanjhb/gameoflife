@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ACTIVE_PURCHASE_STATUSES = exports.CIVIL_ENGINEER_LAND_REVIEW_XP = exports.LAND_ENGINEER_REVIEW_XP = exports.FM_LAND_REVIEW_XP = exports.TOTAL_PROFESSIONAL_FEE_RATE = void 0;
+exports.LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS = exports.ACTIVE_PURCHASE_STATUSES = exports.CIVIL_ENGINEER_LAND_REVIEW_XP = exports.LAND_ENGINEER_REVIEW_XP = exports.FM_LAND_REVIEW_XP = exports.TOTAL_PROFESSIONAL_FEE_RATE = void 0;
 exports.hasArchitectJob = hasArchitectJob;
 exports.hasCivilEngineerJob = hasCivilEngineerJob;
 exports.isLandEngineerJob = isLandEngineerJob;
@@ -11,6 +11,8 @@ exports.calculateTotalEngineerFee = calculateTotalEngineerFee;
 exports.calculateEngineerFeeShare = calculateEngineerFeeShare;
 exports.calculateTotalPurchaseCost = calculateTotalPurchaseCost;
 exports.buildPurchaseCostBreakdown = buildPurchaseCostBreakdown;
+exports.fmPurchaseReviewXpAlreadyEarned = fmPurchaseReviewXpAlreadyEarned;
+exports.landSaleResubmitBlockedByCooldown = landSaleResubmitBlockedByCooldown;
 /** Total professional fees (FM + architects + civil engineers) = 5% of plot price */
 exports.TOTAL_PROFESSIONAL_FEE_RATE = 0.05;
 exports.FM_LAND_REVIEW_XP = 10;
@@ -83,5 +85,28 @@ function buildPurchaseCostBreakdown(offeredPrice, engineerCount, buyerBalance) {
         buyer_balance: buyerBalance,
         can_afford: buyerBalance >= total_required,
     };
+}
+/** Cooldown before the same seller can re-list a plot to the same buyer after FM denial. */
+exports.LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS = 24;
+/**
+ * FM land-purchase XP is only earned once per parcel+buyer until a purchase completes.
+ * Prevents approve/deny/resubmit loops from farming +10 XP repeatedly.
+ */
+async function fmPurchaseReviewXpAlreadyEarned(db, parcelId, buyerId, currentRequestId) {
+    const row = await db.get(`SELECT id FROM land_purchase_requests
+     WHERE parcel_id = $1 AND user_id = $2 AND id <> $3
+       AND fm_reviewed_at IS NOT NULL
+       AND status <> 'approved'
+     LIMIT 1`, [parcelId, buyerId, currentRequestId]);
+    return !!row;
+}
+/** Blocks rapid re-listing after FM denial of the same parcel to the same buyer. */
+async function landSaleResubmitBlockedByCooldown(db, parcelId, sellerId, buyerId) {
+    const row = await db.get(`SELECT id FROM land_sale_requests
+     WHERE parcel_id = $1 AND seller_id = $2 AND buyer_id = $3
+       AND status = 'denied'
+       AND fm_reviewed_at > NOW() - ($4::text || ' hours')::interval
+     LIMIT 1`, [parcelId, sellerId, buyerId, String(exports.LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS)]);
+    return !!row;
 }
 //# sourceMappingURL=landPurchaseApproval.js.map

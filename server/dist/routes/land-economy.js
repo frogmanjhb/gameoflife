@@ -8,6 +8,7 @@ const express_validator_1 = require("express-validator");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const landProperty_1 = require("../domain/landProperty");
+const landPurchaseApproval_1 = require("../domain/landPurchaseApproval");
 const router = (0, express_1.Router)();
 async function syncParcelAppreciation(parcelId) {
     const parcel = await database_prod_1.default.get('SELECT id, purchase_price, value, purchased_at FROM land_parcels WHERE id = $1 AND owner_id IS NOT NULL', [parcelId]);
@@ -132,6 +133,11 @@ router.post('/sale-requests', auth_1.authenticateToken, (0, express_validator_1.
         if (activeSale) {
             return res.status(400).json({ error: 'This parcel already has an active sale request' });
         }
+        if (await (0, landPurchaseApproval_1.landSaleResubmitBlockedByCooldown)(database_prod_1.default, parcel_id, req.user.id, buyer_id)) {
+            return res.status(400).json({
+                error: `This sale was recently denied by the Financial Manager. Wait ${landPurchaseApproval_1.LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS} hours before re-listing to the same buyer.`,
+            });
+        }
         const schoolId = req.user.school_id ?? null;
         const result = schoolId !== null
             ? await database_prod_1.default.get(`INSERT INTO land_sale_requests (parcel_id, seller_id, buyer_id, sale_price, school_id)
@@ -194,6 +200,12 @@ router.put('/sale-requests/:id/fm-review', auth_1.authenticateToken, (0, express
         const fmAuth = await assertFinancialManager(req.user.id, sale.school_id ?? null, sale.parcel_town_class);
         if (!fmAuth.ok) {
             return res.status(403).json({ error: fmAuth.error });
+        }
+        if (sale.seller_id === req.user.id || sale.buyer_id === req.user.id) {
+            return res.status(403).json({ error: 'You cannot review a sale you are party to' });
+        }
+        if (sale.fm_reviewed_by != null) {
+            return res.status(400).json({ error: 'This sale request has already been reviewed' });
         }
         if (status === 'denied') {
             await database_prod_1.default.run(`UPDATE land_sale_requests

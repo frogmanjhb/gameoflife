@@ -1188,8 +1188,11 @@ export const codeBoardApi = {
 
 export const townNewsApi = {
   getManage: (): Promise<{ data: TownNewsManageStatus }> => api.get('/town-news/manage'),
-  getStories: (params?: { class?: string }): Promise<{ data: TownNewsPublicView }> =>
-    api.get('/town-news/stories', { params }),
+  getStories: (params?: {
+    class?: string;
+    before_id?: number;
+    scope?: 'older';
+  }): Promise<{ data: TownNewsPublicView }> => api.get('/town-news/stories', { params }),
   submitStory: (data: {
     headline: string;
     body: string;

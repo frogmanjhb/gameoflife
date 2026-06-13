@@ -1097,6 +1097,7 @@ export interface TownNewsManageStatus {
 
 export interface TownNewsPublicView {
   stories: TownNewsStory[];
+  has_more: boolean;
 }
 
 export interface TownNewsPopup {

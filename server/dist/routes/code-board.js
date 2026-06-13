@@ -8,7 +8,6 @@ const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const jobs_1 = require("./jobs");
 const codeBoard_1 = require("../domain/codeBoard");
-const townScope_1 = require("../domain/townScope");
 const router = (0, express_1.Router)();
 async function tablesReady() {
     try {
@@ -94,6 +93,7 @@ function mapAppRow(row, viewerUserId, starredIds, clickedIds) {
         id: row.id,
         title: row.title,
         url: row.url,
+        town_class: row.town_class,
         star_count: row.star_count,
         click_count: row.click_count,
         created_at: row.created_at,
@@ -109,18 +109,18 @@ function mapAppRow(row, viewerUserId, starredIds, clickedIds) {
         has_clicked: clickedIds.has(row.id),
     };
 }
-async function getAppsForTown(schoolId, townClass, viewerUserId) {
+async function getAppsForSchool(schoolId, viewerUserId) {
     const apps = schoolId != null
         ? await database_prod_1.default.query(`SELECT a.*, u.username AS engineer_username, u.first_name AS engineer_first_name, u.last_name AS engineer_last_name
          FROM code_board_apps a
          JOIN users u ON u.id = a.engineer_user_id
-         WHERE a.school_id = $1 AND a.town_class = $2 AND a.status = 'approved'
-         ORDER BY a.created_at DESC`, [schoolId, townClass])
+         WHERE a.school_id = $1 AND a.status = 'approved'
+         ORDER BY a.town_class, a.created_at DESC`, [schoolId])
         : await database_prod_1.default.query(`SELECT a.*, u.username AS engineer_username, u.first_name AS engineer_first_name, u.last_name AS engineer_last_name
          FROM code_board_apps a
          JOIN users u ON u.id = a.engineer_user_id
-         WHERE a.school_id IS NULL AND a.town_class = $1 AND a.status = 'approved'
-         ORDER BY a.created_at DESC`, [townClass]);
+         WHERE a.school_id IS NULL AND a.status = 'approved'
+         ORDER BY a.town_class, a.created_at DESC`);
     let starredIds = new Set();
     let clickedIds = new Set();
     if (viewerUserId != null && apps.length > 0) {
@@ -174,12 +174,8 @@ router.get('/apps', auth_1.authenticateToken, async (req, res) => {
         if (!(await tablesReady())) {
             return res.status(503).json({ error: 'Code board feature not available yet. Please try again later.' });
         }
-        const townClass = (0, townScope_1.resolveViewerTownClass)(req.user, req.query.class);
-        if (!townClass) {
-            return res.status(400).json({ error: (0, townScope_1.viewerTownClassError)(req.user.role) });
-        }
         const viewerUserId = req.user.role === 'student' ? req.user.id : null;
-        const apps = await getAppsForTown(req.user.school_id ?? null, townClass, viewerUserId);
+        const apps = await getAppsForSchool(req.user.school_id ?? null, viewerUserId);
         res.json({
             apps,
             star_xp_reward: codeBoard_1.STAR_XP_REWARD,
@@ -231,7 +227,7 @@ router.post('/apps', auth_1.authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// DELETE /apps/:id — software engineer removes own app; teacher removes any app in their school
+// DELETE /apps/:id — engineer removes own app; teacher removes student app in town
 router.delete('/apps/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         if (!req.user) {
@@ -246,8 +242,13 @@ router.delete('/apps/:id', auth_1.authenticateToken, async (req, res) => {
         }
         if (req.user.role === 'teacher') {
             const schoolId = req.user.school_id ?? null;
-            const existing = await database_prod_1.default.get(`SELECT id FROM code_board_apps
-         WHERE id = $1 AND ((school_id = $2) OR ($2 IS NULL AND school_id IS NULL))`, [appId, schoolId]);
+            const existing = schoolId != null
+                ? await database_prod_1.default.get(`SELECT a.id FROM code_board_apps a
+             JOIN users u ON u.id = a.engineer_user_id
+             WHERE a.id = $1 AND a.school_id = $2 AND u.role = 'student'`, [appId, schoolId])
+                : await database_prod_1.default.get(`SELECT a.id FROM code_board_apps a
+             JOIN users u ON u.id = a.engineer_user_id
+             WHERE a.id = $1 AND a.school_id IS NULL AND u.role = 'student'`, [appId]);
             if (!existing) {
                 return res.status(404).json({ error: 'App not found or you cannot delete it' });
             }
@@ -293,8 +294,8 @@ router.post('/apps/:id/star', auth_1.authenticateToken, async (req, res) => {
         if (!app) {
             return res.status(404).json({ error: 'App not found' });
         }
-        if (app.school_id !== (student.school_id ?? null) || app.town_class !== student.class) {
-            return res.status(403).json({ error: 'You can only star apps from your town' });
+        if (app.school_id !== (student.school_id ?? null)) {
+            return res.status(403).json({ error: 'You can only star apps from your school' });
         }
         if (app.engineer_user_id === student.id) {
             return res.status(400).json({ error: 'You cannot star your own app' });
@@ -354,8 +355,8 @@ router.post('/apps/:id/click', auth_1.authenticateToken, async (req, res) => {
         if (!app) {
             return res.status(404).json({ error: 'App not found' });
         }
-        if (app.school_id !== (student.school_id ?? null) || app.town_class !== student.class) {
-            return res.status(403).json({ error: 'You can only open apps from your town' });
+        if (app.school_id !== (student.school_id ?? null)) {
+            return res.status(403).json({ error: 'You can only open apps from your school' });
         }
         if (app.engineer_user_id === student.id) {
             return res.status(400).json({ error: 'You cannot earn click rewards on your own app' });

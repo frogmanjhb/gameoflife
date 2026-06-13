@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { codeBoardApi } from '../services/api';
 import { CodeBoardAppItem, CodeBoardManageStatus, ContentSubmissionStatus } from '../types';
 
@@ -24,6 +25,8 @@ const CodeBoardPanel: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
+  const [showOwnershipConfirm, setShowOwnershipConfirm] = useState(false);
+  const [ownershipConfirmed, setOwnershipConfirmed] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -45,9 +48,15 @@ const CodeBoardPanel: React.FC = () => {
     fetchStatus();
   }, [fetchStatus]);
 
-  const handlePost = async (e: React.FormEvent) => {
+  const handlePostRequest = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !url.trim()) return;
+    setOwnershipConfirmed(false);
+    setShowOwnershipConfirm(true);
+  };
+
+  const handleConfirmPost = async () => {
+    if (!ownershipConfirmed || !title.trim() || !url.trim()) return;
     try {
       setActionLoading(true);
       setError(null);
@@ -55,6 +64,8 @@ const CodeBoardPanel: React.FC = () => {
       await codeBoardApi.postApp({ title: title.trim(), url: url.trim() });
       setTitle('');
       setUrl('');
+      setShowOwnershipConfirm(false);
+      setOwnershipConfirmed(false);
       setSuccess('App submitted for teacher approval. It will appear on the Code Board once approved.');
       await fetchStatus();
     } catch (err: unknown) {
@@ -127,7 +138,7 @@ const CodeBoardPanel: React.FC = () => {
           <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">{success}</p>
         )}
 
-        <form onSubmit={handlePost} className="space-y-3 mb-5">
+        <form onSubmit={handlePostRequest} className="space-y-3 mb-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">App name</label>
             <input
@@ -212,6 +223,82 @@ const CodeBoardPanel: React.FC = () => {
           </div>
         )}
       </div>
+
+      {showOwnershipConfirm &&
+        createPortal(
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4">
+            <div
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+              role="dialog"
+              aria-labelledby="code-board-ownership-title"
+              aria-modal="true"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-blue-100 p-2 rounded-lg">
+                  <ShieldCheck className="h-6 w-6 text-blue-700" />
+                </div>
+                <div>
+                  <h2 id="code-board-ownership-title" className="text-lg font-bold text-gray-900">
+                    Confirm your app
+                  </h2>
+                  <p className="text-sm text-gray-600">Before submitting for teacher approval</p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-4">
+                <p className="font-semibold text-gray-900 truncate">{title.trim()}</p>
+                <p className="text-sm text-blue-600 truncate mt-0.5">{url.trim()}</p>
+              </div>
+
+              <p className="text-sm text-gray-700 mb-4">
+                You must confirm that this app or game is your own work before it can be posted to the Code Board.
+              </p>
+
+              <label className="flex items-start gap-2 text-sm mb-5">
+                <input
+                  type="checkbox"
+                  checked={ownershipConfirmed}
+                  onChange={(e) => setOwnershipConfirmed(e.target.checked)}
+                  className="mt-1"
+                />
+                <span>
+                  I confirm that this app or game belongs to me and that I created it myself. I understand that
+                  submitting someone else&apos;s work is not allowed.
+                </span>
+              </label>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={handleConfirmPost}
+                  disabled={actionLoading || !ownershipConfirmed}
+                  className="btn-primary flex-1 inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {actionLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Submitting…
+                    </>
+                  ) : (
+                    'Submit for approval'
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowOwnershipConfirm(false);
+                    setOwnershipConfirmed(false);
+                  }}
+                  disabled={actionLoading}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-200 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

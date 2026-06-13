@@ -204,6 +204,12 @@ router.put('/purchase-requests/:id/fm-review', auth_1.authenticateToken, (0, exp
         if ((reviewer.school_id ?? null) !== (purchaseRequest.school_id ?? null)) {
             return res.status(403).json({ error: 'You can only review purchases in your school' });
         }
+        if (purchaseRequest.user_id === req.user.id) {
+            return res.status(400).json({ error: 'You cannot review your own purchase request' });
+        }
+        if (purchaseRequest.fm_reviewed_by != null) {
+            return res.status(400).json({ error: 'This purchase request has already been reviewed by a Financial Manager' });
+        }
         if (status === 'denied') {
             await database_prod_1.default.run(`UPDATE land_purchase_requests
            SET status = 'denied',
@@ -219,7 +225,8 @@ router.put('/purchase-requests/:id/fm-review', auth_1.authenticateToken, (0, exp
         }
         const offeredPrice = Number(purchaseRequest.offered_price) || 0;
         const requiredEngineers = await getRequiredLandEngineers(purchaseRequest.school_id ?? null, purchaseRequest.parcel_town_class, purchaseRequest.user_id);
-        const fmFee = (0, landPurchaseApproval_1.calculateFmFee)(offeredPrice, requiredEngineers.length);
+        const xpAlreadyEarned = await (0, landPurchaseApproval_1.fmPurchaseReviewXpAlreadyEarned)(database_prod_1.default, purchaseRequest.parcel_id, purchaseRequest.user_id, requestId);
+        const fmFee = xpAlreadyEarned ? 0 : (0, landPurchaseApproval_1.calculateFmFee)(offeredPrice, requiredEngineers.length);
         await client.query('BEGIN');
         const buyerAccountRes = await client.query('SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE', [purchaseRequest.user_id]);
         const fmAccountRes = await client.query('SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE', [req.user.id]);
@@ -256,19 +263,25 @@ router.put('/purchase-requests/:id/fm-review', auth_1.authenticateToken, (0, exp
              fm_reviewed_at = CURRENT_TIMESTAMP,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $3`, [nextStatus, req.user.id, requestId]);
-        const userRowResult = await client.query('SELECT job_level, job_experience_points FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
-        const userRow = userRowResult.rows[0];
-        const currentLevel = Number.isInteger(userRow?.job_level) ? userRow.job_level : 1;
-        const currentXP = typeof userRow?.job_experience_points === 'number' ? userRow.job_experience_points : 0;
-        const newXP = currentXP + landPurchaseApproval_1.FM_LAND_REVIEW_XP;
-        let newLevel = currentLevel;
-        for (let level = currentLevel; level < 10; level++) {
-            if (newXP >= (0, jobs_1.getXPForLevel)(level + 1))
-                newLevel = level + 1;
-            else
-                break;
+        let xpAwarded = 0;
+        let newLevel = null;
+        if (!xpAlreadyEarned) {
+            const userRowResult = await client.query('SELECT job_level, job_experience_points FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
+            const userRow = userRowResult.rows[0];
+            const currentLevel = Number.isInteger(userRow?.job_level) ? userRow.job_level : 1;
+            const currentXP = typeof userRow?.job_experience_points === 'number' ? userRow.job_experience_points : 0;
+            const newXP = currentXP + landPurchaseApproval_1.FM_LAND_REVIEW_XP;
+            let levelAfterXp = currentLevel;
+            for (let level = currentLevel; level < 10; level++) {
+                if (newXP >= (0, jobs_1.getXPForLevel)(level + 1))
+                    levelAfterXp = level + 1;
+                else
+                    break;
+            }
+            await client.query('UPDATE users SET job_experience_points = $1, job_level = $2 WHERE id = $3', [newXP, levelAfterXp, req.user.id]);
+            xpAwarded = landPurchaseApproval_1.FM_LAND_REVIEW_XP;
+            newLevel = levelAfterXp > currentLevel ? levelAfterXp : null;
         }
-        await client.query('UPDATE users SET job_experience_points = $1, job_level = $2 WHERE id = $3', [newXP, newLevel, req.user.id]);
         await client.query('COMMIT');
         const updatedRow = await database_prod_1.default.get(`${purchaseRequestSelect} WHERE lpr.id = $1`, [requestId]);
         const updated = await enrichPurchaseRequestWithEngineers(updatedRow);
@@ -279,8 +292,8 @@ router.put('/purchase-requests/:id/fm-review', auth_1.authenticateToken, (0, exp
             request: updated,
             fee_paid: fmFee,
             cost_breakdown: affordability,
-            experience_points: landPurchaseApproval_1.FM_LAND_REVIEW_XP,
-            new_level: newLevel > currentLevel ? newLevel : null,
+            experience_points: xpAwarded > 0 ? xpAwarded : undefined,
+            new_level: newLevel,
         });
     }
     catch (error) {
@@ -292,8 +305,8 @@ router.put('/purchase-requests/:id/fm-review', auth_1.authenticateToken, (0, exp
         client.release();
     }
 });
-// PUT /purchase-requests/:id/engineer-review — Architect or Civil Engineer approves/denies
-router.put('/purchase-requests/:id/engineer-review', auth_1.authenticateToken, (0, express_validator_1.body)('status').isIn(['approved', 'denied']), (0, express_validator_1.body)('denial_reason').optional().isString(), async (req, res) => {
+// PUT /purchase-requests/:id/engineer-review — Architect or Civil Engineer approves only
+router.put('/purchase-requests/:id/engineer-review', auth_1.authenticateToken, (0, express_validator_1.body)('status').isIn(['approved']), async (req, res) => {
     const client = await database_prod_1.default.pool.connect();
     try {
         const errors = (0, express_validator_1.validationResult)(req);
@@ -304,7 +317,6 @@ router.put('/purchase-requests/:id/engineer-review', auth_1.authenticateToken, (
             return res.status(403).json({ error: 'Only students with Architect or Civil Engineer jobs can review purchases' });
         }
         const requestId = parseInt(req.params.id, 10);
-        const { status, denial_reason } = req.body;
         const reviewer = await getUserWithJob(req.user.id);
         if (!reviewer || !(0, landPurchaseApproval_1.isLandEngineerJob)(reviewer.job_name)) {
             return res.status(403).json({ error: 'Only Architects and Civil Engineers can review land purchases' });
@@ -332,18 +344,6 @@ router.put('/purchase-requests/:id/engineer-review', auth_1.authenticateToken, (
             return res.status(400).json({ error: 'You have already reviewed this purchase request' });
         }
         await client.query('BEGIN');
-        if (status === 'denied') {
-            await client.query(`UPDATE land_purchase_requests
-           SET status = 'denied',
-               denial_reason = $1,
-               reviewed_by = $2,
-               reviewed_at = CURRENT_TIMESTAMP,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $3`, [denial_reason || `Denied by ${reviewer.job_name}`, req.user.id, requestId]);
-            await client.query('COMMIT');
-            const updated = await enrichPurchaseRequestWithEngineers((await database_prod_1.default.get(`${purchaseRequestSelect} WHERE lpr.id = $1`, [requestId])));
-            return res.json({ message: 'Purchase request denied', request: updated });
-        }
         const offeredPrice = Number(purchaseRequest.offered_price) || 0;
         const feeShare = (0, landPurchaseApproval_1.calculateEngineerFeeShare)(offeredPrice, requiredEngineers.length);
         const buyerAccountRes = await client.query('SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE', [purchaseRequest.user_id]);

@@ -5,6 +5,13 @@ export const STORY_XP_REWARD = 20;
 export const STORY_EARNINGS_REWARD = 5000;
 /** Max town news story submissions per contributor per day (resets at 4:00 AM server time). */
 export const TOWN_NEWS_DAILY_POST_LIMIT = 2;
+/** Approved stories fetched per "load more" on the public Town News feed. */
+export const TOWN_NEWS_STORIES_PAGE_SIZE = 20;
+/** Civic day boundary (resets 04:00 server time), same as story post quota. */
+export const TOWN_NEWS_DAY_START_SQL = `
+  CASE WHEN CURRENT_TIME < '04:00:00' THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '4 hours'
+  ELSE CURRENT_DATE + INTERVAL '4 hours' END
+`;
 export const MAX_HEADLINE_LENGTH = 200;
 export const MAX_BODY_LENGTH = 8000;
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -40,10 +47,7 @@ export async function countTodayStorySubmissions(journalistUserId: number): Prom
   const rows = await database.query(
     `SELECT COUNT(*)::int AS count FROM town_news_stories
      WHERE journalist_user_id = $1
-     AND created_at >= (
-       CASE WHEN CURRENT_TIME < '04:00:00' THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '4 hours'
-       ELSE CURRENT_DATE + INTERVAL '4 hours' END
-     )`,
+     AND created_at >= (${TOWN_NEWS_DAY_START_SQL})`,
     [journalistUserId]
   );
   return parseInt(String(rows[0]?.count ?? 0), 10);

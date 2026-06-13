@@ -76,19 +76,69 @@ function mapStoryRow(row) {
             : undefined,
     };
 }
-async function getApprovedStoriesForTown(schoolId, townClass) {
-    const rows = schoolId != null
-        ? await database_prod_1.default.query(`SELECT s.*, u.username AS journalist_username, u.first_name AS journalist_first_name, u.last_name AS journalist_last_name
+const STORY_SELECT = `SELECT s.*, u.username AS journalist_username, u.first_name AS journalist_first_name, u.last_name AS journalist_last_name
          FROM town_news_stories s
-         JOIN users u ON u.id = s.journalist_user_id
+         JOIN users u ON u.id = s.journalist_user_id`;
+async function hasOlderApprovedStories(schoolId, townClass) {
+    const row = schoolId != null
+        ? await database_prod_1.default.get(`SELECT EXISTS(
+           SELECT 1 FROM town_news_stories s
+           WHERE s.school_id = $1 AND s.town_class = $2 AND s.status = 'approved'
+             AND s.created_at < (${townNews_1.TOWN_NEWS_DAY_START_SQL})
+         ) AS exists`, [schoolId, townClass])
+        : await database_prod_1.default.get(`SELECT EXISTS(
+           SELECT 1 FROM town_news_stories s
+           WHERE s.school_id IS NULL AND s.town_class = $1 AND s.status = 'approved'
+             AND s.created_at < (${townNews_1.TOWN_NEWS_DAY_START_SQL})
+         ) AS exists`, [townClass]);
+    return Boolean(row?.exists);
+}
+async function getApprovedStoriesForTown(schoolId, townClass, options = {}) {
+    const { beforeId, olderOnly } = options;
+    const pageSize = townNews_1.TOWN_NEWS_STORIES_PAGE_SIZE;
+    if (beforeId != null || olderOnly) {
+        const limit = pageSize + 1;
+        const rows = schoolId != null
+            ? beforeId != null
+                ? await database_prod_1.default.query(`${STORY_SELECT}
+         WHERE s.school_id = $1 AND s.town_class = $2 AND s.status = 'approved' AND s.id < $3
+         ORDER BY s.created_at DESC, s.id DESC
+         LIMIT $4`, [schoolId, townClass, beforeId, limit])
+                : await database_prod_1.default.query(`${STORY_SELECT}
          WHERE s.school_id = $1 AND s.town_class = $2 AND s.status = 'approved'
-         ORDER BY s.created_at DESC`, [schoolId, townClass])
-        : await database_prod_1.default.query(`SELECT s.*, u.username AS journalist_username, u.first_name AS journalist_first_name, u.last_name AS journalist_last_name
-         FROM town_news_stories s
-         JOIN users u ON u.id = s.journalist_user_id
+           AND s.created_at < (${townNews_1.TOWN_NEWS_DAY_START_SQL})
+         ORDER BY s.created_at DESC, s.id DESC
+         LIMIT $3`, [schoolId, townClass, limit])
+            : beforeId != null
+                ? await database_prod_1.default.query(`${STORY_SELECT}
+         WHERE s.school_id IS NULL AND s.town_class = $1 AND s.status = 'approved' AND s.id < $2
+         ORDER BY s.created_at DESC, s.id DESC
+         LIMIT $3`, [townClass, beforeId, limit])
+                : await database_prod_1.default.query(`${STORY_SELECT}
          WHERE s.school_id IS NULL AND s.town_class = $1 AND s.status = 'approved'
+           AND s.created_at < (${townNews_1.TOWN_NEWS_DAY_START_SQL})
+         ORDER BY s.created_at DESC, s.id DESC
+         LIMIT $2`, [townClass, limit]);
+        const hasMore = rows.length > pageSize;
+        const page = hasMore ? rows.slice(0, pageSize) : rows;
+        return {
+            stories: page.map((row) => mapStoryRow(row)),
+            has_more: hasMore,
+        };
+    }
+    const rows = schoolId != null
+        ? await database_prod_1.default.query(`${STORY_SELECT}
+         WHERE s.school_id = $1 AND s.town_class = $2 AND s.status = 'approved'
+           AND s.created_at >= (${townNews_1.TOWN_NEWS_DAY_START_SQL})
+         ORDER BY s.created_at DESC`, [schoolId, townClass])
+        : await database_prod_1.default.query(`${STORY_SELECT}
+         WHERE s.school_id IS NULL AND s.town_class = $1 AND s.status = 'approved'
+           AND s.created_at >= (${townNews_1.TOWN_NEWS_DAY_START_SQL})
          ORDER BY s.created_at DESC`, [townClass]);
-    return rows.map((row) => mapStoryRow(row));
+    return {
+        stories: rows.map((row) => mapStoryRow(row)),
+        has_more: await hasOlderApprovedStories(schoolId, townClass),
+    };
 }
 // GET /manage — journalist / graphic designer view
 router.get('/manage', auth_1.authenticateToken, async (req, res) => {
@@ -109,10 +159,13 @@ router.get('/manage', auth_1.authenticateToken, async (req, res) => {
            FROM town_news_stories
            WHERE school_id IS NULL AND town_class = $1 AND journalist_user_id = $2
            ORDER BY created_at DESC`, [contributor.class, contributor.id]);
+        const postQuota = await (0, townNews_1.getStoryPostQuota)(contributor.id);
         res.json({
             stories: rows.map((row) => mapStoryRow(row)),
             story_xp_reward: townNews_1.STORY_XP_REWARD,
             story_earnings_reward: townNews_1.STORY_EARNINGS_REWARD,
+            remaining_posts: postQuota.remaining_posts,
+            daily_post_limit: postQuota.daily_post_limit,
         });
     }
     catch (error) {
@@ -133,8 +186,19 @@ router.get('/stories', auth_1.authenticateToken, async (req, res) => {
         if (!townClass) {
             return res.status(400).json({ error: (0, townScope_1.viewerTownClassError)(req.user.role) });
         }
-        const stories = await getApprovedStoriesForTown(req.user.school_id ?? null, townClass);
-        res.json({ stories });
+        const beforeIdRaw = req.query.before_id;
+        const beforeId = beforeIdRaw != null && String(beforeIdRaw).trim() !== ''
+            ? parseInt(String(beforeIdRaw), 10)
+            : undefined;
+        if (beforeId != null && (!Number.isFinite(beforeId) || beforeId < 1)) {
+            return res.status(400).json({ error: 'Invalid before_id' });
+        }
+        const olderOnly = req.query.scope === 'older';
+        const { stories, has_more } = await getApprovedStoriesForTown(req.user.school_id ?? null, townClass, {
+            beforeId,
+            olderOnly,
+        });
+        res.json({ stories, has_more });
     }
     catch (error) {
         console.error('Town news stories error:', error);
@@ -166,6 +230,12 @@ router.post('/stories', auth_1.authenticateToken, async (req, res) => {
         if (!body) {
             return res.status(400).json({ error: 'Please write your story' });
         }
+        const postQuota = await (0, townNews_1.getStoryPostQuota)(contributor.id);
+        if (postQuota.remaining_posts <= 0) {
+            return res.status(400).json({
+                error: 'You have reached your daily limit of 2 Town News posts. Try again tomorrow.',
+            });
+        }
         const widgets = (0, townNewsWidgets_1.sanitizeTownNewsWidgets)(req.body?.widgets);
         const widgetsJson = (0, townNewsWidgets_1.widgetsToJson)(widgets);
         const schoolId = contributor.school_id ?? null;
@@ -183,12 +253,12 @@ router.post('/stories', auth_1.authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// DELETE /stories/:id — contributor removes own story
+// DELETE /stories/:id — contributor removes own story; teacher removes student story in town
 router.delete('/stories/:id', auth_1.authenticateToken, async (req, res) => {
     try {
-        const contributor = await requireTownNewsContributor(req, res);
-        if (!contributor)
-            return;
+        if (!req.user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
         if (!(await tablesReady())) {
             return res.status(503).json({ error: 'Town News Board is not available yet. Please try again later.' });
         }
@@ -196,6 +266,28 @@ router.delete('/stories/:id', auth_1.authenticateToken, async (req, res) => {
         if (Number.isNaN(storyId)) {
             return res.status(400).json({ error: 'Invalid story id' });
         }
+        if (req.user.role === 'teacher') {
+            const townClass = (0, townScope_1.resolveViewerTownClass)(req.user, req.query.class);
+            if (!townClass) {
+                return res.status(400).json({ error: (0, townScope_1.viewerTownClassError)(req.user.role) });
+            }
+            const schoolId = req.user.school_id ?? null;
+            const existing = schoolId != null
+                ? await database_prod_1.default.get(`SELECT s.id FROM town_news_stories s
+             JOIN users u ON u.id = s.journalist_user_id
+             WHERE s.id = $1 AND s.school_id = $2 AND s.town_class = $3 AND u.role = 'student'`, [storyId, schoolId, townClass])
+                : await database_prod_1.default.get(`SELECT s.id FROM town_news_stories s
+             JOIN users u ON u.id = s.journalist_user_id
+             WHERE s.id = $1 AND s.school_id IS NULL AND s.town_class = $2 AND u.role = 'student'`, [storyId, townClass]);
+            if (!existing) {
+                return res.status(404).json({ error: 'Story not found or you cannot delete it' });
+            }
+            await database_prod_1.default.run('DELETE FROM town_news_stories WHERE id = $1', [storyId]);
+            return res.json({ success: true });
+        }
+        const contributor = await requireTownNewsContributor(req, res);
+        if (!contributor)
+            return;
         const schoolId = contributor.school_id ?? null;
         const existing = schoolId != null
             ? await database_prod_1.default.get('SELECT id FROM town_news_stories WHERE id = $1 AND school_id = $2 AND town_class = $3 AND journalist_user_id = $4', [storyId, schoolId, contributor.class, contributor.id])

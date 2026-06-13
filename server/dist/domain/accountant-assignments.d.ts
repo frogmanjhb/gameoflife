@@ -23,5 +23,6 @@ export declare function getClassAccountantRoster(className: string, schoolId: nu
 }>;
 export declare function seedManualAssignmentsFromAutoSplit(className: string, schoolId: number | null): Promise<void>;
 export declare function getAccountantContext(userId: number): Promise<AccountantContext>;
+export declare function getAccountantIdsForStudent(studentUserId: number, townClass: string, schoolId: number | null): Promise<number[]>;
 export declare function getManualClientRows(accountantUserId: number, className: string, schoolId: number | null): Promise<any[]>;
 //# sourceMappingURL=accountant-assignments.d.ts.map

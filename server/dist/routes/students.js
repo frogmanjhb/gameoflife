@@ -10,6 +10,7 @@ const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const tenant_1 = require("../middleware/tenant");
 const accountant_assignments_1 = require("../domain/accountant-assignments");
+const doctor_assignments_1 = require("../domain/doctor-assignments");
 const lawyer_assignments_1 = require("../domain/lawyer-assignments");
 const studentEarningsProfile_1 = require("../domain/studentEarningsProfile");
 const transaction_history_visibility_1 = require("../domain/transaction-history-visibility");
@@ -136,6 +137,58 @@ router.get('/transfer-recipients', auth_1.authenticateToken, async (req, res) =>
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+function formatTownProfessionalRow(row) {
+    const displayName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || row.username;
+    return {
+        id: row.id,
+        username: row.username,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        display_name: displayName,
+    };
+}
+async function fetchTownProfessionalsByIds(userIds) {
+    if (!userIds.length)
+        return [];
+    const rows = await database_prod_1.default.query(`SELECT u.id, u.username, u.first_name, u.last_name
+     FROM users u
+     WHERE u.id = ANY($1::int[])
+     ORDER BY u.last_name NULLS LAST, u.first_name NULLS LAST, u.username`, [userIds]);
+    return rows.map(formatTownProfessionalRow);
+}
+// Student self-service: town accountant, lawyer(s), and doctor
+router.get('/me/town-professionals', auth_1.authenticateToken, tenant_1.requireTenant, async (req, res) => {
+    try {
+        if (!req.user || req.user.role !== 'student') {
+            return res.status(403).json({ error: 'Only students can view their town professionals' });
+        }
+        const townClass = req.user.class;
+        if (!townClass) {
+            return res.json({ accountant: null, lawyers: [], doctor: null });
+        }
+        const schoolId = req.user.school_id ?? req.schoolId ?? null;
+        const studentId = req.user.id;
+        const [accountantIds, lawyerIds, doctorIds] = await Promise.all([
+            (0, accountant_assignments_1.getAccountantIdsForStudent)(studentId, townClass, schoolId),
+            (0, lawyer_assignments_1.getLawyerIdsForStudent)(studentId, townClass, schoolId),
+            (0, doctor_assignments_1.getDoctorIdsForStudent)(studentId, townClass, schoolId),
+        ]);
+        const [accountants, lawyers, doctors] = await Promise.all([
+            fetchTownProfessionalsByIds(accountantIds),
+            fetchTownProfessionalsByIds(lawyerIds),
+            fetchTownProfessionalsByIds(doctorIds),
+        ]);
+        res.json({
+            accountant: accountants[0] ?? null,
+            lawyers,
+            doctor: doctors[0] ?? null,
+        });
+    }
+    catch (error) {
+        console.error('Get student town professionals error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 // Student self-service: XP and money earned breakdown
 router.get('/me/earnings-profile', auth_1.authenticateToken, tenant_1.requireTenant, async (req, res) => {
     try {
@@ -159,7 +212,7 @@ router.get('/', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.req
         if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1')
             console.log('🔍 Getting students for teacher:', req.user?.username, 'school:', req.schoolId);
         const students = await database_prod_1.default.query(`
-      SELECT 
+      SELECT
         u.id,
         u.username,
         u.first_name,
@@ -175,7 +228,25 @@ router.get('/', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.req
         a.balance,
         a.updated_at as last_activity,
         j.name as job_name,
-        (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary
+        (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary,
+        EXISTS (
+          SELECT 1 FROM doctor_illness_assignments d
+          WHERE d.patient_user_id = u.id AND d.cured_at IS NULL
+        ) AS is_sick,
+        (
+          SELECT d.illness_type FROM doctor_illness_assignments d
+          WHERE d.patient_user_id = u.id AND d.cured_at IS NULL
+          ORDER BY d.assigned_at DESC LIMIT 1
+        ) AS illness_type,
+        EXISTS (
+          SELECT 1 FROM cyber_attack_assignments c
+          WHERE c.victim_user_id = u.id AND c.repaired_at IS NULL
+        ) AS has_virus,
+        (
+          SELECT c.attack_type FROM cyber_attack_assignments c
+          WHERE c.victim_user_id = u.id AND c.repaired_at IS NULL
+          ORDER BY c.assigned_at DESC LIMIT 1
+        ) AS attack_type
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
       LEFT JOIN jobs j ON u.job_id = j.id
@@ -324,6 +395,50 @@ router.delete('/:username', auth_1.authenticateToken, tenant_1.requireTenant, (0
     }
     catch (error) {
         console.error('Delete student error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Clear active illness for a student (teachers only)
+router.post('/:username/remove-illness', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const { username } = req.params;
+        const student = await database_prod_1.default.get('SELECT u.id, u.username FROM users u WHERE u.username = $1 AND u.role = $2 AND u.school_id = $3', [username, 'student', req.schoolId]);
+        if (!student) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        const updated = await database_prod_1.default.query(`UPDATE doctor_illness_assignments
+       SET cured_at = CURRENT_TIMESTAMP
+       WHERE patient_user_id = $1 AND cured_at IS NULL
+       RETURNING id`, [student.id]);
+        if (!updated.length) {
+            return res.status(400).json({ error: 'Student is not currently sick' });
+        }
+        res.json({ message: 'Illness removed', username: student.username });
+    }
+    catch (error) {
+        console.error('Remove student illness error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Clear active cyber virus for a student (teachers only)
+router.post('/:username/remove-virus', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const { username } = req.params;
+        const student = await database_prod_1.default.get('SELECT u.id, u.username FROM users u WHERE u.username = $1 AND u.role = $2 AND u.school_id = $3', [username, 'student', req.schoolId]);
+        if (!student) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        const updated = await database_prod_1.default.query(`UPDATE cyber_attack_assignments
+       SET repaired_at = CURRENT_TIMESTAMP
+       WHERE victim_user_id = $1 AND repaired_at IS NULL
+       RETURNING id`, [student.id]);
+        if (!updated.length) {
+            return res.status(400).json({ error: 'Student does not currently have a software virus' });
+        }
+        res.json({ message: 'Software virus removed', username: student.username });
+    }
+    catch (error) {
+        console.error('Remove student virus error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

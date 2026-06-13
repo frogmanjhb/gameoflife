@@ -3,7 +3,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ATTENDANCE_DAY_START_SQL = exports.ABSENT_NO_SICK_NOTE_PAY_FACTOR = exports.SICK_NOTE_APPROVE_XP = exports.ATTENDANCE_REGISTER_XP = void 0;
+exports.ATTENDANCE_WEEKEND_DISABLED_REASON = exports.ATTENDANCE_DAY_START_SQL = exports.ABSENT_NO_SICK_NOTE_PAY_FACTOR = exports.SICK_NOTE_APPROVE_XP = exports.ATTENDANCE_REGISTER_XP = void 0;
+exports.getAttendanceGameDay = getAttendanceGameDay;
+exports.isAttendanceRegisterDayEnabled = isAttendanceRegisterDayEnabled;
 exports.hasNurseJob = hasNurseJob;
 exports.hasDoctorJob = hasDoctorJob;
 exports.hasHrDirectorJob = hasHrDirectorJob;
@@ -24,11 +26,25 @@ exports.ATTENDANCE_REGISTER_XP = 20;
 exports.SICK_NOTE_APPROVE_XP = 10;
 /** Multiplier applied to gross salary when absent without submitting a sick note. */
 exports.ABSENT_NO_SICK_NOTE_PAY_FACTOR = 0.5;
-/** Same day window as job challenge games (resets 04:00). */
+/** Same day window as job challenge games (resets 04:00 UTC). */
 exports.ATTENDANCE_DAY_START_SQL = `
   CASE WHEN CURRENT_TIME < '04:00:00' THEN CURRENT_DATE - INTERVAL '1 day' + INTERVAL '4 hours'
   ELSE CURRENT_DATE + INTERVAL '4 hours' END
 `;
+exports.ATTENDANCE_WEEKEND_DISABLED_REASON = 'Attendance register is not available on weekends.';
+/** Game day for attendance (resets 04:00 UTC, same as job challenge games). */
+function getAttendanceGameDay(date = new Date()) {
+    const gameDay = new Date(date);
+    if (gameDay.getUTCHours() < 4) {
+        gameDay.setUTCDate(gameDay.getUTCDate() - 1);
+    }
+    return gameDay;
+}
+/** Nurse/Doctor register is weekdays only (Mon–Fri game days). */
+function isAttendanceRegisterDayEnabled(date = new Date()) {
+    const dayOfWeek = getAttendanceGameDay(date).getUTCDay();
+    return dayOfWeek !== 0 && dayOfWeek !== 6;
+}
 function hasNurseJob(jobName) {
     return (jobName || '').toLowerCase().trim().includes('nurse');
 }

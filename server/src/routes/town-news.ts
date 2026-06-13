@@ -4,6 +4,8 @@ import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import {
   STORY_EARNINGS_REWARD,
   STORY_XP_REWARD,
+  TOWN_NEWS_DAY_START_SQL,
+  TOWN_NEWS_STORIES_PAGE_SIZE,
   canSubmitTownNews,
   getStoryPostQuota,
   isTownClass,
@@ -107,25 +109,101 @@ function mapStoryRow(row: {
   };
 }
 
-async function getApprovedStoriesForTown(schoolId: number | null, townClass: string) {
+const STORY_SELECT = `SELECT s.*, u.username AS journalist_username, u.first_name AS journalist_first_name, u.last_name AS journalist_last_name
+         FROM town_news_stories s
+         JOIN users u ON u.id = s.journalist_user_id`;
+
+async function hasOlderApprovedStories(schoolId: number | null, townClass: string): Promise<boolean> {
+  const row = schoolId != null
+    ? await database.get(
+        `SELECT EXISTS(
+           SELECT 1 FROM town_news_stories s
+           WHERE s.school_id = $1 AND s.town_class = $2 AND s.status = 'approved'
+             AND s.created_at < (${TOWN_NEWS_DAY_START_SQL})
+         ) AS exists`,
+        [schoolId, townClass]
+      )
+    : await database.get(
+        `SELECT EXISTS(
+           SELECT 1 FROM town_news_stories s
+           WHERE s.school_id IS NULL AND s.town_class = $1 AND s.status = 'approved'
+             AND s.created_at < (${TOWN_NEWS_DAY_START_SQL})
+         ) AS exists`,
+        [townClass]
+      );
+  return Boolean(row?.exists);
+}
+
+async function getApprovedStoriesForTown(
+  schoolId: number | null,
+  townClass: string,
+  options: { beforeId?: number; olderOnly?: boolean } = {}
+) {
+  const { beforeId, olderOnly } = options;
+  const pageSize = TOWN_NEWS_STORIES_PAGE_SIZE;
+
+  if (beforeId != null || olderOnly) {
+    const limit = pageSize + 1;
+    const rows = schoolId != null
+      ? beforeId != null
+        ? await database.query(
+            `${STORY_SELECT}
+         WHERE s.school_id = $1 AND s.town_class = $2 AND s.status = 'approved' AND s.id < $3
+         ORDER BY s.created_at DESC, s.id DESC
+         LIMIT $4`,
+            [schoolId, townClass, beforeId, limit]
+          )
+        : await database.query(
+            `${STORY_SELECT}
+         WHERE s.school_id = $1 AND s.town_class = $2 AND s.status = 'approved'
+           AND s.created_at < (${TOWN_NEWS_DAY_START_SQL})
+         ORDER BY s.created_at DESC, s.id DESC
+         LIMIT $3`,
+            [schoolId, townClass, limit]
+          )
+      : beforeId != null
+        ? await database.query(
+            `${STORY_SELECT}
+         WHERE s.school_id IS NULL AND s.town_class = $1 AND s.status = 'approved' AND s.id < $2
+         ORDER BY s.created_at DESC, s.id DESC
+         LIMIT $3`,
+            [townClass, beforeId, limit]
+          )
+        : await database.query(
+            `${STORY_SELECT}
+         WHERE s.school_id IS NULL AND s.town_class = $1 AND s.status = 'approved'
+           AND s.created_at < (${TOWN_NEWS_DAY_START_SQL})
+         ORDER BY s.created_at DESC, s.id DESC
+         LIMIT $2`,
+            [townClass, limit]
+          );
+    const hasMore = rows.length > pageSize;
+    const page = hasMore ? rows.slice(0, pageSize) : rows;
+    return {
+      stories: page.map((row: Parameters<typeof mapStoryRow>[0]) => mapStoryRow(row)),
+      has_more: hasMore,
+    };
+  }
+
   const rows = schoolId != null
     ? await database.query(
-        `SELECT s.*, u.username AS journalist_username, u.first_name AS journalist_first_name, u.last_name AS journalist_last_name
-         FROM town_news_stories s
-         JOIN users u ON u.id = s.journalist_user_id
+        `${STORY_SELECT}
          WHERE s.school_id = $1 AND s.town_class = $2 AND s.status = 'approved'
+           AND s.created_at >= (${TOWN_NEWS_DAY_START_SQL})
          ORDER BY s.created_at DESC`,
         [schoolId, townClass]
       )
     : await database.query(
-        `SELECT s.*, u.username AS journalist_username, u.first_name AS journalist_first_name, u.last_name AS journalist_last_name
-         FROM town_news_stories s
-         JOIN users u ON u.id = s.journalist_user_id
+        `${STORY_SELECT}
          WHERE s.school_id IS NULL AND s.town_class = $1 AND s.status = 'approved'
+           AND s.created_at >= (${TOWN_NEWS_DAY_START_SQL})
          ORDER BY s.created_at DESC`,
         [townClass]
       );
-  return rows.map((row: Parameters<typeof mapStoryRow>[0]) => mapStoryRow(row));
+  return {
+    stories: rows.map((row: Parameters<typeof mapStoryRow>[0]) => mapStoryRow(row)),
+    has_more: await hasOlderApprovedStories(schoolId, townClass),
+  };
 }
 
 // GET /manage — journalist / graphic designer view
@@ -184,8 +262,21 @@ router.get('/stories', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.status(400).json({ error: viewerTownClassError(req.user.role) });
     }
 
-    const stories = await getApprovedStoriesForTown(req.user.school_id ?? null, townClass);
-    res.json({ stories });
+    const beforeIdRaw = req.query.before_id;
+    const beforeId =
+      beforeIdRaw != null && String(beforeIdRaw).trim() !== ''
+        ? parseInt(String(beforeIdRaw), 10)
+        : undefined;
+    if (beforeId != null && (!Number.isFinite(beforeId) || beforeId < 1)) {
+      return res.status(400).json({ error: 'Invalid before_id' });
+    }
+    const olderOnly = req.query.scope === 'older';
+
+    const { stories, has_more } = await getApprovedStoriesForTown(req.user.school_id ?? null, townClass, {
+      beforeId,
+      olderOnly,
+    });
+    res.json({ stories, has_more });
   } catch (error) {
     console.error('Town news stories error:', error);
     res.status(500).json({ error: 'Internal server error' });
