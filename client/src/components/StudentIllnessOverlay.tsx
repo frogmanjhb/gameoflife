@@ -194,6 +194,17 @@ const StudentIllnessOverlay: React.FC<StudentIllnessOverlayProps> = ({
     return false;
   }, [isActive, illnessType, isTestMode, status, tick, seeDoctorDelayMs, pendingCure, pendingInsuranceClaim]);
 
+  const secondsUntilNaturalRecovery = useMemo(() => {
+    if (!isActive || pendingCure || pendingInsuranceClaim || isTestMode) return 0;
+    if (typeof status?.seconds_until_natural_recovery === 'number') {
+      return Math.max(0, status.seconds_until_natural_recovery);
+    }
+    if (status?.expires_at) {
+      return Math.max(0, Math.ceil((new Date(status.expires_at).getTime() - Date.now()) / 1000));
+    }
+    return 0;
+  }, [isActive, pendingCure, pendingInsuranceClaim, isTestMode, status, tick]);
+
   const secondsLeft = useMemo(() => {
     if (!isActive || canPayForCure || pendingCure || pendingInsuranceClaim) return 0;
     if (isTestMode) {
@@ -335,6 +346,16 @@ const StudentIllnessOverlay: React.FC<StudentIllnessOverlayProps> = ({
                   ? `Clinic fee: R${(status?.cure_fee ?? 5000).toFixed(2)} — health insurance will pay after your insurance manager approves`
                   : `Clinic fee: R${(status?.cure_fee ?? 5000).toFixed(2)} — covered by your health insurance`
                 : `Clinic fee: R${(status?.cure_fee ?? 5000).toFixed(2)} (paid to your town doctor)`}
+            </p>
+          )}
+          {!pendingCure && !pendingInsuranceClaim && secondsUntilNaturalRecovery > 0 && (
+            <p className="text-xs text-gray-500 mt-2">
+              If untreated, illness clears in{' '}
+              {secondsUntilNaturalRecovery >= 86400
+                ? `${Math.ceil(secondsUntilNaturalRecovery / 86400)} day${Math.ceil(secondsUntilNaturalRecovery / 86400) === 1 ? '' : 's'}`
+                : secondsUntilNaturalRecovery >= 3600
+                  ? `${Math.ceil(secondsUntilNaturalRecovery / 3600)} hour${Math.ceil(secondsUntilNaturalRecovery / 3600) === 1 ? '' : 's'}`
+                  : `${secondsUntilNaturalRecovery}s`}
             </p>
           )}
           {error && <p className="text-xs text-red-600 mt-2">{error}</p>}

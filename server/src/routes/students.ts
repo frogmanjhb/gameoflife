@@ -249,7 +249,7 @@ router.get('/', authenticateToken, requireTenant, requireRole(['teacher']), asyn
     if (process.env.DEBUG === '1' || process.env.VERBOSE_LOGGING === '1') console.log('🔍 Getting students for teacher:', req.user?.username, 'school:', req.schoolId);
     
     const students = await database.query(`
-      SELECT 
+      SELECT
         u.id,
         u.username,
         u.first_name,
@@ -265,7 +265,25 @@ router.get('/', authenticateToken, requireTenant, requireRole(['teacher']), asyn
         a.balance,
         a.updated_at as last_activity,
         j.name as job_name,
-        (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary
+        (COALESCE(j.base_salary, 2000.00) * (1 + (COALESCE(u.job_level, 1) - 1) * 0.7222) * CASE WHEN COALESCE(j.is_contractual, false) THEN 1.5 ELSE 1.0 END) as job_salary,
+        EXISTS (
+          SELECT 1 FROM doctor_illness_assignments d
+          WHERE d.patient_user_id = u.id AND d.cured_at IS NULL
+        ) AS is_sick,
+        (
+          SELECT d.illness_type FROM doctor_illness_assignments d
+          WHERE d.patient_user_id = u.id AND d.cured_at IS NULL
+          ORDER BY d.assigned_at DESC LIMIT 1
+        ) AS illness_type,
+        EXISTS (
+          SELECT 1 FROM cyber_attack_assignments c
+          WHERE c.victim_user_id = u.id AND c.repaired_at IS NULL
+        ) AS has_virus,
+        (
+          SELECT c.attack_type FROM cyber_attack_assignments c
+          WHERE c.victim_user_id = u.id AND c.repaired_at IS NULL
+          ORDER BY c.assigned_at DESC LIMIT 1
+        ) AS attack_type
       FROM users u
       LEFT JOIN accounts a ON u.id = a.user_id
       LEFT JOIN jobs j ON u.job_id = j.id
@@ -443,6 +461,72 @@ router.delete('/:username', authenticateToken, requireTenant, requireRole(['teac
     res.json({ message: `Student ${username} has been deleted successfully` });
   } catch (error) {
     console.error('Delete student error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Clear active illness for a student (teachers only)
+router.post('/:username/remove-illness', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { username } = req.params;
+
+    const student = await database.get(
+      'SELECT u.id, u.username FROM users u WHERE u.username = $1 AND u.role = $2 AND u.school_id = $3',
+      [username, 'student', req.schoolId]
+    );
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    const updated = await database.query(
+      `UPDATE doctor_illness_assignments
+       SET cured_at = CURRENT_TIMESTAMP
+       WHERE patient_user_id = $1 AND cured_at IS NULL
+       RETURNING id`,
+      [student.id]
+    );
+
+    if (!updated.length) {
+      return res.status(400).json({ error: 'Student is not currently sick' });
+    }
+
+    res.json({ message: 'Illness removed', username: student.username });
+  } catch (error) {
+    console.error('Remove student illness error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Clear active cyber virus for a student (teachers only)
+router.post('/:username/remove-virus', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { username } = req.params;
+
+    const student = await database.get(
+      'SELECT u.id, u.username FROM users u WHERE u.username = $1 AND u.role = $2 AND u.school_id = $3',
+      [username, 'student', req.schoolId]
+    );
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    const updated = await database.query(
+      `UPDATE cyber_attack_assignments
+       SET repaired_at = CURRENT_TIMESTAMP
+       WHERE victim_user_id = $1 AND repaired_at IS NULL
+       RETURNING id`,
+      [student.id]
+    );
+
+    if (!updated.length) {
+      return res.status(400).json({ error: 'Student does not currently have a software virus' });
+    }
+
+    res.json({ message: 'Software virus removed', username: student.username });
+  } catch (error) {
+    console.error('Remove student virus error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

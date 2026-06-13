@@ -1141,6 +1141,10 @@ export const studentsApi = {
     api.get('/students/me/earnings-profile'),
   getMyTownProfessionals: (): Promise<{ data: import('../types').StudentTownProfessionals }> =>
     api.get('/students/me/town-professionals'),
+  removeIllness: (username: string): Promise<{ data: { message: string; username: string } }> =>
+    api.post(`/students/${encodeURIComponent(username)}/remove-illness`),
+  removeVirus: (username: string): Promise<{ data: { message: string; username: string } }> =>
+    api.post(`/students/${encodeURIComponent(username)}/remove-virus`),
 };
 
 export const studentsAccountantApi = {

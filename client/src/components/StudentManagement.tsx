@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Minus, DollarSign, User, Search, Users, Trash2, AlertTriangle, ChevronDown, ChevronUp, Copy, RefreshCw, Eye, UserCheck } from 'lucide-react';
-import api, { jobsApi } from '../services/api';
+import { Plus, Minus, DollarSign, User, Search, Users, Trash2, AlertTriangle, ChevronDown, ChevronUp, Copy, RefreshCw, Eye, UserCheck, Thermometer, Bug } from 'lucide-react';
+import api, { jobsApi, studentsApi } from '../services/api';
 import { Student } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { getDisplayJobTitle } from '../utils/jobDisplay';
@@ -29,6 +29,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'sick' | 'virus'>('all');
   const [sortBy, setSortBy] = useState<'surname' | 'balance' | 'job'>('surname');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [expandedStudents, setExpandedStudents] = useState<Set<number>>(new Set());
@@ -39,6 +40,14 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
   const [showRemoveXpForm, setShowRemoveXpForm] = useState(false);
   const [xpFormData, setXpFormData] = useState({ amount: '' });
   const [impersonateLoadingId, setImpersonateLoadingId] = useState<number | null>(null);
+  const [removingIllnessId, setRemovingIllnessId] = useState<number | null>(null);
+  const [removingVirusId, setRemovingVirusId] = useState<number | null>(null);
+
+  const isStudentSick = (student: Student) => student.is_sick === true || student.is_sick === 't';
+  const studentHasVirus = (student: Student) => student.has_virus === true || student.has_virus === 't';
+
+  const sickCount = useMemo(() => students.filter(isStudentSick).length, [students]);
+  const virusCount = useMemo(() => students.filter(studentHasVirus).length, [students]);
 
   // Group students by class
   const studentsByClass = useMemo(() => {
@@ -69,11 +78,17 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
     return studentsByClass.grouped[className] || [];
   };
 
-  const filteredStudents = getStudentsForClass(selectedClass).filter(student =>
-    student.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (student.first_name && student.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (student.last_name && student.last_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredStudents = getStudentsForClass(selectedClass).filter(student => {
+    const matchesSearch =
+      student.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (student.first_name && student.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (student.last_name && student.last_name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    if (!matchesSearch) return false;
+    if (statusFilter === 'sick') return isStudentSick(student);
+    if (statusFilter === 'virus') return studentHasVirus(student);
+    return true;
+  });
 
   const displayedStudents = useMemo(() => {
     const dir = sortDirection === 'asc' ? 1 : -1;
@@ -322,6 +337,36 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
     }
   };
 
+  const handleRemoveIllness = async (student: Student) => {
+    setRemovingIllnessId(student.id);
+    setError('');
+    setSuccess('');
+    try {
+      await studentsApi.removeIllness(student.username);
+      setSuccess(`Illness removed for ${student.username}`);
+      onUpdate();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to remove illness');
+    } finally {
+      setRemovingIllnessId(null);
+    }
+  };
+
+  const handleRemoveVirus = async (student: Student) => {
+    setRemovingVirusId(student.id);
+    setError('');
+    setSuccess('');
+    try {
+      await studentsApi.removeVirus(student.username);
+      setSuccess(`Software virus removed for ${student.username}`);
+      onUpdate();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to remove software virus');
+    } finally {
+      setRemovingVirusId(null);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setSuccess('Copied to clipboard!');
@@ -396,6 +441,45 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
         ))}
       </div>
 
+      {/* Status Filters */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setStatusFilter('all')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            statusFilter === 'all'
+              ? 'bg-primary-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          All statuses
+        </button>
+        <button
+          type="button"
+          onClick={() => setStatusFilter('sick')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            statusFilter === 'sick'
+              ? 'bg-red-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          <Thermometer className="h-4 w-4 inline mr-2" />
+          Sick ({sickCount})
+        </button>
+        <button
+          type="button"
+          onClick={() => setStatusFilter('virus')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            statusFilter === 'virus'
+              ? 'bg-purple-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          <Bug className="h-4 w-4 inline mr-2" />
+          Software virus ({virusCount})
+        </button>
+      </div>
+
       {/* Error/Success Messages */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
@@ -444,13 +528,15 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
         <div className="text-center py-12">
           <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm ? 'No students found' : `No students in ${selectedClass === 'all' ? 'any class' : selectedClass}`}
+            {searchTerm || statusFilter !== 'all'
+              ? 'No students found'
+              : `No students in ${selectedClass === 'all' ? 'any class' : selectedClass}`}
           </h3>
           <p className="text-gray-500">
-            {searchTerm 
-              ? 'Try adjusting your search terms' 
-              : selectedClass === 'all' 
-                ? 'Students will appear here once they register' 
+            {searchTerm || statusFilter !== 'all'
+              ? 'Try adjusting your search or filters'
+              : selectedClass === 'all'
+                ? 'Students will appear here once they register'
                 : 'Students in this class will appear here'
             }
           </p>
@@ -460,6 +546,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
           {displayedStudents.map((student) => {
             const isExpanded = expandedStudents.has(student.id);
             const hasPassword = studentPasswords[student.id];
+            const sick = isStudentSick(student);
+            const hasVirus = studentHasVirus(student);
             
             return (
             <div
@@ -492,6 +580,18 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                       <span className="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded-full">
                         {student.class || 'Unassigned'}
                       </span>
+                      {sick && (
+                        <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full inline-flex items-center gap-1">
+                          <Thermometer className="h-3 w-3" />
+                          Sick
+                        </span>
+                      )}
+                      {hasVirus && (
+                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full inline-flex items-center gap-1">
+                          <Bug className="h-3 w-3" />
+                          Virus
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -702,6 +802,38 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
+              {(sick || hasVirus) && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {sick && (
+                    <button
+                      type="button"
+                      disabled={removingIllnessId === student.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveIllness(student);
+                      }}
+                      className="flex-1 px-3 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition-colors text-sm flex items-center justify-center gap-1 disabled:opacity-50"
+                    >
+                      <Thermometer className="h-4 w-4" />
+                      {removingIllnessId === student.id ? 'Removing...' : 'Remove Illness'}
+                    </button>
+                  )}
+                  {hasVirus && (
+                    <button
+                      type="button"
+                      disabled={removingVirusId === student.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveVirus(student);
+                      }}
+                      className="flex-1 px-3 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg transition-colors text-sm flex items-center justify-center gap-1 disabled:opacity-50"
+                    >
+                      <Bug className="h-4 w-4" />
+                      {removingVirusId === student.id ? 'Removing...' : 'Remove Virus'}
+                    </button>
+                  )}
+                </div>
+              )}
               {canImpersonate && (
                 <button
                   type="button"

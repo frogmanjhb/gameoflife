@@ -146,6 +146,10 @@ export interface Student {
   job_name?: string;
   job_level?: number;
   job_salary?: number;
+  is_sick?: boolean;
+  illness_type?: string;
+  has_virus?: boolean;
+  attack_type?: string;
 }
 
 export interface AuthContextType {
@@ -818,6 +822,9 @@ export interface DoctorIllnessMyStatus {
   doctor_display_name?: string;
   health_insurance_covers_clinic?: boolean;
   insurance_broker_required?: boolean;
+  /** When untreated, illness clears automatically after 2 days. */
+  expires_at?: string;
+  seconds_until_natural_recovery?: number;
 }
 
 export interface DoctorIllnessPendingCure {

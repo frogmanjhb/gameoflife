@@ -6,9 +6,11 @@ import {
   DOCTOR_ILLNESS_DAILY_LIMIT,
   DOCTOR_ILLNESS_DAY_START_SQL,
   DOCTOR_ILLNESS_META,
+  DOCTOR_ILLNESS_UNTREATED_EXPIRY_MS,
   DOCTOR_SEE_DOCTOR_DELAY_MS,
   DOCTOR_CURE_FEE,
   DOCTOR_CURE_APPROVE_XP,
+  expireUntreatedIllnesses,
   pickRandomIllnessType,
   DoctorIllnessType,
 } from '../domain/doctor-illness';
@@ -30,15 +32,12 @@ function illnessPayload(type: DoctorIllnessType) {
   return { illness_type: type, illness_name: meta.name, illness_description: meta.description };
 }
 
-async function countClassAssignmentsToday(
-  schoolId: number | null,
-  townClass: string
-): Promise<number> {
+async function countDoctorAssignmentsToday(doctorId: number): Promise<number> {
   const row = await database.get(
     `SELECT COUNT(*)::int AS count FROM doctor_illness_assignments
-     WHERE town_class = $1 AND school_id IS NOT DISTINCT FROM $2
+     WHERE assigned_by_user_id = $1
      AND assigned_at >= (${DOCTOR_ILLNESS_DAY_START_SQL})`,
-    [townClass, schoolId]
+    [doctorId]
   );
   return row?.count ?? 0;
 }
@@ -96,18 +95,20 @@ router.get('/doctor-status', authenticateToken, async (req: AuthenticatedRequest
       });
     }
 
-    const used = await countClassAssignmentsToday(req.user.school_id ?? null, req.user.class);
+    await expireUntreatedIllnesses();
+
+    const used = await countDoctorAssignmentsToday(userId);
     const recent = await database.query(
       `SELECT a.id, a.illness_type, a.assigned_at, a.cured_at, a.cure_requested_at,
               p.username AS patient_username,
               COALESCE(NULLIF(TRIM(CONCAT(p.first_name, ' ', p.last_name)), ''), p.username) AS patient_display_name
        FROM doctor_illness_assignments a
        JOIN users p ON p.id = a.patient_user_id
-       WHERE a.town_class = $1 AND a.school_id IS NOT DISTINCT FROM $2
+       WHERE a.assigned_by_user_id = $1
          AND a.assigned_at >= (${DOCTOR_ILLNESS_DAY_START_SQL})
        ORDER BY a.assigned_at DESC
        LIMIT 10`,
-      [req.user.class, req.user.school_id ?? null]
+      [userId]
     );
 
     const pendingCures = await database.query(
@@ -192,12 +193,14 @@ router.post('/assign', authenticateToken, async (req: AuthenticatedRequest, res:
       return res.status(503).json({ error: 'Illness feature not available yet. Please try again later.' });
     }
 
+    await expireUntreatedIllnesses();
+
     const schoolId = req.user.school_id ?? null;
     const townClass = req.user.class;
-    const used = await countClassAssignmentsToday(schoolId, townClass);
+    const used = await countDoctorAssignmentsToday(doctorId);
     if (used >= DOCTOR_ILLNESS_DAILY_LIMIT) {
       return res.status(400).json({
-        error: `Your town class has already reached the daily limit of ${DOCTOR_ILLNESS_DAILY_LIMIT} sick students.`,
+        error: `You have already made ${DOCTOR_ILLNESS_DAILY_LIMIT} students sick today. Try again tomorrow.`,
       });
     }
 
@@ -268,6 +271,8 @@ router.get('/my-status', authenticateToken, async (req: AuthenticatedRequest, re
       return res.json({ active: false });
     }
 
+    await expireUntreatedIllnesses(req.user.id);
+
     const row = await database.get(
       `SELECT illness_type, assigned_at, cure_requested_at, cure_fee, insurance_claim_requested_at,
               d.username AS doctor_username,
@@ -298,6 +303,13 @@ router.get('/my-status', authenticateToken, async (req: AuthenticatedRequest, re
       req.user.id
     );
 
+    const expiresAtMs = assignedAt + DOCTOR_ILLNESS_UNTREATED_EXPIRY_MS;
+    const showNaturalRecovery = !pendingCure && !pendingInsuranceClaim;
+    const secondsUntilNaturalRecovery =
+      showNaturalRecovery && now < expiresAtMs
+        ? Math.ceil((expiresAtMs - now) / 1000)
+        : 0;
+
     res.json({
       active: true,
       pending_cure: pendingCure,
@@ -311,6 +323,8 @@ router.get('/my-status', authenticateToken, async (req: AuthenticatedRequest, re
       see_doctor_available_at: new Date(seeDoctorAt).toISOString(),
       can_see_doctor: canPayForCure,
       seconds_until_see_doctor: pendingCure || pendingInsuranceClaim || canPayForCure ? 0 : Math.ceil((seeDoctorAt - now) / 1000),
+      expires_at: showNaturalRecovery ? new Date(expiresAtMs).toISOString() : undefined,
+      seconds_until_natural_recovery: showNaturalRecovery ? secondsUntilNaturalRecovery : undefined,
       ...illnessPayload(type),
     });
   } catch (error) {
@@ -330,6 +344,8 @@ router.post('/see-doctor', authenticateToken, async (req: AuthenticatedRequest, 
     } catch {
       return res.status(503).json({ error: 'Illness feature not available yet. Please try again later.' });
     }
+
+    await expireUntreatedIllnesses(req.user.id);
 
     const row = await database.get(
       `SELECT a.id, a.illness_type, a.assigned_at, a.cure_requested_at, a.cure_fee,

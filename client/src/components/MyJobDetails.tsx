@@ -2824,7 +2824,9 @@ const MyJobDetails: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">Town Clinic — Random Illness</h3>
                   <p className="text-sm text-gray-600">
-                    Assign a random illness to a classmate. Up to {doctorIllnessStatus?.daily_limit ?? 5} students per town class per day.
+                    Assign a random illness to a classmate. You can make up to{' '}
+                    {doctorIllnessStatus?.daily_limit ?? 2} students sick per day. Untreated illness clears
+                    after 2 days.
                   </p>
                   <ul className="text-xs text-gray-500 mt-2 list-disc list-inside space-y-0.5">
                     <li>Verdigris Vertigo — wavy green screen</li>
