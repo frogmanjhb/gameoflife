@@ -79,19 +79,21 @@ function mapStoryRow(row) {
 const STORY_SELECT = `SELECT s.*, u.username AS journalist_username, u.first_name AS journalist_first_name, u.last_name AS journalist_last_name
          FROM town_news_stories s
          JOIN users u ON u.id = s.journalist_user_id`;
+const approvedStoryScope = (schoolId, townClass, alias = 's') => schoolId != null
+    ? `${alias}.school_id = $1 AND ${alias}.town_class = $2 AND ${alias}.status = 'approved'`
+    : `${alias}.school_id IS NULL AND ${alias}.town_class = $1 AND ${alias}.status = 'approved'`;
 async function hasOlderApprovedStories(schoolId, townClass) {
+    const scope = approvedStoryScope(schoolId, townClass);
     const row = schoolId != null
-        ? await database_prod_1.default.get(`SELECT EXISTS(
-           SELECT 1 FROM town_news_stories s
-           WHERE s.school_id = $1 AND s.town_class = $2 AND s.status = 'approved'
-             AND s.created_at < (${townNews_1.TOWN_NEWS_DAY_START_SQL})
-         ) AS exists`, [schoolId, townClass])
-        : await database_prod_1.default.get(`SELECT EXISTS(
-           SELECT 1 FROM town_news_stories s
-           WHERE s.school_id IS NULL AND s.town_class = $1 AND s.status = 'approved'
-             AND s.created_at < (${townNews_1.TOWN_NEWS_DAY_START_SQL})
-         ) AS exists`, [townClass]);
-    return Boolean(row?.exists);
+        ? await database_prod_1.default.get(`SELECT COUNT(*)::int AS older_count
+         FROM town_news_stories s
+         WHERE ${scope}
+           AND s.created_at < (${townNews_1.TOWN_NEWS_DAY_START_SQL})`, [schoolId, townClass])
+        : await database_prod_1.default.get(`SELECT COUNT(*)::int AS older_count
+         FROM town_news_stories s
+         WHERE ${scope}
+           AND s.created_at < (${townNews_1.TOWN_NEWS_DAY_START_SQL})`, [townClass]);
+    return Number(row?.older_count ?? 0) > 0;
 }
 async function getApprovedStoriesForTown(schoolId, townClass, options = {}) {
     const { beforeId, olderOnly } = options;
@@ -130,14 +132,18 @@ async function getApprovedStoriesForTown(schoolId, townClass, options = {}) {
         ? await database_prod_1.default.query(`${STORY_SELECT}
          WHERE s.school_id = $1 AND s.town_class = $2 AND s.status = 'approved'
            AND s.created_at >= (${townNews_1.TOWN_NEWS_DAY_START_SQL})
-         ORDER BY s.created_at DESC`, [schoolId, townClass])
+         ORDER BY s.created_at DESC, s.id DESC
+         LIMIT $3`, [schoolId, townClass, pageSize + 1])
         : await database_prod_1.default.query(`${STORY_SELECT}
          WHERE s.school_id IS NULL AND s.town_class = $1 AND s.status = 'approved'
            AND s.created_at >= (${townNews_1.TOWN_NEWS_DAY_START_SQL})
-         ORDER BY s.created_at DESC`, [townClass]);
+         ORDER BY s.created_at DESC, s.id DESC
+         LIMIT $2`, [townClass, pageSize + 1]);
+    const hasMoreToday = rows.length > pageSize;
+    const page = hasMoreToday ? rows.slice(0, pageSize) : rows;
     return {
-        stories: rows.map((row) => mapStoryRow(row)),
-        has_more: await hasOlderApprovedStories(schoolId, townClass),
+        stories: page.map((row) => mapStoryRow(row)),
+        has_more: hasMoreToday || (await hasOlderApprovedStories(schoolId, townClass)),
     };
 }
 // GET /manage — journalist / graphic designer view

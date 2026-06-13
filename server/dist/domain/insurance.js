@@ -9,6 +9,8 @@ exports.toDateString = toDateString;
 exports.formatDateUTC = formatDateUTC;
 exports.isPolicyCoverageActive = isPolicyCoverageActive;
 exports.isPolicyEffectivelyActive = isPolicyEffectivelyActive;
+exports.isPolicyProvidingCoverage = isPolicyProvidingCoverage;
+exports.resolvePolicyWeekStartDate = resolvePolicyWeekStartDate;
 exports.isInsuranceBrokerJob = isInsuranceBrokerJob;
 exports.calculateTeacherRefundAmount = calculateTeacherRefundAmount;
 exports.canTeacherRefundInsuranceStatus = canTeacherRefundInsuranceStatus;
@@ -83,7 +85,23 @@ function isPolicyCoverageActive(weekStart, weeks, today = todayInSA()) {
     return today >= startStr && today <= end;
 }
 function isPolicyEffectivelyActive(status, weekStart, weeks, today = todayInSA()) {
-    return status === 'approved' && isPolicyCoverageActive(weekStart, weeks, today);
+    return isPolicyProvidingCoverage(status, weekStart, weeks, today);
+}
+/** Premium paid; coverage applies while approved or awaiting broker sign-off (denial refunds premium). */
+function isPolicyProvidingCoverage(status, weekStart, weeks, today = todayInSA()) {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'denied' || normalized === 'refunded')
+        return false;
+    if (normalized !== 'approved' && normalized !== 'pending_broker')
+        return false;
+    return isPolicyCoverageActive(weekStart, weeks, today);
+}
+function resolvePolicyWeekStartDate(weekStart, createdAt, today = todayInSA()) {
+    const fromWeekStart = toDateString(weekStart);
+    if (fromWeekStart)
+        return fromWeekStart;
+    const fromCreated = toDateString(createdAt);
+    return fromCreated || today;
 }
 function isInsuranceBrokerJob(jobName) {
     return (jobName || '').toLowerCase().trim().includes('insurance');
@@ -164,11 +182,11 @@ async function hasActiveApprovedCyberInsurance(userId) {
 }
 async function hasActiveApprovedInsuranceOfType(userId, insuranceType) {
     const today = todayInSA();
-    const rows = await database_prod_1.default.query(`SELECT weeks, week_start_date, status
+    const rows = await database_prod_1.default.query(`SELECT weeks, week_start_date, status, created_at
      FROM insurance_purchases
-     WHERE user_id = $1 AND insurance_type = $2 AND status = 'approved'
+     WHERE user_id = $1 AND insurance_type = $2 AND status IN ('approved', 'pending_broker')
      ORDER BY created_at DESC`, [userId, insuranceType]);
-    return rows.some((p) => isPolicyEffectivelyActive(p.status, p.week_start_date, p.weeks, today));
+    return rows.some((p) => isPolicyProvidingCoverage(p.status, resolvePolicyWeekStartDate(p.week_start_date, p.created_at, today), p.weeks, today));
 }
 async function payHealthInsuranceClinicClaim(executor, assignmentId, doctorUserId, doctorAccountId, cureFee, illnessType, opts) {
     const { netAmount: doctorPay, reputation } = await (0, doctor_reputation_1.resolveDoctorNetEarnings)(doctorUserId, cureFee);

@@ -1,1 +1,1 @@
-{"version":3,"file":"insurance.d.ts","sourceRoot":"","sources":["../../src/routes/insurance.ts"],"names":[],"mappings":"AA0BA,QAAA,MAAM,MAAM,4CAAW,CAAC;AA+gCxB,OAAO,EAAE,wBAAwB,EAAE,2BAA2B,EAAE,gCAAgC,EAAE,MAAM,qBAAqB,CAAC;AAC9H,eAAe,MAAM,CAAC"}
+{"version":3,"file":"insurance.d.ts","sourceRoot":"","sources":["../../src/routes/insurance.ts"],"names":[],"mappings":"AA4BA,QAAA,MAAM,MAAM,4CAAW,CAAC;AAuhCxB,OAAO,EAAE,wBAAwB,EAAE,2BAA2B,EAAE,gCAAgC,EAAE,MAAM,qBAAqB,CAAC;AAC9H,eAAe,MAAM,CAAC"}

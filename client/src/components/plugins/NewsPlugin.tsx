@@ -34,7 +34,7 @@ const NewsPlugin: React.FC = () => {
         currentTownClass ? { class: currentTownClass } : undefined
       );
       setStories(res.data.stories);
-      setHasMore(res.data.has_more);
+      setHasMore(Boolean(res.data.has_more));
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
@@ -56,7 +56,7 @@ const NewsPlugin: React.FC = () => {
         ...(oldestId != null ? { before_id: oldestId } : { scope: 'older' }),
       });
       setStories((prev) => [...prev, ...res.data.stories]);
-      setHasMore(res.data.has_more);
+      setHasMore(Boolean(res.data.has_more));
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
@@ -132,69 +132,56 @@ const NewsPlugin: React.FC = () => {
         </div>
       ) : error ? (
         <div className="bg-white rounded-xl shadow-sm border border-red-200 p-8 text-center text-red-700">{error}</div>
-      ) : !stories.length ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-          <Newspaper className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            {hasMore ? 'No stories today' : 'No stories yet'}
-          </h2>
-          <p className="text-gray-600">
-            {hasMore
-              ? 'No new stories have been published today. Load older posts below.'
-              : 'No approved stories or posters have been published yet.'}
-          </p>
-          {hasMore && (
-            <button
-              type="button"
-              onClick={loadMoreStories}
-              disabled={loadingMore}
-              className="btn-secondary mt-6"
-            >
-              {loadingMore ? (
-                <span className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading…
-                </span>
-              ) : (
-                'Load more'
-              )}
-            </button>
-          )}
-        </div>
       ) : (
-        <div className="space-y-6">
-          {stories.map((story) => {
-            const removing = removingStoryId === story.id;
-            return (
-              <div key={story.id} className="relative">
-                {isTeacher && (
-                  <div className="flex justify-end mb-2">
-                    <button
-                      type="button"
-                      onClick={() => handleRemove(story.id, story.headline)}
-                      disabled={removing || !currentTownClass}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
-                    >
-                      {removing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                      Remove story
-                    </button>
+        <>
+          {!stories.length ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+              <Newspaper className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                {hasMore ? 'No stories today' : 'No stories yet'}
+              </h2>
+              <p className="text-gray-600">
+                {hasMore
+                  ? 'No new stories have been published today. Load older posts below.'
+                  : 'No approved stories or posters have been published yet.'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {stories.map((story) => {
+                const removing = removingStoryId === story.id;
+                return (
+                  <div key={story.id} className="relative">
+                    {isTeacher && (
+                      <div className="flex justify-end mb-2">
+                        <button
+                          type="button"
+                          onClick={() => handleRemove(story.id, story.headline)}
+                          disabled={removing || !currentTownClass}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                        >
+                          {removing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                          Remove story
+                        </button>
+                      </div>
+                    )}
+                    <TownNewsStoryCard {...storyToCardProps(story)} />
                   </div>
-                )}
-                <TownNewsStoryCard {...storyToCardProps(story)} />
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
           {hasMore && (
-            <div className="flex justify-center pt-2">
+            <div className="flex justify-center pt-4">
               <button
                 type="button"
                 onClick={loadMoreStories}
                 disabled={loadingMore}
-                className="btn-secondary"
+                className="btn-primary min-w-[10rem]"
               >
                 {loadingMore ? (
                   <span className="inline-flex items-center gap-2">
@@ -207,7 +194,7 @@ const NewsPlugin: React.FC = () => {
               </button>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

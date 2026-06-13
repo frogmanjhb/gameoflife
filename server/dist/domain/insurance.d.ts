@@ -13,6 +13,9 @@ export declare function toDateString(val: Date | string | null | undefined): str
 export declare function formatDateUTC(date: Date): string;
 export declare function isPolicyCoverageActive(weekStart: string | null | undefined, weeks: number, today?: string): boolean;
 export declare function isPolicyEffectivelyActive(status: string, weekStart: string | null | undefined, weeks: number, today?: string): boolean;
+/** Premium paid; coverage applies while approved or awaiting broker sign-off (denial refunds premium). */
+export declare function isPolicyProvidingCoverage(status: string, weekStart: string | null | undefined, weeks: number, today?: string): boolean;
+export declare function resolvePolicyWeekStartDate(weekStart: string | Date | null | undefined, createdAt: string | Date | null | undefined, today?: string): string;
 export declare function isInsuranceBrokerJob(jobName: string | null | undefined): boolean;
 export declare function calculateTeacherRefundAmount(totalCost: number): number;
 export declare function canTeacherRefundInsuranceStatus(status: string): boolean;

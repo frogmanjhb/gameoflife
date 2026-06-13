@@ -13,12 +13,13 @@ const insurance_1 = require("../domain/insurance");
 const router = (0, express_1.Router)();
 const VALID_TYPES = insurance_1.VALID_INSURANCE_TYPES;
 function mapPolicyWithActive(p, today) {
-    const startStr = (0, insurance_1.toDateString)(p.week_start_date);
     const status = String(p.status || 'approved');
     const weeks = Number(p.weeks) || 0;
+    const weekStart = (0, insurance_1.resolvePolicyWeekStartDate)(p.week_start_date, p.created_at, today);
     return {
         ...p,
-        active: (0, insurance_1.isPolicyEffectivelyActive)(status, startStr || null, weeks, today),
+        week_start_date: weekStart || p.week_start_date,
+        active: (0, insurance_1.isPolicyProvidingCoverage)(status, weekStart, weeks, today),
     };
 }
 async function getStudentSalary(userId) {
@@ -127,7 +128,7 @@ router.post('/purchase', auth_1.authenticateToken, tenant_1.requireTenant, [
         }
         const brokerRequired = await (0, insurance_1.classRequiresBrokerApproval)(req.user.school_id ?? null, req.user.class ?? null, req.user.id);
         const status = brokerRequired ? 'pending_broker' : 'approved';
-        const weekStart = brokerRequired ? null : (0, insurance_1.todayInSA)();
+        const weekStart = (0, insurance_1.todayInSA)();
         const schoolId = req.user.school_id ?? null;
         const townClass = req.user.class ?? null;
         const client = await database_prod_1.default.pool.connect();
@@ -171,7 +172,7 @@ router.post('/purchase', auth_1.authenticateToken, tenant_1.requireTenant, [
         }
         res.status(201).json({
             message: status === 'pending_broker'
-                ? 'Insurance request submitted. Your town insurance broker must approve it before coverage starts.'
+                ? 'Insurance request submitted. Your town insurance broker must approve it; coverage starts today and the premium is refunded if denied.'
                 : 'Insurance purchased successfully',
             total_cost: totalCost,
             types: uniqueTypes,
@@ -256,7 +257,7 @@ router.put('/broker/requests/:id/review', auth_1.authenticateToken, tenant_1.req
         }
         await client.query('BEGIN');
         if (status === 'approved') {
-            const weekStart = (0, insurance_1.todayInSA)();
+            const weekStart = (0, insurance_1.resolvePolicyWeekStartDate)(purchase.week_start_date, purchase.created_at);
             await client.query(`UPDATE insurance_purchases
            SET status = 'approved',
                week_start_date = $1,
