@@ -11,6 +11,7 @@ import {
   calculateTotalEngineerFee,
   FM_LAND_REVIEW_XP,
   LAND_ENGINEER_REVIEW_XP,
+  fmPurchaseReviewXpAlreadyEarned,
   isLandEngineerJob,
   RequiredEngineer,
 } from '../domain/landPurchaseApproval';
@@ -270,6 +271,12 @@ router.put('/purchase-requests/:id/fm-review',
       if ((reviewer.school_id ?? null) !== (purchaseRequest.school_id ?? null)) {
         return res.status(403).json({ error: 'You can only review purchases in your school' });
       }
+      if (purchaseRequest.user_id === req.user!.id) {
+        return res.status(400).json({ error: 'You cannot review your own purchase request' });
+      }
+      if (purchaseRequest.fm_reviewed_by != null) {
+        return res.status(400).json({ error: 'This purchase request has already been reviewed by a Financial Manager' });
+      }
 
       if (status === 'denied') {
         await database.run(
@@ -296,7 +303,13 @@ router.put('/purchase-requests/:id/fm-review',
         purchaseRequest.parcel_town_class,
         purchaseRequest.user_id
       );
-      const fmFee = calculateFmFee(offeredPrice, requiredEngineers.length);
+      const xpAlreadyEarned = await fmPurchaseReviewXpAlreadyEarned(
+        database,
+        purchaseRequest.parcel_id,
+        purchaseRequest.user_id,
+        requestId
+      );
+      const fmFee = xpAlreadyEarned ? 0 : calculateFmFee(offeredPrice, requiredEngineers.length);
 
       await client.query('BEGIN');
 
@@ -361,23 +374,29 @@ router.put('/purchase-requests/:id/fm-review',
         [nextStatus, req.user!.id, requestId]
       );
 
-      const userRowResult = await client.query(
-        'SELECT job_level, job_experience_points FROM users WHERE id = $1 FOR UPDATE',
-        [req.user!.id]
-      );
-      const userRow = userRowResult.rows[0];
-      const currentLevel = Number.isInteger(userRow?.job_level) ? userRow.job_level : 1;
-      const currentXP = typeof userRow?.job_experience_points === 'number' ? userRow.job_experience_points : 0;
-      const newXP = currentXP + FM_LAND_REVIEW_XP;
-      let newLevel = currentLevel;
-      for (let level = currentLevel; level < 10; level++) {
-        if (newXP >= getXPForLevel(level + 1)) newLevel = level + 1;
-        else break;
+      let xpAwarded = 0;
+      let newLevel: number | null = null;
+      if (!xpAlreadyEarned) {
+        const userRowResult = await client.query(
+          'SELECT job_level, job_experience_points FROM users WHERE id = $1 FOR UPDATE',
+          [req.user!.id]
+        );
+        const userRow = userRowResult.rows[0];
+        const currentLevel = Number.isInteger(userRow?.job_level) ? userRow.job_level : 1;
+        const currentXP = typeof userRow?.job_experience_points === 'number' ? userRow.job_experience_points : 0;
+        const newXP = currentXP + FM_LAND_REVIEW_XP;
+        let levelAfterXp = currentLevel;
+        for (let level = currentLevel; level < 10; level++) {
+          if (newXP >= getXPForLevel(level + 1)) levelAfterXp = level + 1;
+          else break;
+        }
+        await client.query(
+          'UPDATE users SET job_experience_points = $1, job_level = $2 WHERE id = $3',
+          [newXP, levelAfterXp, req.user!.id]
+        );
+        xpAwarded = FM_LAND_REVIEW_XP;
+        newLevel = levelAfterXp > currentLevel ? levelAfterXp : null;
       }
-      await client.query(
-        'UPDATE users SET job_experience_points = $1, job_level = $2 WHERE id = $3',
-        [newXP, newLevel, req.user!.id]
-      );
 
       await client.query('COMMIT');
 
@@ -391,8 +410,8 @@ router.put('/purchase-requests/:id/fm-review',
         request: updated,
         fee_paid: fmFee,
         cost_breakdown: affordability,
-        experience_points: FM_LAND_REVIEW_XP,
-        new_level: newLevel > currentLevel ? newLevel : null,
+        experience_points: xpAwarded > 0 ? xpAwarded : undefined,
+        new_level: newLevel,
       });
     } catch (error) {
       await client.query('ROLLBACK');

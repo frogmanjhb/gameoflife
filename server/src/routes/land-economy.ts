@@ -10,6 +10,10 @@ import {
   calculateWeeklyRent,
   canCollectWeeklyRent,
 } from '../domain/landProperty';
+import {
+  LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS,
+  landSaleResubmitBlockedByCooldown,
+} from '../domain/landPurchaseApproval';
 
 const router = Router();
 
@@ -180,6 +184,12 @@ router.post('/sale-requests',
         return res.status(400).json({ error: 'This parcel already has an active sale request' });
       }
 
+      if (await landSaleResubmitBlockedByCooldown(database, parcel_id, req.user!.id, buyer_id)) {
+        return res.status(400).json({
+          error: `This sale was recently denied by the Financial Manager. Wait ${LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS} hours before re-listing to the same buyer.`,
+        });
+      }
+
       const schoolId = req.user!.school_id ?? null;
       const result = schoolId !== null
         ? await database.get(
@@ -276,6 +286,12 @@ router.put('/sale-requests/:id/fm-review',
       );
       if (!fmAuth.ok) {
         return res.status(403).json({ error: fmAuth.error });
+      }
+      if (sale.seller_id === req.user!.id || sale.buyer_id === req.user!.id) {
+        return res.status(403).json({ error: 'You cannot review a sale you are party to' });
+      }
+      if (sale.fm_reviewed_by != null) {
+        return res.status(400).json({ error: 'This sale request has already been reviewed' });
       }
 
       if (status === 'denied') {

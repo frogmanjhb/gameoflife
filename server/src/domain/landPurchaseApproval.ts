@@ -130,3 +130,49 @@ export interface EngineerApprovalRow {
   fee_amount: number;
   approved_at: string;
 }
+
+/** Cooldown before the same seller can re-list a plot to the same buyer after FM denial. */
+export const LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS = 24;
+
+type DbGet = {
+  get: (sql: string, params?: unknown[]) => Promise<Record<string, unknown> | undefined>;
+};
+
+/**
+ * FM land-purchase XP is only earned once per parcel+buyer until a purchase completes.
+ * Prevents approve/deny/resubmit loops from farming +10 XP repeatedly.
+ */
+export async function fmPurchaseReviewXpAlreadyEarned(
+  db: DbGet,
+  parcelId: number,
+  buyerId: number,
+  currentRequestId: number
+): Promise<boolean> {
+  const row = await db.get(
+    `SELECT id FROM land_purchase_requests
+     WHERE parcel_id = $1 AND user_id = $2 AND id <> $3
+       AND fm_reviewed_at IS NOT NULL
+       AND status <> 'approved'
+     LIMIT 1`,
+    [parcelId, buyerId, currentRequestId]
+  );
+  return !!row;
+}
+
+/** Blocks rapid re-listing after FM denial of the same parcel to the same buyer. */
+export async function landSaleResubmitBlockedByCooldown(
+  db: DbGet,
+  parcelId: number,
+  sellerId: number,
+  buyerId: number
+): Promise<boolean> {
+  const row = await db.get(
+    `SELECT id FROM land_sale_requests
+     WHERE parcel_id = $1 AND seller_id = $2 AND buyer_id = $3
+       AND status = 'denied'
+       AND fm_reviewed_at > NOW() - ($4::text || ' hours')::interval
+     LIMIT 1`,
+    [parcelId, sellerId, buyerId, String(LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS)]
+  );
+  return !!row;
+}
