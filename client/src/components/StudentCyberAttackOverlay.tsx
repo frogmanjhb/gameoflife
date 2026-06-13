@@ -259,7 +259,7 @@ const StudentCyberAttackOverlay: React.FC = () => {
                 <p className="text-xs text-gray-500 mb-4">
                   {status?.cyber_insurance_covers_repair
                     ? status?.insurance_broker_required
-                      ? `R${repairFee.toFixed(2)} — cyber insurance will pay after your insurance manager approves`
+                      ? `R${repairFee.toFixed(2)} — covered by cyber insurance (insurance manager approves claim; you are not charged)`
                       : `R${repairFee.toFixed(2)} — covered by your cyber insurance`
                     : `R${repairFee.toFixed(2)} paid to your town Software Engineer`}
                 </p>

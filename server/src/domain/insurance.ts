@@ -72,7 +72,31 @@ export function isPolicyEffectivelyActive(
   weeks: number,
   today: string = todayInSA()
 ): boolean {
-  return status === 'approved' && isPolicyCoverageActive(weekStart, weeks, today);
+  return isPolicyProvidingCoverage(status, weekStart, weeks, today);
+}
+
+/** Premium paid; coverage applies while approved or awaiting broker sign-off (denial refunds premium). */
+export function isPolicyProvidingCoverage(
+  status: string,
+  weekStart: string | null | undefined,
+  weeks: number,
+  today: string = todayInSA()
+): boolean {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'denied' || normalized === 'refunded') return false;
+  if (normalized !== 'approved' && normalized !== 'pending_broker') return false;
+  return isPolicyCoverageActive(weekStart, weeks, today);
+}
+
+export function resolvePolicyWeekStartDate(
+  weekStart: string | Date | null | undefined,
+  createdAt: string | Date | null | undefined,
+  today: string = todayInSA()
+): string {
+  const fromWeekStart = toDateString(weekStart);
+  if (fromWeekStart) return fromWeekStart;
+  const fromCreated = toDateString(createdAt);
+  return fromCreated || today;
 }
 
 export function isInsuranceBrokerJob(jobName: string | null | undefined): boolean {
@@ -200,15 +224,27 @@ async function hasActiveApprovedInsuranceOfType(
 ): Promise<boolean> {
   const today = todayInSA();
   const rows = await database.query(
-    `SELECT weeks, week_start_date, status
+    `SELECT weeks, week_start_date, status, created_at
      FROM insurance_purchases
-     WHERE user_id = $1 AND insurance_type = $2 AND status = 'approved'
+     WHERE user_id = $1 AND insurance_type = $2 AND status IN ('approved', 'pending_broker')
      ORDER BY created_at DESC`,
     [userId, insuranceType]
   );
 
-  return (rows as Array<{ weeks: number; week_start_date: string | null; status: string }>).some((p) =>
-    isPolicyEffectivelyActive(p.status, p.week_start_date, p.weeks, today)
+  return (
+    rows as Array<{
+      weeks: number;
+      week_start_date: string | null;
+      status: string;
+      created_at: string | Date;
+    }>
+  ).some((p) =>
+    isPolicyProvidingCoverage(
+      p.status,
+      resolvePolicyWeekStartDate(p.week_start_date, p.created_at, today),
+      p.weeks,
+      today
+    )
   );
 }
 

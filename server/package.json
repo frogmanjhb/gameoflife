@@ -55,6 +55,7 @@
     "migrate:town-news-popups": "node run-sql-migration.js migrations/104_add_town_news_popups.sql",
     "migrate:accountant-transfer-reward-reversals": "node run-sql-migration.js migrations/105_accountant_transfer_reward_reversals.sql",
     "migrate:transaction-history-cleared-at": "node run-sql-migration.js migrations/106_transaction_history_cleared_at.sql",
+    "migrate:insurance-coverage-timing": "node run-sql-migration.js migrations/107_fix_insurance_coverage_timing.sql",
     "audit:accountant-transfer-exploit": "node scripts/audit-reverse-accountant-transfer-rewards.js --audit",
     "reverse:accountant-transfer-exploit": "node scripts/audit-reverse-accountant-transfer-rewards.js --apply",
     "seed:test-school": "node seed-test-school.js",

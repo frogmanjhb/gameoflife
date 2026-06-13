@@ -9,6 +9,8 @@ import {
   todayInSA,
   toDateString,
   isPolicyEffectivelyActive,
+  isPolicyProvidingCoverage,
+  resolvePolicyWeekStartDate,
   isInsuranceBrokerJob,
   classRequiresBrokerApproval,
   getClassInsuranceBrokers,
@@ -28,12 +30,17 @@ const router = Router();
 const VALID_TYPES = VALID_INSURANCE_TYPES;
 
 function mapPolicyWithActive(p: Record<string, unknown>, today: string) {
-  const startStr = toDateString(p.week_start_date as string | Date | null);
   const status = String(p.status || 'approved');
   const weeks = Number(p.weeks) || 0;
+  const weekStart = resolvePolicyWeekStartDate(
+    p.week_start_date as string | Date | null,
+    p.created_at as string | Date | null,
+    today
+  );
   return {
     ...p,
-    active: isPolicyEffectivelyActive(status, startStr || null, weeks, today),
+    week_start_date: weekStart || p.week_start_date,
+    active: isPolicyProvidingCoverage(status, weekStart, weeks, today),
   };
 }
 
@@ -174,7 +181,7 @@ router.post(
         req.user.id
       );
       const status = brokerRequired ? 'pending_broker' : 'approved';
-      const weekStart = brokerRequired ? null : todayInSA();
+      const weekStart = todayInSA();
       const schoolId = req.user.school_id ?? null;
       const townClass = req.user.class ?? null;
 
@@ -226,7 +233,7 @@ router.post(
       res.status(201).json({
         message:
           status === 'pending_broker'
-            ? 'Insurance request submitted. Your town insurance broker must approve it before coverage starts.'
+            ? 'Insurance request submitted. Your town insurance broker must approve it; coverage starts today and the premium is refunded if denied.'
             : 'Insurance purchased successfully',
         total_cost: totalCost,
         types: uniqueTypes,
@@ -338,7 +345,10 @@ router.put(
       await client.query('BEGIN');
 
       if (status === 'approved') {
-        const weekStart = todayInSA();
+        const weekStart = resolvePolicyWeekStartDate(
+          purchase.week_start_date as string | Date | null,
+          purchase.created_at as string | Date
+        );
         await client.query(
           `UPDATE insurance_purchases
            SET status = 'approved',

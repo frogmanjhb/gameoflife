@@ -174,7 +174,7 @@ const InsurancePlugin: React.FC = () => {
       await api.post('/insurance/purchase', { types: selectedTypes, weeks });
       setSuccess(
         quote?.broker_required
-          ? `Insurance request submitted for broker approval (${weeks} week(s): ${selectedTypes.join(', ')}).`
+          ? `Insurance request submitted for broker approval (${weeks} week(s): ${selectedTypes.join(', ')}). Coverage starts today; premium is refunded if denied.`
           : `Insurance purchased for ${weeks} week(s): ${selectedTypes.join(', ')}.`
       );
       setSelectedTypes([]);
@@ -568,7 +568,7 @@ const InsurancePlugin: React.FC = () => {
                       <div className="flex flex-col items-end gap-1">
                         {p.status === 'pending_broker' && (
                           <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-200 text-amber-900">
-                            Pending broker
+                            {p.active ? 'Active — pending broker' : 'Pending broker'}
                           </span>
                         )}
                         {p.status === 'denied' && (

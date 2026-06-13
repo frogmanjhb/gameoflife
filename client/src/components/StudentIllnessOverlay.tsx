@@ -343,7 +343,7 @@ const StudentIllnessOverlay: React.FC<StudentIllnessOverlayProps> = ({
             <p className="text-xs text-gray-600 mt-2">
               {status?.health_insurance_covers_clinic
                 ? status?.insurance_broker_required
-                  ? `Clinic fee: R${(status?.cure_fee ?? 5000).toFixed(2)} — health insurance will pay after your insurance manager approves`
+                  ? `Clinic fee: R${(status?.cure_fee ?? 5000).toFixed(2)} — covered by health insurance (insurance manager approves claim; you are not charged)`
                   : `Clinic fee: R${(status?.cure_fee ?? 5000).toFixed(2)} — covered by your health insurance`
                 : `Clinic fee: R${(status?.cure_fee ?? 5000).toFixed(2)} (paid to your town doctor)`}
             </p>
