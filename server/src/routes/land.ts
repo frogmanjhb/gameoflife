@@ -4,7 +4,7 @@ import database from '../database/database-prod';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { BiomeType, RiskLevel, LandParcel, LandPurchaseRequest } from '../types';
 import { enrichOwnedParcel, calculateAppreciatedValue } from '../domain/landProperty';
-import { calculateTotalPurchaseCost, isLandEngineerJob } from '../domain/landPurchaseApproval';
+import { calculateTotalPurchaseCost, isLandEngineerJob, resolvePurchaseSchoolId } from '../domain/landPurchaseApproval';
 import {
   COMMUNITY_AUCTION_VALUE,
   isCommunityAuctionPlot,
@@ -16,6 +16,7 @@ import landPurchaseApprovalRouter, {
   getRequiredLandEngineers,
   enrichPurchaseRequestWithEngineers,
   townHasFinancialManager,
+  executeTeacherPurchaseApproval,
 } from './land-purchase-approval';
 
 const router = Router();
@@ -417,67 +418,40 @@ router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedReq
       }
 
       const userId = req.user!.id;
-      let rows;
-      if (schoolId !== null) {
-        rows = await database.query(
-          `SELECT lpr.*,
-                  u.username AS applicant_username,
-                  u.first_name AS applicant_first_name,
-                  u.last_name AS applicant_last_name,
-                  u.class AS applicant_class,
-                  lp.grid_code AS parcel_grid_code,
-                  lp.biome_type AS parcel_biome_type,
-                  lp.value AS parcel_value,
-                  lp.town_class AS parcel_town_class,
-                  r.username AS reviewer_username
-           FROM land_purchase_requests lpr
-           JOIN users u ON lpr.user_id = u.id
-           JOIN land_parcels lp ON lpr.parcel_id = lp.id
-           LEFT JOIN users r ON lpr.reviewed_by = r.id
-           WHERE lpr.status = 'pending_engineer'
-             AND lp.town_class = $1
-             AND u.school_id = $2
-             AND lpr.user_id != $3
-             AND NOT EXISTS (
-               SELECT 1 FROM land_purchase_engineer_approvals lpea
-               WHERE lpea.request_id = lpr.id AND lpea.approver_id = $3
-             )
-           ORDER BY lpr.created_at ASC`,
-          [user.class, schoolId, userId]
-        );
-      } else {
-        rows = await database.query(
-          `SELECT lpr.*,
-                  u.username AS applicant_username,
-                  u.first_name AS applicant_first_name,
-                  u.last_name AS applicant_last_name,
-                  u.class AS applicant_class,
-                  lp.grid_code AS parcel_grid_code,
-                  lp.biome_type AS parcel_biome_type,
-                  lp.value AS parcel_value,
-                  lp.town_class AS parcel_town_class,
-                  r.username AS reviewer_username
-           FROM land_purchase_requests lpr
-           JOIN users u ON lpr.user_id = u.id
-           JOIN land_parcels lp ON lpr.parcel_id = lp.id
-           LEFT JOIN users r ON lpr.reviewed_by = r.id
-           WHERE lpr.status = 'pending_engineer'
-             AND lp.town_class = $1
-             AND u.school_id IS NULL
-             AND lpr.user_id != $2
-             AND NOT EXISTS (
-               SELECT 1 FROM land_purchase_engineer_approvals lpea
-               WHERE lpea.request_id = lpr.id AND lpea.approver_id = $2
-             )
-           ORDER BY lpr.created_at ASC`,
-          [user.class, userId]
-        );
-      }
+      const reviewerSchoolId = user.school_id ?? null;
+      const rows = await database.query(
+        `SELECT lpr.*,
+                u.username AS applicant_username,
+                u.first_name AS applicant_first_name,
+                u.last_name AS applicant_last_name,
+                u.class AS applicant_class,
+                u.school_id AS applicant_school_id,
+                lp.grid_code AS parcel_grid_code,
+                lp.biome_type AS parcel_biome_type,
+                lp.value AS parcel_value,
+                lp.town_class AS parcel_town_class,
+                r.username AS reviewer_username
+         FROM land_purchase_requests lpr
+         JOIN users u ON lpr.user_id = u.id
+         JOIN land_parcels lp ON lpr.parcel_id = lp.id
+         LEFT JOIN users r ON lpr.reviewed_by = r.id
+         WHERE lpr.status = 'pending_engineer'
+           AND lp.town_class = $1
+           AND COALESCE(lpr.school_id, u.school_id) IS NOT DISTINCT FROM $2
+           AND lpr.user_id != $3
+           AND NOT EXISTS (
+             SELECT 1 FROM land_purchase_engineer_approvals lpea
+             WHERE lpea.request_id = lpr.id AND lpea.approver_id = $3
+           )
+         ORDER BY lpr.created_at ASC`,
+        [user.class, reviewerSchoolId, userId]
+      );
 
       const filtered: typeof rows = [];
       for (const row of rows) {
+        const rowSchoolId = resolvePurchaseSchoolId(row.school_id, row.applicant_school_id);
         const requiredForRequest = await getRequiredLandEngineers(
-          schoolId,
+          rowSchoolId,
           user.class,
           row.user_id
         );
@@ -567,7 +541,8 @@ router.put('/purchase-requests/:id',
   requireRole(['teacher']),
   [
     body('status').isIn(['approved', 'denied']).withMessage('Status must be approved or denied'),
-    body('denial_reason').optional().isString()
+    body('denial_reason').optional().isString(),
+    body('master_approve').optional().isBoolean(),
   ],
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -577,7 +552,7 @@ router.put('/purchase-requests/:id',
       }
 
       const requestId = parseInt(req.params.id);
-      const { status, denial_reason } = req.body;
+      const { status, denial_reason, master_approve: masterApprove } = req.body;
       const schoolId = req.user?.school_id ?? null;
 
       // Get the purchase request (must be from a student in teacher's school)
@@ -598,13 +573,22 @@ router.put('/purchase-requests/:id',
 
       // Normalize status comparison (handle case sensitivity)
       const currentStatus = String(purchaseRequest.status).toLowerCase().trim();
-      if (currentStatus !== 'pending_teacher') {
+      const isMasterApprove = masterApprove === true && status === 'approved';
+      const canDeny = ['pending_engineer', 'pending_teacher'].includes(currentStatus);
+      const canApprove =
+        (isMasterApprove && currentStatus === 'pending_engineer') ||
+        (!isMasterApprove && currentStatus === 'pending_teacher');
+
+      if (status === 'denied' && !canDeny) {
+        return res.status(400).json({ error: 'This request has already been processed' });
+      }
+      if (status === 'approved' && !canApprove) {
         return res.status(400).json({
           error:
             currentStatus === 'pending_fm'
               ? 'The Financial Manager must approve this request first'
-              : currentStatus === 'pending_engineer'
-                ? 'Architects and Civil Engineers must approve this request before the teacher can review it'
+              : currentStatus === 'pending_engineer' && !isMasterApprove
+                ? 'Use Master Approve to bypass architect and civil engineer approval, or wait for their review'
                 : 'This request has already been processed',
         });
       }
@@ -624,96 +608,24 @@ router.put('/purchase-requests/:id',
       }
 
       if (status === 'approved') {
-        // Check if user still has sufficient balance
-        const account = await database.get('SELECT balance FROM accounts WHERE user_id = $1', [purchaseRequest.user_id]);
-        const accountBalance = Number(account?.balance) || 0;
-        const offeredPrice = Number(purchaseRequest.offered_price) || 0;
-        if (!account || accountBalance < offeredPrice) {
-          await database.run(`
-            UPDATE land_purchase_requests 
-            SET status = 'denied', 
-                denial_reason = 'Insufficient balance at time of approval',
-                reviewed_by = $1,
-                reviewed_at = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $2
-          `, [req.user!.id, requestId]);
-          return res.status(400).json({ error: 'User has insufficient balance' });
-        }
-
-        // Deduct balance from user's account
-        await database.run(`
-          UPDATE accounts 
-          SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP 
-          WHERE user_id = $2
-        `, [offeredPrice, purchaseRequest.user_id]);
-
-        // Get buyer's class and school_id for treasury deposit
-        const buyer = await database.get('SELECT class, school_id FROM users WHERE id = $1', [purchaseRequest.user_id]);
-        const buyerClass = buyer?.class;
-        const landSchoolId = buyer?.school_id ?? null;
-
-        // Deposit to treasury for the buyer's class (filtered by school_id)
-        if (buyerClass && ['6A', '6B', '6C'].includes(buyerClass)) {
-          if (landSchoolId != null) {
-            await database.run(
-              'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3',
-              [offeredPrice, buyerClass, landSchoolId]
-            );
-          } else {
-            await database.run(
-              'UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL',
-              [offeredPrice, buyerClass]
-            );
+        try {
+          await executeTeacherPurchaseApproval(purchaseRequest, req.user!.id);
+        } catch (err: unknown) {
+          const code = err && typeof err === 'object' && 'code' in err ? (err as { code?: string }).code : undefined;
+          if (code === 'INSUFFICIENT_BALANCE') {
+            await database.run(`
+              UPDATE land_purchase_requests 
+              SET status = 'denied', 
+                  denial_reason = 'Insufficient balance at time of approval',
+                  reviewed_by = $1,
+                  reviewed_at = CURRENT_TIMESTAMP,
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = $2
+            `, [req.user!.id, requestId]);
+            return res.status(400).json({ error: 'User has insufficient balance' });
           }
-
-          // Record treasury transaction
-          await database.run(
-            'INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
-            [landSchoolId, buyerClass, offeredPrice, 'deposit', `Land Purchase: Plot ${purchaseRequest.parcel_id}`, purchaseRequest.user_id]
-          );
+          throw err;
         }
-
-        // Record the transaction
-        const userAccount = await database.get('SELECT id FROM accounts WHERE user_id = $1', [purchaseRequest.user_id]);
-        await database.run(`
-          INSERT INTO transactions (from_account_id, amount, transaction_type, description)
-          VALUES ($1, $2, 'withdrawal', $3)
-        `, [userAccount.id, offeredPrice, `Land purchase: Plot ${purchaseRequest.parcel_id}`]);
-
-        // Transfer ownership
-        await database.run(`
-          UPDATE land_parcels 
-          SET owner_id = $1, 
-              purchased_at = CURRENT_TIMESTAMP,
-              purchase_price = $2,
-              value = $2,
-              last_rent_collected_at = NULL,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = $3
-        `, [purchaseRequest.user_id, offeredPrice, purchaseRequest.parcel_id]);
-
-        // Update request status
-        await database.run(`
-          UPDATE land_purchase_requests 
-          SET status = 'approved',
-              reviewed_by = $1,
-              reviewed_at = CURRENT_TIMESTAMP,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2
-        `, [req.user!.id, requestId]);
-
-        // Deny any other pending requests for this parcel
-        await database.run(`
-          UPDATE land_purchase_requests 
-          SET status = 'denied',
-              denial_reason = 'Parcel was purchased by another user',
-              reviewed_by = $1,
-              reviewed_at = CURRENT_TIMESTAMP,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE parcel_id = $2 AND id != $3 AND status IN ('pending_fm', 'pending_engineer', 'pending_teacher')
-        `, [req.user!.id, purchaseRequest.parcel_id, requestId]);
-
       } else {
         // Deny the request
         await database.run(`
@@ -738,7 +650,9 @@ router.put('/purchase-requests/:id',
       `, [requestId]);
 
       res.json({
-        message: `Purchase request ${status}`,
+        message: isMasterApprove
+          ? 'Purchase approved (architect and engineer step bypassed)'
+          : `Purchase request ${status}`,
         request: updated
       });
     } catch (error) {

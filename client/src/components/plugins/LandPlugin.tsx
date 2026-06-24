@@ -13,6 +13,7 @@ import { LandPurchaseRequest, LandStats, MyPropertiesResponse, LandSaleRequest }
 import { formatCurrency, BIOME_CONFIG, BIOME_ICONS, RISK_COLORS } from '../land/BiomeConfig';
 import LandGrid from '../land/LandGrid';
 import LandPropertyCard from '../land/LandPropertyCard';
+import { isLandEngineerJob, LAND_ENGINEER_APPROVAL_AUTO_AFTER_DAYS } from '../../utils/landPurchaseCosts';
 
 const TOWN_CLASS_LIST: Array<'6A' | '6B' | '6C'> = ['6A', '6B', '6C'];
 
@@ -140,19 +141,28 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
     fetchData();
   }, [fetchData]);
 
-  const handleRequestAction = async (id: number, status: 'approved' | 'denied', reason?: string) => {
+  const handleRequestAction = async (id: number, status: 'approved' | 'denied', reason?: string, masterApprove?: boolean) => {
     setActionLoading(id);
     setError('');
     setSuccess('');
     try {
-      await landApi.updatePurchaseRequest(id, status, reason);
-      setSuccess(`Request ${status} successfully`);
+      const res = await landApi.updatePurchaseRequest(id, status, reason, masterApprove);
+      setSuccess(res.data.message || `Request ${status} successfully`);
       fetchData();
     } catch (err: any) {
       setError(err.response?.data?.error || `Failed to ${status} request`);
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleMasterApprove = (id: number) => {
+    if (!window.confirm(
+      'Master Approve completes this land purchase immediately and bypasses architect and civil engineer approval. Continue?'
+    )) {
+      return;
+    }
+    handleRequestAction(id, 'approved', undefined, true);
   };
 
   const handleSeedData = async () => {
@@ -400,6 +410,9 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                             {(request.engineer_approvals_required ?? 0) > 0 && (
                               <p className="text-xs text-violet-700 mt-1">
                                 Engineer approvals: {request.engineer_approvals_received ?? 0}/{request.engineer_approvals_required}
+                                {request.status === 'pending_engineer' && request.engineer_review_deadline_at && (
+                                  <> · Auto-approves absent reviewers after {request.engineer_auto_approval_after_days ?? LAND_ENGINEER_APPROVAL_AUTO_AFTER_DAYS} days ({new Date(request.engineer_review_deadline_at).toLocaleDateString()})</>
+                                )}
                               </p>
                             )}
                             {request.denial_reason && (
@@ -437,6 +450,34 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                               ) : (
                                 <XCircle className="h-4 w-4" />
                               )}
+                              <span>Deny</span>
+                            </button>
+                          </div>
+                        )}
+                        {request.status === 'pending_engineer' && (
+                          <div className="flex flex-col items-end gap-2">
+                            <button
+                              onClick={() => handleMasterApprove(request.id)}
+                              disabled={actionLoading !== null}
+                              className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                              title="Bypass architect and civil engineer approval"
+                            >
+                              {actionLoading === request.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <CheckCircle className="h-4 w-4" />
+                              )}
+                              <span>{actionLoading === request.id ? 'Processing...' : 'Master Approve'}</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                const reason = prompt('Reason for denial (optional):');
+                                handleRequestAction(request.id, 'denied', reason || undefined);
+                              }}
+                              disabled={actionLoading !== null}
+                              className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1 text-sm"
+                            >
+                              <XCircle className="h-4 w-4" />
                               <span>Deny</span>
                             </button>
                           </div>
@@ -553,7 +594,7 @@ interface StudentLandViewProps {
 }
 
 const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlugin }) => {
-  const { refreshProfile } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const { currentTown, currentTownClass } = useTown();
   const [activeTab, setActiveTab] = useState<'explore' | 'my-properties' | 'requests' | 'sales' | 'fm-approvals' | 'engineer-approvals'>('explore');
   const [myProperties, setMyProperties] = useState<MyPropertiesResponse | null>(null);
@@ -573,10 +614,11 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
 
   useEffect(() => {
     fetchMyData();
-  }, []);
+  }, [user?.id, user?.job_name]);
 
   const fetchMyData = async () => {
     setLoading(true);
+    const landEngineerRole = user?.role === 'student' && isLandEngineerJob(user?.job_name);
     try {
       const [propertiesRes, requestsRes, salesRes, buyerRes] = await Promise.all([
         landApi.getMyProperties(),
@@ -606,11 +648,15 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
       }
       setIsFinancialManager(fmRole);
 
-      try {
-        const engineerRes = await landApi.getEngineerPurchaseRequests();
-        setEngineerApprovals(engineerRes.data);
+      if (landEngineerRole) {
         setIsLandEngineer(true);
-      } catch {
+        try {
+          const engineerRes = await landApi.getEngineerPurchaseRequests();
+          setEngineerApprovals(engineerRes.data);
+        } catch {
+          setEngineerApprovals([]);
+        }
+      } else {
         setEngineerApprovals([]);
         setIsLandEngineer(false);
       }

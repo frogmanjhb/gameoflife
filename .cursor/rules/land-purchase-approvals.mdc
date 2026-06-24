@@ -1,0 +1,18 @@
+---
+description: Land purchase approval workflow — FM, architects/engineers, teacher, auto-approval
+globs: server/src/**/land*.ts, server/src/domain/landPurchase*.ts, client/src/components/plugins/LandPlugin.tsx
+---
+
+# Land purchase approvals
+
+**Flow:** `pending_fm` → (FM) → `pending_engineer` → (all town architects + civil engineers) → `pending_teacher` → (teacher) → `approved`
+
+**Constants** (`server/src/domain/landPurchaseApproval.ts`):
+- `LAND_ENGINEER_APPROVAL_AUTO_AFTER_DAYS = 3` — after this many days in `pending_engineer`, missing architect/engineer approvals are recorded automatically (no fee, no XP) and the request advances to `pending_teacher` if complete.
+- Auto-approval clock starts at `fm_reviewed_at`, or `updated_at`/`created_at` if there was no FM step.
+
+**Teacher master approve:** `PUT /land/purchase-requests/:id` with `{ status: 'approved', master_approve: true }` while status is `pending_engineer` completes the purchase immediately, bypassing architect/engineer steps. Does not bypass FM (`pending_fm`).
+
+**Finance:** Auto-approvals and master approve do not pay engineer fees or award engineer XP. Teacher final approval deducts plot price only (professional fees are paid during FM/engineer review steps when students act manually).
+
+**Implementation:** `processAutoEngineerApprovals` runs during `enrichPurchaseRequestWithEngineers` (lazy, on fetch). `executeTeacherPurchaseApproval` is shared for normal and master teacher approval.

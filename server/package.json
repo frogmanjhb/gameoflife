@@ -56,6 +56,8 @@
     "migrate:accountant-transfer-reward-reversals": "node run-sql-migration.js migrations/105_accountant_transfer_reward_reversals.sql",
     "migrate:transaction-history-cleared-at": "node run-sql-migration.js migrations/106_transaction_history_cleared_at.sql",
     "migrate:insurance-coverage-timing": "node run-sql-migration.js migrations/107_fix_insurance_coverage_timing.sql",
+    "migrate:land-purchase-engineer-fix": "node run-sql-migration.js migrations/107_land_purchase_school_id_engineer_fix.sql",
+    "migrate:land-purchase-auto-engineer": "node run-sql-migration.js migrations/108_land_purchase_auto_engineer_approval.sql",
     "audit:accountant-transfer-exploit": "node scripts/audit-reverse-accountant-transfer-rewards.js --audit",
     "reverse:accountant-transfer-exploit": "node scripts/audit-reverse-accountant-transfer-rewards.js --apply",
     "seed:test-school": "node seed-test-school.js",

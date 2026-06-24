@@ -1582,6 +1582,7 @@ export interface LandPurchaseRequest {
     job_name?: string;
     fee_amount: number;
     approved_at: string;
+    auto_approved?: boolean;
   }>;
   required_engineers?: Array<{
     id: number;
@@ -1606,6 +1607,8 @@ export interface LandPurchaseRequest {
     buyer_balance: number;
     can_afford: boolean;
   };
+  engineer_review_deadline_at?: string | null;
+  engineer_auto_approval_after_days?: number;
 }
 
 export interface LandSaleRequest {

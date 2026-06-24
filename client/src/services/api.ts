@@ -737,8 +737,17 @@ export const landApi = {
     api.put(`/land/purchase-requests/${id}/engineer-review`, { status, denial_reason: denialReason }),
 
   // Update purchase request (teachers only)
-  updatePurchaseRequest: (id: number, status: 'approved' | 'denied', denialReason?: string): Promise<{ data: { message: string; request: LandPurchaseRequest } }> => {
-    return api.put(`/land/purchase-requests/${id}`, { status, denial_reason: denialReason });
+  updatePurchaseRequest: (
+    id: number,
+    status: 'approved' | 'denied',
+    denialReason?: string,
+    masterApprove?: boolean
+  ): Promise<{ data: { message: string; request: LandPurchaseRequest } }> => {
+    return api.put(`/land/purchase-requests/${id}`, {
+      status,
+      denial_reason: denialReason,
+      ...(masterApprove ? { master_approve: true } : {}),
+    });
   },
 
   // Seed land data (teachers only)

@@ -31,6 +31,20 @@ export function isLandEngineerJob(jobName: string | null | undefined): boolean {
   return hasArchitectJob(jobName) || hasCivilEngineerJob(jobName);
 }
 
+/** Prefer request.school_id; fall back to buyer school so engineer lookup matches tenant. */
+export function resolvePurchaseSchoolId(
+  requestSchoolId: number | null | undefined,
+  buyerSchoolId?: number | null | undefined
+): number | null {
+  if (requestSchoolId !== undefined && requestSchoolId !== null) {
+    return requestSchoolId;
+  }
+  if (buyerSchoolId !== undefined && buyerSchoolId !== null) {
+    return buyerSchoolId;
+  }
+  return null;
+}
+
 export function calculateTotalProfessionalFee(offeredPrice: number): number {
   return Math.round(offeredPrice * TOTAL_PROFESSIONAL_FEE_RATE);
 }
@@ -133,6 +147,9 @@ export interface EngineerApprovalRow {
 
 /** Cooldown before the same seller can re-list a plot to the same buyer after FM denial. */
 export const LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS = 24;
+
+/** Architect/civil engineer approvals auto-complete after this many days if students are absent. */
+export const LAND_ENGINEER_APPROVAL_AUTO_AFTER_DAYS = 3;
 
 type DbGet = {
   get: (sql: string, params?: unknown[]) => Promise<Record<string, unknown> | undefined>;
