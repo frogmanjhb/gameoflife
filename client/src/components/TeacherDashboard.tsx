@@ -53,6 +53,8 @@ const TeacherDashboard: React.FC = () => {
   const [mobileTownsOpen, setMobileTownsOpen] = useState(false);
   const [mobileExpandedTown, setMobileExpandedTown] = useState<string | number | null>(null);
   const [mobileSystemsOpen, setMobileSystemsOpen] = useState(false);
+  const [desktopSystemsOpen, setDesktopSystemsOpen] = useState(true);
+  const [desktopToolsOpen, setDesktopToolsOpen] = useState(false);
   const [mobileAnnouncementsOpen, setMobileAnnouncementsOpen] = useState(false);
   const [heroActivityOpen, setHeroActivityOpen] = useState(false);
   const [mobileToolSheet, setMobileToolSheet] = useState<TeacherToolTab | null>(null);
@@ -390,6 +392,8 @@ const TeacherDashboard: React.FC = () => {
 
   const activeTown = allTowns.find((t) => t.class === currentTownClass);
   const activeToolLabel = teacherTabs.find((t) => t.id === mobileToolSheet)?.label ?? '';
+  const activeDesktopToolLabel = teacherTabs.find((t) => t.id === activeTab)?.label ?? 'Teacher tools';
+  const teacherToolsPendingTotal = pendingCount + pendingContentCount;
 
   return (
     <ResponsivePage className="pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
@@ -561,47 +565,64 @@ const TeacherDashboard: React.FC = () => {
           />
         )}
 
-        <div>
-          <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-            <div className="flex items-center space-x-2">
-              <Grid className="h-5 w-5 text-primary-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Available Systems</h2>
-              <span className="text-xs text-gray-500 ml-2">
-                Drag the handle to reorder tiles to match your classroom board
-              </span>
-            </div>
+        <ResponsiveAccordionCard
+          title="Available Systems"
+          subtitle={
+            enabledPlugins.length === 0
+              ? 'No systems available'
+              : `${enabledPlugins.length} system${enabledPlugins.length !== 1 ? 's' : ''} · Drag to reorder tiles`
+          }
+          icon={<Grid />}
+          open={desktopSystemsOpen}
+          onToggle={() => setDesktopSystemsOpen((o) => !o)}
+        >
+          <div className="space-y-4">
             {tileOrder.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setTileOrder(enabledPlugins.map((p) => p.id))}
-                className="text-xs text-primary-600 hover:text-primary-700 hover:underline"
-              >
-                Reset to default order
-              </button>
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setTileOrder(enabledPlugins.map((p) => p.id))}
+                  className="text-xs text-primary-600 hover:text-primary-700 hover:underline"
+                >
+                  Reset to default order
+                </button>
+              </div>
+            )}
+            {enabledPlugins.length === 0 ? (
+              <EmptyState icon={Grid} title="No systems available at this time" />
+            ) : (
+              renderPluginTiles(true)
             )}
           </div>
+        </ResponsiveAccordionCard>
 
-          {enabledPlugins.length === 0 ? (
-            <EmptyState icon={Grid} title="No systems available at this time" />
-          ) : (
-            renderPluginTiles(true)
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-4 sm:px-6 pt-4 sm:pt-5">
-            <div className="flex items-center space-x-2">
-              <Settings className="h-5 w-5 text-primary-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Teacher tools</h2>
-            </div>
+        <ResponsiveAccordionCard
+          title="Teacher tools"
+          subtitle={
+            teacherToolsPendingTotal > 0
+              ? `${activeDesktopToolLabel} · ${teacherToolsPendingTotal} pending`
+              : activeDesktopToolLabel
+          }
+          icon={<Settings />}
+          badge={
+            teacherToolsPendingTotal > 0 ? (
+              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                {teacherToolsPendingTotal}
+              </span>
+            ) : undefined
+          }
+          open={desktopToolsOpen}
+          onToggle={() => setDesktopToolsOpen((o) => !o)}
+        >
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <ResponsiveTabNav
+              tabs={teacherTabs}
+              activeTab={activeTab}
+              onTabChange={(id) => setActiveTab(id as TeacherToolTab)}
+            />
+            <div className="p-4 sm:p-6">{renderTeacherToolContent(toolPanelProps)}</div>
           </div>
-          <ResponsiveTabNav
-            tabs={teacherTabs}
-            activeTab={activeTab}
-            onTabChange={(id) => setActiveTab(id as TeacherToolTab)}
-          />
-          <div className="p-4 sm:p-6">{renderTeacherToolContent(toolPanelProps)}</div>
-        </div>
+        </ResponsiveAccordionCard>
 
         <AnnouncementsPanel
           announcements={announcements}

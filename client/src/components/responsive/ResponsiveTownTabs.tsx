@@ -1,5 +1,5 @@
-import React from 'react';
-import { MapPin } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChevronDown, MapPin } from 'lucide-react';
 import ResponsiveStats, { ResponsiveStatItem } from './ResponsiveStats';
 
 export interface TownTabStat {
@@ -68,9 +68,10 @@ interface TownTabOverviewRowProps {
   overview: TownTabOverview;
   isActive: boolean;
   variant: 'primary' | 'emerald';
+  className?: string;
 }
 
-const TownTabOverviewRow: React.FC<TownTabOverviewRowProps> = ({ overview, isActive, variant }) => {
+const TownTabOverviewRow: React.FC<TownTabOverviewRowProps> = ({ overview, isActive, variant, className = '' }) => {
   const panelClass = isActive
     ? variant === 'primary'
       ? 'bg-white/50 border border-primary-100/60'
@@ -78,7 +79,7 @@ const TownTabOverviewRow: React.FC<TownTabOverviewRowProps> = ({ overview, isAct
     : 'bg-gray-50 border border-gray-100';
 
   return (
-    <div className={`rounded-lg px-3 py-2 mb-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-600 ${panelClass}`}>
+    <div className={`rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-600 ${panelClass} ${className}`}>
       <span>
         Mayor{' '}
         <span className="font-medium text-gray-800">{overview.mayorName}</span>
@@ -175,7 +176,7 @@ const TownTabSummaryPanel: React.FC<TownTabSummaryPanelProps> = ({ summary, isAc
   );
 };
 
-/** Town selector: stacked on mobile, 2 cols tablet, 3 cols desktop. */
+/** Town selector accordion: 2 cols tablet, 3 cols desktop. Click to expand details. */
 const ResponsiveTownTabs: React.FC<ResponsiveTownTabsProps> = ({
   towns,
   activeId,
@@ -183,60 +184,91 @@ const ResponsiveTownTabs: React.FC<ResponsiveTownTabsProps> = ({
   variant = 'primary',
 }) => {
   const styles = variantStyles[variant];
+  const [expandedId, setExpandedId] = useState<string | number | null>(null);
+
+  const handleTownPress = (id: string | number) => {
+    onSelect(id);
+    setExpandedId((prev) => (prev === id ? null : id));
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-200">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-200 items-start">
         {towns.map((town) => {
           const isActive = activeId === town.id;
+          const isExpanded = expandedId === town.id;
+          const hasDetails = Boolean(town.summary || (town.stats && town.stats.length > 0));
+          const summaryLine = town.summary
+            ? `${town.summary.studentCount} students · ${town.summary.totalBalanceFormatted}`
+            : town.classLabel;
+
           return (
-            <button
+            <div
               key={town.id}
-              type="button"
-              onClick={() => onSelect(town.id)}
-              className={`p-4 sm:p-5 text-left transition-all w-full min-w-0 ${
+              className={`transition-all w-full min-w-0 ${
                 isActive ? styles.active : 'hover:bg-gray-50/80'
               }`}
             >
-              <div className="flex items-center gap-3 mb-4 min-w-0">
-                <div
-                  className={`p-2 rounded-lg shrink-0 ${
-                    isActive ? styles.iconActive : 'bg-gray-100 text-gray-500'
-                  }`}
-                >
-                  <MapPin className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <h3
-                    className={`font-bold truncate ${isActive ? styles.titleActive : 'text-gray-900'}`}
+              <button
+                type="button"
+                onClick={() => handleTownPress(town.id)}
+                className="p-4 sm:p-5 text-left w-full min-w-0"
+                aria-expanded={hasDetails ? isExpanded : undefined}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`p-2 rounded-lg shrink-0 ${
+                      isActive ? styles.iconActive : 'bg-gray-100 text-gray-500'
+                    }`}
                   >
-                    {town.townName}
-                  </h3>
-                  <p className="text-sm text-gray-500">{town.classLabel}</p>
-                </div>
-              </div>
-
-              {town.overview && (
-                <TownTabOverviewRow overview={town.overview} isActive={isActive} variant={variant} />
-              )}
-
-              {town.summary ? (
-                <TownTabSummaryPanel summary={town.summary} isActive={isActive} variant={variant} />
-              ) : town.stats && town.stats.length > 0 ? (
-                <ResponsiveStats mobileCols={1}>
-                  {town.stats.map((stat) => (
-                    <ResponsiveStatItem
-                      key={stat.label}
-                      label={stat.label}
-                      value={stat.value}
-                      helper={stat.helper}
-                      icon={stat.icon}
-                      valueClassName={stat.valueClassName ?? 'text-sm font-semibold text-gray-700'}
+                    <MapPin className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3
+                      className={`font-bold truncate ${isActive ? styles.titleActive : 'text-gray-900'}`}
+                    >
+                      {town.townName}
+                    </h3>
+                    <p className="text-sm text-gray-500 truncate">{summaryLine}</p>
+                  </div>
+                  {hasDetails && (
+                    <ChevronDown
+                      className={`h-4 w-4 text-gray-400 shrink-0 transition-transform ${
+                        isExpanded ? 'rotate-180' : ''
+                      }`}
                     />
-                  ))}
-                </ResponsiveStats>
-              ) : null}
-            </button>
+                  )}
+                </div>
+              </button>
+
+              {isExpanded && (
+                <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-0 space-y-3">
+                  {town.overview && (
+                    <TownTabOverviewRow
+                      overview={town.overview}
+                      isActive={isActive}
+                      variant={variant}
+                    />
+                  )}
+                  {town.summary ? (
+                    <TownTabSummaryPanel summary={town.summary} isActive={isActive} variant={variant} />
+                  ) : town.stats && town.stats.length > 0 ? (
+                    <ResponsiveStats mobileCols={1}>
+                      {town.stats.map((stat) => (
+                        <ResponsiveStatItem
+                          key={stat.label}
+                          label={stat.label}
+                          value={stat.value}
+                          helper={stat.helper}
+                          icon={stat.icon}
+                          valueClassName={stat.valueClassName ?? 'text-sm font-semibold text-gray-700'}
+                        />
+                      ))}
+                    </ResponsiveStats>
+                  ) : null}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
