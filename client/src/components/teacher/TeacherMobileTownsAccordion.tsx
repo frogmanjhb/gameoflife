@@ -9,7 +9,7 @@ import {
 interface TeacherMobileTownsAccordionProps {
   towns: TownTabItem[];
   activeTownClass: string | number | null;
-  expandedTownId: string | number | null;
+  allTownsExpanded: boolean;
   onTownPress: (id: string | number) => void;
 }
 
@@ -17,13 +17,13 @@ interface TeacherMobileTownsAccordionProps {
 const TeacherMobileTownsAccordion: React.FC<TeacherMobileTownsAccordionProps> = ({
   towns,
   activeTownClass,
-  expandedTownId,
+  allTownsExpanded,
   onTownPress,
 }) => (
   <div className="space-y-2">
     {towns.map((town) => {
       const isSelected = activeTownClass === town.id;
-      const isDetailOpen = expandedTownId === town.id;
+      const isDetailOpen = allTownsExpanded;
       const summaryLine = town.summary
         ? `${town.summary.studentCount} students · ${town.summary.totalBalanceFormatted}`
         : town.classLabel;

@@ -51,7 +51,7 @@ const TeacherDashboard: React.FC = () => {
   const { currentTown, currentTownClass, allTowns, announcements, loading: townLoading, setCurrentTownClass, refreshAnnouncements } = useTown();
   const [activeTab, setActiveTab] = useState<TeacherToolTab>('pending');
   const [mobileTownsOpen, setMobileTownsOpen] = useState(false);
-  const [mobileExpandedTown, setMobileExpandedTown] = useState<string | number | null>(null);
+  const [mobileAllTownsExpanded, setMobileAllTownsExpanded] = useState(false);
   const [mobileSystemsOpen, setMobileSystemsOpen] = useState(false);
   const [desktopSystemsOpen, setDesktopSystemsOpen] = useState(true);
   const [desktopToolsOpen, setDesktopToolsOpen] = useState(false);
@@ -315,8 +315,13 @@ const TeacherDashboard: React.FC = () => {
   };
 
   const handleMobileTownPress = (townId: string | number) => {
+    const wasActive = currentTownClass === townId;
     setCurrentTownClass(townId as '6A' | '6B' | '6C');
-    setMobileExpandedTown((prev) => (prev === townId ? null : townId));
+    if (mobileAllTownsExpanded && wasActive) {
+      setMobileAllTownsExpanded(false);
+    } else {
+      setMobileAllTownsExpanded(true);
+    }
   };
 
   const toolPanelProps = {
@@ -522,7 +527,7 @@ const TeacherDashboard: React.FC = () => {
             <TeacherMobileTownsAccordion
               towns={townTabItems}
               activeTownClass={currentTownClass}
-              expandedTownId={mobileExpandedTown}
+              allTownsExpanded={mobileAllTownsExpanded}
               onTownPress={handleMobileTownPress}
             />
           </ResponsiveAccordionCard>

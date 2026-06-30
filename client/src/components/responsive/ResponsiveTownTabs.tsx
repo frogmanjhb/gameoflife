@@ -184,11 +184,16 @@ const ResponsiveTownTabs: React.FC<ResponsiveTownTabsProps> = ({
   variant = 'primary',
 }) => {
   const styles = variantStyles[variant];
-  const [expandedId, setExpandedId] = useState<string | number | null>(null);
+  const [allExpanded, setAllExpanded] = useState(false);
 
   const handleTownPress = (id: string | number) => {
+    const wasActive = activeId === id;
     onSelect(id);
-    setExpandedId((prev) => (prev === id ? null : id));
+    if (allExpanded && wasActive) {
+      setAllExpanded(false);
+    } else {
+      setAllExpanded(true);
+    }
   };
 
   return (
@@ -196,8 +201,8 @@ const ResponsiveTownTabs: React.FC<ResponsiveTownTabsProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-200 items-start">
         {towns.map((town) => {
           const isActive = activeId === town.id;
-          const isExpanded = expandedId === town.id;
           const hasDetails = Boolean(town.summary || (town.stats && town.stats.length > 0));
+          const isExpanded = allExpanded && hasDetails;
           const summaryLine = town.summary
             ? `${town.summary.studentCount} students · ${town.summary.totalBalanceFormatted}`
             : town.classLabel;
