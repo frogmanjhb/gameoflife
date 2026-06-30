@@ -517,11 +517,14 @@ router.get('/tax-report/:class', authenticateToken, requireRole(['teacher']), as
       return res.status(400).json({ error: 'Invalid town class' });
     }
 
-    let dateFilter = '';
+    let dateFilterTt = '';
+    let dateFilterPlain = '';
     if (period === 'week') {
-      dateFilter = "AND tt.created_at >= CURRENT_DATE - INTERVAL '7 days'";
+      dateFilterTt = "AND tt.created_at >= CURRENT_DATE - INTERVAL '7 days'";
+      dateFilterPlain = "AND created_at >= CURRENT_DATE - INTERVAL '7 days'";
     } else if (period === 'month') {
-      dateFilter = "AND tt.created_at >= CURRENT_DATE - INTERVAL '30 days'";
+      dateFilterTt = "AND tt.created_at >= CURRENT_DATE - INTERVAL '30 days'";
+      dateFilterPlain = "AND created_at >= CURRENT_DATE - INTERVAL '30 days'";
     }
 
     // Get tax paid by each student
@@ -536,7 +539,7 @@ router.get('/tax-report/:class', authenticateToken, requireRole(['teacher']), as
         COALESCE(SUM(tt.net_amount), 0) as total_net,
         COUNT(tt.id) as payment_count
        FROM users u
-       LEFT JOIN tax_transactions tt ON u.id = tt.user_id AND tt.town_class = $1 ${dateFilter}
+       LEFT JOIN tax_transactions tt ON u.id = tt.user_id AND tt.town_class = $1 ${dateFilterTt}
        WHERE u.role = 'student' AND u.class = $1
        GROUP BY u.id, u.username, u.first_name, u.last_name
        ORDER BY total_tax_paid DESC`,
@@ -552,7 +555,7 @@ router.get('/tax-report/:class', authenticateToken, requireRole(['teacher']), as
         COUNT(*) as total_payments,
         COALESCE(AVG(tax_rate_applied), 0) as avg_tax_rate
        FROM tax_transactions
-       WHERE town_class = $1 ${dateFilter}`,
+       WHERE town_class = $1 ${dateFilterPlain}`,
       [townClass]
     );
 
@@ -561,7 +564,7 @@ router.get('/tax-report/:class', authenticateToken, requireRole(['teacher']), as
       `SELECT tt.*, u.username, u.first_name, u.last_name
        FROM tax_transactions tt
        JOIN users u ON tt.user_id = u.id
-       WHERE tt.town_class = $1 ${dateFilter}
+       WHERE tt.town_class = $1 ${dateFilterTt}
        ORDER BY tt.created_at DESC
        LIMIT 50`,
       [townClass]

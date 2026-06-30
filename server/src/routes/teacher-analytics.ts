@@ -615,4 +615,94 @@ router.get('/student-logins',
   }
 );
 
+/**
+ * GET /api/teacher-analytics/today-activity
+ * School-wide activity counts for the current civic day (UTC midnight boundary).
+ * Teacher only, scoped to school / all towns.
+ */
+router.get('/today-activity',
+  authenticateToken,
+  requireTenant,
+  requireRole(['teacher']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user || !req.schoolId) {
+        return res.status(403).json({ error: 'School context required' });
+      }
+
+      const startDate = getStartDate('day');
+      const startDateIso = startDate.toISOString();
+
+      let loginEventsExists = false;
+      try {
+        await database.query('SELECT 1 FROM login_events LIMIT 1');
+        loginEventsExists = true;
+      } catch {
+        loginEventsExists = false;
+      }
+
+      const studentsLoggedInSubquery = loginEventsExists
+        ? `(SELECT COUNT(DISTINCT le.user_id)::int
+            FROM login_events le
+            JOIN users u ON le.user_id = u.id
+            WHERE le.school_id = $1
+              AND le.login_at >= $2::timestamptz
+              AND u.role = 'student'
+              AND u.class IN ('6A', '6B', '6C'))`
+        : `(SELECT 0::int)`;
+
+      const row = await database.get(`
+        SELECT
+          ${studentsLoggedInSubquery} AS students_logged_in,
+          (SELECT COUNT(t.id)::int
+           FROM transactions t
+           JOIN accounts a ON t.from_account_id = a.id
+           JOIN users u ON a.user_id = u.id
+           WHERE u.school_id = $1
+             AND u.role = 'student'
+             AND u.class IN ('6A', '6B', '6C')
+             AND t.transaction_type = 'transfer'
+             AND t.created_at >= $2::timestamptz) AS transfers_made,
+          (SELECT COUNT(t.id)::int
+           FROM transactions t
+           JOIN accounts a ON t.to_account_id = a.id
+           JOIN users u ON a.user_id = u.id
+           WHERE u.school_id = $1
+             AND u.role = 'student'
+             AND u.class IN ('6A', '6B', '6C')
+             AND t.created_at >= $2::timestamptz
+             AND t.description ILIKE 'Police bonus%') AS bonuses_given,
+          (SELECT COUNT(t.id)::int
+           FROM transactions t
+           JOIN accounts a ON t.from_account_id = a.id
+           JOIN users u ON a.user_id = u.id
+           WHERE u.school_id = $1
+             AND u.role = 'student'
+             AND u.class IN ('6A', '6B', '6C')
+             AND t.transaction_type = 'fine'
+             AND t.created_at >= $2::timestamptz) AS fines_given,
+          (SELECT COUNT(d.id)::int
+           FROM doctor_illness_assignments d
+           JOIN users u ON d.patient_user_id = u.id
+           WHERE u.school_id = $1
+             AND u.role = 'student'
+             AND u.class IN ('6A', '6B', '6C')
+             AND d.cured_at >= $2::timestamptz) AS sickness_cured
+      `, [req.schoolId, startDateIso]);
+
+      res.json({
+        start_date: startDateIso,
+        students_logged_in: row?.students_logged_in ?? 0,
+        transfers_made: row?.transfers_made ?? 0,
+        bonuses_given: row?.bonuses_given ?? 0,
+        fines_given: row?.fines_given ?? 0,
+        sickness_cured: row?.sickness_cured ?? 0,
+      });
+    } catch (error) {
+      console.error('Failed to fetch today activity:', error);
+      res.status(500).json({ error: 'Failed to fetch today activity' });
+    }
+  }
+);
+
 export default router;

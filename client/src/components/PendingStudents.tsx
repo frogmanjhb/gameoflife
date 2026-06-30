@@ -91,13 +91,13 @@ const PendingStudents: React.FC<PendingStudentsProps> = ({ onUpdate }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="bg-amber-100 p-3 rounded-lg">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="bg-amber-100 p-3 rounded-lg shrink-0">
             <Clock className="h-6 w-6 text-amber-600" />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">New Student Registrations</h2>
+          <div className="min-w-0">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">New Student Registrations</h2>
             <p className="text-sm text-gray-500">
               {pendingStudents.length} {pendingStudents.length === 1 ? 'student' : 'students'} waiting for approval
             </p>
@@ -105,7 +105,7 @@ const PendingStudents: React.FC<PendingStudentsProps> = ({ onUpdate }) => {
         </div>
         <button
           onClick={fetchPendingStudents}
-          className="flex items-center space-x-2 px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors min-h-[44px] w-full sm:w-auto shrink-0"
         >
           <RefreshCw className="h-4 w-4" />
           <span>Refresh</span>
@@ -181,11 +181,11 @@ const PendingStudents: React.FC<PendingStudentsProps> = ({ onUpdate }) => {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex space-x-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={() => handleApprove(student)}
                   disabled={processing === student.id}
-                  className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
                 >
                   {processing === student.id ? (
                     <>
@@ -202,7 +202,7 @@ const PendingStudents: React.FC<PendingStudentsProps> = ({ onUpdate }) => {
                 <button
                   onClick={() => handleDeny(student)}
                   disabled={processing === student.id}
-                  className="flex items-center justify-center space-x-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center px-4 py-2.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-w-[44px]"
                 >
                   <X className="h-4 w-4" />
                 </button>

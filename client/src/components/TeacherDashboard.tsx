@@ -4,23 +4,25 @@ import { usePlugins } from '../contexts/PluginContext';
 import { useTown } from '../contexts/TownContext';
 import PluginCard from './PluginCard';
 import AnnouncementsPanel from './AnnouncementsPanel';
-import TownInfo from './TownInfo';
-import PluginManagement from './admin/PluginManagement';
-import AnnouncementManagement from './admin/AnnouncementManagement';
-import TownSettings from './admin/TownSettings';
-import JobManagement from './admin/JobManagement';
-import TreasuryManagement from './admin/TreasuryManagement';
-import WinkelManagement from './admin/WinkelManagement';
-import TeacherJobTestingTab from './admin/TeacherJobTestingTab';
-import TeacherContentApprovals from './admin/TeacherContentApprovals';
-import StudentManagement from './StudentManagement';
-import PendingStudents from './PendingStudents';
 import { 
-  Grid, Settings, Briefcase, Building2, Users, Wallet, 
-  TrendingUp, CreditCard, Megaphone, MapPin, Landmark, Clock, ShoppingBag, GripVertical, CalendarDays, FileCheck
+  Grid, Settings, Briefcase, Building2, Users, 
+  Megaphone, Landmark, Clock, ShoppingBag, GripVertical, FileCheck, MapPin, Activity
 } from 'lucide-react';
-import api, { contentSubmissionsApi } from '../services/api';
-import { Student, Loan, Transaction } from '../types';
+import api, { contentSubmissionsApi, teacherAnalyticsApi } from '../services/api';
+import { Student, Loan, TodayActivity } from '../types';
+import {
+  ResponsivePage,
+  ResponsiveHero,
+  ResponsiveTownTabs,
+  ResponsiveTabNav,
+  ResponsiveAccordionCard,
+  LoadingState,
+  EmptyState,
+  TownTabItem,
+} from './responsive';
+import TeacherToolsBottomBar, { TeacherToolSheet } from './teacher/TeacherToolsBottomBar';
+import TeacherMobileTownsAccordion from './teacher/TeacherMobileTownsAccordion';
+import { renderTeacherToolContent, TeacherToolTab } from './teacher/TeacherToolPanels';
 
 interface TownStats {
   studentCount: number;
@@ -33,11 +35,27 @@ interface TownStats {
 
 const TILE_ORDER_STORAGE_KEY = 'teacherDashboardTileOrder';
 
+function getTimeGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+const isStudentSick = (student: Student) => student.is_sick === true || student.is_sick === 't';
+const studentHasVirus = (student: Student) => student.has_virus === true || student.has_virus === 't';
+
 const TeacherDashboard: React.FC = () => {
   const { user, refreshProfile } = useAuth();
   const { enabledPlugins, plugins, loading: pluginsLoading, refreshPlugins } = usePlugins();
   const { currentTown, currentTownClass, allTowns, announcements, loading: townLoading, setCurrentTownClass, refreshAnnouncements } = useTown();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'treasury' | 'plugins' | 'announcements' | 'town' | 'jobs' | 'students' | 'pending' | 'shop' | 'submissions'>('dashboard');
+  const [activeTab, setActiveTab] = useState<TeacherToolTab>('pending');
+  const [mobileTownsOpen, setMobileTownsOpen] = useState(false);
+  const [mobileExpandedTown, setMobileExpandedTown] = useState<string | number | null>(null);
+  const [mobileSystemsOpen, setMobileSystemsOpen] = useState(false);
+  const [mobileAnnouncementsOpen, setMobileAnnouncementsOpen] = useState(false);
+  const [heroActivityOpen, setHeroActivityOpen] = useState(false);
+  const [mobileToolSheet, setMobileToolSheet] = useState<TeacherToolTab | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingContentCount, setPendingContentCount] = useState(0);
   const [pendingTransfersCount, setPendingTransfersCount] = useState(0);
@@ -48,6 +66,7 @@ const TeacherDashboard: React.FC = () => {
   // Data for town stats
   const [students, setStudents] = useState<Student[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [todayActivity, setTodayActivity] = useState<TodayActivity | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [jobsSubTab, setJobsSubTab] = useState<'manage' | 'testing' | 'unemployed'>('manage');
 
@@ -131,9 +150,7 @@ const TeacherDashboard: React.FC = () => {
     setDraggedTileId(null);
   }, [tileOrder]);
 
-  const displayName = user?.first_name && user?.last_name
-    ? `${user.first_name} ${user.last_name}`
-    : user?.username || 'Teacher';
+  const firstName = user?.first_name?.trim() || user?.username || 'Teacher';
 
   const daysPassed = useMemo(() => {
     if (!user?.game_start_date) return null;
@@ -154,12 +171,13 @@ const TeacherDashboard: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [studentsRes, loansRes, pendingRes, pendingTransfersRes, contentRes] = await Promise.all([
+      const [studentsRes, loansRes, pendingRes, pendingTransfersRes, contentRes, activityRes] = await Promise.all([
         api.get('/students'),
         api.get('/loans'),
         api.get('/students/pending').catch(() => ({ data: [] })),
         api.get('/transactions/pending-transfers').catch(() => ({ data: [] })),
         contentSubmissionsApi.getPending().catch(() => ({ data: { pending_count: 0 } })),
+        teacherAnalyticsApi.getTodayActivity().catch(() => ({ data: null })),
       ]);
       setStudents(studentsRes.data);
       setLoans(loansRes.data);
@@ -167,6 +185,7 @@ const TeacherDashboard: React.FC = () => {
       setPendingContentCount(contentRes.data?.pending_count ?? 0);
       const transfers = pendingTransfersRes.data || [];
       setPendingTransfersCount(transfers.filter((t: { status: string }) => t.status === 'pending').length);
+      setTodayActivity(activityRes.data);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -198,9 +217,6 @@ const TeacherDashboard: React.FC = () => {
     return stats;
   }, [students, loans, allTowns]);
 
-  // Get stats for current town
-  const currentStats = currentTownClass ? townStats[currentTownClass] : null;
-
   const unemployedStudentsByClass = useMemo(() => {
     const grouped = students
       .filter((student) => !student.job_id)
@@ -225,67 +241,259 @@ const TeacherDashboard: React.FC = () => {
       }));
   }, [students]);
 
-  // Get announcements count per town
-  const getAnnouncementsForTown = (townClass: string) => {
-    // This is a simplified version - in reality you'd need to fetch announcements per town
-    return currentTownClass === townClass ? announcements.length : 0;
-  };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount);
   };
 
-  if (pluginsLoading || townLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
+  const formatCompactCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-ZA', {
+      style: 'currency',
+      currency: 'ZAR',
+      maximumFractionDigits: 0,
+    }).format(amount);
 
-  return (
-    <div className="space-y-6">
-      {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold mb-2">Welcome, {displayName}! 👨‍🏫</h1>
-            <p className="text-primary-100">Town Hub Control Center</p>
-          </div>
-          <div className="flex items-center gap-6">
-            {daysPassed !== null && (
-              <div className="text-right bg-white/15 rounded-xl px-4 py-2">
-                <div className="flex items-center gap-1.5 justify-end">
-                  <CalendarDays className="h-4 w-4 text-primary-200" />
-                  <p className="text-primary-200 text-xs font-medium">Game of Life</p>
-                </div>
-                <p className="text-2xl font-bold">Day {daysPassed}</p>
+  const sickCount = useMemo(() => students.filter(isStudentSick).length, [students]);
+  const virusCount = useMemo(() => students.filter(studentHasVirus).length, [students]);
+  const pendingLoansCount = useMemo(
+    () => loans.filter((loan) => loan.status === 'pending').length,
+    [loans]
+  );
+  const approvalsNeeded =
+    pendingCount + pendingContentCount + pendingTransfersCount + pendingLoansCount;
+  const circulatingTotal = useMemo(() => {
+    const studentTotal = students.reduce((sum, s) => sum + (Number(s.balance) || 0), 0);
+    const treasuryTotal = allTowns.reduce(
+      (sum, town) => sum + (Number(town.treasury_balance) || 0),
+      0
+    );
+    return studentTotal + treasuryTotal;
+  }, [students, allTowns]);
+
+  const townTabItems: TownTabItem[] = useMemo(
+    () =>
+      allTowns.map((town) => {
+        const stats = townStats[town.class];
+        return {
+          id: town.class,
+          townName: town.town_name,
+          classLabel: `Class ${town.class}`,
+          overview: {
+            mayorName: town.mayor_name || 'TBD',
+            taxRate: town.tax_rate,
+            taxEnabled: town.tax_enabled,
+          },
+          summary: stats
+            ? {
+                studentCount: stats.studentCount,
+                employedCount: stats.employedCount,
+                unemployedCount: stats.unemployedCount,
+                employmentPercent:
+                  stats.studentCount > 0
+                    ? Math.round((stats.employedCount / stats.studentCount) * 100)
+                    : 0,
+                activeLoans: stats.activeLoans,
+                pendingLoansLabel:
+                  stats.pendingLoans > 0 ? `${stats.pendingLoans} pending approval` : 'No pending',
+                totalBalanceFormatted: formatCurrency(stats.totalBalance),
+                avgBalanceFormatted: formatCurrency(
+                  stats.studentCount > 0 ? stats.totalBalance / stats.studentCount : 0
+                ),
+                treasuryFormatted: formatCurrency(town.treasury_balance || 10000000),
+                balanceIsPositive: stats.totalBalance >= 0,
+              }
+            : undefined,
+        };
+      }),
+    [allTowns, townStats]
+  );
+
+  const openMobileTool = (tab: TeacherToolTab) => {
+    setActiveTab(tab);
+    setMobileToolSheet(tab);
+  };
+
+  const handleMobileTownPress = (townId: string | number) => {
+    setCurrentTownClass(townId as '6A' | '6B' | '6C');
+    setMobileExpandedTown((prev) => (prev === townId ? null : townId));
+  };
+
+  const toolPanelProps = {
+    activeTab,
+    jobsSubTab,
+    setJobsSubTab,
+    fetchData,
+    students,
+    plugins,
+    refreshPlugins,
+    announcements,
+    refreshAnnouncements,
+    unemployedStudentsByClass,
+  };
+
+  const renderPluginTiles = (draggable: boolean) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {orderedPlugins.map((plugin) => {
+        const isDragging = draggedTileId === plugin.id;
+        const isDropTarget = dropTargetId === plugin.id;
+        return (
+          <div
+            key={plugin.id}
+            className={`relative group rounded-xl transition-all ${
+              isDragging ? 'opacity-50 scale-95' : ''
+            } ${isDropTarget ? 'ring-2 ring-primary-500 ring-offset-2 bg-primary-50/50' : ''}`}
+            onDragOver={draggable ? (e) => handleTileDragOver(e, plugin.id) : undefined}
+            onDragLeave={draggable ? handleTileDragLeave : undefined}
+            onDrop={draggable ? (e) => handleTileDrop(e, plugin.id) : undefined}
+          >
+            {draggable && (
+              <div
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 touch-none"
+                draggable
+                onDragStart={(e) => handleTileDragStart(e, plugin.id)}
+                onDragEnd={handleTileDragEnd}
+                title="Drag to reorder"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+              >
+                <GripVertical className="h-5 w-5" />
               </div>
             )}
-            <div className="text-right">
-              <p className="text-primary-100 text-sm">Managing</p>
-              <p className="text-xl font-bold">{allTowns.length} Towns</p>
+            <div className={draggable ? 'pl-10' : ''}>
+              <PluginCard
+                plugin={plugin}
+                needsAttention={plugin.route_path === '/bank' && pendingTransfersCount > 0}
+              />
             </div>
           </div>
-        </div>
-      </div>
+        );
+      })}
+    </div>
+  );
 
-      {/* Pending Students Alert Banner */}
-      {pendingCount > 0 && activeTab !== 'pending' && (
-        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Clock className="h-5 w-5 text-amber-600" />
-              <div>
+  if (pluginsLoading || (townLoading && allTowns.length === 0)) {
+    return <LoadingState />;
+  }
+
+  const teacherTabs = [
+    { id: 'pending', label: 'New Students', mobileLabel: 'New', icon: Clock, badge: pendingCount },
+    { id: 'submissions', label: 'Content', mobileLabel: 'Content', icon: FileCheck, badge: pendingContentCount },
+    { id: 'students', label: 'Students', mobileLabel: 'Students', icon: Users },
+    { id: 'treasury', label: 'Treasury', mobileLabel: 'Treasury', icon: Landmark },
+    { id: 'jobs', label: 'Jobs', mobileLabel: 'Jobs', icon: Briefcase },
+    { id: 'shop', label: 'Shop', mobileLabel: 'Shop', icon: ShoppingBag },
+    { id: 'plugins', label: 'Plugins', mobileLabel: 'Plugins', icon: Settings },
+    { id: 'announcements', label: 'Announcements', mobileLabel: 'News', icon: Megaphone },
+    { id: 'town', label: 'Town Settings', mobileLabel: 'Town', icon: Building2 },
+  ];
+
+  const activeTown = allTowns.find((t) => t.class === currentTownClass);
+  const activeToolLabel = teacherTabs.find((t) => t.id === mobileToolSheet)?.label ?? '';
+
+  return (
+    <ResponsivePage className="pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+      {/* Daily summary */}
+      <ResponsiveHero className="bg-gradient-to-r from-primary-600 to-primary-700 text-white">
+        <div className="space-y-3 sm:space-y-4">
+          <h1 className="text-xl sm:text-2xl font-bold break-words">
+            {getTimeGreeting()}, {firstName}
+          </h1>
+          <p className="text-sm sm:text-base text-primary-50 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {daysPassed !== null && (
+              <>
+                <span>
+                  <span aria-hidden="true">📅 </span>
+                  Day {daysPassed}
+                </span>
+                <span className="text-primary-300" aria-hidden="true">·</span>
+              </>
+            )}
+            <span>
+              <span aria-hidden="true">🏘 </span>
+              {allTowns.length} Town{allTowns.length !== 1 ? 's' : ''}
+            </span>
+            <span className="text-primary-300" aria-hidden="true">·</span>
+            <span>
+              <span aria-hidden="true">👨‍🎓 </span>
+              {students.length} Student{students.length !== 1 ? 's' : ''}
+            </span>
+          </p>
+          <ResponsiveAccordionCard
+            title="Today's activity"
+            subtitle={
+              approvalsNeeded > 0
+                ? `${approvalsNeeded} approval${approvalsNeeded !== 1 ? 's' : ''} needed`
+                : `${formatCompactCurrency(circulatingTotal)} circulating`
+            }
+            icon={<Activity />}
+            open={heroActivityOpen}
+            onToggle={() => setHeroActivityOpen((o) => !o)}
+            className="shadow-none"
+          >
+            <ul className="space-y-1 text-sm text-gray-700">
+              <li>
+                <span aria-hidden="true">💰 </span>
+                {formatCompactCurrency(circulatingTotal)} circulating
+              </li>
+              <li className={approvalsNeeded > 0 ? 'font-medium text-amber-700' : undefined}>
+                <span aria-hidden="true">📢 </span>
+                {approvalsNeeded} Approval{approvalsNeeded !== 1 ? 's' : ''} needed
+              </li>
+              <li className={sickCount > 0 ? 'font-medium text-amber-700' : undefined}>
+                <span aria-hidden="true">🤒 </span>
+                {sickCount} student{sickCount !== 1 ? 's' : ''} sick
+              </li>
+              <li className={virusCount > 0 ? 'font-medium text-amber-700' : undefined}>
+                <span aria-hidden="true">🐛 </span>
+                {virusCount} student{virusCount !== 1 ? 's' : ''} with a software virus
+              </li>
+              {todayActivity && (
+                <>
+                  <li>
+                    <span aria-hidden="true">👋 </span>
+                    {todayActivity.students_logged_in} student{todayActivity.students_logged_in !== 1 ? 's' : ''} logged in
+                  </li>
+                  <li>
+                    <span aria-hidden="true">💸 </span>
+                    {todayActivity.transfers_made} transfer{todayActivity.transfers_made !== 1 ? 's' : ''} made
+                  </li>
+                  <li>
+                    <span aria-hidden="true">🎁 </span>
+                    {todayActivity.bonuses_given} bonus{todayActivity.bonuses_given !== 1 ? 'es' : ''} given
+                  </li>
+                  <li>
+                    <span aria-hidden="true">⚖️ </span>
+                    {todayActivity.fines_given} fine{todayActivity.fines_given !== 1 ? 's' : ''} given
+                  </li>
+                  <li>
+                    <span aria-hidden="true">💊 </span>
+                    {todayActivity.sickness_cured} sickness cured
+                  </li>
+                </>
+              )}
+            </ul>
+          </ResponsiveAccordionCard>
+        </div>
+      </ResponsiveHero>
+
+      {pendingCount > 0 && activeTab !== 'pending' && !mobileToolSheet && (
+        <div className="bg-amber-50 border-l-4 border-amber-500 p-3 sm:p-4 rounded-lg">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3 min-w-0">
+              <Clock className="h-5 w-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-amber-800">
                   {pendingCount} new student{pendingCount !== 1 ? 's' : ''} waiting for approval
                 </p>
-                <p className="text-xs text-amber-600">Click "New Students" tab to review and approve</p>
+                <p className="text-xs text-amber-600 hidden sm:block">
+                  Tap &quot;New Students&quot; to review and approve
+                </p>
               </div>
             </div>
             <button
-              onClick={() => setActiveTab('pending')}
-              className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+              onClick={() => openMobileTool('pending')}
+              className="px-4 py-2.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium min-h-[44px] w-full sm:w-auto shrink-0"
             >
               Review Now
             </button>
@@ -293,334 +501,129 @@ const TeacherDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Town Tabs */}
-      {allTowns.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="grid grid-cols-3 divide-x divide-gray-200">
-            {allTowns.map((town) => {
-              const stats = townStats[town.class];
-              const isActive = currentTownClass === town.class;
-              
-              return (
-                <button
-                  key={town.id}
-                  onClick={() => setCurrentTownClass(town.class)}
-                  className={`p-4 text-left transition-all ${
-                    isActive 
-                      ? 'bg-gradient-to-br from-primary-50 to-primary-100 border-b-4 border-primary-500' 
-                      : 'hover:bg-gray-50 border-b-4 border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className={`p-2 rounded-lg ${isActive ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                      <MapPin className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className={`font-bold ${isActive ? 'text-primary-700' : 'text-gray-900'}`}>
-                        {town.town_name}
-                      </h3>
-                      <p className="text-sm text-gray-500">Class {town.class}</p>
-                    </div>
-                  </div>
-                  
-                  {stats && (
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="flex items-center space-x-1">
-                        <Users className="h-3 w-3 text-gray-400" />
-                        <span className="text-gray-600">{stats.studentCount} students</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Wallet className="h-3 w-3 text-gray-400" />
-                        <span className={`${stats.totalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formatCurrency(stats.totalBalance)}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Briefcase className="h-3 w-3 text-gray-400" />
-                        <span className="text-gray-600">{stats.employedCount} employed</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Landmark className="h-3 w-3 text-emerald-500" />
-                        <span className="text-emerald-600">
-                          {formatCurrency(town.treasury_balance || 10000000)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* ——— Mobile: collapsed accordion cards ——— */}
+      <div className="md:hidden space-y-2.5">
+        {allTowns.length > 0 && (
+          <ResponsiveAccordionCard
+            title="Towns"
+            subtitle={
+              activeTown
+                ? `${allTowns.length} towns · ${activeTown.town_name}`
+                : `${allTowns.length} towns`
+            }
+            icon={<MapPin />}
+            open={mobileTownsOpen}
+            onToggle={() => setMobileTownsOpen((o) => !o)}
+          >
+            <TeacherMobileTownsAccordion
+              towns={townTabItems}
+              activeTownClass={currentTownClass}
+              expandedTownId={mobileExpandedTown}
+              onTownPress={handleMobileTownPress}
+            />
+          </ResponsiveAccordionCard>
+        )}
 
-      {/* Plugin Cards - Available Systems (reorderable to match classroom board) */}
-      <div>
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-          <div className="flex items-center space-x-2">
-            <Grid className="h-5 w-5 text-primary-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Available Systems</h2>
-            <span className="text-xs text-gray-500 ml-2 hidden sm:inline">Drag the handle to reorder tiles to match your classroom board</span>
-          </div>
-          {tileOrder.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setTileOrder(enabledPlugins.map(p => p.id))}
-              className="text-xs text-primary-600 hover:text-primary-700 hover:underline"
-            >
-              Reset to default order
-            </button>
+        <ResponsiveAccordionCard
+          title="Available Systems"
+          subtitle={`${enabledPlugins.length} system${enabledPlugins.length !== 1 ? 's' : ''}`}
+          icon={<Grid />}
+          open={mobileSystemsOpen}
+          onToggle={() => setMobileSystemsOpen((o) => !o)}
+        >
+          {enabledPlugins.length === 0 ? (
+            <EmptyState icon={Grid} title="No systems available at this time" />
+          ) : (
+            renderPluginTiles(false)
           )}
-        </div>
-        
-        {enabledPlugins.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-            <Grid className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p className="text-gray-500">No systems available at this time</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {orderedPlugins.map((plugin) => {
-              const isDragging = draggedTileId === plugin.id;
-              const isDropTarget = dropTargetId === plugin.id;
-              return (
-                <div
-                  key={plugin.id}
-                  className={`relative group rounded-xl transition-all ${
-                    isDragging ? 'opacity-50 scale-95' : ''
-                  } ${isDropTarget ? 'ring-2 ring-primary-500 ring-offset-2 bg-primary-50/50' : ''}`}
-                  onDragOver={(e) => handleTileDragOver(e, plugin.id)}
-                  onDragLeave={handleTileDragLeave}
-                  onDrop={(e) => handleTileDrop(e, plugin.id)}
-                >
-                  <div
-                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 touch-none"
-                    draggable
-                    onDragStart={(e) => handleTileDragStart(e, plugin.id)}
-                    onDragEnd={handleTileDragEnd}
-                    title="Drag to reorder"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  >
-                    <GripVertical className="h-5 w-5" />
-                  </div>
-                  <div className="pl-10">
-                    <PluginCard
-                      plugin={plugin}
-                      needsAttention={plugin.route_path === '/bank' && pendingTransfersCount > 0}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        </ResponsiveAccordionCard>
+
+        {announcements.length > 0 && (
+          <ResponsiveAccordionCard
+            title="Announcements"
+            subtitle={`${announcements.length} active`}
+            icon={<Megaphone />}
+            open={mobileAnnouncementsOpen}
+            onToggle={() => setMobileAnnouncementsOpen((o) => !o)}
+          >
+            <AnnouncementsPanel announcements={announcements} />
+          </ResponsiveAccordionCard>
         )}
       </div>
 
-      {/* Current Town Details */}
-      {currentTown && currentStats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-2 text-gray-500 mb-1">
-              <Users className="h-4 w-4" />
-              <span className="text-xs font-medium">Students</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900">{currentStats.studentCount}</p>
-            <p className="text-xs text-gray-500">{currentStats.employedCount} employed</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-2 text-gray-500 mb-1">
-              <Wallet className="h-4 w-4" />
-              <span className="text-xs font-medium">Total Balance</span>
-            </div>
-            <p className={`text-2xl font-bold ${currentStats.totalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(currentStats.totalBalance)}
-            </p>
-            <p className="text-xs text-gray-500">
-              Avg: {formatCurrency(currentStats.studentCount > 0 ? currentStats.totalBalance / currentStats.studentCount : 0)}
-            </p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-2 text-gray-500 mb-1">
-              <Briefcase className="h-4 w-4" />
-              <span className="text-xs font-medium">Employment</span>
-            </div>
-            <p className="text-2xl font-bold text-blue-600">
-              {currentStats.studentCount > 0 
-                ? Math.round((currentStats.employedCount / currentStats.studentCount) * 100) 
-                : 0}%
-            </p>
-            <p className="text-xs text-gray-500">{currentStats.unemployedCount} unemployed</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-2 text-gray-500 mb-1">
-              <CreditCard className="h-4 w-4" />
-              <span className="text-xs font-medium">Loans</span>
-            </div>
-            <p className="text-2xl font-bold text-purple-600">{currentStats.activeLoans}</p>
-            <p className="text-xs text-amber-600">
-              {currentStats.pendingLoans > 0 ? `${currentStats.pendingLoans} pending approval` : 'No pending'}
-            </p>
-          </div>
-        </div>
-      )}
+      {/* ——— Desktop: full layout ——— */}
+      <div className="hidden md:block space-y-6">
+        {allTowns.length > 0 && (
+          <ResponsiveTownTabs
+            towns={townTabItems}
+            activeId={currentTownClass}
+            onSelect={(id) => setCurrentTownClass(id as '6A' | '6B' | '6C')}
+          />
+        )}
 
-      {/* Navigation Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
-            {[
-              { id: 'dashboard', label: 'Overview', icon: Grid },
-              { id: 'pending', label: 'New Students', icon: Clock, badge: pendingCount },
-              { id: 'submissions', label: 'Content', icon: FileCheck, badge: pendingContentCount },
-              { id: 'students', label: 'Students', icon: Users },
-              { id: 'treasury', label: 'Treasury', icon: Landmark },
-              { id: 'jobs', label: 'Jobs', icon: Briefcase },
-              { id: 'shop', label: 'Shop', icon: ShoppingBag },
-              { id: 'plugins', label: 'Plugins', icon: Settings },
-              { id: 'announcements', label: 'Announcements', icon: Megaphone },
-              { id: 'town', label: 'Town Settings', icon: Building2 }
-            ].map(({ id, label, icon: Icon, badge }) => (
+        <div>
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+            <div className="flex items-center space-x-2">
+              <Grid className="h-5 w-5 text-primary-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Available Systems</h2>
+              <span className="text-xs text-gray-500 ml-2">
+                Drag the handle to reorder tiles to match your classroom board
+              </span>
+            </div>
+            {tileOrder.length > 0 && (
               <button
-                key={id}
-                onClick={() => setActiveTab(id as any)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 relative ${
-                  activeTab === id
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                type="button"
+                onClick={() => setTileOrder(enabledPlugins.map((p) => p.id))}
+                className="text-xs text-primary-600 hover:text-primary-700 hover:underline"
               >
-                <Icon className="h-4 w-4" />
-                <span>{label}</span>
-                {badge !== undefined && badge > 0 && (
-                  <span className="ml-1 bg-amber-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
-                    {badge}
-                  </span>
-                )}
+                Reset to default order
               </button>
-            ))}
-          </nav>
-        </div>
+            )}
+          </div>
 
-        <div className="p-6">
-          {/* Dashboard Tab */}
-          {activeTab === 'dashboard' && (
-            <div className="space-y-6">
-              {/* Town Info and Announcements */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 [&>*]:min-w-0">
-                <TownInfo town={currentTown} readOnly={true} showTreasury={true} />
-                <AnnouncementsPanel announcements={announcements} />
-              </div>
-            </div>
-          )}
-
-          {/* Pending Students Tab */}
-          {activeTab === 'pending' && (
-            <PendingStudents onUpdate={fetchData} />
-          )}
-
-          {activeTab === 'submissions' && (
-            <TeacherContentApprovals onUpdate={fetchData} />
-          )}
-
-          {/* Students Tab */}
-          {activeTab === 'students' && (
-            <StudentManagement students={students} onUpdate={fetchData} />
-          )}
-
-          {/* Treasury Tab */}
-          {activeTab === 'treasury' && (
-            <TreasuryManagement />
-          )}
-
-          {/* Plugins Tab */}
-          {activeTab === 'plugins' && (
-            <PluginManagement plugins={plugins} onUpdate={refreshPlugins} />
-          )}
-
-          {/* Announcements Tab */}
-          {activeTab === 'announcements' && (
-            <AnnouncementManagement announcements={announcements} onUpdate={refreshAnnouncements} />
-          )}
-
-          {/* Jobs Tab */}
-          {activeTab === 'jobs' && (
-            <div className="space-y-6">
-              <div className="border-b border-gray-200">
-                <nav className="flex space-x-6">
-                  {[
-                    { id: 'manage' as const, label: 'Job management' },
-                    { id: 'testing' as const, label: 'Job testing' },
-                    { id: 'unemployed' as const, label: 'Unemployed students' },
-                  ].map(({ id, label }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setJobsSubTab(id)}
-                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                        jobsSubTab === id
-                          ? 'border-primary-500 text-primary-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-
-              {jobsSubTab === 'manage' && <JobManagement />}
-              {jobsSubTab === 'testing' && <TeacherJobTestingTab />}
-              {jobsSubTab === 'unemployed' && (
-                <div className="space-y-4">
-                  {unemployedStudentsByClass.length === 0 ? (
-                    <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-4">
-                      All students currently have jobs.
-                    </div>
-                  ) : (
-                    unemployedStudentsByClass.map(({ className, students: classStudents }) => (
-                      <div key={className} className="bg-white border border-gray-200 rounded-xl">
-                        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                          <h3 className="font-semibold text-gray-900">Class {className}</h3>
-                          <span className="text-sm font-medium text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">
-                            {classStudents.length} unemployed
-                          </span>
-                        </div>
-                        <div className="divide-y divide-gray-100">
-                          {classStudents.map((student) => {
-                            const fullName = `${student.first_name || ''} ${student.last_name || ''}`.trim();
-                            return (
-                              <div
-                                key={student.id}
-                                className="px-4 py-3 flex items-center justify-between text-sm"
-                              >
-                                <span className="text-gray-900 font-medium">
-                                  {fullName || student.username}
-                                </span>
-                                <span className="text-gray-500">@{student.username}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Shop Tab */}
-          {activeTab === 'shop' && (
-            <WinkelManagement />
-          )}
-
-          {/* Town Settings Tab */}
-          {activeTab === 'town' && (
-            <TownSettings />
+          {enabledPlugins.length === 0 ? (
+            <EmptyState icon={Grid} title="No systems available at this time" />
+          ) : (
+            renderPluginTiles(true)
           )}
         </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-4 sm:px-6 pt-4 sm:pt-5">
+            <div className="flex items-center space-x-2">
+              <Settings className="h-5 w-5 text-primary-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Teacher tools</h2>
+            </div>
+          </div>
+          <ResponsiveTabNav
+            tabs={teacherTabs}
+            activeTab={activeTab}
+            onTabChange={(id) => setActiveTab(id as TeacherToolTab)}
+          />
+          <div className="p-4 sm:p-6">{renderTeacherToolContent(toolPanelProps)}</div>
+        </div>
+
+        <AnnouncementsPanel
+          announcements={announcements}
+          maxItems={Math.max(announcements.length, 1)}
+        />
       </div>
-    </div>
+
+      {/* Mobile: bottom bar + full-screen tool sheets */}
+      <TeacherToolsBottomBar
+        tabs={teacherTabs}
+        activeTab={mobileToolSheet}
+        onSelect={(id) => openMobileTool(id as TeacherToolTab)}
+      />
+
+      <TeacherToolSheet
+        open={mobileToolSheet !== null}
+        title={activeToolLabel}
+        onClose={() => setMobileToolSheet(null)}
+      >
+        {mobileToolSheet && renderTeacherToolContent({ ...toolPanelProps, activeTab: mobileToolSheet })}
+      </TeacherToolSheet>
+    </ResponsivePage>
   );
 };
 

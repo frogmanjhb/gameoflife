@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { usePlugins } from '../../contexts/PluginContext';
 import { codeBoardApi } from '../../services/api';
 import { CodeBoardPublicView } from '../../types';
+import { ResponsivePage, ResponsivePluginHero, LoadingState, EmptyState } from '../responsive';
 
 const CodeBoardPlugin: React.FC = () => {
   const { user } = useAuth();
@@ -99,11 +100,7 @@ const CodeBoardPlugin: React.FC = () => {
   };
 
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!codeBoardPlugin || !codeBoardPlugin.enabled) {
@@ -114,18 +111,13 @@ const CodeBoardPlugin: React.FC = () => {
   const isTeacher = user?.role === 'teacher';
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">💻</div>
-          <div>
-            <h1 className="text-2xl font-bold">Code Board</h1>
-            <p className="text-blue-100">
-              Apps built by software engineers across all towns — star your favourites and try them out
-            </p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="Code Board"
+        subtitle="Apps built by software engineers across all towns — star your favourites and try them out"
+        emoji="💻"
+        gradientClass="bg-gradient-to-r from-blue-600 to-indigo-700 text-white"
+      />
 
       {data && (
         <p className="text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
@@ -140,19 +132,14 @@ const CodeBoardPlugin: React.FC = () => {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-        </div>
+        <LoadingState />
       ) : error ? (
         <div className="bg-white rounded-xl shadow-sm border border-red-200 p-8 text-center text-red-700">{error}</div>
       ) : !data?.apps.length ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-          <div className="text-5xl mb-4">💻</div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">No apps yet</h2>
-          <p className="text-gray-600">
-            No software engineers have posted any apps yet.
-          </p>
-        </div>
+        <EmptyState
+          title="No apps yet"
+          description="No software engineers have posted any apps yet."
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {data.apps.map((app) => {
@@ -239,7 +226,7 @@ const CodeBoardPlugin: React.FC = () => {
           })}
         </div>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

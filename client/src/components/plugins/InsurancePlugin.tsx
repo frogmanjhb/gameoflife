@@ -6,6 +6,7 @@ import {
   Shield, Loader2, AlertCircle, Heart, Wifi, Home, Filter
 } from 'lucide-react';
 import api, { insuranceApi, InsuranceTypeSetting } from '../../services/api';
+import { ResponsivePage, ResponsivePluginHero, LoadingState, EmptyState } from '../responsive';
 
 const INSURANCE_TYPES = [
   { id: 'health' as const, label: 'Health', icon: Heart, color: 'text-red-600', bg: 'bg-red-100' },
@@ -225,11 +226,7 @@ const InsurancePlugin: React.FC = () => {
   };
 
   if (pluginsLoading || !insurancePlugin) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!insurancePlugin.enabled) {
@@ -237,22 +234,17 @@ const InsurancePlugin: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="bg-gradient-to-r from-teal-600 to-cyan-700 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex items-center space-x-4">
-          <div className="bg-white/20 p-4 rounded-xl">
-            <Shield className="h-10 w-10" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">Insurance</h1>
-            <p className="text-teal-100">
-              {isTeacher
-                ? 'View insurance purchases and refund 90% of premium when needed'
-                : 'Health, cyber and property insurance — 5% of salary per type per week'}
-            </p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage className="max-w-4xl mx-auto">
+      <ResponsivePluginHero
+        icon={Shield}
+        title="Insurance"
+        subtitle={
+          isTeacher
+            ? 'View insurance purchases and refund 90% of premium when needed'
+            : 'Health, cyber and property insurance — 5% of salary per type per week'
+        }
+        gradientClass="bg-gradient-to-r from-teal-600 to-cyan-700 text-white"
+      />
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-2 text-red-800">
@@ -366,14 +358,9 @@ const InsurancePlugin: React.FC = () => {
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
-            </div>
+            <LoadingState />
           ) : teacherPurchases.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
-              <Shield className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p>No insurance purchases yet.</p>
-            </div>
+            <EmptyState icon={Shield} title="No insurance purchases yet." />
           ) : (
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
@@ -544,7 +531,7 @@ const InsurancePlugin: React.FC = () => {
                   return (
                     <div
                       key={p.id}
-                      className={`flex items-center justify-between p-4 rounded-xl border-2 ${
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border-2 ${
                         p.active ? 'border-teal-400 bg-teal-50' : 'border-gray-200 bg-gray-50'
                       }`}
                     >
@@ -595,7 +582,7 @@ const InsurancePlugin: React.FC = () => {
           </div>
         </>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

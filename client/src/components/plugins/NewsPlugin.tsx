@@ -7,6 +7,7 @@ import { useTown } from '../../contexts/TownContext';
 import { townNewsApi } from '../../services/api';
 import { TownNewsStory } from '../../types';
 import TownNewsStoryCard, { storyToCardProps } from '../TownNewsStoryCard';
+import { ResponsivePage, ResponsivePluginHero, LoadingState, EmptyState } from '../responsive';
 
 const NewsPlugin: React.FC = () => {
   const { plugins, loading: pluginsLoading } = usePlugins();
@@ -97,11 +98,7 @@ const NewsPlugin: React.FC = () => {
   const isTeacher = user?.role === 'teacher';
 
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!newsPlugin || !newsPlugin.enabled) {
@@ -109,43 +106,33 @@ const NewsPlugin: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">📰</div>
-          <div>
-            <h1 className="text-2xl font-bold">Town News Board</h1>
-            <p className="text-primary-100">
-              Local news, posters and updates from journalists, graphic designers, and entrepreneurs
-            </p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        icon={Newspaper}
+        title="Town News Board"
+        subtitle="Local news, posters and updates from journalists, graphic designers, and entrepreneurs"
+      />
 
       {success && (
         <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">{success}</p>
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <Loader2 className="h-10 w-10 animate-spin text-primary-600" />
-        </div>
+        <LoadingState />
       ) : error ? (
         <div className="bg-white rounded-xl shadow-sm border border-red-200 p-8 text-center text-red-700">{error}</div>
       ) : (
         <>
           {!stories.length ? (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-              <Newspaper className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                {hasMore ? 'No stories today' : 'No stories yet'}
-              </h2>
-              <p className="text-gray-600">
-                {hasMore
+            <EmptyState
+              icon={Newspaper}
+              title={hasMore ? 'No stories today' : 'No stories yet'}
+              description={
+                hasMore
                   ? 'No new stories have been published today. Load older posts below.'
-                  : 'No approved stories or posters have been published yet.'}
-              </p>
-            </div>
+                  : 'No approved stories or posters have been published yet.'
+              }
+            />
           ) : (
             <div className="space-y-6">
               {stories.map((story) => {
@@ -196,7 +183,7 @@ const NewsPlugin: React.FC = () => {
           )}
         </>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

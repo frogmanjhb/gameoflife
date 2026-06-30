@@ -7,6 +7,14 @@ import {
   DollarSign, ToggleLeft, ToggleRight, Download, Upload,
   AlertCircle, CheckCircle, Clock, FileText, RefreshCw
 } from 'lucide-react';
+import { ResponsiveTabNav } from '../responsive';
+
+const treasuryTabs = [
+  { id: 'overview', label: 'Overview', mobileLabel: 'Overview', icon: Wallet },
+  { id: 'pay-salaries', label: 'Pay Salaries', mobileLabel: 'Pay', icon: DollarSign },
+  { id: 'tax-report', label: 'Tax Report', mobileLabel: 'Tax', icon: FileText },
+  { id: 'transactions', label: 'Transactions', mobileLabel: 'History', icon: Receipt },
+];
 
 const TreasuryManagement: React.FC = () => {
   const { currentTownClass, refreshTown } = useTown();
@@ -193,14 +201,14 @@ const TreasuryManagement: React.FC = () => {
 
       {/* Treasury Balance Card */}
       {treasuryInfo && (
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-6 text-white">
-          <div className="flex items-center justify-between">
-            <div>
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 sm:p-6 text-white">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="min-w-0">
               <p className="text-emerald-100 text-sm font-medium">Treasury Balance</p>
-              <p className="text-4xl font-bold mt-1">{formatCurrency(treasuryInfo.treasury_balance)}</p>
+              <p className="text-2xl sm:text-4xl font-bold mt-1 break-words">{formatCurrency(treasuryInfo.treasury_balance)}</p>
               <p className="text-emerald-100 text-sm mt-2">Starting balance: R10,000,000</p>
             </div>
-            <div className="text-right">
+            <div className="sm:text-right shrink-0">
               <div className="flex items-center space-x-2 mb-2">
                 <span className="text-emerald-100 text-sm">Tax Collection</span>
                 <button
@@ -226,7 +234,7 @@ const TreasuryManagement: React.FC = () => {
 
       {/* Stats Grid */}
       {treasuryInfo && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 [&>*]:min-w-0">
           <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
             <div className="flex items-center space-x-2 text-green-600 mb-1">
               <TrendingUp className="h-4 w-4" />
@@ -258,33 +266,14 @@ const TreasuryManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="flex space-x-8">
-          {[
-            { id: 'overview', label: 'Overview', icon: Wallet },
-            { id: 'pay-salaries', label: 'Pay Salaries', icon: DollarSign },
-            { id: 'tax-report', label: 'Tax Report', icon: FileText },
-            { id: 'transactions', label: 'Transactions', icon: Receipt }
-          ].map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id as any)}
-              className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                activeTab === id
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
-      </div>
+      <ResponsiveTabNav
+        tabs={treasuryTabs}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as typeof activeTab)}
+      />
 
       {/* Tab Content */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 min-w-0 overflow-hidden">
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
@@ -451,7 +440,7 @@ const TreasuryManagement: React.FC = () => {
                   <CheckCircle className="h-5 w-5" />
                   <span>Payment Complete!</span>
                 </h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 [&>*]:min-w-0">
                   <div>
                     <p className="text-sm text-green-600">Students Paid</p>
                     <p className="text-xl font-bold text-green-800">{lastPaymentResult.paid_count}</p>
@@ -522,7 +511,7 @@ const TreasuryManagement: React.FC = () => {
             </div>
 
             {/* Summary Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 [&>*]:min-w-0">
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-sm text-gray-600">Total Gross</p>
                 <p className="text-xl font-bold text-gray-900">{formatCurrency(taxReport.summary.total_gross)}</p>

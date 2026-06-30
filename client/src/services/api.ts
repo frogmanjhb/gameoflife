@@ -868,6 +868,17 @@ export const transactionsApi = {
   getHistory: (): Promise<{ data: import('../types').Transaction[] }> => {
     return api.get('/transactions/history');
   },
+  getBankStats: (params?: { class?: string; username?: string }): Promise<{ data: BankStats }> => {
+    return api.get('/transactions/bank-stats', { params });
+  },
+  getHistoryPage: (params: {
+    limit: number;
+    offset: number;
+    class?: string;
+    username?: string;
+  }): Promise<{ data: PaginatedTransactionHistory }> => {
+    return api.get('/transactions/history', { params });
+  },
   approveAllPendingTransfers: (): Promise<{
     data: { message: string; approved: number; failed: { id: number; error: string }[] };
   }> => {
@@ -1145,7 +1156,25 @@ export const tendersApi = {
 };
 
 // Teacher: Chartered Accountant client assignments
+export interface BankStats {
+  week_transaction_count: number;
+  pending_loans: number;
+  active_loans: number;
+  pending_fines_bonuses: number;
+  pending_lawsuits: number;
+}
+
+export interface PaginatedTransactionHistory {
+  transactions: import('../types').Transaction[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
 export const studentsApi = {
+  getBankSummary: (): Promise<{ data: import('../types').Student[] }> =>
+    api.get('/students/bank-summary'),
   getMyEarningsProfile: (): Promise<{ data: import('../types').StudentEarningsProfile }> =>
     api.get('/students/me/earnings-profile'),
   getMyTownProfessionals: (): Promise<{ data: import('../types').StudentTownProfessionals }> =>
@@ -1357,6 +1386,8 @@ export const teacherAnalyticsApi = {
     const queryString = queryParams.toString();
     return api.get(`/teacher-analytics/student-logins${queryString ? `?${queryString}` : ''}`);
   },
+  getTodayActivity: (): Promise<{ data: import('../types').TodayActivity }> =>
+    api.get('/teacher-analytics/today-activity'),
 };
 
 export interface ProceedingsStep {

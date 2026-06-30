@@ -7,6 +7,7 @@ import api, { mathGameApi, wordleGameApi } from '../../services/api';
 import { MathGameStatus, WordleGameStatus } from '../../types';
 import ChoresGameModal from '../ChoresGameModal';
 import WordleGameModal from '../WordleGameModal';
+import { ResponsivePage, ResponsivePluginHero, LoadingState } from '../responsive';
 
 const ChoresPlugin: React.FC = () => {
   const { user } = useAuth();
@@ -78,11 +79,7 @@ const ChoresPlugin: React.FC = () => {
   };
 
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!choresPlugin || !choresPlugin.enabled) {
@@ -94,27 +91,21 @@ const ChoresPlugin: React.FC = () => {
     const mathEnabled = (bankSettings.math_chores_enabled ?? 'true').toLowerCase() === 'true';
     const wordleEnabled = (bankSettings.wordle_chores_enabled ?? 'true').toLowerCase() === 'true';
     return (
-      <div className="space-y-6">
-        <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-          <div className="flex items-center space-x-3">
-            <div className="text-4xl">🧹</div>
-            <div>
-              <h1 className="text-2xl font-bold">Chores</h1>
-              <p className="text-primary-100">Chore challenges – students earn money with math and Wordle</p>
-            </div>
-          </div>
-        </div>
+      <ResponsivePage>
+        <ResponsivePluginHero
+          title="Chores"
+          subtitle="Chore challenges – students earn money with math and Wordle"
+          emoji="🧹"
+        />
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
           <p className="text-gray-600 mb-6">
             Students complete chore challenges to earn money. Math chores: solve sums (daily limit in Town Settings). Wordle chores: guess the word in 6 tries (earn money and job XP if they have a job). Enable or disable each type below.
           </p>
           {loadingBank ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
-            </div>
+            <LoadingState className="py-4" />
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border border-gray-200 rounded-lg">
                 <div>
                   <p className="font-medium text-gray-900">Math Chores</p>
                   <p className="text-sm text-gray-500">Students can play math chore challenges to earn money</p>
@@ -132,7 +123,7 @@ const ChoresPlugin: React.FC = () => {
                   )}
                 </button>
               </div>
-              <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border border-gray-200 rounded-lg">
                 <div>
                   <p className="font-medium text-gray-900">Wordle Chores</p>
                   <p className="text-sm text-gray-500">Students can play Wordle chore challenges to earn money (and job XP if they have a job)</p>
@@ -190,33 +181,25 @@ const ChoresPlugin: React.FC = () => {
           onGameComplete={() => {}}
           testMode
         />
-      </div>
+      </ResponsivePage>
     );
   }
 
   // Student view
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   const mathEnabled = mathGameStatus?.enabled !== false;
   const wordleEnabled = wordleGameStatus?.enabled !== false;
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">🧹</div>
-          <div>
-            <h1 className="text-2xl font-bold">Chores</h1>
-            <p className="text-primary-100">Solve math sums or Wordle to complete chores and earn money!</p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="Chores"
+        subtitle="Solve math sums or Wordle to complete chores and earn money!"
+        emoji="🧹"
+      />
 
       {mathEnabled && (
         <>
@@ -296,7 +279,7 @@ const ChoresPlugin: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Math Games</h3>
               <div className="space-y-3">
                 {mathGameStatus.recent_sessions.slice(0, 5).map((session: any) => (
-                  <div key={session.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div key={session.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <div className={`w-3 h-3 rounded-full ${
                         session.difficulty === 'easy' ? 'bg-green-500' :
@@ -384,7 +367,7 @@ const ChoresPlugin: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Wordle Games</h3>
               <div className="space-y-3">
                 {wordleGameStatus.recent_sessions.slice(0, 5).map((session: any) => (
-                  <div key={session.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div key={session.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-gray-50 rounded-lg">
                     <div>
                       <p className="font-medium text-gray-900">
                         {session.status === 'won' ? 'Won' : 'Lost'} in {session.guesses_count} guess(es)
@@ -423,7 +406,7 @@ const ChoresPlugin: React.FC = () => {
         onClose={() => setIsWordleOpen(false)}
         onGameComplete={fetchData}
       />
-    </div>
+    </ResponsivePage>
   );
 };
 

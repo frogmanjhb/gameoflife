@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { ScrollText, Save, Edit2, CheckCircle } from 'lucide-react';
 import api from '../../services/api';
+import { ResponsivePage, ResponsivePluginHero, LoadingState } from '../responsive';
 
 const APP_RULES = [
   { title: '1. Protect Your Account', items: ['Keep your password private.', 'Do not use someone else\'s account.', 'Tell a teacher if something looks wrong.'] },
@@ -116,11 +117,7 @@ const TownRulesPlugin: React.FC = () => {
 
   // Wait for plugins to load before checking
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!townRulesPlugin || !townRulesPlugin.enabled) {
@@ -130,16 +127,12 @@ const TownRulesPlugin: React.FC = () => {
   const isTeacher = user?.role === 'teacher';
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">🏛</div>
-          <div>
-            <h1 className="text-2xl font-bold">CivicLab – App Rules</h1>
-            <p className="text-primary-100">These rules help our town run fairly and smoothly.</p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        icon={ScrollText}
+        title="CivicLab – App Rules"
+        subtitle="These rules help our town run fairly and smoothly."
+      />
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
@@ -211,10 +204,7 @@ const TownRulesPlugin: React.FC = () => {
             Town Rules – {currentTownClass}
           </h2>
           {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mx-auto mb-2" />
-              <p className="text-gray-600">Loading town rules...</p>
-            </div>
+            <LoadingState message="Loading town rules…" />
           ) : (
             <>
               {isTeacher && !editing && (
@@ -237,7 +227,7 @@ const TownRulesPlugin: React.FC = () => {
                     placeholder="Enter town rules here..."
                     className="w-full h-64 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
                   />
-                  <div className="flex justify-end space-x-3">
+                  <div className="flex flex-col sm:flex-row justify-end gap-3">
                     <button
                       onClick={handleCancel}
                       disabled={saving}
@@ -294,7 +284,7 @@ const TownRulesPlugin: React.FC = () => {
           )}
         </div>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

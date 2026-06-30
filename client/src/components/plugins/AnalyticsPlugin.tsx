@@ -5,6 +5,7 @@ import { Navigate } from 'react-router-dom';
 import { BarChart3, TrendingUp, PieChart, Users, Calendar } from 'lucide-react';
 import { teacherAnalyticsApi } from '../../services/api';
 import { EngagementAnalytics, EngagementTimeSeries, EngagementByClass, EngagementByStudent, StudentLoginRow } from '../../types';
+import { ResponsivePage, ResponsivePluginHero, LoadingState, ResponsiveTabNav } from '../responsive';
 
 const AnalyticsPlugin: React.FC = () => {
   const { user } = useAuth();
@@ -303,11 +304,7 @@ const AnalyticsPlugin: React.FC = () => {
   };
 
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!analyticsPlugin || !analyticsPlugin.enabled) {
@@ -340,26 +337,22 @@ const AnalyticsPlugin: React.FC = () => {
     { label: 'Purchases', value: analytics.summary.total_purchases, color: '#ef4444' }
   ].filter(d => d.value > 0) : [];
 
-  const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: 'overview', label: 'Overview', icon: <BarChart3 className="h-4 w-4" /> },
-    { id: 'engagement', label: 'Engagement over time', icon: <TrendingUp className="h-4 w-4" /> },
-    { id: 'byclass', label: 'By class', icon: <BarChart3 className="h-4 w-4" /> },
-    { id: 'bystudent', label: 'By student', icon: <Users className="h-4 w-4" /> },
-    { id: 'logins', label: 'Student total logins', icon: <Users className="h-4 w-4" /> }
+  const analyticsTabs = [
+    { id: 'overview' as const, label: 'Overview', icon: BarChart3 },
+    { id: 'engagement' as const, label: 'Engagement over time', icon: TrendingUp },
+    { id: 'byclass' as const, label: 'By class', icon: BarChart3 },
+    { id: 'bystudent' as const, label: 'By student', icon: Users },
+    { id: 'logins' as const, label: 'Student total logins', icon: Users },
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">📊</div>
-          <div>
-            <h1 className="text-2xl font-bold">Analytics</h1>
-            <p className="text-indigo-100">Engagement data visualization for teachers</p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="Analytics"
+        subtitle="Engagement data visualization for teachers"
+        emoji="📊"
+        gradientClass="bg-gradient-to-r from-indigo-600 to-purple-700 text-white"
+      />
 
       {/* Single filter bar - applies to all tabs */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
@@ -402,25 +395,11 @@ const AnalyticsPlugin: React.FC = () => {
 
       {/* Tabs */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="border-b border-gray-200">
-          <nav className="flex flex-wrap gap-0" aria-label="Tabs">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-4 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab.icon}
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
+        <ResponsiveTabNav
+          tabs={analyticsTabs}
+          activeTab={activeTab}
+          onTabChange={(id) => setActiveTab(id as TabId)}
+        />
 
         <div className="p-6">
           {error && (
@@ -430,15 +409,13 @@ const AnalyticsPlugin: React.FC = () => {
           )}
 
           {loading && activeTab !== 'logins' ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
-            </div>
+            <LoadingState />
           ) : (
             <>
               {/* Tab: Overview */}
               {activeTab === 'overview' && analytics && (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
               <div className="flex items-center space-x-2 text-gray-500 mb-1">
                 <Users className="h-4 w-4" />
@@ -472,7 +449,7 @@ const AnalyticsPlugin: React.FC = () => {
               <p className="text-xs text-gray-500">{analytics.summary.total_purchases_users} users</p>
             </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                       <div className="flex items-center space-x-2 text-gray-500 mb-1">
                         <TrendingUp className="h-4 w-4" />
@@ -642,9 +619,7 @@ const AnalyticsPlugin: React.FC = () => {
                     <div className="text-sm text-red-600">{studentLoginsError}</div>
                   )}
                   {studentLoginsLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
-                    </div>
+                    <LoadingState className="py-12" />
                   ) : studentLogins.length === 0 ? (
                     <div className="text-center py-8 text-gray-500 border border-dashed border-gray-300 rounded-lg">
                       No student login data for this period.
@@ -683,7 +658,7 @@ const AnalyticsPlugin: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
+    </ResponsivePage>
   );
 };
 

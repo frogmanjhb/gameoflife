@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, Menu, X, Home, UserCircle } from 'lucide-react';
+import { LogOut, Menu, Home, UserCircle } from 'lucide-react';
 import ProfileBadge from './ProfileBadge';
 import StudentIllnessOverlay from './StudentIllnessOverlay';
 import StudentCyberAttackOverlay from './StudentCyberAttackOverlay';
 import SickNoteModal from './SickNoteModal';
 import StudentLoginPopupModal from './StudentLoginPopupModal';
+import { MobileDrawer } from './responsive';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -35,8 +36,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     return location.pathname.startsWith(path);
   };
 
+  const hubTitle =
+    user?.role === 'teacher' || user?.role === 'super_admin'
+      ? 'Civic Lab - Town Hub Control Center'
+      : 'Civic Lab - Town Hub';
+
+  const hubSubtitle =
+    user?.role === 'teacher' || user?.role === 'super_admin'
+      ? undefined
+      : 'Your virtual town dashboard';
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* App chrome — stays above teacher tool sheets on mobile */}
+      <div id="app-chrome-top" className="sticky top-0 z-50">
       {isImpersonating && user && (
         <div className="bg-amber-500 text-amber-950 px-4 py-2">
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-sm font-medium">
@@ -58,13 +71,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <div className="bg-primary-600 p-2 rounded-lg">
-                <img src="/logo.png" alt="Town Hub" className="h-6 w-6" />
+            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+              <div className="bg-primary-600 rounded-lg shrink-0 flex h-10 w-10 items-center justify-center p-1">
+                <img
+                  src="/logo.png"
+                  alt="Civic Lab"
+                  className="max-h-full max-w-full w-auto h-auto object-contain"
+                />
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Town Hub</h1>
-                <p className="text-sm text-gray-500">CivicLab Control Center</p>
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight line-clamp-2 sm:line-clamp-1 sm:truncate">
+                  {hubTitle}
+                </h1>
+                {hubSubtitle && (
+                  <p className="text-xs sm:text-sm text-gray-500 truncate hidden sm:block">{hubSubtitle}</p>
+                )}
               </div>
             </div>
             
@@ -125,66 +146,64 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
+              className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileMenuOpen}
             >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              <Menu className="h-6 w-6" />
             </button>
           </div>
         </div>
 
-        {/* Mobile Navigation */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200">
-            <div className="px-4 py-3 space-y-1">
-              {navigation.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-base font-medium transition-colors ${
-                      isActive(item.href)
-                        ? 'bg-primary-100 text-primary-700'
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
-              {user && (
-                <>
-                  <div className="border-t border-gray-200 my-2"></div>
-                  <div className="px-4 py-2 text-sm text-gray-600">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <ProfileBadge user={user} size="md" />
-                      <span className="font-medium text-gray-900">{user.username}</span>
-                    </div>
-                    <span className="px-2 py-1 bg-primary-100 text-primary-800 rounded-full text-xs font-medium inline-block">
-                      {user.role === 'teacher' ? '👨‍🏫 Teacher' : '🎓 Student'}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                      setMobileMenuOpen(false);
-                    }}
-                    className="flex items-center space-x-2 w-full px-4 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-gray-100"
-                  >
-                    <LogOut className="h-5 w-5" />
-                    <span>Logout</span>
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        )}
+        <MobileDrawer open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} title="Menu">
+          {navigation.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-colors min-h-[44px] ${
+                  isActive(item.href)
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                }`}
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                <span>{item.name}</span>
+              </Link>
+            );
+          })}
+          {user && (
+            <>
+              <div className="border-t border-gray-200 my-2" />
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-3 mb-2">
+                  <ProfileBadge user={user} size="md" />
+                  <span className="font-medium text-gray-900">{user.username}</span>
+                </div>
+                <span className="px-2 py-1 bg-primary-100 text-primary-800 rounded-full text-xs font-medium inline-block">
+                  {user.role === 'teacher' ? '👨‍🏫 Teacher' : '🎓 Student'}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setMobileMenuOpen(false);
+                }}
+                className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-base font-medium text-gray-600 hover:bg-gray-100 min-h-[44px]"
+              >
+                <LogOut className="h-5 w-5 shrink-0" />
+                <span>Logout</span>
+              </button>
+            </>
+          )}
+        </MobileDrawer>
       </header>
+      </div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 relative min-w-0 overflow-x-hidden">
         {children}
 
         {user?.role === 'student' && !user?.account_frozen && <StudentIllnessOverlay />}

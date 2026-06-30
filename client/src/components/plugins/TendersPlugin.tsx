@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTown } from '../../contexts/TownContext';
 import { tendersApi } from '../../services/api';
 import { Tender, TenderApplication, TenderApplicationStatus } from '../../types';
+import { ResponsivePage, ResponsivePluginHero, LoadingState, EmptyState } from '../responsive';
 
 const TendersPlugin: React.FC = () => {
   const { plugins, loading: pluginsLoading } = usePlugins();
@@ -68,11 +69,7 @@ const TendersPlugin: React.FC = () => {
 
   // Wait for plugins to load before checking
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!tendersPlugin || !tendersPlugin.enabled) {
@@ -214,28 +211,20 @@ const TendersPlugin: React.FC = () => {
   }, [tenders]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">📑</div>
-          <div>
-            <h1 className="text-2xl font-bold">Tenders</h1>
-            <p className="text-primary-100">
-              {isTeacher
-                ? `Manage building tenders for ${currentTownClass || 'your selected town'}`
-                : 'Apply for building jobs that need to happen on the game board'}
-            </p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="Tenders"
+        subtitle={
+          isTeacher
+            ? `Manage building tenders for ${currentTownClass || 'your selected town'}`
+            : 'Apply for building jobs that need to happen on the game board'
+        }
+        emoji="📑"
+      />
 
       {(error || success) && (
         <div className="space-y-3">
@@ -256,7 +245,7 @@ const TendersPlugin: React.FC = () => {
 
       {/* Teacher actions */}
       {isTeacher && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <p className="font-semibold text-gray-900">Create a new tender</p>
             <p className="text-sm text-gray-500">
@@ -276,13 +265,11 @@ const TendersPlugin: React.FC = () => {
 
       {/* Tender list */}
       {sortedTenders.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-          <ClipboardList className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">No tenders yet</h2>
-          <p className="text-gray-600">
-            {isTeacher ? 'Create the first tender for this town.' : 'Check back later for new building jobs.'}
-          </p>
-        </div>
+        <EmptyState
+          icon={ClipboardList}
+          title="No tenders yet"
+          description={isTeacher ? 'Create the first tender for this town.' : 'Check back later for new building jobs.'}
+        />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {sortedTenders.map((tender) => (
@@ -412,7 +399,7 @@ const TendersPlugin: React.FC = () => {
                   placeholder="0.00"
                 />
               </div>
-              <div className="flex space-x-3 pt-2">
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <button
                   type="submit"
                   disabled={createLoading || !currentTownClass}
@@ -457,9 +444,7 @@ const TendersPlugin: React.FC = () => {
             </div>
 
             {applicationsLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
-              </div>
+              <LoadingState />
             ) : applications.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
                 <ClipboardList className="h-12 w-12 mx-auto mb-4 text-gray-300" />
@@ -552,7 +537,7 @@ const TendersPlugin: React.FC = () => {
 
             {studentSelectedTender.description && <p className="text-gray-700 whitespace-pre-wrap">{studentSelectedTender.description}</p>}
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex flex-col sm:flex-row gap-3">
               <button
                 onClick={applyToTender}
                 disabled={
@@ -577,7 +562,7 @@ const TendersPlugin: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

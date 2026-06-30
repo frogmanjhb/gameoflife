@@ -8,6 +8,7 @@ import {
   Power, TrendingUp, Users, DollarSign, BarChart3
 } from 'lucide-react';
 import api from '../../services/api';
+import { ResponsivePage, ResponsivePluginHero, LoadingState } from '../responsive';
 
 interface PizzaTimeStatus {
   id: number;
@@ -185,11 +186,7 @@ const PizzaTimePlugin: React.FC = () => {
 
   // Wait for plugins to load
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!pizzaTimePlugin || !pizzaTimePlugin.enabled) {
@@ -197,17 +194,14 @@ const PizzaTimePlugin: React.FC = () => {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   const hasTeacherData = user?.role === 'teacher' ? allClassesStatus : status;
   if (!hasTeacherData && !loading) {
     return (
-      <div className="space-y-6">
+      <ResponsivePage>
+        <ResponsivePluginHero title="Pizza Time" subtitle="Class donation tracker" icon={Pizza} gradientClass="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white" />
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
           <div className="flex items-center space-x-3">
             <AlertCircle className="h-5 w-5 text-red-500" />
@@ -222,7 +216,7 @@ const PizzaTimePlugin: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </ResponsivePage>
     );
   }
 
@@ -230,19 +224,13 @@ const PizzaTimePlugin: React.FC = () => {
   if (user?.role === 'teacher' && allClassesStatus) {
     const classKeys: ('6A' | '6B' | '6C')[] = ['6A', '6B', '6C'];
     return (
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 rounded-2xl p-6 text-white shadow-lg">
-          <div className="flex items-center space-x-4">
-            <div className="bg-white/20 rounded-full p-4">
-              <Pizza className="h-8 w-8" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold">Pizza Time</h1>
-              <p className="text-orange-100">Class donation tracker for pizza party – all classes</p>
-            </div>
-          </div>
-        </div>
+      <ResponsivePage>
+        <ResponsivePluginHero
+          icon={Pizza}
+          title="Pizza Time"
+          subtitle="Class donation tracker for pizza party – all classes"
+          gradientClass="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white"
+        />
 
         {/* Messages */}
         {error && (
@@ -283,7 +271,7 @@ const PizzaTimePlugin: React.FC = () => {
               : [];
             return (
               <div key={className} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                   <h2 className="text-xl font-bold text-gray-800">Class {className}</h2>
                   <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                     classStatus.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
@@ -342,7 +330,7 @@ const PizzaTimePlugin: React.FC = () => {
                 )}
 
                 {/* Controls */}
-                <div className="flex gap-2 mt-auto">
+                <div className="flex flex-col sm:flex-row gap-2 mt-auto">
                   <button
                     onClick={() => handleToggle(className)}
                     disabled={!!toggling}
@@ -407,33 +395,27 @@ const PizzaTimePlugin: React.FC = () => {
             );
           })}
         </div>
-      </div>
+      </ResponsivePage>
     );
   }
 
   // Student View
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="bg-white/20 rounded-full p-4">
-              <Pizza className="h-8 w-8" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold">Pizza Time</h1>
-              <p className="text-orange-100">Help your class reach the pizza party goal!</p>
-            </div>
-          </div>
-          {!status.is_active && (
-            <div className="bg-white/20 rounded-lg px-4 py-2 flex items-center space-x-2">
-              <AlertCircle className="h-5 w-5" />
+    <ResponsivePage>
+      <ResponsivePluginHero
+        icon={Pizza}
+        title="Pizza Time"
+        subtitle="Help your class reach the pizza party goal!"
+        gradientClass="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white"
+        actions={
+          !status.is_active ? (
+            <div className="bg-white/20 rounded-lg px-4 py-2 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 shrink-0" />
               <span className="font-semibold">Pizza Time is not active</span>
             </div>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* Messages */}
       {error && (
@@ -469,7 +451,7 @@ const PizzaTimePlugin: React.FC = () => {
 
       {/* Progress Card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <h2 className="text-xl font-bold text-gray-800">Fund Progress</h2>
           <div className="text-right">
             <div className="text-2xl font-bold text-primary-600">
@@ -549,7 +531,7 @@ const PizzaTimePlugin: React.FC = () => {
               Your balance: <span className="font-semibold text-primary-600">R{account.balance.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
           )}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             {[100, 500, 1000, 2000, 5000].map((amount) => {
               const canAfford = account ? account.balance >= amount : false;
               return (
@@ -577,7 +559,7 @@ const PizzaTimePlugin: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

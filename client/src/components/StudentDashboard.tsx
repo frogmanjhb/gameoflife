@@ -16,6 +16,14 @@ import { Grid, CalendarDays } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, X } from 'lucide-react';
 import { getDisplayJobTitle } from '../utils/jobDisplay';
+import {
+  ResponsivePage,
+  ResponsiveHero,
+  ResponsiveHeroContent,
+  ResponsiveHeroAside,
+  LoadingState,
+  EmptyState,
+} from './responsive';
 
 // Header color themes for student dashboard - changes randomly each login
 const headerColorThemes = [
@@ -125,36 +133,36 @@ const StudentDashboard: React.FC = () => {
   }, [latestTenderAnnouncement, dismissedTenderAnnouncementId]);
 
   if (pluginsLoading || townLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   return (
-    <div className="space-y-6">
+    <ResponsivePage>
       {/* Welcome Banner - color changes randomly each login */}
-      <div className={`${headerTheme.gradient} rounded-2xl p-6`}>
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className={`text-2xl font-bold mb-2 ${headerTheme.text}`}>Welcome, {displayName}! 🎓</h1>
-            <p className={headerTheme.subtext}>
+      <ResponsiveHero className={headerTheme.gradient}>
+        <ResponsiveHeroContent>
+          <div className="min-w-0 flex-1">
+            <h1 className={`text-xl sm:text-2xl font-bold mb-2 break-words ${headerTheme.text}`}>
+              Welcome, {displayName}! 🎓
+            </h1>
+            <p className={`${headerTheme.subtext} break-words`}>
               {currentTown ? `Welcome to ${currentTown.town_name}!` : 'Welcome to Town Hub!'}
               {jobName !== 'No job assigned' && ` • Your job: ${jobName}`}
             </p>
           </div>
           {daysPassed !== null && (
-            <div className="bg-white/20 rounded-xl px-4 py-2 text-right flex-shrink-0">
-              <div className="flex items-center gap-1.5 justify-end">
-                <CalendarDays className={`h-4 w-4 ${headerTheme.subtext}`} />
-                <p className={`text-xs font-medium ${headerTheme.subtext}`}>Game of Life</p>
+            <ResponsiveHeroAside>
+              <div className="bg-white/20 rounded-xl px-4 py-2 min-w-[120px]">
+                <div className="flex items-center gap-1.5">
+                  <CalendarDays className={`h-4 w-4 shrink-0 ${headerTheme.subtext}`} />
+                  <p className={`text-xs font-medium ${headerTheme.subtext}`}>Game of Life</p>
+                </div>
+                <p className={`text-xl sm:text-2xl font-bold ${headerTheme.text}`}>Day {daysPassed}</p>
               </div>
-              <p className={`text-2xl font-bold ${headerTheme.text}`}>Day {daysPassed}</p>
-            </div>
+            </ResponsiveHeroAside>
           )}
-        </div>
-      </div>
+        </ResponsiveHeroContent>
+      </ResponsiveHero>
 
       {/* New Tender Alert (only when Tenders plugin enabled and student can access plugins) */}
       {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/tenders') && showTenderBanner && latestTenderAnnouncement && (
@@ -201,20 +209,19 @@ const StudentDashboard: React.FC = () => {
         </div>
         
         {pluginsToShow.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-            <Grid className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            {user?.role === 'student' && !user?.rules_agreed_at && enabledPlugins.length > 0 ? (
-              <>
-                <p className="text-gray-700 font-medium">You must agree to the app rules before using the town systems.</p>
-                <p className="text-sm text-gray-500 mt-1">Ask your teacher to enable the Rules system so you can agree and get started.</p>
-              </>
-            ) : (
-              <>
-                <p className="text-gray-500">No systems available at this time</p>
-                <p className="text-sm text-gray-400 mt-1">Check back later for updates</p>
-              </>
-            )}
-          </div>
+          <EmptyState
+            icon={Grid}
+            title={
+              user?.role === 'student' && !user?.rules_agreed_at && enabledPlugins.length > 0
+                ? 'You must agree to the app rules before using the town systems.'
+                : 'No systems available at this time'
+            }
+            description={
+              user?.role === 'student' && !user?.rules_agreed_at && enabledPlugins.length > 0
+                ? 'Ask your teacher to enable the Rules system so you can agree and get started.'
+                : 'Check back later for updates'
+            }
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {pluginsToShow.map((plugin) => (
@@ -248,7 +255,7 @@ const StudentDashboard: React.FC = () => {
           <MyTendersCard />
         </div>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

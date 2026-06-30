@@ -1,16 +1,24 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlugins } from '../../contexts/PluginContext';
 import { Navigate } from 'react-router-dom';
 import { 
   Wallet, Send, DollarSign, History, TrendingUp, AlertCircle,
-  Users, User, Search, Plus, Minus, CheckCircle, XCircle, Filter, CreditCard, FileText,
+  Users, CheckCircle, XCircle, CreditCard, FileText,
   ArrowUpRight, ArrowDownLeft, Banknote, ToggleLeft, ToggleRight, Briefcase, Settings, Clock, Scale
 } from 'lucide-react';
-import api, { treasuryApi, policeFinesBonusesApi, PoliceFineBonus, transactionsApi, lawsuitsApi, StudentLawsuit } from '../../services/api';
+import api, { treasuryApi, policeFinesBonusesApi, PoliceFineBonus, transactionsApi, lawsuitsApi, StudentLawsuit, studentsApi, BankStats } from '../../services/api';
 import { Transaction, Loan, Student } from '../../types';
 import TransferForm from '../TransferForm';
 import LoanForm from '../LoanForm';
+import {
+  ResponsivePage,
+  ResponsiveGrid,
+  ResponsiveStatItem,
+  ResponsivePluginHero,
+  ResponsiveTabNav,
+  LoadingState,
+} from '../responsive';
 
 // ============================================
 // TEACHER BANK VIEW COMPONENT
@@ -35,6 +43,8 @@ interface PendingTransfer {
   created_at: string;
 }
 
+const TRANSACTION_PAGE_SIZE = 100;
+
 const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
   const { plugins } = usePlugins();
   const courtEnabled = plugins.some((p) => p.route_path === '/court' && p.enabled);
@@ -50,18 +60,6 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
   const [lawsuitDenialDraft, setLawsuitDenialDraft] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   
-  // Filters
-  const [selectedClass, setSelectedClass] = useState<string>('all');
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  
-  // Forms
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showBulkPaymentModal, setShowBulkPaymentModal] = useState(false);
-  const [paymentType, setPaymentType] = useState<'deposit' | 'withdraw'>('deposit');
-  const [formData, setFormData] = useState({ amount: '', description: '' });
-  const [bulkFormData, setBulkFormData] = useState({ amount: '', description: '' });
-  
   // Loan approval
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [showLoanModal, setShowLoanModal] = useState(false);
@@ -75,42 +73,24 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
   const [bankSettings, setBankSettings] = useState<Record<string, string>>({});
   const [unemployedCount, setUnemployedCount] = useState(0);
   const [settingsLoading, setSettingsLoading] = useState(false);
-
-  useEffect(() => {
-    fetchData();
-    fetchBankSettings();
-  }, [courtEnabled]);
-
-  useEffect(() => {
-    const onHistoryCleared = () => {
-      fetchData();
-    };
-    window.addEventListener('transaction-history-cleared', onHistoryCleared);
-    return () => window.removeEventListener('transaction-history-cleared', onHistoryCleared);
-  }, [courtEnabled]);
-
-  const fetchData = async () => {
-    try {
-      const [studentsRes, loansRes, transactionsRes, pendingTransfersRes, pfbRes, lawsuitsRes] = await Promise.all([
-        api.get('/students'),
-        api.get('/loans'),
-        api.get('/transactions/history'),
-        api.get('/transactions/pending-transfers'),
-        policeFinesBonusesApi.getPending().catch(() => ({ data: [] })),
-        courtEnabled ? lawsuitsApi.getPendingTeacher().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
-      ]);
-      setStudents(studentsRes.data);
-      setLoans(loansRes.data);
-      setTransactions(transactionsRes.data);
-      setPendingTransfers(pendingTransfersRes.data);
-      setPendingFinesBonuses(pfbRes.data);
-      setPendingLawsuits(lawsuitsRes.data);
-    } catch (error) {
-      console.error('Failed to fetch data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [bankStats, setBankStats] = useState<BankStats>({
+    week_transaction_count: 0,
+    pending_loans: 0,
+    active_loans: 0,
+    pending_fines_bonuses: 0,
+    pending_lawsuits: 0,
+  });
+  const [loansLoaded, setLoansLoaded] = useState(false);
+  const [loansLoading, setLoansLoading] = useState(false);
+  const [transactionsLoaded, setTransactionsLoaded] = useState(false);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionTotal, setTransactionTotal] = useState(0);
+  const [transactionOffset, setTransactionOffset] = useState(0);
+  const [transactionHasMore, setTransactionHasMore] = useState(false);
+  const [finesBonusesLoaded, setFinesBonusesLoaded] = useState(false);
+  const [finesBonusesLoading, setFinesBonusesLoading] = useState(false);
+  const [lawsuitsLoaded, setLawsuitsLoaded] = useState(false);
+  const [lawsuitsLoading, setLawsuitsLoading] = useState(false);
 
   const fetchBankSettings = async () => {
     try {
@@ -124,6 +104,145 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
       console.error('Failed to fetch bank settings:', error);
     }
   };
+
+  const fetchLoans = useCallback(async () => {
+    setLoansLoading(true);
+    try {
+      const loansRes = await api.get('/loans');
+      setLoans(loansRes.data);
+      setLoansLoaded(true);
+    } catch (error) {
+      console.error('Failed to fetch loans:', error);
+    } finally {
+      setLoansLoading(false);
+    }
+  }, []);
+
+  const fetchTransactions = useCallback(async (offset: number, replace: boolean) => {
+    setTransactionsLoading(true);
+    try {
+      const res = await transactionsApi.getHistoryPage({
+        limit: TRANSACTION_PAGE_SIZE,
+        offset,
+      });
+      setTransactionTotal(res.data.total);
+      setTransactionHasMore(res.data.has_more);
+      setTransactionOffset(offset);
+      setTransactions((prev) => (replace ? res.data.transactions : [...prev, ...res.data.transactions]));
+      setTransactionsLoaded(true);
+    } catch (error) {
+      console.error('Failed to fetch transactions:', error);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }, []);
+
+  const fetchFinesBonuses = useCallback(async () => {
+    setFinesBonusesLoading(true);
+    try {
+      const pfbRes = await policeFinesBonusesApi.getPending().catch(() => ({ data: [] }));
+      setPendingFinesBonuses(pfbRes.data);
+      setFinesBonusesLoaded(true);
+    } catch (error) {
+      console.error('Failed to fetch fines and bonuses:', error);
+    } finally {
+      setFinesBonusesLoading(false);
+    }
+  }, []);
+
+  const fetchLawsuits = useCallback(async () => {
+    setLawsuitsLoading(true);
+    try {
+      const lawsuitsRes = await lawsuitsApi.getPendingTeacher().catch(() => ({ data: [] }));
+      setPendingLawsuits(lawsuitsRes.data);
+      setLawsuitsLoaded(true);
+    } catch (error) {
+      console.error('Failed to fetch lawsuits:', error);
+    } finally {
+      setLawsuitsLoading(false);
+    }
+  }, []);
+
+  const fetchInitialData = useCallback(async () => {
+    try {
+      const [studentsRes, pendingTransfersRes, statsRes, settingsRes, unemployedRes] = await Promise.all([
+        studentsApi.getBankSummary(),
+        api.get('/transactions/pending-transfers'),
+        transactionsApi.getBankStats(),
+        api.get('/transactions/bank-settings'),
+        api.get('/transactions/unemployed-students'),
+      ]);
+      setStudents(studentsRes.data);
+      setPendingTransfers(pendingTransfersRes.data);
+      setBankStats(statsRes.data);
+      setBankSettings(settingsRes.data);
+      setUnemployedCount(unemployedRes.data.count);
+    } catch (error) {
+      console.error('Failed to fetch bank data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const refreshAfterMutation = useCallback(async () => {
+    try {
+      const [studentsRes, pendingTransfersRes, statsRes] = await Promise.all([
+        studentsApi.getBankSummary(),
+        api.get('/transactions/pending-transfers'),
+        transactionsApi.getBankStats(),
+      ]);
+      setStudents(studentsRes.data);
+      setPendingTransfers(pendingTransfersRes.data);
+      setBankStats(statsRes.data);
+      if (loansLoaded) {
+        const loansRes = await api.get('/loans');
+        setLoans(loansRes.data);
+      }
+      if (transactionsLoaded) {
+        await fetchTransactions(0, true);
+      }
+      if (finesBonusesLoaded) {
+        const pfbRes = await policeFinesBonusesApi.getPending().catch(() => ({ data: [] }));
+        setPendingFinesBonuses(pfbRes.data);
+      }
+      if (lawsuitsLoaded && courtEnabled) {
+        const lawsuitsRes = await lawsuitsApi.getPendingTeacher().catch(() => ({ data: [] }));
+        setPendingLawsuits(lawsuitsRes.data);
+      }
+      await fetchBankSettings();
+    } catch (error) {
+      console.error('Failed to refresh bank data:', error);
+    }
+  }, [loansLoaded, transactionsLoaded, finesBonusesLoaded, lawsuitsLoaded, courtEnabled, fetchTransactions]);
+
+  useEffect(() => {
+    setLoading(true);
+    setLoansLoaded(false);
+    setTransactionsLoaded(false);
+    setFinesBonusesLoaded(false);
+    setLawsuitsLoaded(false);
+    fetchInitialData();
+  }, [courtEnabled, fetchInitialData]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (activeTab === 'loans' && !loansLoaded && !loansLoading) fetchLoans();
+    if (activeTab === 'fines-bonuses' && !finesBonusesLoaded && !finesBonusesLoading) fetchFinesBonuses();
+    if (activeTab === 'lawsuits' && courtEnabled && !lawsuitsLoaded && !lawsuitsLoading) fetchLawsuits();
+  }, [activeTab, loading, courtEnabled, loansLoaded, loansLoading, finesBonusesLoaded, finesBonusesLoading, lawsuitsLoaded, lawsuitsLoading, fetchLoans, fetchFinesBonuses, fetchLawsuits]);
+
+  useEffect(() => {
+    if (loading || activeTab !== 'activity') return;
+    fetchTransactions(0, true);
+  }, [activeTab, loading, fetchTransactions]);
+
+  useEffect(() => {
+    const onHistoryCleared = () => {
+      refreshAfterMutation();
+    };
+    window.addEventListener('transaction-history-cleared', onHistoryCleared);
+    return () => window.removeEventListener('transaction-history-cleared', onHistoryCleared);
+  }, [refreshAfterMutation]);
 
   const toggleBasicSalary = async () => {
     setSettingsLoading(true);
@@ -146,7 +265,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
     try {
       const response = await api.post('/transactions/pay-basic-salary', {});
       setSuccess(`Paid unemployment fund to ${response.data.updated_count} students (R${response.data.amount} each)`);
-      fetchData();
+      refreshAfterMutation();
       fetchBankSettings();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to pay unemployment fund');
@@ -160,9 +279,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
     setError(''); setSuccess('');
     try {
       const townClasses = ['6A', '6B', '6C'];
-      const classesToPay = selectedClass === 'all'
-        ? townClasses.filter((c) => (studentsByClass.grouped[c] || []).some((s) => s.job_id))
-        : [selectedClass];
+      const classesToPay = townClasses.filter((c) => (studentsByClass.grouped[c] || []).some((s) => s.job_id));
       if (classesToPay.length === 0) {
         setError('No employed students to pay');
         return;
@@ -175,7 +292,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
         totalCount += result.data.paid_count ?? 0;
       }
       setSuccess(`Paid salaries to ${totalCount} employed students (R${totalNet.toFixed(2)} total)`);
-      fetchData();
+      refreshAfterMutation();
       fetchBankSettings();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to pay employed salaries');
@@ -203,69 +320,24 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
   }, [students]);
 
   const employedCount = useMemo(() => {
-    const relevant = selectedClass === 'all' ? students : (studentsByClass.grouped[selectedClass] || []);
-    return relevant.filter((s) => s.job_id).length;
-  }, [students, selectedClass, studentsByClass]);
-
-  const filteredStudents = useMemo(() => {
-    let filtered = selectedClass === 'all' ? students : (studentsByClass.grouped[selectedClass] || []);
-    if (searchTerm) {
-      filtered = filtered.filter(s => 
-        s.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (s.first_name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (s.last_name?.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
-    }
-    return filtered;
-  }, [students, selectedClass, searchTerm, studentsByClass]);
-
-  const filteredLoans = useMemo(() => {
-    let filtered = loans;
-    if (selectedClass !== 'all') {
-      const classStudentIds = (studentsByClass.grouped[selectedClass] || []).map(s => s.id);
-      filtered = filtered.filter(l => {
-        const student = students.find(s => s.username === l.borrower_username);
-        return student && classStudentIds.includes(student.id);
-      });
-    }
-    if (selectedStudent) {
-      filtered = filtered.filter(l => l.borrower_username === selectedStudent.username);
-    }
-    return filtered;
-  }, [loans, selectedClass, selectedStudent, studentsByClass, students]);
-
-  const filteredTransactions = useMemo(() => {
-    let filtered = transactions;
-    if (selectedClass !== 'all') {
-      const classUsernames = (studentsByClass.grouped[selectedClass] || []).map(s => s.username);
-      filtered = filtered.filter(t => 
-        classUsernames.includes(t.from_username || '') || classUsernames.includes(t.to_username || '')
-      );
-    }
-    if (selectedStudent) {
-      filtered = filtered.filter(t => 
-        t.from_username === selectedStudent.username || t.to_username === selectedStudent.username
-      );
-    }
-    return filtered;
-  }, [transactions, selectedClass, selectedStudent, studentsByClass]);
+    return students.filter((s) => s.job_id).length;
+  }, [students]);
 
   // Stats
   const stats = useMemo(() => {
-    const relevantStudents = selectedClass === 'all' ? students : (studentsByClass.grouped[selectedClass] || []);
-    const totalBalance = relevantStudents.reduce((sum, s) => sum + (Number(s.balance) || 0), 0);
-    const pendingLoans = filteredLoans.filter(l => l.status === 'pending').length;
-    const activeLoans = filteredLoans.filter(l => l.status === 'active').length;
+    const totalBalance = students.reduce((sum, s) => sum + (Number(s.balance) || 0), 0);
     const pendingTransfersCount = pendingTransfers.filter(pt => pt.status === 'pending').length;
-    const pendingFinesBonusesCount = pendingFinesBonuses.length;
-    const pendingLawsuitsCount = pendingLawsuits.length;
-    const recentTransactions = filteredTransactions.filter(t => {
-      const date = new Date(t.created_at);
-      const now = new Date();
-      return (now.getTime() - date.getTime()) < 7 * 24 * 60 * 60 * 1000; // Last 7 days
-    }).length;
-    return { totalBalance, pendingLoans, activeLoans, pendingTransfersCount, pendingFinesBonusesCount, pendingLawsuitsCount, recentTransactions, studentCount: relevantStudents.length };
-  }, [students, filteredLoans, filteredTransactions, selectedClass, studentsByClass, pendingTransfers, pendingFinesBonuses, pendingLawsuits]);
+    return {
+      totalBalance,
+      pendingLoans: bankStats.pending_loans,
+      activeLoans: bankStats.active_loans,
+      pendingTransfersCount,
+      pendingFinesBonusesCount: bankStats.pending_fines_bonuses,
+      pendingLawsuitsCount: bankStats.pending_lawsuits,
+      recentTransactions: bankStats.week_transaction_count,
+      studentCount: students.length,
+    };
+  }, [students, bankStats, pendingTransfers]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount);
@@ -278,55 +350,6 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
   };
 
   // Handlers
-  const handlePayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedStudent) return;
-    setError(''); setSuccess(''); setActionLoading(true);
-
-    try {
-      const endpoint = paymentType === 'deposit' ? '/transactions/deposit' : '/transactions/withdraw';
-      await api.post(endpoint, {
-        username: selectedStudent.username,
-        amount: parseFloat(formData.amount),
-        description: formData.description || `${paymentType === 'deposit' ? 'Payment' : 'Withdrawal'} by teacher`
-      });
-      setSuccess(`${paymentType === 'deposit' ? 'Payment' : 'Withdrawal'} successful!`);
-      setFormData({ amount: '', description: '' });
-      setShowPaymentModal(false);
-      fetchData();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Operation failed');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleBulkPayment = async (e: React.FormEvent, type: 'deposit' | 'withdraw') => {
-    e.preventDefault();
-    if (selectedClass === 'all') {
-      setError('Please select a specific class for bulk payments');
-      return;
-    }
-    setError(''); setSuccess(''); setActionLoading(true);
-
-    try {
-      const endpoint = type === 'deposit' ? '/transactions/bulk-payment' : '/transactions/bulk-removal';
-      await api.post(endpoint, {
-        class_name: selectedClass,
-        amount: parseFloat(bulkFormData.amount),
-        description: bulkFormData.description || `Bulk ${type === 'deposit' ? 'payment' : 'withdrawal'} by teacher`
-      });
-      setSuccess(`Bulk ${type === 'deposit' ? 'payment' : 'withdrawal'} successful!`);
-      setBulkFormData({ amount: '', description: '' });
-      setShowBulkPaymentModal(false);
-      fetchData();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Bulk operation failed');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const handleLoanApproval = async (loanId: number, approved: boolean) => {
     setError(''); setSuccess(''); setActionLoading(true);
     try {
@@ -334,7 +357,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
       setSuccess(`Loan ${approved ? 'approved' : 'denied'} successfully!`);
       setShowLoanModal(false);
       setSelectedLoan(null);
-      fetchData();
+      refreshAfterMutation();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update loan status');
     } finally {
@@ -347,7 +370,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
     try {
       await api.post(`/loans/activate/${loanId}`);
       setSuccess('Loan activated successfully!');
-      fetchData();
+      refreshAfterMutation();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to activate loan');
     } finally {
@@ -386,152 +409,83 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
+  const teacherTabs = [
+    { id: 'payments', label: 'Payments', icon: Banknote },
+    { id: 'loans', label: 'Loans', icon: CreditCard },
+    { id: 'transfers', label: 'Pending Transfers', icon: Send, badge: stats.pendingTransfersCount },
+    { id: 'fines-bonuses', label: 'Fines & Bonuses', icon: AlertCircle, badge: stats.pendingFinesBonusesCount },
+    ...(courtEnabled ? [{ id: 'lawsuits' as const, label: 'Lawsuits', icon: Scale, badge: stats.pendingLawsuitsCount }] : []),
+    { id: 'activity', label: 'Activity', icon: History },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">🏦</div>
-          <div>
-            <h1 className="text-2xl font-bold">Bank Management</h1>
-            <p className="text-emerald-100">Teacher Administration Panel</p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="Bank Management"
+        subtitle="Teacher Administration Panel"
+        emoji="🏦"
+        gradientClass="bg-gradient-to-r from-emerald-600 to-teal-700 text-white"
+      />
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center space-x-2 text-gray-500 mb-1">
-            <Users className="h-4 w-4" />
-            <span className="text-xs font-medium">Students</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{stats.studentCount}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center space-x-2 text-gray-500 mb-1">
-            <Wallet className="h-4 w-4" />
-            <span className="text-xs font-medium">Total Balance</span>
-          </div>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalBalance)}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center space-x-2 text-gray-500 mb-1">
-            <AlertCircle className="h-4 w-4" />
-            <span className="text-xs font-medium">Pending Loans</span>
-          </div>
-          <p className="text-2xl font-bold text-amber-600">{stats.pendingLoans}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center space-x-2 text-gray-500 mb-1">
-            <CreditCard className="h-4 w-4" />
-            <span className="text-xs font-medium">Active Loans</span>
-          </div>
-          <p className="text-2xl font-bold text-blue-600">{stats.activeLoans}</p>
-        </div>
-        <div
-          className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm cursor-pointer hover:border-emerald-300 transition-colors"
-          onClick={() => setActiveTab('transfers')}
-        >
-          <div className="flex items-center space-x-2 text-gray-500 mb-1">
-            <Send className="h-4 w-4" />
-            <span className="text-xs font-medium">Pending Transfers</span>
-          </div>
-          <p className="text-2xl font-bold text-amber-600">{stats.pendingTransfersCount}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center space-x-2 text-gray-500 mb-1">
-            <History className="h-4 w-4" />
-            <span className="text-xs font-medium">This Week</span>
-          </div>
-          <p className="text-2xl font-bold text-purple-600">{stats.recentTransactions}</p>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-        <div className="flex items-center space-x-2 mb-4">
-          <Filter className="h-5 w-5 text-gray-500" />
-          <span className="font-medium text-gray-700">Filters</span>
-        </div>
-        
-        {/* Class Tabs */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button
-            onClick={() => { setSelectedClass('all'); setSelectedStudent(null); }}
-            className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-              selectedClass === 'all' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            All Classes
-          </button>
-          {studentsByClass.sortedClasses.map((className) => (
-            <button
-              key={className}
-              onClick={() => { setSelectedClass(className); setSelectedStudent(null); }}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                selectedClass === className ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {className} ({studentsByClass.grouped[className].length})
-            </button>
-          ))}
-        </div>
-
-        {/* Search and Student Select */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search students..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-4">
+        <ResponsiveGrid preset="stats-6">
+          <div className="col-span-2 md:col-span-1">
+            <ResponsiveStatItem
+              compact
+              label="Total Balance"
+              value={formatCurrency(stats.totalBalance)}
+              icon={Wallet}
+              valueClassName="text-green-600"
             />
           </div>
-          <div className="w-full md:w-64">
-            <select
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              value={selectedStudent?.id || ''}
-              onChange={(e) => {
-                const student = filteredStudents.find(s => s.id === parseInt(e.target.value));
-                setSelectedStudent(student || null);
-              }}
-            >
-              <option value="">All Students</option>
-              {filteredStudents.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.first_name && s.last_name ? `${s.first_name} ${s.last_name}` : s.username}
-                </option>
-              ))}
-            </select>
-          </div>
-          {selectedStudent && (
-            <button
-              onClick={() => setSelectedStudent(null)}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 underline"
-            >
-              Clear Student Filter
-            </button>
-          )}
-        </div>
+          <ResponsiveStatItem compact label="Students" value={stats.studentCount} icon={Users} />
+          <ResponsiveStatItem
+            compact
+            label="Pending Loans"
+            value={stats.pendingLoans}
+            icon={AlertCircle}
+            valueClassName="text-amber-600"
+          />
+          <ResponsiveStatItem
+            compact
+            label="Active Loans"
+            value={stats.activeLoans}
+            icon={CreditCard}
+            valueClassName="text-blue-600"
+          />
+          <button
+            type="button"
+            className="text-left rounded-lg -m-1 p-1 hover:bg-emerald-50 transition-colors min-w-0"
+            onClick={() => setActiveTab('transfers')}
+          >
+            <ResponsiveStatItem
+              compact
+              label="Pending Transfers"
+              value={stats.pendingTransfersCount}
+              icon={Send}
+              valueClassName="text-amber-600"
+            />
+          </button>
+          <ResponsiveStatItem
+            compact
+            label="This Week"
+            value={stats.recentTransactions}
+            icon={History}
+            valueClassName="text-purple-600"
+          />
+        </ResponsiveGrid>
       </div>
 
       {/* Pending Transfers Alert Banner */}
       {stats.pendingTransfersCount > 0 && activeTab !== 'transfers' && (
         <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Send className="h-5 w-5 text-amber-600" />
-              <div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3 min-w-0">
+              <Send className="h-5 w-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-amber-800">
                   {stats.pendingTransfersCount} student transfer{stats.pendingTransfersCount !== 1 ? 's' : ''} waiting for approval
                 </p>
@@ -540,7 +494,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
             </div>
             <button
               onClick={() => setActiveTab('transfers')}
-              className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+              className="px-4 py-2.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium min-h-[44px] w-full sm:w-auto shrink-0"
             >
               Review Now
             </button>
@@ -563,39 +517,15 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
       )}
 
       {/* Main Content Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
-            {[
-              { id: 'payments', label: 'Payments', icon: Banknote },
-              { id: 'loans', label: 'Loans', icon: CreditCard },
-              { id: 'transfers', label: 'Pending Transfers', icon: Send, badge: stats.pendingTransfersCount },
-              { id: 'fines-bonuses', label: 'Fines & Bonuses', icon: AlertCircle, badge: stats.pendingFinesBonusesCount },
-              ...(courtEnabled ? [{ id: 'lawsuits' as const, label: 'Lawsuits', icon: Scale, badge: stats.pendingLawsuitsCount }] : []),
-              { id: 'activity', label: 'Activity', icon: History }
-            ].map(({ id, label, icon: Icon, badge }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id as any)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 relative ${
-                  activeTab === id
-                    ? 'border-emerald-500 text-emerald-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{label}</span>
-                {badge !== undefined && badge > 0 && (
-                  <span className="ml-1 bg-amber-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
-                    {badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </nav>
-        </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <ResponsiveTabNav
+          tabs={teacherTabs}
+          activeTab={activeTab}
+          onTabChange={(id) => setActiveTab(id as typeof activeTab)}
+          variant="emerald"
+        />
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* Payments Tab */}
           {activeTab === 'payments' && (
             <div className="space-y-6">
@@ -679,97 +609,6 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                   </p>
                 )}
               </div>
-
-              {/* Bulk Actions */}
-              {selectedClass !== 'all' && (
-                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-200">
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-                    <Users className="h-5 w-5 mr-2 text-emerald-600" />
-                    Bulk Actions for {selectedClass}
-                  </h3>
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={() => setShowBulkPaymentModal(true)}
-                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Pay All Students</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-                {/* Student Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredStudents.map((student) => {
-                  const isNegativeBalance = Number(student.balance) < 0;
-                  return (
-                  <div
-                    key={student.id}
-                    className={`bg-white rounded-xl border-2 p-4 transition-all ${
-                      isNegativeBalance
-                        ? 'border-red-400 bg-red-50'
-                        : selectedStudent?.id === student.id 
-                          ? 'border-emerald-500 shadow-lg' 
-                          : 'border-gray-200 hover:border-emerald-300 hover:shadow-md'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center space-x-3">
-                        <div className={`p-2 rounded-full ${isNegativeBalance ? 'bg-red-100' : 'bg-emerald-100'}`}>
-                          <User className={`h-5 w-5 ${isNegativeBalance ? 'text-red-600' : 'text-emerald-600'}`} />
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-gray-900">
-                            {student.first_name && student.last_name 
-                              ? `${student.first_name} ${student.last_name}` 
-                              : student.username}
-                          </h4>
-                          <p className="text-sm text-gray-500">@{student.username}</p>
-                        </div>
-                      </div>
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                        {student.class || 'N/A'}
-                      </span>
-                    </div>
-                    
-                    <div className="mb-4">
-                      <p className={`text-2xl font-bold ${isNegativeBalance ? 'text-red-600' : 'text-emerald-600'}`}>
-                        {formatCurrency(student.balance)}
-                      </p>
-                      <p className="text-xs text-gray-500">Account: {student.account_number}</p>
-                      {isNegativeBalance && (
-                        <p className="text-xs text-red-600 font-medium mt-1">⚠️ Negative balance</p>
-                      )}
-                    </div>
-
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => { setSelectedStudent(student); setPaymentType('deposit'); setShowPaymentModal(true); }}
-                        className="flex-1 px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm flex items-center justify-center space-x-1"
-                      >
-                        <Plus className="h-4 w-4" />
-                        <span>Add</span>
-                      </button>
-                      <button
-                        onClick={() => { setSelectedStudent(student); setPaymentType('withdraw'); setShowPaymentModal(true); }}
-                        className="flex-1 px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm flex items-center justify-center space-x-1"
-                      >
-                        <Minus className="h-4 w-4" />
-                        <span>Remove</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-                })}
-              </div>
-
-              {filteredStudents.length === 0 && (
-                <div className="text-center py-12">
-                  <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No students found</p>
-                </div>
-              )}
             </div>
           )}
 
@@ -804,7 +643,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                           } else {
                             setSuccess(message);
                           }
-                          fetchData();
+                          refreshAfterMutation();
                         } catch (err: any) {
                           setError(err.response?.data?.error || 'Failed to approve all transfers');
                         } finally {
@@ -834,7 +673,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                           } else {
                             setSuccess(message);
                           }
-                          fetchData();
+                          refreshAfterMutation();
                         } catch (err: any) {
                           setError(err.response?.data?.error || 'Failed to deny all transfers');
                         } finally {
@@ -885,7 +724,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                             try {
                               await api.post(`/transactions/pending-transfers/${pt.id}/approve`);
                               setSuccess('Transfer approved');
-                              fetchData();
+                              refreshAfterMutation();
                             } catch (err: any) {
                               setError(err.response?.data?.error || 'Failed to approve');
                             } finally {
@@ -904,7 +743,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                             try {
                               await api.post(`/transactions/pending-transfers/${pt.id}/deny`);
                               setSuccess('Transfer denied');
-                              fetchData();
+                              refreshAfterMutation();
                             } catch (err: any) {
                               setError(err.response?.data?.error || 'Failed to deny');
                             } finally {
@@ -928,6 +767,10 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
           {/* Fines & Bonuses Tab */}
           {activeTab === 'fines-bonuses' && (
             <div className="space-y-6">
+              {finesBonusesLoading && !finesBonusesLoaded ? (
+                <LoadingState message="Loading fines and bonuses..." />
+              ) : (
+              <>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">Pending Fines & Bonuses</h3>
                 <p className="text-sm text-gray-600 mb-4">
@@ -1012,7 +855,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                                   ? `Fine of R${Number(pfb.amount).toFixed(2)} applied to ${pfb.target_username}`
                                   : `Bonus of R${Number(pfb.amount).toFixed(2)} awarded to ${pfb.target_username}`
                               );
-                              fetchData();
+                              refreshAfterMutation();
                             } catch (err: any) {
                               setError(err.response?.data?.error || 'Failed to approve');
                             } finally {
@@ -1031,7 +874,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                             try {
                               await policeFinesBonusesApi.deny(pfb.id);
                               setSuccess('Request denied');
-                              fetchData();
+                              refreshAfterMutation();
                             } catch (err: any) {
                               setError(err.response?.data?.error || 'Failed to deny');
                             } finally {
@@ -1049,11 +892,17 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                   ))}
                 </div>
               )}
+              </>
+              )}
             </div>
           )}
 
           {activeTab === 'lawsuits' && courtEnabled && (
             <div className="space-y-6">
+              {lawsuitsLoading && !lawsuitsLoaded ? (
+                <LoadingState message="Loading lawsuits..." />
+              ) : (
+              <>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">Pending Lawsuits</h3>
                 <p className="text-sm text-gray-600 mb-4">
@@ -1128,7 +977,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                                 teacher_initials: lawsuitInitialsDraft[ls.id] || '',
                               });
                               setSuccess('Lawsuit approved');
-                              fetchData();
+                              refreshAfterMutation();
                             } catch (err: unknown) {
                               const e = err as { response?: { data?: { error?: string } } };
                               setError(e.response?.data?.error || 'Failed to approve');
@@ -1158,7 +1007,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                                 denial_reason: lawsuitDenialDraft[ls.id] || 'Denied',
                               });
                               setSuccess('Lawsuit denied');
-                              fetchData();
+                              refreshAfterMutation();
                             } catch (err: unknown) {
                               const e = err as { response?: { data?: { error?: string } } };
                               setError(e.response?.data?.error || 'Failed to deny');
@@ -1174,12 +1023,18 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                   ))}
                 </div>
               )}
+              </>
+              )}
             </div>
           )}
 
           {/* Loans Tab */}
           {activeTab === 'loans' && (
             <div className="space-y-6">
+              {loansLoading && !loansLoaded ? (
+                <LoadingState message="Loading loans..." />
+              ) : (
+              <>
               {/* Process Weekly Payments Button */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 mb-6">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
@@ -1195,7 +1050,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                     try {
                       const response = await api.post('/loans/process-weekly-payments', { force: true });
                       setSuccess(`Processed ${response.data.results?.length || 0} loan payments`);
-                      fetchData();
+                      refreshAfterMutation();
                     } catch (err: any) {
                       setError(err.response?.data?.error || 'Failed to process payments');
                     } finally {
@@ -1210,14 +1065,14 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
               </div>
 
               {/* Pending Loans */}
-              {filteredLoans.filter(l => l.status === 'pending').length > 0 && (
+              {loans.filter(l => l.status === 'pending').length > 0 && (
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                     <AlertCircle className="h-5 w-5 text-amber-600 mr-2" />
-                    Pending Approval ({filteredLoans.filter(l => l.status === 'pending').length})
+                    Pending Approval ({loans.filter(l => l.status === 'pending').length})
                   </h3>
                   <div className="space-y-4">
-                    {filteredLoans.filter(l => l.status === 'pending').map((loan) => (
+                    {loans.filter(l => l.status === 'pending').map((loan) => (
                       <div key={loan.id} className="bg-amber-50 rounded-xl p-4 border border-amber-200">
                         <div className="flex items-start justify-between mb-4">
                           <div>
@@ -1273,14 +1128,14 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
               )}
 
               {/* Active Loans */}
-              {filteredLoans.filter(l => ['active', 'approved'].includes(l.status)).length > 0 && (
+              {loans.filter(l => ['active', 'approved'].includes(l.status)).length > 0 && (
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                     <CreditCard className="h-5 w-5 text-blue-600 mr-2" />
-                    Active Loans ({filteredLoans.filter(l => ['active', 'approved'].includes(l.status)).length})
+                    Active Loans ({loans.filter(l => ['active', 'approved'].includes(l.status)).length})
                   </h3>
                   <div className="space-y-4">
-                    {filteredLoans.filter(l => ['active', 'approved'].includes(l.status)).map((loan) => (
+                    {loans.filter(l => ['active', 'approved'].includes(l.status)).map((loan) => (
                       <div key={loan.id} className="bg-blue-50 rounded-xl p-4 border border-blue-200">
                         <div className="flex items-start justify-between mb-4">
                           <div>
@@ -1342,14 +1197,14 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
               )}
 
               {/* Completed Loans */}
-              {filteredLoans.filter(l => ['paid_off', 'denied'].includes(l.status)).length > 0 && (
+              {loans.filter(l => ['paid_off', 'denied'].includes(l.status)).length > 0 && (
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                     <CheckCircle className="h-5 w-5 text-gray-600 mr-2" />
-                    Completed/Denied ({filteredLoans.filter(l => ['paid_off', 'denied'].includes(l.status)).length})
+                    Completed/Denied ({loans.filter(l => ['paid_off', 'denied'].includes(l.status)).length})
                   </h3>
                   <div className="space-y-4">
-                    {filteredLoans.filter(l => ['paid_off', 'denied'].includes(l.status)).map((loan) => (
+                    {loans.filter(l => ['paid_off', 'denied'].includes(l.status)).map((loan) => (
                       <div key={loan.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                         <div className="flex items-start justify-between mb-3">
                           <div>
@@ -1382,11 +1237,13 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                 </div>
               )}
 
-              {filteredLoans.length === 0 && (
+              {loans.length === 0 && (
                 <div className="text-center py-12">
                   <CreditCard className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                   <p className="text-gray-500">No loan applications found</p>
                 </div>
+              )}
+              </>
               )}
             </div>
           )}
@@ -1396,17 +1253,20 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">Transaction History</h3>
-                <span className="text-sm text-gray-500">{filteredTransactions.length} transactions</span>
+                <span className="text-sm text-gray-500">{transactionTotal} transactions</span>
               </div>
 
-              {filteredTransactions.length === 0 ? (
+              {transactionsLoading && transactions.length === 0 ? (
+                <LoadingState message="Loading transactions..." />
+              ) : transactions.length === 0 ? (
                 <div className="text-center py-12">
                   <History className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                   <p className="text-gray-500">No transactions found</p>
                 </div>
               ) : (
+                <>
                 <div className="space-y-2">
-                  {filteredTransactions.map((transaction) => (
+                  {transactions.map((transaction) => (
                     <div key={transaction.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                       <div className="flex items-center space-x-4">
                         <div className="bg-white p-2 rounded-full shadow-sm">
@@ -1447,131 +1307,25 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
                     </div>
                   ))}
                 </div>
+                {transactionHasMore && (
+                  <div className="flex justify-center pt-4">
+                    <button
+                      onClick={() => fetchTransactions(transactionOffset + TRANSACTION_PAGE_SIZE, false)}
+                      disabled={transactionsLoading}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                    >
+                      {transactionsLoading ? 'Loading...' : 'Load more'}
+                    </button>
+                  </div>
+                )}
+                </>
               )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Payment Modal */}
-      {showPaymentModal && selectedStudent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              {paymentType === 'deposit' ? 'Add Money to' : 'Remove Money from'} {selectedStudent.first_name || selectedStudent.username}
-            </h3>
-            <form onSubmit={handlePayment} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    max={paymentType === 'withdraw' ? selectedStudent.balance : undefined}
-                    required
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    placeholder="0.00"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  />
-                </div>
-                {paymentType === 'withdraw' && (
-                  <p className="text-sm text-gray-500 mt-1">Available: {formatCurrency(selectedStudent.balance)}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
-                <input
-                  type="text"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder={paymentType === 'deposit' ? 'e.g., Salary, Bonus, Reward' : 'e.g., Fine, Expense'}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
-              <div className="flex space-x-3">
-                <button
-                  type="submit"
-                  disabled={actionLoading}
-                  className={`flex-1 py-2 text-white rounded-lg transition-colors disabled:opacity-50 ${
-                    paymentType === 'deposit' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'
-                  }`}
-                >
-                  {actionLoading ? 'Processing...' : paymentType === 'deposit' ? 'Add Money' : 'Remove Money'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPaymentModal(false)}
-                  className="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Payment Modal */}
-      {showBulkPaymentModal && selectedClass !== 'all' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Bulk Payment to {selectedClass}
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              This will add money to all {studentsByClass.grouped[selectedClass]?.length || 0} students in {selectedClass}
-            </p>
-            <form onSubmit={(e) => handleBulkPayment(e, 'deposit')} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount per student</label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    required
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    placeholder="0.00"
-                    value={bulkFormData.amount}
-                    onChange={(e) => setBulkFormData({ ...bulkFormData, amount: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
-                <input
-                  type="text"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="e.g., Weekly allowance, Class bonus"
-                  value={bulkFormData.description}
-                  onChange={(e) => setBulkFormData({ ...bulkFormData, description: e.target.value })}
-                />
-              </div>
-              <div className="flex space-x-3">
-                <button
-                  type="submit"
-                  disabled={actionLoading}
-                  className="flex-1 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                >
-                  {actionLoading ? 'Processing...' : 'Pay All Students'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowBulkPaymentModal(false)}
-                  className="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+    </ResponsivePage>
   );
 };
 
@@ -1664,29 +1418,28 @@ const StudentBankView: React.FC<StudentBankViewProps> = ({ bankPlugin }) => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
+  const studentTabs = [
+    { id: 'overview', label: 'Overview', icon: Wallet },
+    { id: 'transfer', label: 'Transfer Money', icon: Send },
+    { id: 'loans', label: 'Loans', icon: DollarSign },
+    { id: 'history', label: 'History', icon: History },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">🏦</div>
-          <div>
-            <h1 className="text-2xl font-bold">Bank</h1>
-            <p className="text-primary-100">Financial Services System</p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="Bank"
+        subtitle="Financial Services System"
+        emoji="🏦"
+        gradientClass="bg-gradient-to-r from-primary-600 to-primary-700 text-white"
+      />
 
       {/* Account Balance Card */}
       <div className={`card ${(account?.balance || 0) < 0 ? 'border-2 border-red-500 bg-red-50' : ''}`}>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 mb-1">Account Balance</h2>
             <p className={`text-3xl font-bold ${(account?.balance || 0) < 0 ? 'text-red-600' : 'text-primary-600'}`}>
@@ -1704,78 +1457,58 @@ const StudentBankView: React.FC<StudentBankViewProps> = ({ bankPlugin }) => {
               </div>
             )}
           </div>
-          <div className={`p-4 rounded-full ${(account?.balance || 0) < 0 ? 'bg-red-100' : 'bg-primary-100'}`}>
+          <div className={`p-4 rounded-full shrink-0 self-start sm:self-center ${(account?.balance || 0) < 0 ? 'bg-red-100' : 'bg-primary-100'}`}>
             <Wallet className={`h-8 w-8 ${(account?.balance || 0) < 0 ? 'text-red-600' : 'text-primary-600'}`} />
           </div>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
-            {[
-              { id: 'overview', label: 'Overview', icon: Wallet },
-              { id: 'transfer', label: 'Transfer Money', icon: Send },
-              { id: 'loans', label: 'Loans', icon: DollarSign },
-              { id: 'history', label: 'History', icon: History }
-            ].map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id as any)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                  activeTab === id
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{label}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <ResponsiveTabNav
+          tabs={studentTabs}
+          activeTab={activeTab}
+          onTabChange={(id) => setActiveTab(id as typeof activeTab)}
+          variant="primary"
+        />
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Quick Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <ResponsiveGrid preset="1-3">
                 <div className="bg-success-50 p-4 rounded-lg">
-                  <div className="flex items-center">
-                    <TrendingUp className="h-5 w-5 text-success-600" />
-                    <span className="ml-2 text-sm font-medium text-success-800">Total Deposits</span>
-                  </div>
-                  <p className="text-2xl font-bold text-success-600 mt-1">
-                    {formatCurrency(
+                  <ResponsiveStatItem
+                    label="Total Deposits"
+                    value={formatCurrency(
                       transactions
                         .filter(t => ['deposit', 'salary'].includes(t.transaction_type))
                         .reduce((sum, t) => sum + t.amount, 0)
                     )}
-                  </p>
+                    icon={TrendingUp}
+                    valueClassName="text-success-600"
+                  />
                 </div>
 
                 <div className="bg-warning-50 p-4 rounded-lg">
-                  <div className="flex items-center">
-                    <DollarSign className="h-5 w-5 text-warning-600" />
-                    <span className="ml-2 text-sm font-medium text-warning-800">Active Loans</span>
-                  </div>
-                  <p className="text-2xl font-bold text-warning-600 mt-1">
-                    {loans.filter(l => l.status === 'active').length}
-                  </p>
+                  <ResponsiveStatItem
+                    label="Active Loans"
+                    value={loans.filter(l => l.status === 'active').length}
+                    icon={DollarSign}
+                    valueClassName="text-warning-600"
+                  />
                 </div>
 
                 <div className="bg-primary-50 p-4 rounded-lg">
-                  <div className="flex items-center">
-                    <Send className="h-5 w-5 text-primary-600" />
-                    <span className="ml-2 text-sm font-medium text-primary-800">Transfers Made</span>
-                  </div>
-                  <p className="text-2xl font-bold text-primary-600 mt-1">
-                    {transactions.filter(t => t.transaction_type === 'transfer' && t.from_username === user?.username).length}
-                  </p>
+                  <ResponsiveStatItem
+                    label="Transfers Made"
+                    value={transactions.filter(t => t.transaction_type === 'transfer' && t.from_username === user?.username).length}
+                    icon={Send}
+                    valueClassName="text-primary-600"
+                  />
                 </div>
-              </div>
+              </ResponsiveGrid>
 
               {/* Recent Transactions */}
               <div>
@@ -1856,7 +1589,7 @@ const StudentBankView: React.FC<StudentBankViewProps> = ({ bankPlugin }) => {
           )}
         </div>
       </div>
-    </div>
+    </ResponsivePage>
   );
 };
 
@@ -1870,11 +1603,7 @@ const BankPlugin: React.FC = () => {
 
   // Wait for plugins to load before checking
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!bankPlugin || !bankPlugin.enabled) {

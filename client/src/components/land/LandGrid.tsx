@@ -21,7 +21,31 @@ interface LandGridProps {
 const GRID_SIZE = 10;
 const MIN_CELL_SIZE = 20;
 const MAX_CELL_SIZE = 80;
-const DEFAULT_CELL_SIZE = 50;
+const DESKTOP_DEFAULT_CELL_SIZE = 50;
+const MOBILE_DEFAULT_CELL_SIZE = 28;
+const MOBILE_BREAKPOINT = 768;
+const GRID_GAP = 4;
+const GRID_INNER_PADDING = 16;
+const GRID_OUTER_PADDING = 32;
+const GRID_OUTER_PADDING_MOBILE = 16;
+
+function snapCellSize(size: number): number {
+  return Math.max(MIN_CELL_SIZE, Math.min(MAX_CELL_SIZE, Math.floor(size / 2) * 2));
+}
+
+function computeFitCellSize(containerWidth: number, isMobile = false): number {
+  const outerPadding = isMobile ? GRID_OUTER_PADDING_MOBILE : GRID_OUTER_PADDING;
+  const available = containerWidth - outerPadding - GRID_INNER_PADDING;
+  const raw = (available - (GRID_SIZE - 1) * GRID_GAP) / GRID_SIZE;
+  return snapCellSize(raw);
+}
+
+function getDefaultCellSize(viewportWidth: number, containerWidth?: number): number {
+  const isMobile = viewportWidth < MOBILE_BREAKPOINT;
+  if (!isMobile) return DESKTOP_DEFAULT_CELL_SIZE;
+  const fit = containerWidth ? computeFitCellSize(containerWidth, isMobile) : MOBILE_DEFAULT_CELL_SIZE;
+  return Math.min(MOBILE_DEFAULT_CELL_SIZE, fit);
+}
 
 const LandGrid: React.FC<LandGridProps> = ({
   onParcelSelect,
@@ -34,7 +58,11 @@ const LandGrid: React.FC<LandGridProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  const [cellSize, setCellSize] = useState(DEFAULT_CELL_SIZE);
+  const [cellSize, setCellSize] = useState(() =>
+    typeof window !== 'undefined'
+      ? getDefaultCellSize(window.innerWidth)
+      : DESKTOP_DEFAULT_CELL_SIZE
+  );
   const [hoveredParcel, setHoveredParcel] = useState<LandParcel | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [selectedParcel, setSelectedParcel] = useState<LandParcel | null>(null);
@@ -53,7 +81,31 @@ const LandGrid: React.FC<LandGridProps> = ({
   const [classStudents, setClassStudents] = useState<ClassStudentOption[]>([]);
   
   const containerRef = useRef<HTMLDivElement>(null);
+  const gridContainerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const userAdjustedZoom = useRef(false);
+
+  const applyDefaultCellSize = useCallback(() => {
+    const containerWidth = gridContainerRef.current?.clientWidth;
+    setCellSize(getDefaultCellSize(window.innerWidth, containerWidth));
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+
+    const el = gridContainerRef.current;
+    if (!el) return;
+
+    applyDefaultCellSize();
+
+    const observer = new ResizeObserver(() => {
+      if (!userAdjustedZoom.current) {
+        applyDefaultCellSize();
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [applyDefaultCellSize, loading]);
 
   // Fetch all parcels for the selected town
   useEffect(() => {
@@ -209,9 +261,18 @@ const LandGrid: React.FC<LandGridProps> = ({
   }, [townClass]);
 
   // Zoom controls
-  const zoomIn = () => setCellSize(prev => Math.min(prev + 2, MAX_CELL_SIZE));
-  const zoomOut = () => setCellSize(prev => Math.max(prev - 2, MIN_CELL_SIZE));
-  const resetZoom = () => setCellSize(DEFAULT_CELL_SIZE);
+  const zoomIn = () => {
+    userAdjustedZoom.current = true;
+    setCellSize(prev => Math.min(prev + 2, MAX_CELL_SIZE));
+  };
+  const zoomOut = () => {
+    userAdjustedZoom.current = true;
+    setCellSize(prev => Math.max(prev - 2, MIN_CELL_SIZE));
+  };
+  const resetZoom = () => {
+    userAdjustedZoom.current = false;
+    applyDefaultCellSize();
+  };
 
   // Get cell style
   const getCellStyle = useCallback((row: number, col: number) => {
@@ -345,84 +406,119 @@ const LandGrid: React.FC<LandGridProps> = ({
   }
 
   return (
-    <div className="space-y-4" ref={containerRef}>
+    <div className="space-y-3 sm:space-y-4 min-w-0" ref={containerRef}>
       {/* Teacher: Recalculate prices so hover prices match legend */}
       {canRearrange && (
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-amber-50 border border-amber-200 p-4 rounded-xl">
-          <div>
-            <p className="text-sm text-amber-800">
-              Drag any tile onto another to swap positions and match your classroom board. Use &quot;Recalculate prices&quot; to sync plot values with the legend.
-              {canManageOwnership && (
-                <> Click a plot below to assign it to a student or remove ownership.</>
+        <>
+          <details className="sm:hidden bg-amber-50 border border-amber-200 rounded-xl group">
+            <summary className="px-3 py-2.5 text-sm font-medium text-amber-900 cursor-pointer list-none flex items-center justify-between gap-2">
+              <span>Teacher tools</span>
+              <RefreshCw className="h-4 w-4 text-amber-700 shrink-0" />
+            </summary>
+            <div className="px-3 pb-3 space-y-2 border-t border-amber-200/60">
+              <p className="text-xs text-amber-800 pt-2">
+                Drag tiles to swap positions. Recalculate prices to sync with the legend.
+                {canManageOwnership && ' Tap a plot to assign ownership.'}
+              </p>
+              {recalcSuccess && (
+                <p className="text-xs text-green-700 font-medium">Prices updated to match the legend.</p>
               )}
-            </p>
-            {recalcSuccess && (
-              <p className="text-sm text-green-700 font-medium mt-2">Prices updated to match the legend.</p>
-            )}
+              <button
+                type="button"
+                onClick={handleRecalculateValues}
+                disabled={recalcLoading || parcels.length === 0}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 text-sm"
+              >
+                {recalcLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Recalculate prices
+              </button>
+            </div>
+          </details>
+          <div className="hidden sm:flex flex-wrap items-center justify-between gap-4 bg-amber-50 border border-amber-200 p-4 rounded-xl">
+            <div>
+              <p className="text-sm text-amber-800">
+                Drag any tile onto another to swap positions and match your classroom board. Use &quot;Recalculate prices&quot; to sync plot values with the legend.
+                {canManageOwnership && (
+                  <> Click a plot below to assign it to a student or remove ownership.</>
+                )}
+              </p>
+              {recalcSuccess && (
+                <p className="text-sm text-green-700 font-medium mt-2">Prices updated to match the legend.</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleRecalculateValues}
+              disabled={recalcLoading || parcels.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {recalcLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Recalculate prices
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleRecalculateValues}
-            disabled={recalcLoading || parcels.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {recalcLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Recalculate prices
-          </button>
-        </div>
+        </>
       )}
 
       {/* Controls Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-        {/* Zoom Controls */}
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-500 mr-2">Zoom:</span>
-          <button 
-            onClick={zoomOut}
-            className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-            title="Zoom Out"
+      <div className="bg-white p-2 sm:p-4 rounded-xl shadow-sm border border-gray-200 space-y-2 sm:space-y-0">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
+            <span className="hidden sm:inline text-sm text-gray-500 mr-1">Zoom:</span>
+            <button 
+              onClick={zoomOut}
+              className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+              title="Zoom Out"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </button>
+            <span className="text-xs sm:text-sm font-medium w-10 sm:w-12 text-center tabular-nums">{cellSize}px</span>
+            <button 
+              onClick={zoomIn}
+              className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+              title="Zoom In"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </button>
+            <button 
+              onClick={resetZoom}
+              className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+              title="Reset Zoom"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+          </div>
+
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors min-h-[40px] ${
+              showFilters ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
           >
-            <ZoomOut className="h-4 w-4" />
-          </button>
-          <span className="text-sm font-medium w-12 text-center">{cellSize}px</span>
-          <button 
-            onClick={zoomIn}
-            className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-            title="Zoom In"
-          >
-            <ZoomIn className="h-4 w-4" />
-          </button>
-          <button 
-            onClick={resetZoom}
-            className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-            title="Reset Zoom"
-          >
-            <Maximize2 className="h-4 w-4" />
+            <Filter className="h-4 w-4" />
+            <span className="text-sm">Filters</span>
+            {(filterBiome || filterOwned !== 'all') && (
+              <span className="bg-primary-600 text-white text-xs px-1.5 py-0.5 rounded-full">
+                •
+              </span>
+            )}
           </button>
         </div>
 
-        {/* Filter Toggle */}
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-            showFilters ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          <Filter className="h-4 w-4" />
-          <span>Filters</span>
-          {(filterBiome || filterOwned !== 'all') && (
-            <span className="bg-primary-600 text-white text-xs px-2 py-0.5 rounded-full">
-              Active
-            </span>
-          )}
-        </button>
+        {!canRearrange && (
+          <>
+            <div className="flex items-center justify-between gap-2 text-xs sm:text-sm text-gray-600 sm:hidden">
+              <span>Total: <strong>{parcels.length}</strong></span>
+              <span>Avail: <strong>{parcels.filter(p => !p.owner_id).length}</strong></span>
+              <span>Owned: <strong>{parcels.filter(p => p.owner_id).length}</strong></span>
+            </div>
 
-        {/* Stats */}
-        <div className="flex items-center space-x-4 text-sm text-gray-600">
-          <span>Total: <strong>{parcels.length.toLocaleString()}</strong></span>
-          <span>Available: <strong>{parcels.filter(p => !p.owner_id).length.toLocaleString()}</strong></span>
-          <span>Owned: <strong>{parcels.filter(p => p.owner_id).length.toLocaleString()}</strong></span>
-        </div>
+            <div className="hidden sm:flex items-center justify-end gap-4 text-sm text-gray-600">
+              <span>Total: <strong>{parcels.length.toLocaleString()}</strong></span>
+              <span>Available: <strong>{parcels.filter(p => !p.owner_id).length.toLocaleString()}</strong></span>
+              <span>Owned: <strong>{parcels.filter(p => p.owner_id).length.toLocaleString()}</strong></span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Filters Panel */}
@@ -476,7 +572,8 @@ const LandGrid: React.FC<LandGridProps> = ({
 
       {/* Grid Container */}
       <div 
-        className="relative bg-gray-200 rounded-xl overflow-auto border-2 border-gray-400 p-4"
+        ref={gridContainerRef}
+        className="relative bg-gray-200 rounded-xl overflow-x-auto overflow-y-auto border-2 border-gray-400 p-2 sm:p-4 min-w-0 max-w-full"
         style={{ minHeight: '200px' }}
         onMouseMove={handleMouseMove}
       >
@@ -512,7 +609,30 @@ const LandGrid: React.FC<LandGridProps> = ({
       )}
 
       {/* Legend */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+      <details className="sm:hidden bg-white rounded-xl shadow-sm border border-gray-200">
+        <summary className="px-3 py-2.5 text-sm font-medium text-gray-700 cursor-pointer list-none">
+          Biome legend
+        </summary>
+        <div className="px-3 pb-3 border-t border-gray-100 pt-2">
+          <div className="flex flex-wrap gap-2">
+            {biomeTypes.map(biome => {
+              const config = BIOME_CONFIG[biome];
+              return (
+                <button
+                  key={biome}
+                  type="button"
+                  className="flex items-center gap-1.5 text-xs text-gray-600 px-1.5 py-1 rounded hover:bg-gray-50"
+                  onClick={() => setFilterBiome(filterBiome === biome ? '' : biome)}
+                >
+                  <div className="w-3 h-3 rounded shrink-0" style={{ backgroundColor: config.color }} />
+                  <span>{BIOME_ICONS[biome]} {biome}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </details>
+      <div className="hidden sm:block bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <h4 className="text-sm font-medium text-gray-700 mb-3">Biome Legend</h4>
         <p className="text-xs text-gray-500 mb-2">Each plot in a biome costs the same fixed price. Hover a square to confirm.</p>
         <div className="flex flex-wrap gap-3">

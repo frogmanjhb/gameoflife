@@ -385,18 +385,18 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
           <input
             type="text"
             placeholder="Search students by name or username..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[44px]"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Sort by</label>
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
+          <label className="text-sm font-medium text-gray-700">Sort by</label>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'surname' | 'balance' | 'job')}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+            className="w-full sm:w-auto px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm min-h-[44px]"
           >
             <option value="surname">Surname</option>
             <option value="job">Job</option>
@@ -405,7 +405,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onUpdat
           <button
             type="button"
             onClick={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
-            className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+            className="w-full sm:w-auto px-3 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium min-h-[44px]"
             title={sortDirection === 'asc' ? 'Ascending' : 'Descending'}
           >
             {sortDirection === 'asc' ? 'A→Z' : 'Z→A'}

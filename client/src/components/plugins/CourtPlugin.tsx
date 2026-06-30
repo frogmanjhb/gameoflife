@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { usePlugins } from '../../contexts/PluginContext';
 import api, { lawsuitsApi, LinkableAction, StudentLawsuit } from '../../services/api';
 import LawsuitProceedingsFlowMap from '../LawsuitProceedingsFlowMap';
+import { ResponsivePage, ResponsivePluginHero, LoadingState, ResponsiveTabNav } from '../responsive';
 
 const PROCESS_COST = 10000;
 const CLAIM_CAP = 5000;
@@ -210,28 +211,35 @@ const CourtPlugin: React.FC = () => {
   }, [selectedCase, user]);
 
   if (pluginsLoading) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!courtPlugin?.enabled) {
     return <Navigate to="/" replace />;
   }
 
+  const courtTabs = [
+    { id: 'current', label: 'Current cases' },
+    { id: 'past', label: 'Past cases' },
+    { id: 'rules', label: 'Court rules', icon: ScrollText },
+    ...(isStudent
+      ? [
+          { id: 'file', label: 'File a case', icon: Plus },
+          ...(juryCases.length > 0
+            ? [{ id: 'jury', label: `Jury duty (${juryCases.length})`, icon: Gavel }]
+            : []),
+        ]
+      : []),
+  ];
+
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <Scale className="h-8 w-8 text-indigo-600" />
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Court</h1>
-          <p className="text-sm text-gray-600">
-            {isTeacher ? 'Browse town lawsuits and proceedings' : 'File suits, respond, and serve jury duty'}
-          </p>
-        </div>
-      </div>
+    <ResponsivePage className="max-w-4xl mx-auto">
+      <ResponsivePluginHero
+        icon={Scale}
+        title="Court"
+        subtitle={isTeacher ? 'Browse town lawsuits and proceedings' : 'File suits, respond, and serve jury duty'}
+        gradientClass="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white"
+      />
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">{error}</div>
@@ -240,63 +248,21 @@ const CourtPlugin: React.FC = () => {
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-lg text-sm">{success}</div>
       )}
 
-      <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-2">
-        {(['current', 'past'] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => {
-              setTab(t);
-              setSelectedCase(null);
-            }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${
-              tab === t ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {t === 'current' ? 'Current cases' : 'Past cases'}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => {
-            setTab('rules');
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <ResponsiveTabNav
+          tabs={courtTabs}
+          activeTab={tab}
+          onTabChange={(id) => {
+            setTab(id as typeof tab);
             setSelectedCase(null);
           }}
-          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1 ${
-            tab === 'rules' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          <ScrollText className="h-4 w-4" /> Court rules
-        </button>
-        {isStudent && (
-          <>
-            <button
-              type="button"
-              onClick={() => setTab('file')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1 ${
-                tab === 'file' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <Plus className="h-4 w-4" /> File a case
-            </button>
-            {juryCases.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setTab('jury')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1 ${
-                  tab === 'jury' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800'
-                }`}
-              >
-                <Gavel className="h-4 w-4" /> Jury duty ({juryCases.length})
-              </button>
-            )}
-          </>
-        )}
+          className="flex-1 border-0"
+        />
         {isTeacher && (
           <select
             value={townClassFilter}
             onChange={(e) => setTownClassFilter(e.target.value)}
-            className="ml-auto input-field text-sm py-2"
+            className="input-field text-sm py-2 shrink-0"
           >
             <option value="all">All classes</option>
             <option value="6A">6A</option>
@@ -524,7 +490,7 @@ const CourtPlugin: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-3">
             {loading ? (
-              <p className="text-gray-500">Loading…</p>
+              <LoadingState className="py-8" />
             ) : cases.length === 0 ? (
               <div className="text-center py-12 bg-gray-50 rounded-xl border">
                 <FileText className="h-10 w-10 text-gray-300 mx-auto mb-2" />
@@ -540,7 +506,7 @@ const CourtPlugin: React.FC = () => {
                     selectedCase?.id === c.id ? 'border-indigo-500 ring-1 ring-indigo-200' : ''
                   }`}
                 >
-                  <div className="flex justify-between items-start">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                     <div>
                       <p className="font-medium text-gray-900">
                         #{c.id}{' '}
@@ -738,7 +704,7 @@ const CourtPlugin: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

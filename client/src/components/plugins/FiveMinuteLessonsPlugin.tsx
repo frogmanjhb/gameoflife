@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { fiveMinuteLessonsApi } from '../../services/api';
 import { FiveMinuteLessonItem, FiveMinuteLessonsStatus } from '../../types';
 import { CheckCircle, Loader2, ToggleLeft, ToggleRight, Vote } from 'lucide-react';
+import { ResponsivePage, ResponsivePluginHero, LoadingState, EmptyState } from '../responsive';
 
 const TOWN_CLASSES = ['6A', '6B', '6C'] as const;
 
@@ -172,11 +173,7 @@ const FiveMinuteLessonsPlugin: React.FC = () => {
   };
 
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!plugin || !plugin.enabled) {
@@ -187,18 +184,13 @@ const FiveMinuteLessonsPlugin: React.FC = () => {
   const pendingLessons = status?.pending_lessons || [];
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-indigo-600 to-violet-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">📚</div>
-          <div>
-            <h1 className="text-2xl font-bold">5 Minute Lessons</h1>
-            <p className="text-indigo-100">
-              Vote on short teaching activities led by your Teacher or Principal students
-            </p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="5 Minute Lessons"
+        subtitle="Vote on short teaching activities led by your Teacher or Principal students"
+        emoji="📚"
+        gradientClass="bg-gradient-to-r from-indigo-600 to-violet-700 text-white"
+      />
 
       {isTeacher && (
         <div className="flex flex-wrap gap-2">
@@ -266,9 +258,7 @@ const FiveMinuteLessonsPlugin: React.FC = () => {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
-        </div>
+        <LoadingState />
       ) : (
         <>
           {isTeacher && pendingLessons.length > 0 && (
@@ -295,23 +285,21 @@ const FiveMinuteLessonsPlugin: React.FC = () => {
           )}
 
           {!isTeacher && !status?.board_active ? (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-              <Vote className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Lessons board is off</h2>
-              <p className="text-gray-600">Enable your board above, or ask your teacher to turn the class board on.</p>
-            </div>
+            <EmptyState
+              icon={Vote}
+              title="Lessons board is off"
+              description="Enable your board above, or ask your teacher to turn the class board on."
+            />
           ) : (isTeacher ? (status?.lessons || []).filter((l) => l.status !== 'pending') : openLessons).length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-              <Vote className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                {isTeacher ? 'No approved lessons yet' : 'No lessons to vote on'}
-              </h2>
-              <p className="text-gray-600">
-                {isTeacher
+            <EmptyState
+              icon={Vote}
+              title={isTeacher ? 'No approved lessons yet' : 'No lessons to vote on'}
+              description={
+                isTeacher
                   ? 'Approve lesson submissions from Teacher or Principal students.'
-                  : 'Approved lessons from your class will appear here.'}
-              </p>
-            </div>
+                  : 'Approved lessons from your class will appear here.'
+              }
+            />
           ) : (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-gray-900">
@@ -339,7 +327,7 @@ const FiveMinuteLessonsPlugin: React.FC = () => {
           )}
         </>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

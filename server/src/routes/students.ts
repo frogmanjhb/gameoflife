@@ -243,6 +243,32 @@ router.get('/me/earnings-profile', authenticateToken, requireTenant, async (req:
   }
 });
 
+// Lightweight student list for bank management (teachers only)
+router.get('/bank-summary', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const students = await database.query(`
+      SELECT
+        u.id,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.class,
+        u.job_id,
+        a.account_number,
+        a.balance
+      FROM users u
+      LEFT JOIN accounts a ON u.id = a.user_id
+      WHERE u.role = 'student' AND u.school_id = $1
+      ORDER BY u.class, u.last_name, u.first_name
+    `, [req.schoolId]);
+
+    res.json(students);
+  } catch (error) {
+    console.error('Get bank summary students error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get all students with their account balances (teachers only)
 router.get('/', authenticateToken, requireTenant, requireRole(['teacher']), async (req: AuthenticatedRequest, res: Response) => {
   try {

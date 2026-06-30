@@ -35,6 +35,7 @@ import InsuranceManagerGameModal from '../jobchallenges/InsuranceManagerGameModa
 import DoctorIllnessTestButtons from '../DoctorIllnessTestButtons';
 import StudentIllnessOverlay from '../StudentIllnessOverlay';
 import { DoctorIllnessType } from '../../utils/doctorIllness';
+import { ResponsivePage, ResponsivePluginHero, LoadingState } from '../responsive';
 
 const JobsPlugin: React.FC = () => {
   const { plugins, loading: pluginsLoading } = usePlugins();
@@ -173,11 +174,7 @@ const JobsPlugin: React.FC = () => {
 
   // Wait for plugins to load before checking
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!jobsPlugin || !jobsPlugin.enabled) {
@@ -185,25 +182,20 @@ const JobsPlugin: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="text-4xl">💼</div>
-            <div>
-              <h1 className="text-2xl font-bold">Jobs</h1>
-              <p className="text-primary-100">Employment Board</p>
-            </div>
-          </div>
-          {userHasJob && (
-            <div className="bg-white bg-opacity-20 rounded-lg px-4 py-2 flex items-center space-x-2">
-              <AlertCircle className="h-5 w-5" />
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="Jobs"
+        subtitle="Employment Board"
+        emoji="💼"
+        actions={
+          userHasJob ? (
+            <div className="bg-white/20 rounded-lg px-4 py-2 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 shrink-0" />
               <span className="text-sm font-medium">You are employed as: {getDisplayJobTitle(user?.job_name, user?.job_level)}</span>
             </div>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* Student's pending applications */}
       {user?.role === 'student' && pendingApplications.length > 0 && (
@@ -267,7 +259,7 @@ const JobsPlugin: React.FC = () => {
             Who&apos;s in each role
           </h2>
           <p className="text-sm text-gray-600 mb-4">Jobs and students assigned in your class.</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
             {classJobAssignments.map((item) => (
               <div
                 key={item.id}
@@ -393,9 +385,7 @@ const JobsPlugin: React.FC = () => {
       {/* Pin Board */}
       <div className="pin-board rounded-2xl p-8 min-h-[600px] relative overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
-          </div>
+          <LoadingState />
         ) : displayJobs.length === 0 ? (
           <div className="text-center py-16">
             <Briefcase className="h-16 w-16 mx-auto mb-4 text-gray-400" />
@@ -527,7 +517,7 @@ const JobsPlugin: React.FC = () => {
           <InsuranceManagerGameModal isOpen={testGameKey === 'insuranceManager'} onClose={() => setTestGameKey(null)} onGameComplete={() => {}} gameStatus={null} testMode />
         </>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

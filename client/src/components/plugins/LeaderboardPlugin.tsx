@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { Trophy, Users, Star, TrendingUp, BookOpen, DollarSign } from 'lucide-react';
 import api from '../../services/api';
+import { ResponsivePage, ResponsivePluginHero, LoadingState, ResponsiveTabNav } from '../responsive';
 
 interface LeaderboardEntry {
   user_id: number;
@@ -295,31 +296,28 @@ const LeaderboardPlugin: React.FC = () => {
 
   // Wait for plugins to load before checking
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!leaderboardPlugin || !leaderboardPlugin.enabled) {
     return <Navigate to="/" replace />;
   }
 
+  const classTabs = [
+    { id: 'overall', label: 'Overall Top 5', icon: TrendingUp },
+    { id: '6A', label: 'Class 6A', icon: Users },
+    { id: '6B', label: 'Class 6B', icon: Users },
+    { id: '6C', label: 'Class 6C', icon: Users },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">🏆</div>
-          <div>
-            <h1 className="text-2xl font-bold">Chores Leaderboard</h1>
-            <p className="text-yellow-100">
-              {gameType === 'math' ? 'Math game rankings' : 'Wordle chore rankings'} · Top performers across all classes
-            </p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="Chores Leaderboard"
+        subtitle={`${gameType === 'math' ? 'Math game rankings' : 'Wordle chore rankings'} · Top performers across all classes`}
+        emoji="🏆"
+        gradientClass="bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white"
+      />
 
       {/* Game type selector */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
@@ -354,69 +352,18 @@ const LeaderboardPlugin: React.FC = () => {
       </div>
 
       {/* Tab Navigation */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setActiveTab('overall')}
-            className={`flex-1 min-w-[120px] px-4 py-3 rounded-lg font-semibold transition-all ${
-              activeTab === 'overall'
-                ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              <span>Overall Top 5</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveTab('6A')}
-            className={`flex-1 min-w-[120px] px-4 py-3 rounded-lg font-semibold transition-all ${
-              activeTab === '6A'
-                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Users className="h-4 w-4" />
-              <span>Class 6A</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveTab('6B')}
-            className={`flex-1 min-w-[120px] px-4 py-3 rounded-lg font-semibold transition-all ${
-              activeTab === '6B'
-                ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Users className="h-4 w-4" />
-              <span>Class 6B</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveTab('6C')}
-            className={`flex-1 min-w-[120px] px-4 py-3 rounded-lg font-semibold transition-all ${
-              activeTab === '6C'
-                ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Users className="h-4 w-4" />
-              <span>Class 6C</span>
-            </div>
-          </button>
-        </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <ResponsiveTabNav
+          tabs={classTabs}
+          activeTab={activeTab}
+          onTabChange={(id) => setActiveTab(id as typeof activeTab)}
+        />
       </div>
 
       {/* Leaderboard Content */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-          </div>
+          <LoadingState />
         ) : (
           <>
             {activeTab === 'overall' && (
@@ -494,7 +441,7 @@ const LeaderboardPlugin: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </ResponsivePage>
   );
 };
 

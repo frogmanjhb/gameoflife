@@ -20,6 +20,22 @@ export function teacherSchoolTransactionVisibilitySql(
   };
 }
 
+export function teacherSchoolTransactionFilter(
+  schoolId: number | null
+): { schoolCondition: string; visibilityFragment: string; params: unknown[] } {
+  const schoolCondition =
+    schoolId !== null
+      ? '(fa.user_id IS NULL OR fu.school_id = $1) AND (ta.user_id IS NULL OR tu.school_id = $1)'
+      : '(fa.user_id IS NULL OR fu.school_id IS NULL) AND (ta.user_id IS NULL OR tu.school_id IS NULL)';
+  const params = schoolId !== null ? [schoolId] : [];
+  const visibility = teacherSchoolTransactionVisibilitySql(schoolId, params.length + 1);
+  return {
+    schoolCondition,
+    visibilityFragment: visibility.fragment,
+    params: [...params, ...visibility.params],
+  };
+}
+
 export function studentTownTransactionVisibilitySql(
   schoolId: number | null,
   studentClass: string,

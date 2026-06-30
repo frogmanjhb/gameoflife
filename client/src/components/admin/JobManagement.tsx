@@ -567,37 +567,42 @@ const JobManagement: React.FC = () => {
                   return (
                     <div
                       key={student.id}
-                      className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm"
+                      className="px-4 py-2.5 flex items-center gap-2 text-sm min-w-0"
                     >
-                      <div className="min-w-0">
-                        <span className="font-medium text-gray-900">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-gray-900 truncate">
                           {student.first_name} {student.last_name}
-                        </span>
-                        <span className="text-gray-500 ml-2">({student.username})</span>
-                      </div>
-                      <div className="flex items-center gap-3">
+                          <span className="text-gray-500 font-normal ml-1">
+                            ({student.username})
+                          </span>
+                        </p>
                         {student.job_name ? (
-                          <>
-                            <span className="text-gray-700">
-                              {getJobEmoji(student.job_name)} {student.job_name}
-                              {student.job_level ? (
-                                <span className="text-gray-500 ml-1">· Lv {student.job_level}</span>
-                              ) : null}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveJob(student.id)}
-                              disabled={isRemoving}
-                              className="text-red-600 hover:text-red-700 flex items-center space-x-1 disabled:opacity-50"
-                            >
-                              <UserMinus className="h-4 w-4" />
-                              <span>{isRemoving ? 'Removing...' : 'Remove job'}</span>
-                            </button>
-                          </>
+                          <p className="text-gray-700 truncate text-xs sm:text-sm mt-0.5">
+                            {getJobEmoji(student.job_name)} {student.job_name}
+                            {student.job_level ? (
+                              <span className="text-gray-500 ml-1">· Lv {student.job_level}</span>
+                            ) : null}
+                          </p>
                         ) : (
-                          <span className="text-gray-400 italic">Unemployed</span>
+                          <p className="text-gray-400 italic text-xs sm:text-sm mt-0.5">Unemployed</p>
                         )}
                       </div>
+                      {student.job_name ? (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveJob(student.id)}
+                          disabled={isRemoving}
+                          aria-label={
+                            isRemoving
+                              ? 'Removing job'
+                              : `Remove job from ${student.first_name} ${student.last_name}`
+                          }
+                          title="Remove job"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg disabled:opacity-50 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 self-center"
+                        >
+                          <UserMinus className="h-4 w-4" />
+                        </button>
+                      ) : null}
                     </div>
                   );
                 })}

@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { classEventsApi } from '../../services/api';
 import { ClassEventItem, ClassEventTiming, ClassEventVotingStatus } from '../../types';
 import { CheckCircle, Loader2, ToggleLeft, ToggleRight, Vote } from 'lucide-react';
+import { ResponsivePage, ResponsivePluginHero, LoadingState, EmptyState } from '../responsive';
 
 const TOWN_CLASSES = ['6A', '6B', '6C'] as const;
 
@@ -132,11 +133,7 @@ const EventVotingPlugin: React.FC = () => {
   };
 
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!plugin || !plugin.enabled) {
@@ -146,18 +143,13 @@ const EventVotingPlugin: React.FC = () => {
   const openEvents = (status?.events || []).filter((e) => e.status === 'open');
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-red-600 to-rose-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">🗳️</div>
-          <div>
-            <h1 className="text-2xl font-bold">Event Voting Board</h1>
-            <p className="text-red-100">
-              Vote on fun 5-minute class events suggested by your Event Planner
-            </p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="Event Voting Board"
+        subtitle="Vote on fun 5-minute class events suggested by your Event Planner"
+        emoji="🗳️"
+        gradientClass="bg-gradient-to-r from-red-600 to-rose-700 text-white"
+      />
 
       {isTeacher && (
         <div className="flex flex-wrap gap-2">
@@ -225,21 +217,19 @@ const EventVotingPlugin: React.FC = () => {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <Loader2 className="h-10 w-10 animate-spin text-red-600" />
-        </div>
+        <LoadingState />
       ) : !status?.board_active && !isTeacher ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-          <Vote className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Voting board is off</h2>
-          <p className="text-gray-600">Enable your board above, or ask your teacher to turn the class board on.</p>
-        </div>
+        <EmptyState
+          icon={Vote}
+          title="Voting board is off"
+          description="Enable your board above, or ask your teacher to turn the class board on."
+        />
       ) : openEvents.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-          <Vote className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">No events to vote on</h2>
-          <p className="text-gray-600">Your Event Planner has not suggested any open events yet.</p>
-        </div>
+        <EmptyState
+          icon={Vote}
+          title="No events to vote on"
+          description="Your Event Planner has not suggested any open events yet."
+        />
       ) : (
         <div className="space-y-4">
           {(isTeacher ? status?.events || [] : openEvents).map((event) => (
@@ -256,7 +246,7 @@ const EventVotingPlugin: React.FC = () => {
           ))}
         </div>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

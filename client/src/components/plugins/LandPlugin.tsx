@@ -14,6 +14,15 @@ import { formatCurrency, BIOME_CONFIG, BIOME_ICONS, RISK_COLORS } from '../land/
 import LandGrid from '../land/LandGrid';
 import LandPropertyCard from '../land/LandPropertyCard';
 import { isLandEngineerJob, LAND_ENGINEER_APPROVAL_AUTO_AFTER_DAYS } from '../../utils/landPurchaseCosts';
+import {
+  ResponsivePage,
+  ResponsiveGrid,
+  ResponsiveStatItem,
+  ResponsivePluginHero,
+  ResponsiveTabNav,
+  LoadingState,
+  EmptyState,
+} from '../responsive';
 
 const TOWN_CLASS_LIST: Array<'6A' | '6B' | '6C'> = ['6A', '6B', '6C'];
 
@@ -54,32 +63,28 @@ const TownClassTabs: React.FC<TownClassTabsProps> = ({ allTowns, currentTownClas
     : TOWN_CLASS_LIST.map((cls) => ({ class: cls, town_name: `${cls} Town` }));
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="grid grid-cols-3 divide-x divide-gray-200">
+    <div className="px-3 sm:px-4 pt-3 pb-2 border-b border-gray-100">
+      <div
+        className="flex rounded-lg bg-gray-100 p-1 gap-1"
+        role="tablist"
+        aria-label="Select town class"
+      >
         {towns.map((town) => {
           const isActive = currentTownClass === town.class;
           return (
             <button
               key={town.class}
               type="button"
+              role="tab"
+              aria-selected={isActive}
               onClick={() => onSelect(town.class)}
-              className={`p-4 text-left transition-all ${
+              className={`flex-1 min-w-0 py-2 px-2 rounded-md text-sm font-semibold transition-all min-h-[40px] ${
                 isActive
-                  ? 'bg-gradient-to-br from-emerald-50 to-teal-100 border-b-4 border-emerald-500'
-                  : 'hover:bg-gray-50 border-b-4 border-transparent'
+                  ? 'bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-200/80'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              <div className="flex items-center space-x-3">
-                <div className={`p-2 rounded-lg ${isActive ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                  <MapPin className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className={`font-bold ${isActive ? 'text-emerald-700' : 'text-gray-900'}`}>
-                    {town.town_name}
-                  </h3>
-                  <p className="text-sm text-gray-500">Class {town.class}</p>
-                </div>
-              </div>
+              {town.class}
             </button>
           );
         })}
@@ -106,19 +111,6 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
   const [success, setSuccess] = useState('');
   const [filterStatus, setFilterStatus] = useState<'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied' | ''>('pending_teacher');
   const [seeding, setSeeding] = useState(false);
-  const [landFullySeeded, setLandFullySeeded] = useState(false);
-
-  useEffect(() => {
-    const checkSeeded = async () => {
-      try {
-        const results = await Promise.all(TOWN_CLASS_LIST.map((tc) => landApi.getStats(tc)));
-        setLandFullySeeded(results.every((r) => r.data.total_parcels >= 100));
-      } catch {
-        setLandFullySeeded(false);
-      }
-    };
-    checkSeeded();
-  }, [success]);
 
   const fetchData = useCallback(async () => {
     if (!currentTownClass) return;
@@ -172,7 +164,6 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
     try {
       const res = await landApi.seedLandData();
       setSuccess(`${res.data.message} - ${res.data.count} parcels created`);
-      setLandFullySeeded(true);
       fetchData();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to seed land data');
@@ -193,126 +184,104 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
   };
 
   if (!currentTownClass) {
-    return (
-      <div className="text-center py-12 text-gray-500">
-        <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-emerald-600" />
-        <p>Loading town data...</p>
-      </div>
-    );
+    return <LoadingState message="Loading town data..." />;
   }
 
+  const activeTownName =
+    allTowns.find((t) => t.class === currentTownClass)?.town_name || `Class ${currentTownClass}`;
+
   return (
-    <div className="space-y-6">
-      <TownClassTabs
-        allTowns={allTowns}
-        currentTownClass={currentTownClass}
-        onSelect={setCurrentTownClass}
+    <ResponsivePage className="space-y-3 sm:space-y-6">
+      <ResponsivePluginHero
+        title="Land Registry Management"
+        subtitle={
+          <>
+            <span className="sm:hidden">{activeTownName}</span>
+            <span className="hidden sm:inline">{activeTownName} — Teacher Administration</span>
+          </>
+        }
+        emoji="🗺️"
+        gradientClass="bg-gradient-to-r from-emerald-600 to-teal-700 text-white"
       />
-
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="text-4xl">🗺️</div>
-            <div>
-              <h1 className="text-2xl font-bold">Land Registry Management</h1>
-              <p className="text-emerald-100">
-                {allTowns.find((t) => t.class === currentTownClass)?.town_name || `Class ${currentTownClass}`} — Teacher Administration
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={handleSeedData}
-            disabled={seeding || landFullySeeded}
-            className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
-              landFullySeeded
-                ? 'bg-white/10 text-white/50 cursor-not-allowed' 
-                : 'bg-white/20 hover:bg-white/30'
-            }`}
-          >
-            <Database className="h-4 w-4" />
-            <span>{seeding ? 'Seeding...' : landFullySeeded ? 'All Towns Seeded' : 'Seed Land Data'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Quick Stats */}
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-2 text-gray-500 mb-1">
-              <MapPin className="h-4 w-4" />
-              <span className="text-xs font-medium">Total Plots</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900">{stats.total_parcels.toLocaleString()}</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-2 text-gray-500 mb-1">
-              <CheckCircle className="h-4 w-4" />
-              <span className="text-xs font-medium">Available</span>
-            </div>
-            <p className="text-2xl font-bold text-green-600">{stats.available_parcels.toLocaleString()}</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-2 text-gray-500 mb-1">
-              <Users className="h-4 w-4" />
-              <span className="text-xs font-medium">Owned</span>
-            </div>
-            <p className="text-2xl font-bold text-blue-600">{stats.owned_parcels.toLocaleString()}</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-2 text-gray-500 mb-1">
-              <Clock className="h-4 w-4" />
-              <span className="text-xs font-medium">Pending Requests</span>
-            </div>
-            <p className="text-2xl font-bold text-amber-600">{stats.pending_requests}</p>
-          </div>
-        </div>
-      )}
 
       {/* Status Messages */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center space-x-2">
-          <XCircle className="h-5 w-5" />
+        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 sm:px-4 sm:py-3 rounded-lg flex items-center gap-2 text-sm">
+          <XCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center space-x-2">
-          <CheckCircle className="h-5 w-5" />
+        <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 sm:px-4 sm:py-3 rounded-lg flex items-center gap-2 text-sm">
+          <CheckCircle className="h-4 w-4 shrink-0" />
           <span>{success}</span>
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
-            {[
-              { id: 'grid', label: 'Land Grid', icon: Map },
-              { id: 'requests', label: 'Purchase Requests', icon: Clock, badge: stats?.pending_requests },
-              { id: 'stats', label: 'Statistics', icon: DollarSign }
-            ].map(({ id, label, icon: Icon, badge }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id as any)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                  activeTab === id
-                    ? 'border-emerald-500 text-emerald-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{label}</span>
-                {badge !== undefined && badge > 0 && (
-                  <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">{badge}</span>
-                )}
-              </button>
-            ))}
-          </nav>
-        </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-w-0">
+        <TownClassTabs
+          allTowns={allTowns}
+          currentTownClass={currentTownClass}
+          onSelect={setCurrentTownClass}
+        />
 
-        <div className="p-6">
+        {stats && (
+          <div className="px-2 sm:px-4 py-2 sm:py-3 border-b border-gray-100">
+            <div className="grid grid-cols-4 lg:grid-cols-4 gap-1.5 sm:gap-4 [&>*]:min-w-0">
+              <div className="bg-white rounded-lg sm:rounded-xl p-2 sm:p-4 border border-gray-200 shadow-sm min-w-0">
+                <ResponsiveStatItem
+                  compact
+                  mobileLabel="Total"
+                  label="Total Plots"
+                  value={stats.total_parcels.toLocaleString()}
+                  icon={MapPin}
+                />
+              </div>
+              <div className="bg-white rounded-lg sm:rounded-xl p-2 sm:p-4 border border-gray-200 shadow-sm min-w-0">
+                <ResponsiveStatItem
+                  compact
+                  mobileLabel="Avail"
+                  label="Available"
+                  value={stats.available_parcels.toLocaleString()}
+                  icon={CheckCircle}
+                  valueClassName="text-green-600"
+                />
+              </div>
+              <div className="bg-white rounded-lg sm:rounded-xl p-2 sm:p-4 border border-gray-200 shadow-sm min-w-0">
+                <ResponsiveStatItem
+                  compact
+                  label="Owned"
+                  value={stats.owned_parcels.toLocaleString()}
+                  icon={Users}
+                  valueClassName="text-blue-600"
+                />
+              </div>
+              <div className="bg-white rounded-lg sm:rounded-xl p-2 sm:p-4 border border-gray-200 shadow-sm min-w-0">
+                <ResponsiveStatItem
+                  compact
+                  mobileLabel="Pending"
+                  label="Pending Requests"
+                  value={stats.pending_requests}
+                  icon={Clock}
+                  valueClassName="text-amber-600"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <ResponsiveTabNav
+          variant="emerald"
+          tabs={[
+            { id: 'grid', label: 'Land Grid', mobileLabel: 'Grid', icon: Map },
+            { id: 'requests', label: 'Purchase Requests', mobileLabel: 'Requests', icon: Clock, badge: stats?.pending_requests },
+            { id: 'stats', label: 'Statistics', mobileLabel: 'Stats', icon: DollarSign },
+          ]}
+          activeTab={activeTab}
+          onTabChange={(id) => setActiveTab(id as typeof activeTab)}
+        />
+
+        <div className="p-3 sm:p-6 min-w-0">
           {/* Grid Tab */}
           {activeTab === 'grid' && (
             <>
@@ -363,14 +332,12 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
 
               {/* Requests List */}
               {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 text-emerald-600 animate-spin" />
-                </div>
+                <LoadingState />
               ) : requests.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Clock className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p>No {filterStatus || ''} purchase requests found</p>
-                </div>
+                <EmptyState
+                  icon={Clock}
+                  title={`No ${filterStatus || ''} purchase requests found`}
+                />
               ) : (
                 <div className="space-y-4">
                   {requests.map((request) => (
@@ -582,7 +549,7 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
           )}
         </div>
       </div>
-    </div>
+    </ResponsivePage>
   );
 };
 
@@ -755,100 +722,89 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
 
   if (!currentTownClass) {
     return (
-      <div className="text-center py-12 text-gray-500">
-        <MapPin className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-        <p>You need to be assigned to a class (6A, 6B, or 6C) to use the Land Registry.</p>
-        <p className="text-sm mt-1">Please contact your teacher.</p>
-      </div>
+      <EmptyState
+        icon={MapPin}
+        title="You need to be assigned to a class (6A, 6B, or 6C) to use the Land Registry."
+        description="Please contact your teacher."
+      />
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">🗺️</div>
-          <div>
-            <h1 className="text-2xl font-bold">Land Registry</h1>
-            <p className="text-primary-100">
-              {currentTown?.town_name || `Class ${currentTownClass}`} — explore and purchase land in your town
-            </p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage className="space-y-3 sm:space-y-6">
+      <ResponsivePluginHero
+        title="Land Registry"
+        subtitle={currentTown?.town_name || `Class ${currentTownClass}`}
+        emoji="🗺️"
+      />
 
-      {/* Quick Stats */}
-      {myProperties && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-2 text-gray-500 mb-1">
-              <MapPin className="h-4 w-4" />
-              <span className="text-xs font-medium">My Plots</span>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-w-0">
+        {myProperties && activeTab !== 'explore' && (
+          <div className="px-3 pt-3 pb-2 border-b border-gray-100 sm:hidden">
+            <div className="grid grid-cols-3 gap-2 [&>*]:min-w-0">
+              <ResponsiveStatItem compact label="My Plots" value={myProperties.total_count} icon={MapPin} valueClassName="text-primary-600" />
+              <ResponsiveStatItem compact label="Value" value={formatCurrency(myProperties.total_value)} icon={DollarSign} valueClassName="text-green-600" />
+              <ResponsiveStatItem compact label="Pending" value={myRequests.filter(r => isActivePurchaseStatus(r.status)).length} icon={Clock} valueClassName="text-amber-600" />
             </div>
-            <p className="text-2xl font-bold text-primary-600">{myProperties.total_count}</p>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-2 text-gray-500 mb-1">
-              <DollarSign className="h-4 w-4" />
-              <span className="text-xs font-medium">Portfolio Value</span>
-            </div>
-            <p className="text-2xl font-bold text-green-600">{formatCurrency(myProperties.total_value)}</p>
-            {myProperties.total_purchase_value != null && myProperties.total_value > myProperties.total_purchase_value && (
-              <p className="text-xs text-emerald-600 mt-1">
-                +{formatCurrency(myProperties.total_value - myProperties.total_purchase_value)} appreciation
-              </p>
-            )}
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-2 text-gray-500 mb-1">
-              <Clock className="h-4 w-4" />
-              <span className="text-xs font-medium">Pending Requests</span>
-            </div>
-            <p className="text-2xl font-bold text-amber-600">
-              {myRequests.filter(r => isActivePurchaseStatus(r.status)).length}
-            </p>
-          </div>
-        </div>
-      )}
+        )}
 
-      {/* Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        {myProperties && (
+          <div className="hidden sm:block px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
+            <ResponsiveGrid preset="1-3">
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 min-w-0">
+                <ResponsiveStatItem
+                  label="My Plots"
+                  value={myProperties.total_count}
+                  icon={MapPin}
+                  valueClassName="text-primary-600"
+                />
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 min-w-0">
+                <ResponsiveStatItem
+                  label="Portfolio Value"
+                  value={formatCurrency(myProperties.total_value)}
+                  icon={DollarSign}
+                  valueClassName="text-green-600"
+                  helper={
+                    myProperties.total_purchase_value != null && myProperties.total_value > myProperties.total_purchase_value
+                      ? `+${formatCurrency(myProperties.total_value - myProperties.total_purchase_value)} appreciation`
+                      : undefined
+                  }
+                />
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 min-w-0">
+                <ResponsiveStatItem
+                  label="Pending Requests"
+                  value={myRequests.filter(r => isActivePurchaseStatus(r.status)).length}
+                  icon={Clock}
+                  valueClassName="text-amber-600"
+                />
+              </div>
+            </ResponsiveGrid>
+          </div>
+        )}
+
         {(error || success) && (
-          <div className={`mx-6 mt-4 px-4 py-2 rounded-lg text-sm ${error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+          <div className={`mx-3 sm:mx-6 mt-3 sm:mt-4 px-3 py-2 rounded-lg text-sm ${error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
             {error || success}
           </div>
         )}
-        <div className="border-b border-gray-200 overflow-x-auto">
-          <nav className="flex space-x-6 px-6 min-w-max">
-            {[
-              { id: 'explore', label: 'Explore Land', icon: Map },
-              { id: 'my-properties', label: 'My Plots', icon: MapPin, badge: myProperties?.total_count },
-              { id: 'requests', label: 'Buy Requests', icon: Clock, badge: myRequests.filter(r => isActivePurchaseStatus(r.status)).length },
-              { id: 'sales', label: 'Sales', icon: DollarSign, badge: buyerOffers.filter(r => r.status === 'pending_buyer').length + mySales.filter(r => r.status === 'pending_fm' || r.status === 'pending_buyer').length },
-              ...(isLandEngineer ? [{ id: 'engineer-approvals', label: 'Land Approvals', icon: HardHat, badge: engineerApprovals.length }] : []),
-              ...(isFinancialManager ? [{ id: 'fm-approvals', label: 'FM Approvals', icon: CheckCircle, badge: fmApprovals.length + fmPurchaseApprovals.length }] : []),
-            ].map(({ id, label, icon: Icon, badge }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id as any)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                  activeTab === id
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{label}</span>
-                {badge !== undefined && badge > 0 && (
-                  <span className="bg-primary-500 text-white text-xs px-2 py-0.5 rounded-full">{badge}</span>
-                )}
-              </button>
-            ))}
-          </nav>
-        </div>
+        <ResponsiveTabNav
+          variant="primary"
+          tabs={[
+            { id: 'explore', label: 'Explore Land', mobileLabel: 'Explore', icon: Map },
+            { id: 'my-properties', label: 'My Plots', mobileLabel: 'Plots', icon: MapPin, badge: myProperties?.total_count },
+            { id: 'requests', label: 'Buy Requests', mobileLabel: 'Buy', icon: Clock, badge: myRequests.filter(r => isActivePurchaseStatus(r.status)).length },
+            { id: 'sales', label: 'Sales', mobileLabel: 'Sales', icon: DollarSign, badge: buyerOffers.filter(r => r.status === 'pending_buyer').length + mySales.filter(r => r.status === 'pending_fm' || r.status === 'pending_buyer').length },
+            ...(isLandEngineer ? [{ id: 'engineer-approvals', label: 'Land Approvals', mobileLabel: 'Engineer', icon: HardHat, badge: engineerApprovals.length }] : []),
+            ...(isFinancialManager ? [{ id: 'fm-approvals', label: 'FM Approvals', mobileLabel: 'FM', icon: CheckCircle, badge: fmApprovals.length + fmPurchaseApprovals.length }] : []),
+          ]}
+          activeTab={activeTab}
+          onTabChange={(id) => setActiveTab(id as typeof activeTab)}
+        />
 
-        <div className="p-6">
+        <div className="p-3 sm:p-6 min-w-0">
           {/* Explore Tab */}
           {activeTab === 'explore' && (
             <LandGrid onParcelSelect={(parcel) => console.log('Selected:', parcel)} townClass={currentTownClass} />
@@ -857,15 +813,13 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
           {/* My Properties Tab */}
           {activeTab === 'my-properties' && (
             loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
-              </div>
+              <LoadingState />
             ) : myProperties && myProperties.parcels.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <MapPin className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p>You don't own any land yet</p>
-              <p className="text-sm mt-1">Explore the grid and purchase your first plot!</p>
-              </div>
+              <EmptyState
+                icon={MapPin}
+                title="You don't own any land yet"
+                description="Explore the grid and purchase your first plot!"
+              />
             ) : myProperties && (
               <div className="space-y-4">
                 <p className="text-sm text-gray-600">
@@ -883,9 +837,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
           {/* Sales Tab */}
           {activeTab === 'sales' && (
             loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
-              </div>
+              <LoadingState />
             ) : (
               <div className="space-y-6">
                 {buyerOffers.filter(r => r.status === 'pending_buyer').length > 0 && (
@@ -942,11 +894,9 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
           {/* FM Approvals Tab */}
           {activeTab === 'fm-approvals' && isFinancialManager && (
             loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
-              </div>
+              <LoadingState />
             ) : fmApprovals.length === 0 && fmPurchaseApprovals.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">No land purchases or sales awaiting your approval</p>
+              <EmptyState title="No land purchases or sales awaiting your approval" />
             ) : (
               <div className="space-y-6">
                 {fmPurchaseApprovals.length > 0 && (
@@ -1077,11 +1027,9 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
           {/* Engineer Approvals Tab */}
           {activeTab === 'engineer-approvals' && isLandEngineer && (
             loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
-              </div>
+              <LoadingState />
             ) : engineerApprovals.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">No land purchases awaiting your approval</p>
+              <EmptyState title="No land purchases awaiting your approval" />
             ) : (
               <div className="space-y-4">
                 <p className="text-sm text-gray-600">
@@ -1122,15 +1070,13 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
           {/* My Requests Tab */}
           {activeTab === 'requests' && (
             loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
-              </div>
+              <LoadingState />
             ) : myRequests.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <Clock className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>No purchase requests yet</p>
-                <p className="text-sm mt-1">Your purchase requests will appear here</p>
-              </div>
+              <EmptyState
+                icon={Clock}
+                title="No purchase requests yet"
+                description="Your purchase requests will appear here"
+              />
             ) : (
               <div className="space-y-4">
                 {myRequests.map((request) => (
@@ -1210,7 +1156,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
           )}
         </div>
       </div>
-    </div>
+    </ResponsivePage>
   );
 };
 
@@ -1224,11 +1170,7 @@ const LandPlugin: React.FC = () => {
 
   // Wait for plugins to load before checking
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!landPlugin || !landPlugin.enabled) {

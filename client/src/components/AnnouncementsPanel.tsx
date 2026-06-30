@@ -27,9 +27,18 @@ function renderAnnouncementContent(content: string) {
 interface AnnouncementsPanelProps {
   announcements: Announcement[];
   maxItems?: number;
+  /** When false, omits outer card chrome (for use inside modals). */
+  showCard?: boolean;
+  /** When false, omits the panel heading row. */
+  showHeader?: boolean;
 }
 
-const AnnouncementsPanel: React.FC<AnnouncementsPanelProps> = ({ announcements, maxItems = 5 }) => {
+const AnnouncementsPanel: React.FC<AnnouncementsPanelProps> = ({
+  announcements,
+  maxItems = 5,
+  showCard = true,
+  showHeader = true,
+}) => {
   const displayAnnouncements = announcements.slice(0, maxItems);
 
   const formatDate = (dateString: string) => {
@@ -56,33 +65,44 @@ const AnnouncementsPanel: React.FC<AnnouncementsPanelProps> = ({ announcements, 
     }
   };
 
+  const header = showHeader ? (
+    <div className="flex items-center space-x-2 mb-4">
+      <Bell className="h-5 w-5 text-primary-600" />
+      <h2 className="text-lg font-semibold text-gray-900">Town Alerts</h2>
+      {announcements.length > maxItems && (
+        <span className="ml-auto text-sm text-gray-500">
+          {announcements.length - maxItems} more
+        </span>
+      )}
+    </div>
+  ) : null;
+
   if (announcements.length === 0) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-w-0">
-        <div className="flex items-center space-x-2 mb-4">
-          <Bell className="h-5 w-5 text-primary-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Town Alerts</h2>
-        </div>
+    const emptyContent = (
+      <>
+        {header}
         <div className="text-center py-8 text-gray-500">
           <Bell className="h-12 w-12 mx-auto mb-2 text-gray-300" />
           <p>No announcements yet</p>
           <p className="text-sm">Check back later for town updates</p>
         </div>
+      </>
+    );
+
+    if (!showCard) {
+      return <div className="min-w-0">{emptyContent}</div>;
+    }
+
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-w-0">
+        {emptyContent}
       </div>
     );
   }
 
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-w-0">
-      <div className="flex items-center space-x-2 mb-4">
-        <Bell className="h-5 w-5 text-primary-600" />
-        <h2 className="text-lg font-semibold text-gray-900">Town Alerts</h2>
-        {announcements.length > maxItems && (
-          <span className="ml-auto text-sm text-gray-500">
-            {announcements.length - maxItems} more
-          </span>
-        )}
-      </div>
+  const listContent = (
+    <>
+      {header}
       <div className="space-y-4">
         {displayAnnouncements.map((announcement) => {
           const colors = getColorClasses(announcement.background_color);
@@ -112,6 +132,16 @@ const AnnouncementsPanel: React.FC<AnnouncementsPanelProps> = ({ announcements, 
           );
         })}
       </div>
+    </>
+  );
+
+  if (!showCard) {
+    return <div className="min-w-0">{listContent}</div>;
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-w-0">
+      {listContent}
     </div>
   );
 };

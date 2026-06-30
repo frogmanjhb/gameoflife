@@ -100,7 +100,6 @@ export const TownProvider: React.FC<TownProviderProps> = ({ children }) => {
 
   const setCurrentTownClass = (townClass: '6A' | '6B' | '6C' | null) => {
     setCurrentTownClassState(townClass);
-    setLoading(true);
   };
 
   const refreshTown = async () => {

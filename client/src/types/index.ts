@@ -1912,3 +1912,12 @@ export interface EngagementAnalytics {
   low_login_students?: LowLoginStudent[];
   summary: EngagementSummary;
 }
+
+export interface TodayActivity {
+  start_date: string;
+  students_logged_in: number;
+  transfers_made: number;
+  bonuses_given: number;
+  fines_given: number;
+  sickness_cured: number;
+}

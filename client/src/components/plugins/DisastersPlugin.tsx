@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { AlertTriangle, CloudLightning, Flame, Bug, Waves, Wind, Snowflake, Zap, History, Users } from 'lucide-react';
 import api from '../../services/api';
+import { ResponsivePage, ResponsivePluginHero, LoadingState } from '../responsive';
 
 interface Disaster {
   id: number;
@@ -91,11 +92,7 @@ const DisastersPlugin: React.FC = () => {
 
   // Wait for plugins to load before checking
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!disastersPlugin || !disastersPlugin.enabled) {
@@ -103,22 +100,16 @@ const DisastersPlugin: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-red-600 via-orange-500 to-yellow-500 rounded-2xl p-6 text-white">
-        <div className="flex items-center space-x-3">
-          <div className="text-4xl">🌪️</div>
-          <div>
-            <h1 className="text-2xl font-bold">Disasters</h1>
-            <p className="text-red-100">Natural and economic events affecting all citizens</p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="Disasters"
+        subtitle="Natural and economic events affecting all citizens"
+        emoji="🌪️"
+        gradientClass="bg-gradient-to-r from-red-600 via-orange-500 to-yellow-500 text-white"
+      />
 
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-        </div>
+        <LoadingState />
       ) : (
         <>
           {/* Active Disasters Warning */}
@@ -159,7 +150,7 @@ const DisastersPlugin: React.FC = () => {
                 <p className="text-gray-400 mt-2">The skies are clear... for now.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {disasters.map(disaster => (
                   <div
                     key={disaster.id}
@@ -267,7 +258,7 @@ const DisastersPlugin: React.FC = () => {
           </div>
         </>
       )}
-    </div>
+    </ResponsivePage>
   );
 };
 

@@ -4,6 +4,7 @@ import { usePlugins } from '../../contexts/PluginContext';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { AlertCircle, CheckCircle, Loader2, Send, XCircle } from 'lucide-react';
+import { ResponsivePage, ResponsivePluginHero, LoadingState, ResponsiveTabNav } from '../responsive';
 
 type SuggestionStatus = 'pending' | 'approved' | 'denied';
 type BugStatus = 'pending' | 'verified' | 'denied';
@@ -235,61 +236,31 @@ const SuggestionsBugsPlugin: React.FC = () => {
   );
 
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!plugin || !plugin.enabled) {
     return <Navigate to="/" replace />;
   }
 
+  const mainTabs = isTeacher
+    ? [{ id: 'review', label: 'Review queue' }]
+    : [
+        { id: 'my', label: 'My submissions' },
+        { id: 'submit', label: 'Submit' },
+      ];
+
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 text-white">
-        <div className="flex items-center gap-3">
-          <div className="text-4xl">💡🐛</div>
-          <div>
-            <h1 className="text-2xl font-bold">Suggestions &amp; Bugs</h1>
-            <p className="text-primary-100">
-              Submit ideas and report legit bugs. If approved, you earn <span className="font-semibold">R1000</span>.
-            </p>
-          </div>
-        </div>
-      </div>
+    <ResponsivePage>
+      <ResponsivePluginHero
+        title="Suggestions & Bugs"
+        subtitle="Submit ideas and report legit bugs. If approved, you earn R1000."
+        emoji="💡"
+      />
 
       {/* Tabs */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200 px-6">
-          <nav className="flex gap-6">
-            {!isTeacher && (
-              <>
-                <button
-                  onClick={() => setTab('my')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${tab === 'my' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                >
-                  My submissions
-                </button>
-                <button
-                  onClick={() => setTab('submit')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${tab === 'submit' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                >
-                  Submit
-                </button>
-              </>
-            )}
-            {isTeacher && (
-              <button
-                onClick={() => setTab('review')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${tab === 'review' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-              >
-                Review queue
-              </button>
-            )}
-          </nav>
-        </div>
+        <ResponsiveTabNav tabs={mainTabs} activeTab={tab} onTabChange={(id) => setTab(id as typeof tab)} />
 
         <div className="p-6">
           {/* Student: My submissions */}
@@ -297,12 +268,9 @@ const SuggestionsBugsPlugin: React.FC = () => {
             <div className="space-y-6">
               {myError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{myError}</div>}
               {myLoading ? (
-                <div className="text-center py-10">
-                  <Loader2 className="h-10 w-10 animate-spin text-primary-600 mx-auto mb-3" />
-                  <p className="text-gray-600">Loading your submissions...</p>
-                </div>
+                <LoadingState message="Loading your submissions…" />
               ) : (
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="font-semibold text-gray-900">Suggestions</h3>
@@ -368,7 +336,7 @@ const SuggestionsBugsPlugin: React.FC = () => {
               {submitError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{submitError}</div>}
               {submitSuccess && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">{submitSuccess}</div>}
 
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => setSubmitTab('bug')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium border ${submitTab === 'bug' ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
@@ -446,10 +414,7 @@ const SuggestionsBugsPlugin: React.FC = () => {
             <div className="space-y-6">
               {queueError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{queueError}</div>}
               {queueLoading ? (
-                <div className="text-center py-10">
-                  <Loader2 className="h-10 w-10 animate-spin text-primary-600 mx-auto mb-3" />
-                  <p className="text-gray-600">Loading review queue...</p>
-                </div>
+                <LoadingState message="Loading review queue…" />
               ) : (
                 <div className="space-y-4">
                   <div className="flex flex-wrap gap-2">
@@ -486,7 +451,7 @@ const SuggestionsBugsPlugin: React.FC = () => {
                   </div>
 
                   {teacherReviewTab === 'pending' && (
-                    <div className="grid md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="font-semibold text-gray-900">Pending suggestions</h3>
@@ -569,7 +534,7 @@ const SuggestionsBugsPlugin: React.FC = () => {
                   )}
 
                   {teacherReviewTab === 'approved' && (
-                    <div className="grid md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="font-semibold text-gray-900">Approved suggestions</h3>
@@ -630,7 +595,7 @@ const SuggestionsBugsPlugin: React.FC = () => {
                   )}
 
                   {teacherReviewTab === 'denied' && (
-                    <div className="grid md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="font-semibold text-gray-900">Denied suggestions</h3>
@@ -695,7 +660,7 @@ const SuggestionsBugsPlugin: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
+    </ResponsivePage>
   );
 };
 

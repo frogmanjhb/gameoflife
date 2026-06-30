@@ -8,6 +8,7 @@ import {
   DollarSign, Package, Star
 } from 'lucide-react';
 import api, { winkelApi } from '../../services/api';
+import { ResponsivePage, ResponsivePluginHero, LoadingState, ResponsiveTabNav } from '../responsive';
 
 // Play a "cha-ching" success sound effect (for teacher marking paid)
 const playPaidSound = () => {
@@ -214,11 +215,7 @@ const WinkelPlugin: React.FC = () => {
 
   // Wait for plugins to load before checking
   if (pluginsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (!winkelPlugin || !winkelPlugin.enabled) {
@@ -230,36 +227,26 @@ const WinkelPlugin: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="bg-white/20 rounded-full p-4">
-              <ShoppingBag className="h-8 w-8" />
+    <ResponsivePage>
+      <ResponsivePluginHero
+        icon={ShoppingBag}
+        title="The Winkel"
+        subtitle={`You may make ${weeklyLimit} purchase${weeklyLimit !== 1 ? 's' : ''} per week`}
+        gradientClass="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white"
+        actions={
+          canPurchase ? (
+            <div className="bg-white/20 rounded-lg px-4 py-2 text-right">
+              <p className="font-semibold">{remainingPurchases} purchase{remainingPurchases !== 1 ? 's' : ''} remaining</p>
+              <p className="text-xs opacity-90">{purchasesThisWeek} of {weeklyLimit} used this week</p>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold">The Winkel</h1>
-              <p className="text-orange-100">
-                You may make {weeklyLimit} purchase{weeklyLimit !== 1 ? 's' : ''} per week
-              </p>
+          ) : (
+            <div className="bg-white/20 rounded-lg px-4 py-2 flex items-center gap-2">
+              <Clock className="h-5 w-5 shrink-0" />
+              <span className="font-semibold">Come back next week!</span>
             </div>
-          </div>
-          <div className="text-right">
-            {canPurchase ? (
-              <div className="bg-white/20 rounded-lg px-4 py-2">
-                <p className="font-semibold">{remainingPurchases} purchase{remainingPurchases !== 1 ? 's' : ''} remaining</p>
-                <p className="text-xs text-orange-100">{purchasesThisWeek} of {weeklyLimit} used this week</p>
-              </div>
-            ) : (
-              <div className="bg-white/20 rounded-lg px-4 py-2 flex items-center space-x-2">
-                <Clock className="h-5 w-5" />
-                <span className="font-semibold">Come back next week!</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+          )
+        }
+      />
 
       {/* Messages */}
       {error && (
@@ -277,35 +264,15 @@ const WinkelPlugin: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="flex border-b border-gray-200">
-          <button
-            onClick={() => setActiveTab('shop')}
-            className={`flex-1 px-6 py-4 font-semibold transition-colors ${
-              activeTab === 'shop'
-                ? 'text-primary-600 border-b-2 border-primary-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <div className="flex items-center justify-center space-x-2">
-              <ShoppingCart className="h-5 w-5" />
-              <span>Shop</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`flex-1 px-6 py-4 font-semibold transition-colors ${
-              activeTab === 'history'
-                ? 'text-primary-600 border-b-2 border-primary-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <div className="flex items-center justify-center space-x-2">
-              <History className="h-5 w-5" />
-              <span>My Purchases</span>
-            </div>
-          </button>
-        </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <ResponsiveTabNav
+          tabs={[
+            { id: 'shop', label: 'Shop', icon: ShoppingCart },
+            { id: 'history', label: 'My Purchases', icon: History },
+          ]}
+          activeTab={activeTab}
+          onTabChange={(id) => setActiveTab(id as typeof activeTab)}
+        />
 
         <div className="p-6">
           {activeTab === 'shop' && (
@@ -384,9 +351,7 @@ const WinkelPlugin: React.FC = () => {
                   </div>
                   
                   {loading ? (
-                    <div className="flex justify-center py-12">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
-                    </div>
+                    <LoadingState />
                   ) : consumables.length === 0 ? (
                     <div className="text-center py-12 text-gray-500">
                       <Gift className="h-16 w-16 mx-auto mb-4 text-gray-300" />
@@ -418,9 +383,7 @@ const WinkelPlugin: React.FC = () => {
                   </div>
                   
                   {loading ? (
-                    <div className="flex justify-center py-12">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
-                    </div>
+                    <LoadingState />
                   ) : privileges.length === 0 ? (
                     <div className="text-center py-12 text-gray-500">
                       <Star className="h-16 w-16 mx-auto mb-4 text-gray-300" />
@@ -483,16 +446,14 @@ const WinkelPlugin: React.FC = () => {
                   </div>
                   
                   {loading ? (
-                    <div className="flex justify-center py-12">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
-                    </div>
+                    <LoadingState />
                   ) : profileItems.length === 0 ? (
                     <div className="text-center py-12 text-gray-500">
                       <span className="text-6xl mb-4 block">😎</span>
                       <p>No profile emojis available at this time.</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                       {profileItems.map((item) => {
                         const emojiChar = item.name.match(/^([\u{1F300}-\u{1F9FF}])/u)?.[1];
                         const isOwned = ownedEmojis.some((e: any) => e.id === item.id);
@@ -550,7 +511,7 @@ const WinkelPlugin: React.FC = () => {
                   {purchases.map((purchase) => (
                     <div
                       key={purchase.id}
-                      className="bg-gray-50 rounded-lg p-4 border border-gray-200 flex items-center justify-between"
+                      className="bg-gray-50 rounded-lg p-4 border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
                       <div>
                         <p className="font-semibold text-gray-900">{purchase.item_name}</p>
@@ -572,7 +533,7 @@ const WinkelPlugin: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
+    </ResponsivePage>
   );
 };
 
@@ -677,27 +638,21 @@ const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items,
   const displayPurchases = activeTab === 'pending' ? pendingPurchases : allPurchases;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="bg-white/20 rounded-full p-4">
-              <ShoppingBag className="h-8 w-8" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold">The Winkel</h1>
-              <p className="text-orange-100">Shop Management & Analytics</p>
-            </div>
-          </div>
-          {pendingPurchases.length > 0 && (
+    <ResponsivePage>
+      <ResponsivePluginHero
+        icon={ShoppingBag}
+        title="The Winkel"
+        subtitle="Shop Management & Analytics"
+        gradientClass="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white"
+        actions={
+          pendingPurchases.length > 0 ? (
             <div className="bg-white/20 rounded-lg px-4 py-2">
               <p className="font-semibold">{pendingPurchases.length} pending</p>
-              <p className="text-xs text-orange-100">purchases to fulfill</p>
+              <p className="text-xs opacity-90">purchases to fulfill</p>
             </div>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* Stats Overview */}
       {!statsLoading && stats && (
@@ -743,50 +698,18 @@ const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items,
       )}
 
       {/* Purchases Section with Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200">
-          <div className="flex">
-            <button
-              onClick={() => setActiveTab('pending')}
-              className={`flex-1 px-6 py-4 font-semibold transition-colors ${
-                activeTab === 'pending'
-                  ? 'text-primary-600 border-b-2 border-primary-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <Clock className="h-5 w-5" />
-                <span>Pending Purchases</span>
-                {pendingPurchases.length > 0 && (
-                  <span className="bg-amber-500 text-white px-2 py-0.5 rounded-full text-xs font-bold">
-                    {pendingPurchases.length}
-                  </span>
-                )}
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`flex-1 px-6 py-4 font-semibold transition-colors ${
-                activeTab === 'all'
-                  ? 'text-primary-600 border-b-2 border-primary-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <History className="h-5 w-5" />
-                <span>All Purchases</span>
-                <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs font-bold">
-                  {allPurchases.length}
-                </span>
-              </div>
-            </button>
-          </div>
-        </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <ResponsiveTabNav
+          tabs={[
+            { id: 'pending', label: 'Pending Purchases', icon: Clock, badge: pendingPurchases.length },
+            { id: 'all', label: 'All Purchases', icon: History, badge: allPurchases.length },
+          ]}
+          activeTab={activeTab}
+          onTabChange={(id) => setActiveTab(id as typeof activeTab)}
+        />
         <div className="overflow-x-auto">
           {loading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
-            </div>
+            <LoadingState />
           ) : displayPurchases.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <ShoppingBag className="h-16 w-16 mx-auto mb-4 text-gray-300" />
@@ -887,7 +810,7 @@ const TeacherWinkelView: React.FC<TeacherWinkelViewProps> = ({ purchases, items,
           )}
         </div>
       </div>
-    </div>
+    </ResponsivePage>
   );
 };
 
