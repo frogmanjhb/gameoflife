@@ -3,7 +3,10 @@ import { ClipboardList, Loader2, CheckCircle, Clock, Banknote } from 'lucide-rea
 import { tendersApi } from '../services/api';
 import { Tender } from '../types';
 
-const MyTendersCard: React.FC = () => {
+const MyTendersCard: React.FC<{ showCard?: boolean; showHeader?: boolean }> = ({
+  showCard = true,
+  showHeader = true,
+}) => {
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,16 +31,19 @@ const MyTendersCard: React.FC = () => {
 
   const display = useMemo(() => workingOn.slice(0, 5), [workingOn]);
 
-  return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <ClipboardList className="h-5 w-5 text-primary-600" />
-          <h2 className="text-lg font-semibold text-gray-900">My Tenders</h2>
-        </div>
-        <span className="text-sm text-gray-500">{workingOn.length}</span>
+  const header = showHeader ? (
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center space-x-2">
+        <ClipboardList className="h-5 w-5 text-primary-600" />
+        <h2 className="text-lg font-semibold text-gray-900">My Tenders</h2>
       </div>
+      <span className="text-sm text-gray-500">{workingOn.length}</span>
+    </div>
+  ) : null;
 
+  const body = (
+    <>
+      {header}
       {loading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 text-primary-600 animate-spin" />
@@ -83,8 +89,14 @@ const MyTendersCard: React.FC = () => {
           )}
         </div>
       )}
-    </div>
+    </>
   );
+
+  if (!showCard) {
+    return body;
+  }
+
+  return <div className="card">{body}</div>;
 };
 
 export default MyTendersCard;

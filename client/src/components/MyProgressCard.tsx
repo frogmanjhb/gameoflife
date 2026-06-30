@@ -12,7 +12,10 @@ const formatCurrency = (amount: number) =>
     maximumFractionDigits: 0,
   }).format(amount);
 
-const MyProgressCard: React.FC = () => {
+const MyProgressCard: React.FC<{ showCard?: boolean; showHeader?: boolean }> = ({
+  showCard = true,
+  showHeader = true,
+}) => {
   const [profile, setProfile] = useState<StudentEarningsProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -24,18 +27,27 @@ const MyProgressCard: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <TrendingUp className="h-5 w-5 text-primary-600" />
-          <h2 className="text-lg font-semibold text-gray-900">My Progress</h2>
-        </div>
-        <Link to="/my-profile" className="text-sm text-primary-600 hover:underline font-medium">
-          View full profile
-        </Link>
+  const header = showHeader ? (
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center space-x-2">
+        <TrendingUp className="h-5 w-5 text-primary-600" />
+        <h2 className="text-lg font-semibold text-gray-900">My Progress</h2>
       </div>
+      <Link to="/my-profile" className="text-sm text-primary-600 hover:underline font-medium">
+        View full profile
+      </Link>
+    </div>
+  ) : (
+    <div className="flex justify-end mb-4">
+      <Link to="/my-profile" className="text-sm text-primary-600 hover:underline font-medium">
+        View full profile
+      </Link>
+    </div>
+  );
 
+  const body = (
+    <>
+      {header}
       {loading ? (
         <div className="flex items-center gap-2 text-gray-500 text-sm py-4">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -63,6 +75,16 @@ const MyProgressCard: React.FC = () => {
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (!showCard) {
+    return body;
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      {body}
     </div>
   );
 };

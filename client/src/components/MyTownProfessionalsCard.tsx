@@ -28,7 +28,10 @@ const ProfessionalRow: React.FC<{
   </div>
 );
 
-const MyTownProfessionalsCard: React.FC = () => {
+const MyTownProfessionalsCard: React.FC<{ showCard?: boolean; showHeader?: boolean }> = ({
+  showCard = true,
+  showHeader = true,
+}) => {
   const [professionals, setProfessionals] = useState<StudentTownProfessionals | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -55,11 +58,19 @@ const MyTownProfessionalsCard: React.FC = () => {
   }, []);
 
   if (loading) {
+    const loadingContent = (
+      <div className="flex items-center justify-center h-40">
+        <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
+      </div>
+    );
+
+    if (!showCard) {
+      return loadingContent;
+    }
+
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
-        </div>
+        {loadingContent}
       </div>
     );
   }
@@ -70,15 +81,18 @@ const MyTownProfessionalsCard: React.FC = () => {
       : null;
   const primaryLawyer = professionals?.lawyers?.[0] ?? null;
 
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center space-x-2 mb-4">
-        <div className="p-2 rounded-lg bg-indigo-100">
-          <Users className="h-5 w-5 text-indigo-600" />
-        </div>
-        <h2 className="text-lg font-semibold text-gray-900">My Town Team</h2>
+  const header = showHeader ? (
+    <div className="flex items-center space-x-2 mb-4">
+      <div className="p-2 rounded-lg bg-indigo-100">
+        <Users className="h-5 w-5 text-indigo-600" />
       </div>
+      <h2 className="text-lg font-semibold text-gray-900">My Town Team</h2>
+    </div>
+  ) : null;
 
+  const body = (
+    <>
+      {header}
       {error ? (
         <p className="text-sm text-red-600">{error}</p>
       ) : (
@@ -124,6 +138,16 @@ const MyTownProfessionalsCard: React.FC = () => {
           />
         </div>
       )}
+    </>
+  );
+
+  if (!showCard) {
+    return body;
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      {body}
     </div>
   );
 };

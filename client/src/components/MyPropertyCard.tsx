@@ -5,7 +5,10 @@ import { landApi } from '../services/api';
 import { MyPropertiesResponse } from '../types';
 import { formatCurrency, BIOME_CONFIG, BIOME_ICONS } from './land/BiomeConfig';
 
-const MyPropertyCard: React.FC = () => {
+const MyPropertyCard: React.FC<{ showCard?: boolean; showHeader?: boolean }> = ({
+  showCard = true,
+  showHeader = true,
+}) => {
   const navigate = useNavigate();
   const [properties, setProperties] = useState<MyPropertiesResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,49 +34,81 @@ const MyPropertyCard: React.FC = () => {
   const totalAppreciation = totalCurrentValue - totalPurchaseValue;
 
   if (loading) {
+    const loadingContent = (
+      <div className="flex items-center justify-center h-40">
+        <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
+      </div>
+    );
+
+    if (!showCard) {
+      return loadingContent;
+    }
+
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
-        </div>
+        {loadingContent}
       </div>
     );
   }
 
   if (error) {
+    const errorHeader = showHeader ? (
+      <div className="flex items-center space-x-2 mb-4">
+        <MapPin className="h-5 w-5 text-primary-600" />
+        <h3 className="font-semibold text-gray-900">My Properties</h3>
+      </div>
+    ) : null;
+
+    const errorBody = (
+      <>
+        {errorHeader}
+        <p className="text-sm text-gray-500">Unable to load properties</p>
+      </>
+    );
+
+    if (!showCard) {
+      return errorBody;
+    }
+
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center space-x-2 mb-4">
-          <MapPin className="h-5 w-5 text-primary-600" />
-          <h3 className="font-semibold text-gray-900">My Properties</h3>
-        </div>
-        <p className="text-sm text-gray-500">Unable to load properties</p>
+        {errorBody}
       </div>
     );
   }
 
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-4 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Map className="h-5 w-5" />
-            <h3 className="font-semibold">My Properties</h3>
-          </div>
-          <button
-            onClick={() => navigate('/land')}
-            className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full flex items-center space-x-1 transition-colors"
-          >
-            <span>View All</span>
-            <ArrowRight className="h-3 w-3" />
-          </button>
-        </div>
+  const embeddedHeader = showHeader ? (
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center space-x-2">
+        <Map className="h-5 w-5 text-emerald-600" />
+        <h3 className="font-semibold text-gray-900">My Properties</h3>
       </div>
+      <button
+        type="button"
+        onClick={() => navigate('/land')}
+        className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center space-x-1"
+      >
+        <span>View All</span>
+        <ArrowRight className="h-3 w-3" />
+      </button>
+    </div>
+  ) : (
+    <div className="flex justify-end mb-4">
+      <button
+        type="button"
+        onClick={() => navigate('/land')}
+        className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center space-x-1"
+      >
+        <span>View All</span>
+        <ArrowRight className="h-3 w-3" />
+      </button>
+    </div>
+  );
 
-      {/* Content */}
-      <div className="p-4">
-        {properties && properties.total_count === 0 ? (
+  const content = (
+    <>
+      {!showCard && embeddedHeader}
+      {properties && properties.total_count === 0 ? (
           <div className="text-center py-4">
             <MapPin className="h-10 w-10 mx-auto mb-2 text-gray-300" />
             <p className="text-sm text-gray-500">No properties owned yet</p>
@@ -158,7 +193,32 @@ const MyPropertyCard: React.FC = () => {
             </div>
           </>
         )}
+    </>
+  );
+
+  if (!showCard) {
+    return content;
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-4 text-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Map className="h-5 w-5" />
+            <h3 className="font-semibold">My Properties</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/land')}
+            className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full flex items-center space-x-1 transition-colors"
+          >
+            <span>View All</span>
+            <ArrowRight className="h-3 w-3" />
+          </button>
+        </div>
       </div>
+      <div className="p-4">{content}</div>
     </div>
   );
 };

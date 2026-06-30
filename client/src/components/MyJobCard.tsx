@@ -7,24 +7,40 @@ import { stripPositionsAvailableFromRequirements, getDisplayJobTitle } from '../
 
 interface MyJobCardProps {
   user: User;
+  showCard?: boolean;
+  showHeader?: boolean;
 }
 
-const MyJobCard: React.FC<MyJobCardProps> = ({ user }) => {
+const MyJobCard: React.FC<MyJobCardProps> = ({ user, showCard = true, showHeader = true }) => {
   const navigate = useNavigate();
   const hasJob = user.job_id && user.job_name;
 
   if (!hasJob) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center space-x-2 mb-4">
-          <Briefcase className="h-5 w-5 text-amber-600" />
-          <h2 className="text-lg font-semibold text-gray-900">My Job</h2>
-        </div>
+    const emptyHeader = showHeader ? (
+      <div className="flex items-center space-x-2 mb-4">
+        <Briefcase className="h-5 w-5 text-amber-600" />
+        <h2 className="text-lg font-semibold text-gray-900">My Job</h2>
+      </div>
+    ) : null;
+
+    const emptyBody = (
+      <>
+        {emptyHeader}
         <div className="text-center py-8 text-gray-500">
           <Briefcase className="h-12 w-12 mx-auto mb-2 text-gray-300" />
           <p>No job assigned yet</p>
           <p className="text-sm mt-1">Apply for jobs in the Jobs system</p>
         </div>
+      </>
+    );
+
+    if (!showCard) {
+      return emptyBody;
+    }
+
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        {emptyBody}
       </div>
     );
   }
@@ -73,19 +89,19 @@ const MyJobCard: React.FC<MyJobCardProps> = ({ user }) => {
     }
   };
 
-  return (
-    <div 
-      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-shadow"
-      onClick={handleCardClick}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <Briefcase className="h-5 w-5 text-amber-600" />
-          <h2 className="text-lg font-semibold text-gray-900">My Job</h2>
-        </div>
-        <ArrowRight className="h-5 w-5 text-gray-400" />
+  const header = showHeader ? (
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center space-x-2">
+        <Briefcase className="h-5 w-5 text-amber-600" />
+        <h2 className="text-lg font-semibold text-gray-900">My Job</h2>
       </div>
+      {showCard && <ArrowRight className="h-5 w-5 text-gray-400" />}
+    </div>
+  ) : null;
 
+  const body = (
+    <>
+      {header}
       {/* Job Title & Company */}
       <div className="border-l-4 border-amber-500 pl-4 py-3 bg-amber-50 rounded-r-lg mb-4">
         <div className="flex items-start justify-between">
@@ -206,6 +222,28 @@ const MyJobCard: React.FC<MyJobCardProps> = ({ user }) => {
           </div>
         ) : null;
       })()}
+      {!showCard && (
+        <button
+          type="button"
+          onClick={handleCardClick}
+          className="mt-4 text-sm text-primary-600 hover:text-primary-700 font-medium"
+        >
+          View job details →
+        </button>
+      )}
+    </>
+  );
+
+  if (!showCard) {
+    return body;
+  }
+
+  return (
+    <div
+      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-shadow"
+      onClick={handleCardClick}
+    >
+      {body}
     </div>
   );
 };

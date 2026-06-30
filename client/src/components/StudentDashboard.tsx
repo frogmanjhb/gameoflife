@@ -12,7 +12,7 @@ import MyInsuranceCard from './MyInsuranceCard';
 import MyTendersCard from './MyTendersCard';
 import MyProgressCard from './MyProgressCard';
 import MyTownProfessionalsCard from './MyTownProfessionalsCard';
-import { Grid, CalendarDays } from 'lucide-react';
+import { Grid, CalendarDays, Building2, Bell, TrendingUp, Users, Briefcase, MapPin, Shield, ClipboardList } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, X } from 'lucide-react';
 import { getDisplayJobTitle } from '../utils/jobDisplay';
@@ -21,6 +21,7 @@ import {
   ResponsiveHero,
   ResponsiveHeroContent,
   ResponsiveHeroAside,
+  ResponsiveAccordionCard,
   LoadingState,
   EmptyState,
 } from './responsive';
@@ -47,6 +48,17 @@ const getRandomHeaderColor = () => {
   return headerColorThemes[randomIndex];
 };
 
+type StudentSection =
+  | 'systems'
+  | 'townInfo'
+  | 'alerts'
+  | 'progress'
+  | 'team'
+  | 'job'
+  | 'properties'
+  | 'insurance'
+  | 'tenders';
+
 const StudentDashboard: React.FC = () => {
   const { user } = useAuth();
   const { enabledPlugins, loading: pluginsLoading } = usePlugins();
@@ -62,6 +74,21 @@ const StudentDashboard: React.FC = () => {
   const fiveMinuteLessonsEnabled = enabledPlugins.some((p) => p.route_path === '/five-minute-lessons');
   const [eventVotingNeedsVote, setEventVotingNeedsVote] = useState(false);
   const [lessonsNeedsVote, setLessonsNeedsVote] = useState(false);
+  const [openSections, setOpenSections] = useState<Record<StudentSection, boolean>>({
+    systems: true,
+    townInfo: false,
+    alerts: false,
+    progress: false,
+    team: false,
+    job: false,
+    properties: false,
+    insurance: false,
+    tenders: false,
+  });
+
+  const toggleSection = (section: StudentSection) => {
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
 
   useEffect(() => {
     if (!canAccessPlugins || user?.role !== 'student') {
@@ -201,60 +228,146 @@ const StudentDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Plugin Cards Grid - Available Systems (Highly Visible) */}
-      <div>
-        <div className="flex items-center space-x-2 mb-4">
-          <Grid className="h-5 w-5 text-primary-600" />
-          <h2 className="text-xl font-bold text-gray-900">Available Systems</h2>
-        </div>
-        
-        {pluginsToShow.length === 0 ? (
-          <EmptyState
-            icon={Grid}
-            title={
-              user?.role === 'student' && !user?.rules_agreed_at && enabledPlugins.length > 0
-                ? 'You must agree to the app rules before using the town systems.'
-                : 'No systems available at this time'
-            }
-            description={
-              user?.role === 'student' && !user?.rules_agreed_at && enabledPlugins.length > 0
-                ? 'Ask your teacher to enable the Rules system so you can agree and get started.'
-                : 'Check back later for updates'
-            }
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {pluginsToShow.map((plugin) => (
-              <PluginCard
-                key={plugin.id}
-                plugin={plugin}
-                needsVote={
-                  (plugin.route_path === '/event-voting' && eventVotingNeedsVote) ||
-                  (plugin.route_path === '/five-minute-lessons' && lessonsNeedsVote)
-                }
-              />
-            ))}
-          </div>
+      <div className="space-y-2.5">
+        <ResponsiveAccordionCard
+          title="Available Systems"
+          subtitle={
+            pluginsToShow.length === 0
+              ? user?.role === 'student' && !user?.rules_agreed_at && enabledPlugins.length > 0
+                ? 'Agree to rules to unlock systems'
+                : 'No systems available'
+              : `${pluginsToShow.length} system${pluginsToShow.length !== 1 ? 's' : ''}`
+          }
+          icon={<Grid />}
+          open={openSections.systems}
+          onToggle={() => toggleSection('systems')}
+        >
+          {pluginsToShow.length === 0 ? (
+            <EmptyState
+              icon={Grid}
+              title={
+                user?.role === 'student' && !user?.rules_agreed_at && enabledPlugins.length > 0
+                  ? 'You must agree to the app rules before using the town systems.'
+                  : 'No systems available at this time'
+              }
+              description={
+                user?.role === 'student' && !user?.rules_agreed_at && enabledPlugins.length > 0
+                  ? 'Ask your teacher to enable the Rules system so you can agree and get started.'
+                  : 'Check back later for updates'
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {pluginsToShow.map((plugin) => (
+                <PluginCard
+                  key={plugin.id}
+                  plugin={plugin}
+                  needsVote={
+                    (plugin.route_path === '/event-voting' && eventVotingNeedsVote) ||
+                    (plugin.route_path === '/five-minute-lessons' && lessonsNeedsVote)
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </ResponsiveAccordionCard>
+
+        <ResponsiveAccordionCard
+          title="Town Information"
+          subtitle={currentTown ? currentTown.town_name : 'Your town details'}
+          icon={<Building2 />}
+          open={openSections.townInfo}
+          onToggle={() => toggleSection('townInfo')}
+        >
+          <TownInfo town={currentTown} readOnly showCard={false} showHeader={false} />
+        </ResponsiveAccordionCard>
+
+        <ResponsiveAccordionCard
+          title="Town Alerts"
+          subtitle={
+            announcements.length === 0
+              ? 'No announcements yet'
+              : `${announcements.length} alert${announcements.length !== 1 ? 's' : ''}`
+          }
+          icon={<Bell />}
+          open={openSections.alerts}
+          onToggle={() => toggleSection('alerts')}
+        >
+          <AnnouncementsPanel announcements={announcements} showCard={false} showHeader={false} />
+        </ResponsiveAccordionCard>
+
+        {canAccessPlugins && user?.role === 'student' && (
+          <ResponsiveAccordionCard
+            title="My Progress"
+            subtitle={jobName !== 'No job assigned' ? `${jobName} · XP & earnings` : 'Job XP & earnings'}
+            icon={<TrendingUp />}
+            open={openSections.progress}
+            onToggle={() => toggleSection('progress')}
+          >
+            <MyProgressCard showCard={false} showHeader={false} />
+          </ResponsiveAccordionCard>
+        )}
+
+        {canAccessPlugins && user?.role === 'student' && (
+          <ResponsiveAccordionCard
+            title="My Town Team"
+            subtitle="Accountant, lawyer & doctor"
+            icon={<Users />}
+            open={openSections.team}
+            onToggle={() => toggleSection('team')}
+          >
+            <MyTownProfessionalsCard showCard={false} showHeader={false} />
+          </ResponsiveAccordionCard>
+        )}
+
+        {canAccessPlugins && enabledPlugins.some((p) => p.route_path === '/jobs') && user && (
+          <ResponsiveAccordionCard
+            title="My Job"
+            subtitle={jobName}
+            icon={<Briefcase />}
+            open={openSections.job}
+            onToggle={() => toggleSection('job')}
+          >
+            <MyJobCard user={user} showCard={false} showHeader={false} />
+          </ResponsiveAccordionCard>
+        )}
+
+        {canAccessPlugins && enabledPlugins.some((p) => p.route_path === '/land') && (
+          <ResponsiveAccordionCard
+            title="My Properties"
+            subtitle="Land & property"
+            icon={<MapPin />}
+            open={openSections.properties}
+            onToggle={() => toggleSection('properties')}
+          >
+            <MyPropertyCard showCard={false} showHeader={false} />
+          </ResponsiveAccordionCard>
+        )}
+
+        {canAccessPlugins && enabledPlugins.some((p) => p.route_path === '/insurance') && (
+          <ResponsiveAccordionCard
+            title="My Insurance"
+            subtitle="Coverage policies"
+            icon={<Shield />}
+            open={openSections.insurance}
+            onToggle={() => toggleSection('insurance')}
+          >
+            <MyInsuranceCard showCard={false} showHeader={false} />
+          </ResponsiveAccordionCard>
+        )}
+
+        {canAccessPlugins && enabledPlugins.some((p) => p.route_path === '/tenders') && (
+          <ResponsiveAccordionCard
+            title="My Tenders"
+            subtitle="Approved & awarded work"
+            icon={<ClipboardList />}
+            open={openSections.tenders}
+            onToggle={() => toggleSection('tenders')}
+          >
+            <MyTendersCard showCard={false} showHeader={false} />
+          </ResponsiveAccordionCard>
         )}
       </div>
-
-      {/* Town Info, Announcements, My Job (when Jobs enabled), and Properties (when Land enabled) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 [&>*]:min-w-0">
-        <TownInfo town={currentTown} readOnly={true} />
-        <AnnouncementsPanel announcements={announcements} />
-        {canAccessPlugins && user?.role === 'student' && <MyProgressCard />}
-        {canAccessPlugins && user?.role === 'student' && <MyTownProfessionalsCard />}
-        {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/jobs') && user && <MyJobCard user={user} />}
-        {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/land') && <MyPropertyCard />}
-        {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/insurance') && <MyInsuranceCard />}
-      </div>
-
-      {/* My Tenders (only when Tenders plugin enabled and student can access plugins) */}
-      {canAccessPlugins && enabledPlugins.some(p => p.route_path === '/tenders') && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <MyTendersCard />
-        </div>
-      )}
     </ResponsivePage>
   );
 };

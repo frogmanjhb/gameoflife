@@ -16,7 +16,10 @@ interface Policy {
 const TYPE_LABELS: Record<string, string> = { health: 'Health', cyber: 'Cyber', property: 'Property' };
 const TYPE_ICONS: Record<string, React.ElementType> = { health: Heart, cyber: Wifi, property: Home };
 
-const MyInsuranceCard: React.FC = () => {
+const MyInsuranceCard: React.FC<{ showCard?: boolean; showHeader?: boolean }> = ({
+  showCard = true,
+  showHeader = true,
+}) => {
   const navigate = useNavigate();
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,29 +36,38 @@ const MyInsuranceCard: React.FC = () => {
   const activeCount = policies.filter((p) => p.active).length;
 
   if (loading) {
+    const loadingContent = (
+      <div className="flex items-center justify-center h-40">
+        <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
+      </div>
+    );
+
+    if (!showCard) {
+      return loadingContent;
+    }
+
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
-        </div>
+        {loadingContent}
       </div>
     );
   }
 
-  return (
-    <div
-      onClick={() => navigate('/insurance')}
-      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all"
-    >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <div className="p-2 rounded-lg bg-teal-100">
-            <Shield className="h-5 w-5 text-teal-600" />
-          </div>
-          <h2 className="text-lg font-semibold text-gray-900">My Insurance</h2>
+  const header = showHeader ? (
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center space-x-2">
+        <div className="p-2 rounded-lg bg-teal-100">
+          <Shield className="h-5 w-5 text-teal-600" />
         </div>
-        <ArrowRight className="h-5 w-5 text-gray-400" />
+        <h2 className="text-lg font-semibold text-gray-900">My Insurance</h2>
       </div>
+      {showCard && <ArrowRight className="h-5 w-5 text-gray-400" />}
+    </div>
+  ) : null;
+
+  const body = (
+    <>
+      {header}
       {policies.length === 0 ? (
         <p className="text-sm text-gray-500">No insurance yet. Open Insurance to buy coverage.</p>
       ) : (
@@ -84,6 +96,28 @@ const MyInsuranceCard: React.FC = () => {
           </div>
         </div>
       )}
+      {!showCard && (
+        <button
+          type="button"
+          onClick={() => navigate('/insurance')}
+          className="mt-4 text-sm text-primary-600 hover:text-primary-700 font-medium"
+        >
+          Open Insurance →
+        </button>
+      )}
+    </>
+  );
+
+  if (!showCard) {
+    return body;
+  }
+
+  return (
+    <div
+      onClick={() => navigate('/insurance')}
+      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all"
+    >
+      {body}
     </div>
   );
 };

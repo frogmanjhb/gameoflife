@@ -8,9 +8,17 @@ interface TownInfoProps {
   town: TownSettings | null;
   readOnly?: boolean;
   showTreasury?: boolean; // Only teachers should see treasury
+  showCard?: boolean;
+  showHeader?: boolean;
 }
 
-const TownInfo: React.FC<TownInfoProps> = ({ town, readOnly = true, showTreasury = false }) => {
+const TownInfo: React.FC<TownInfoProps> = ({
+  town,
+  readOnly = true,
+  showTreasury = false,
+  showCard = true,
+  showHeader = true,
+}) => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount);
   };
@@ -42,26 +50,37 @@ const TownInfo: React.FC<TownInfoProps> = ({ town, readOnly = true, showTreasury
   };
 
   if (!town) {
+    const emptyContent = (
+      <div className="text-center py-8 text-gray-500">
+        <Building2 className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+        <p>No town information available</p>
+      </div>
+    );
+
+    if (!showCard) {
+      return <>{emptyContent}</>;
+    }
+
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="text-center py-8 text-gray-500">
-          <Building2 className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-          <p>No town information available</p>
-        </div>
+        {emptyContent}
       </div>
     );
   }
 
-  return (
+  const header = showHeader ? (
+    <div className="flex items-center space-x-2 mb-4">
+      <Building2 className="h-5 w-5 text-primary-600" />
+      <h2 className="text-lg font-semibold text-gray-900">Town Information</h2>
+      {!readOnly && (
+        <span className="ml-auto text-xs text-gray-500">Class {town.class}</span>
+      )}
+    </div>
+  ) : null;
+
+  const content = (
     <>
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center space-x-2 mb-4">
-        <Building2 className="h-5 w-5 text-primary-600" />
-        <h2 className="text-lg font-semibold text-gray-900">Town Information</h2>
-        {!readOnly && (
-          <span className="ml-auto text-xs text-gray-500">Class {town.class}</span>
-        )}
-      </div>
+      {header}
       <div className="space-y-4">
         <div>
           <div className="flex items-center space-x-2 mb-1">
@@ -131,8 +150,16 @@ const TownInfo: React.FC<TownInfoProps> = ({ town, readOnly = true, showTreasury
           </div>
         )}
       </div>
-    </div>
-    
+    </>
+  );
+
+  return (
+    <>
+    {showCard ? (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">{content}</div>
+    ) : (
+      content
+    )}
     {user?.role === 'student' && taxEducationOpen && (
       <div
         className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
