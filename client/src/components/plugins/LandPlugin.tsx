@@ -421,6 +421,34 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                             </button>
                           </div>
                         )}
+                        {request.status === 'pending_fm' && (
+                          <div className="flex flex-col items-end gap-2">
+                            <button
+                              onClick={() => handleMasterApprove(request.id)}
+                              disabled={actionLoading !== null}
+                              className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                              title="Bypass Financial Manager, architect, and civil engineer approvals"
+                            >
+                              {actionLoading === request.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <CheckCircle className="h-4 w-4" />
+                              )}
+                              <span>{actionLoading === request.id ? 'Processing...' : 'Master Approve'}</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                const reason = prompt('Reason for denial (optional):');
+                                handleRequestAction(request.id, 'denied', reason || undefined);
+                              }}
+                              disabled={actionLoading !== null}
+                              className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1 text-sm"
+                            >
+                              <XCircle className="h-4 w-4" />
+                              <span>Deny</span>
+                            </button>
+                          </div>
+                        )}
                         {request.status === 'pending_engineer' && (
                           <div className="flex flex-col items-end gap-2">
                             <button

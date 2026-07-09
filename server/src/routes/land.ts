@@ -574,9 +574,10 @@ router.put('/purchase-requests/:id',
       // Normalize status comparison (handle case sensitivity)
       const currentStatus = String(purchaseRequest.status).toLowerCase().trim();
       const isMasterApprove = masterApprove === true && status === 'approved';
+      const isPendingPurchaseStatus = ['pending_fm', 'pending_engineer', 'pending_teacher'].includes(currentStatus);
       const canDeny = ['pending_engineer', 'pending_teacher'].includes(currentStatus);
       const canApprove =
-        (isMasterApprove && currentStatus === 'pending_engineer') ||
+        (isMasterApprove && isPendingPurchaseStatus) ||
         (!isMasterApprove && currentStatus === 'pending_teacher');
 
       if (status === 'denied' && !canDeny) {
@@ -585,8 +586,8 @@ router.put('/purchase-requests/:id',
       if (status === 'approved' && !canApprove) {
         return res.status(400).json({
           error:
-            currentStatus === 'pending_fm'
-              ? 'The Financial Manager must approve this request first'
+            currentStatus === 'pending_fm' && !isMasterApprove
+              ? 'The Financial Manager must approve this request first, or use Master Approve to complete now'
               : currentStatus === 'pending_engineer' && !isMasterApprove
                 ? 'Use Master Approve to bypass architect and civil engineer approval, or wait for their review'
                 : 'This request has already been processed',
