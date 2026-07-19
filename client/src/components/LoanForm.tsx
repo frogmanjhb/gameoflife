@@ -99,13 +99,27 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
     }
   };
 
-  const handleMakePayment = async (loanId: number, amount: number) => {
+  const handleMakePayment = async (loanId: number) => {
     try {
-      await api.post('/loans/pay', {
-        loan_id: loanId,
-        amount: amount
+      setError('');
+      const response = await api.post('/loans/pay', {
+        loan_id: loanId
       });
-      setSuccess('Payment successful!');
+      setSuccess(response.data?.message || 'Payment successful!');
+      fetchData();
+      onSuccess();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Payment failed');
+    }
+  };
+
+  const handlePayOffLoan = async (loanId: number) => {
+    try {
+      setError('');
+      const response = await api.post('/loans/pay-off', {
+        loan_id: loanId
+      });
+      setSuccess(response.data?.message || 'Loan paid off successfully!');
       fetchData();
       onSuccess();
     } catch (err: any) {
@@ -250,22 +264,34 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
       {/* Active Loan Warning */}
       {activeLoan && activeLoan.next_payment_date && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center">
-              <Clock className="h-5 w-5 text-blue-600 mr-3" />
+              <Clock className="h-5 w-5 text-blue-600 mr-3 flex-shrink-0" />
               <div>
                 <h3 className="font-semibold text-blue-900">Next Payment Due</h3>
                 <p className="text-sm text-blue-800">
-                  {formatDate(activeLoan.next_payment_date)} • {formatCurrency(activeLoan.weekly_payment || activeLoan.monthly_payment / 4.33)}
+                  {formatDate(activeLoan.next_payment_date)} •{' '}
+                  {formatCurrency(activeLoan.weekly_payment || activeLoan.monthly_payment / 4.33)}
+                </p>
+                <p className="text-xs text-blue-700 mt-0.5">
+                  Outstanding: {formatCurrency(activeLoan.outstanding_balance)}
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => handleMakePayment(activeLoan.id, activeLoan.weekly_payment || activeLoan.monthly_payment / 4.33)}
-              className="btn-success text-sm"
-            >
-              Pay Now
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleMakePayment(activeLoan.id)}
+                className="btn-success text-sm"
+              >
+                Pay Now
+              </button>
+              <button
+                onClick={() => handlePayOffLoan(activeLoan.id)}
+                className="btn-secondary text-sm"
+              >
+                Pay Off Loan
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -410,7 +436,7 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
 
                 {loan.status === 'active' && (
                   <div className="border-t pt-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm text-gray-500">Payments Remaining</p>
                         <p className="font-semibold text-gray-900">{loan.payments_remaining || 0}</p>
@@ -420,12 +446,20 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
                           </p>
                         )}
                       </div>
-                      <button
-                        onClick={() => handleMakePayment(loan.id, loan.weekly_payment || loan.monthly_payment / 4.33)}
-                        className="btn-success"
-                      >
-                        Make Payment
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => handleMakePayment(loan.id)}
+                          className="btn-success"
+                        >
+                          Make Payment
+                        </button>
+                        <button
+                          onClick={() => handlePayOffLoan(loan.id)}
+                          className="btn-secondary"
+                        >
+                          Pay Off Loan
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -464,7 +498,8 @@ const LoanForm: React.FC<LoanFormProps> = ({ onSuccess }) => {
           <li>• <strong>Job Required:</strong> You must have a job to apply for a loan</li>
           <li>• <strong>Loan Amount:</strong> Based on your salary (max loan = up to 6x weekly salary)</li>
           <li>• <strong>Interest rates:</strong> 5% (1-4 weeks), 8% (5-8 weeks), 10% (9-12 weeks)</li>
-          <li>• <strong>Payments:</strong> Automatic weekly payments every Monday</li>
+          <li>• <strong>Payments:</strong> Automatic weekly payments every Monday, or pay the current installment anytime</li>
+          <li>• <strong>Pay Off:</strong> You can also clear the full outstanding balance in one payment</li>
           <li>• <strong>Payment Limit:</strong> Weekly payment cannot exceed 50% of your salary</li>
           <li>• <strong>Important:</strong> If you don't have enough funds, payment still goes through (negative balance)</li>
           <li>• <strong>Restrictions:</strong> Clear any negative balance before new loans or transfers</li>

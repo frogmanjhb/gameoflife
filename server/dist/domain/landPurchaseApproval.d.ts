@@ -9,6 +9,8 @@ export type LandPurchaseStatus = 'pending_fm' | 'pending_engineer' | 'pending_te
 export declare function hasArchitectJob(jobName: string | null | undefined): boolean;
 export declare function hasCivilEngineerJob(jobName: string | null | undefined): boolean;
 export declare function isLandEngineerJob(jobName: string | null | undefined): boolean;
+/** Prefer request.school_id; fall back to buyer school so engineer lookup matches tenant. */
+export declare function resolvePurchaseSchoolId(requestSchoolId: number | null | undefined, buyerSchoolId?: number | null | undefined): number | null;
 export declare function calculateTotalProfessionalFee(offeredPrice: number): number;
 export declare function allocateProfessionalFees(offeredPrice: number, engineerCount: number): {
     professional_fee_total: number;
@@ -49,6 +51,8 @@ export interface EngineerApprovalRow {
 }
 /** Cooldown before the same seller can re-list a plot to the same buyer after FM denial. */
 export declare const LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS = 24;
+/** Architect/civil engineer approvals auto-complete after this many days if students are absent. */
+export declare const LAND_ENGINEER_APPROVAL_AUTO_AFTER_DAYS = 3;
 type DbGet = {
     get: (sql: string, params?: unknown[]) => Promise<Record<string, unknown> | undefined>;
 };

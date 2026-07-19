@@ -1,9 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS = exports.ACTIVE_PURCHASE_STATUSES = exports.CIVIL_ENGINEER_LAND_REVIEW_XP = exports.LAND_ENGINEER_REVIEW_XP = exports.FM_LAND_REVIEW_XP = exports.TOTAL_PROFESSIONAL_FEE_RATE = void 0;
+exports.LAND_ENGINEER_APPROVAL_AUTO_AFTER_DAYS = exports.LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS = exports.ACTIVE_PURCHASE_STATUSES = exports.CIVIL_ENGINEER_LAND_REVIEW_XP = exports.LAND_ENGINEER_REVIEW_XP = exports.FM_LAND_REVIEW_XP = exports.TOTAL_PROFESSIONAL_FEE_RATE = void 0;
 exports.hasArchitectJob = hasArchitectJob;
 exports.hasCivilEngineerJob = hasCivilEngineerJob;
 exports.isLandEngineerJob = isLandEngineerJob;
+exports.resolvePurchaseSchoolId = resolvePurchaseSchoolId;
 exports.calculateTotalProfessionalFee = calculateTotalProfessionalFee;
 exports.allocateProfessionalFees = allocateProfessionalFees;
 exports.calculateFmFee = calculateFmFee;
@@ -32,6 +33,16 @@ function hasCivilEngineerJob(jobName) {
 }
 function isLandEngineerJob(jobName) {
     return hasArchitectJob(jobName) || hasCivilEngineerJob(jobName);
+}
+/** Prefer request.school_id; fall back to buyer school so engineer lookup matches tenant. */
+function resolvePurchaseSchoolId(requestSchoolId, buyerSchoolId) {
+    if (requestSchoolId !== undefined && requestSchoolId !== null) {
+        return requestSchoolId;
+    }
+    if (buyerSchoolId !== undefined && buyerSchoolId !== null) {
+        return buyerSchoolId;
+    }
+    return null;
 }
 function calculateTotalProfessionalFee(offeredPrice) {
     return Math.round(offeredPrice * exports.TOTAL_PROFESSIONAL_FEE_RATE);
@@ -88,6 +99,8 @@ function buildPurchaseCostBreakdown(offeredPrice, engineerCount, buyerBalance) {
 }
 /** Cooldown before the same seller can re-list a plot to the same buyer after FM denial. */
 exports.LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS = 24;
+/** Architect/civil engineer approvals auto-complete after this many days if students are absent. */
+exports.LAND_ENGINEER_APPROVAL_AUTO_AFTER_DAYS = 3;
 /**
  * FM land-purchase XP is only earned once per parcel+buyer until a purchase completes.
  * Prevents approve/deny/resubmit loops from farming +10 XP repeatedly.
