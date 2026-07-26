@@ -1198,6 +1198,41 @@ export interface ClassEventVotingStatus {
   town_class?: string;
 }
 
+export type AuctionStatus = 'draft' | 'live' | 'ended';
+export type AuctionBidIncrement = 1000 | 5000 | 10000 | 50000;
+
+export interface AuctionItem {
+  id: number;
+  school_id?: number | null;
+  town_class: '6A' | '6B' | '6C';
+  name: string;
+  starting_price: number;
+  status: AuctionStatus;
+  created_by_user_id: number;
+  created_by_username?: string;
+  winner_user_id?: number | null;
+  winner_username?: string | null;
+  winning_bid?: number | null;
+  current_high_bid?: number | null;
+  current_high_bidder_user_id?: number | null;
+  current_high_bidder_username?: string | null;
+  display_high?: number;
+  went_live_at?: string | null;
+  ended_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface AuctionBid {
+  id: number;
+  user_id: number;
+  amount: number;
+  created_at: string;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+}
+
 export type FiveMinuteLessonStatus = 'pending' | 'denied' | 'open' | 'closed';
 
 export interface FiveMinuteLessonItem {

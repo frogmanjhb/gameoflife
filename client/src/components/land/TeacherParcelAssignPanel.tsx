@@ -89,7 +89,9 @@ const TeacherParcelAssignPanel: React.FC<TeacherParcelAssignPanelProps> = ({
             {BIOME_ICONS[parcel.biome_type]}
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Assign plot {parcel.grid_code}</h3>
+            <h3 className="font-semibold text-gray-900">
+              {isAuction ? `Transfer ownership · ${parcel.grid_code}` : `Assign plot ${parcel.grid_code}`}
+            </h3>
             <p className="text-sm text-gray-600">
               {parcel.biome_type} · {priceLabel}
             </p>
@@ -110,7 +112,9 @@ const TeacherParcelAssignPanel: React.FC<TeacherParcelAssignPanelProps> = ({
       {success && <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">{success}</p>}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Assign to student</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {isAuction ? 'Transfer to student' : 'Assign to student'}
+        </label>
         <select
           value={studentId}
           onChange={(e) => setStudentId(e.target.value)}
@@ -137,7 +141,7 @@ const TeacherParcelAssignPanel: React.FC<TeacherParcelAssignPanelProps> = ({
           className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-          Assign plot
+          {isAuction ? 'Transfer ownership' : 'Assign plot'}
         </button>
         <button
           type="button"
@@ -151,7 +155,9 @@ const TeacherParcelAssignPanel: React.FC<TeacherParcelAssignPanelProps> = ({
       </div>
 
       <p className="text-xs text-gray-500">
-        Assigning does not charge the student. Pending purchase requests for this plot are cancelled automatically.
+        {isAuction
+          ? 'Use after the class auction ends. Transferring does not charge the student. Pending purchase requests for this plot are cancelled automatically.'
+          : 'Assigning does not charge the student. Pending purchase requests for this plot are cancelled automatically.'}
       </p>
     </div>
   );
