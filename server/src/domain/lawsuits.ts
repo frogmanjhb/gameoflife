@@ -1,6 +1,6 @@
 import database from '../database/database-prod';
 import { getXPForLevel } from '../routes/jobs';
-import { hasHrDirectorJob } from './attendance';
+import { hasHrDirectorJob, townHasHrDirector } from './attendance';
 import { getClassLawyerRoster, getLawyerIdsForStudent, hasLawyerJob } from './lawyer-assignments';
 import { hasPoliceLieutenantJob } from './police-fines';
 import { isTownClass, TownClass } from './townScope';
@@ -133,6 +133,49 @@ export async function checkStudentCanTransact(userId: number): Promise<{ canTran
 export async function getStudentBalance(userId: number): Promise<number> {
   const account = await database.get('SELECT balance FROM accounts WHERE user_id = $1', [userId]);
   return account ? parseFloat(account.balance) : 0;
+}
+
+/** When a town has no HR Director, skip mediation and escalate to lawyers. Returns true if status changed. */
+export async function autoEscalatePastHrIfNoDirector(lawsuitId: number): Promise<boolean> {
+  const row = await database.get('SELECT * FROM student_lawsuits WHERE id = $1', [lawsuitId]);
+  if (!row || row.status !== 'pending_hr') return false;
+  if (await townHasHrDirector(row.school_id as number | null, row.town_class as string)) {
+    return false;
+  }
+
+  const lawyerSetup = await resolveLawyerSetup(
+    row.plaintiff_user_id as number,
+    row.defendant_user_id as number,
+    row.town_class as string,
+    row.school_id as number | null
+  );
+
+  await database.query(
+    `UPDATE student_lawsuits SET
+       status = 'pending_lawyer',
+       hr_reviewer_id = NULL,
+       hr_reviewed_at = CURRENT_TIMESTAMP,
+       hr_notes = $1,
+       hr_outcome = 'escalated',
+       hr_recommended_amount = NULL,
+       plaintiff_consents_settlement = false,
+       defendant_consents_settlement = false,
+       plaintiff_lawyer_id = $2,
+       defendant_lawyer_id = $3,
+       lawyer_conflict = $4,
+       plaintiff_lawyer_acceptance = $5,
+       updated_at = CURRENT_TIMESTAMP
+     WHERE id = $6 AND status = 'pending_hr'`,
+    [
+      'Auto-escalated: no HR Director in this town.',
+      lawyerSetup.plaintiffLawyerId,
+      lawyerSetup.defendantLawyerId,
+      lawyerSetup.lawyerConflict,
+      lawyerSetup.plaintiffAcceptance,
+      lawsuitId,
+    ]
+  );
+  return true;
 }
 
 export async function resolveLawyerSetup(
@@ -708,7 +751,11 @@ export function buildProceedingsTimeline(
       label: 'HR mediation',
       state: stepState('hr'),
       at: (row.hr_reviewed_at as string) || null,
-      summary: row.hr_outcome ? String(row.hr_outcome).replace(/_/g, ' ') : undefined,
+      summary: row.hr_notes && String(row.hr_notes).startsWith('Auto-escalated')
+        ? 'Skipped — no HR Director'
+        : row.hr_outcome
+          ? String(row.hr_outcome).replace(/_/g, ' ')
+          : undefined,
       detail: row.hr_notes as string | undefined,
     },
     {

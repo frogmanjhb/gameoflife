@@ -73,8 +73,8 @@ const LandPropertyCard: React.FC<LandPropertyCardProps> = ({ parcel, onUpdated }
     setSellLoading(true);
     setError('');
     try {
-      await landApi.createSaleRequest(parcel.id, parseInt(buyerId, 10), parseFloat(salePrice));
-      setSuccess('Sale request sent to Financial Manager for approval');
+      const res = await landApi.createSaleRequest(parcel.id, parseInt(buyerId, 10), parseFloat(salePrice));
+      setSuccess(res.data.message || 'Sale request submitted');
       setSellOpen(false);
       onUpdated();
     } catch (err: any) {
@@ -164,7 +164,7 @@ const LandPropertyCard: React.FC<LandPropertyCardProps> = ({ parcel, onUpdated }
               </button>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Your Financial Manager must approve before the buyer can accept. Current value: {formatCurrency(currentValue)}.
+              If your town has a Financial Manager, they must approve before the buyer can accept. Otherwise the offer goes straight to the buyer. Current value: {formatCurrency(currentValue)}.
             </p>
             {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
             <div className="space-y-3">

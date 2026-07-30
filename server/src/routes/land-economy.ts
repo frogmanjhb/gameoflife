@@ -14,6 +14,7 @@ import {
   LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS,
   landSaleResubmitBlockedByCooldown,
 } from '../domain/landPurchaseApproval';
+import { townHasFinancialManager } from './land-purchase-approval';
 
 const router = Router();
 
@@ -191,20 +192,30 @@ router.post('/sale-requests',
       }
 
       const schoolId = req.user!.school_id ?? null;
+      const townClass = parcel.town_class as string;
+      const hasFm =
+        isTownClass(townClass) && (await townHasFinancialManager(schoolId, townClass));
+      const initialStatus = hasFm ? 'pending_fm' : 'pending_buyer';
+
       const result = schoolId !== null
         ? await database.get(
-            `INSERT INTO land_sale_requests (parcel_id, seller_id, buyer_id, sale_price, school_id)
-             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-            [parcel_id, req.user!.id, buyer_id, sale_price, schoolId]
+            `INSERT INTO land_sale_requests (parcel_id, seller_id, buyer_id, sale_price, school_id, status)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            [parcel_id, req.user!.id, buyer_id, sale_price, schoolId, initialStatus]
           )
         : await database.get(
-            `INSERT INTO land_sale_requests (parcel_id, seller_id, buyer_id, sale_price)
-             VALUES ($1, $2, $3, $4) RETURNING id`,
-            [parcel_id, req.user!.id, buyer_id, sale_price]
+            `INSERT INTO land_sale_requests (parcel_id, seller_id, buyer_id, sale_price, status)
+             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+            [parcel_id, req.user!.id, buyer_id, sale_price, initialStatus]
           );
 
       const request = await database.get(`${saleRequestSelect()} WHERE lsr.id = $1`, [result.id]);
-      res.status(201).json({ message: 'Sale request submitted to Financial Manager', request });
+      res.status(201).json({
+        message: hasFm
+          ? 'Sale request submitted to Financial Manager'
+          : 'Sale request sent to buyer (no Financial Manager in town)',
+        request,
+      });
     } catch (error) {
       console.error('Failed to create sale request:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -402,7 +413,7 @@ router.put('/sale-requests/:id/accept', authenticateToken, async (req: Authentic
   }
 });
 
-// PUT /sale-requests/:id/cancel — seller cancels pending FM review
+// PUT /sale-requests/:id/cancel — seller cancels pending FM or buyer review
 router.put('/sale-requests/:id/cancel', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const requestId = parseInt(req.params.id, 10);
@@ -410,7 +421,7 @@ router.put('/sale-requests/:id/cancel', authenticateToken, async (req: Authentic
     if (!sale || sale.seller_id !== req.user!.id) {
       return res.status(404).json({ error: 'Sale request not found' });
     }
-    if (sale.status !== 'pending_fm') {
+    if (sale.status !== 'pending_fm' && sale.status !== 'pending_buyer') {
       return res.status(400).json({ error: 'Only pending sale requests can be cancelled' });
     }
 

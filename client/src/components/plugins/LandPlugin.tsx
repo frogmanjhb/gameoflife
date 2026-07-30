@@ -851,7 +851,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
             ) : myProperties && (
               <div className="space-y-4">
                 <p className="text-sm text-gray-600">
-                  Properties grow <strong>1% per week</strong>. Collect <strong>5% rental income</strong> weekly, or sell to a classmate (Financial Manager approval required).
+                  Properties grow <strong>1% per week</strong>. Collect <strong>5% rental income</strong> weekly, or sell to a classmate (Financial Manager approval when one is assigned).
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {myProperties.parcels.map((parcel) => (
@@ -905,7 +905,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
                             <p className="font-medium">{sale.parcel_grid_code} → {sale.buyer_username}</p>
                             <p className="text-sm text-gray-600">{formatCurrency(sale.sale_price)} · {sale.status.replace('_', ' ')}</p>
                           </div>
-                          {sale.status === 'pending_fm' && (
+                          {(sale.status === 'pending_fm' || sale.status === 'pending_buyer') && (
                             <button type="button" onClick={() => handleCancelSale(sale.id)} disabled={actionLoading === sale.id} className="text-sm text-red-600 hover:text-red-700">
                               Cancel
                             </button>

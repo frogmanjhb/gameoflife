@@ -6,6 +6,7 @@ import { requireTenant } from '../middleware/tenant';
 import { getLawyerClientIds, hasLawyerJob } from '../domain/lawyer-assignments';
 import { hasHrDirectorJob, townHasHrDirector } from '../domain/attendance';
 import {
+  autoEscalatePastHrIfNoDirector,
   awardJobXp,
   buildProceedingsTimeline,
   checkStudentCanTransact,
@@ -49,16 +50,22 @@ async function requireCourtEnabled(req: AuthenticatedRequest, res: Response): Pr
   return true;
 }
 
-async function enrichCase(row: Record<string, unknown>) {
+async function enrichCase(row: Record<string, unknown>, allowAutoEscalate = true): Promise<Record<string, unknown>> {
+  if (allowAutoEscalate && row.status === 'pending_hr') {
+    const escalated = await autoEscalatePastHrIfNoDirector(Number(row.id));
+    if (escalated) {
+      const fresh = await getCaseById(Number(row.id));
+      if (fresh) return enrichCase(fresh, false);
+    }
+  }
   const jury = await database.query(
     'SELECT vote, voted_at FROM lawsuit_jury_assignments WHERE lawsuit_id = $1 ORDER BY id',
     [row.id]
   );
-  const townHasHr = await townHasHrDirector(row.school_id as number | null, row.town_class as string);
   return {
     ...row,
     proceedings_timeline: buildProceedingsTimeline(row, jury),
-    teacher_hr_required: row.status === 'pending_hr' && !townHasHr,
+    teacher_hr_required: false,
   };
 }
 
@@ -155,8 +162,10 @@ router.post('/', authenticateToken, requireTenant, async (req: AuthenticatedRequ
       [schoolId, user.class, user.id, defendant.id, amount, description.trim(), rule_reference.trim(), linkedType, linkedId]
     );
 
-    const created = await getCaseById(result[0].id);
-    return res.status(201).json(await enrichCase(created));
+    const lawsuitId = result[0].id as number;
+    await autoEscalatePastHrIfNoDirector(lawsuitId);
+    const created = await getCaseById(lawsuitId);
+    return res.status(201).json(await enrichCase(created, false));
   } catch (err) {
     console.error('lawsuits POST error:', err);
     return res.status(500).json({ error: 'Failed to file lawsuit' });
@@ -506,14 +515,14 @@ router.post('/:id/hr-review', authenticateToken, requireTenant, async (req: Auth
   try {
     if (!(await requireCourtEnabled(req, res))) return;
     const user = req.user;
-    const isTeacher = user?.role === 'teacher' || user?.role === 'super_admin';
-    const student = isTeacher
-      ? null
-      : await database.get(
-          `SELECT u.*, j.name AS job_name FROM users u LEFT JOIN jobs j ON u.job_id = j.id WHERE u.id = $1`,
-          [user?.id]
-        );
-    if (!isTeacher && !hasHrDirectorJob(student?.job_name)) {
+    if (!user || user.role !== 'student') {
+      return res.status(403).json({ error: 'Only the HR Director can mediate' });
+    }
+    const student = await database.get(
+      `SELECT u.*, j.name AS job_name FROM users u LEFT JOIN jobs j ON u.job_id = j.id WHERE u.id = $1`,
+      [user.id]
+    );
+    if (!hasHrDirectorJob(student?.job_name)) {
       return res.status(403).json({ error: 'Only HR Director can mediate' });
     }
 
@@ -532,16 +541,14 @@ router.post('/:id/hr-review', authenticateToken, requireTenant, async (req: Auth
       return res.status(400).json({ error: 'Case is not pending HR mediation' });
     }
 
-    if (isTeacher) {
-      const schoolId = req.schoolId ?? user?.school_id ?? null;
-      if (row.school_id !== schoolId && user?.role !== 'super_admin') {
-        return res.status(403).json({ error: 'Case is not in your school' });
-      }
-      if (await townHasHrDirector(row.school_id, row.town_class)) {
-        return res.status(403).json({ error: 'This town has an HR Director — student HR handles mediation' });
-      }
-    } else if (row.town_class !== student?.class) {
+    if (row.town_class !== student?.class) {
       return res.status(403).json({ error: 'Case is not in your town class' });
+    }
+    if (!(await townHasHrDirector(row.school_id, row.town_class))) {
+      await autoEscalatePastHrIfNoDirector(lawsuitId);
+      return res.status(400).json({
+        error: 'No HR Director in this town — case was auto-escalated to court',
+      });
     }
 
     let newStatus = 'pending_lawyer';
@@ -581,7 +588,7 @@ router.post('/:id/hr-review', authenticateToken, requireTenant, async (req: Auth
        WHERE id = $12`,
       [
         newStatus,
-        user!.id,
+        user.id,
         hr_notes.trim(),
         outcome,
         outcome === 'settlement_recommended' ? parseFloat(String(hr_recommended_amount)) : null,
@@ -599,7 +606,7 @@ router.post('/:id/hr-review', authenticateToken, requireTenant, async (req: Auth
       await refundEscrowIfHeld(lawsuitId);
     }
 
-    const xp = isTeacher ? null : await awardJobXp(user!.id, HR_MEDIATION_XP);
+    const xp = await awardJobXp(user.id, HR_MEDIATION_XP);
     return res.json({
       message: 'HR review recorded',
       experience_points: xp?.experience_points,
