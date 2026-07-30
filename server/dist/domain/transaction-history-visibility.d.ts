@@ -6,6 +6,11 @@ export declare function teacherSchoolTransactionVisibilitySql(schoolId: number |
     fragment: string;
     params: unknown[];
 };
+export declare function teacherSchoolTransactionFilter(schoolId: number | null): {
+    schoolCondition: string;
+    visibilityFragment: string;
+    params: unknown[];
+};
 export declare function studentTownTransactionVisibilitySql(schoolId: number | null, studentClass: string, schoolParamIndex: number, classParamIndex: number): {
     fragment: string;
     params: unknown[];

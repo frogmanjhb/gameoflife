@@ -5,6 +5,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.teacherSchoolTransactionVisibilitySql = teacherSchoolTransactionVisibilitySql;
+exports.teacherSchoolTransactionFilter = teacherSchoolTransactionFilter;
 exports.studentTownTransactionVisibilitySql = studentTownTransactionVisibilitySql;
 function teacherSchoolTransactionVisibilitySql(schoolId, schoolParamIndex) {
     return {
@@ -17,6 +18,18 @@ function teacherSchoolTransactionVisibilitySql(schoolId, schoolParamIndex) {
         AND (fu.class = ts.class OR tu.class = ts.class)
     )`,
         params: [schoolId],
+    };
+}
+function teacherSchoolTransactionFilter(schoolId) {
+    const schoolCondition = schoolId !== null
+        ? '(fa.user_id IS NULL OR fu.school_id = $1) AND (ta.user_id IS NULL OR tu.school_id = $1)'
+        : '(fa.user_id IS NULL OR fu.school_id IS NULL) AND (ta.user_id IS NULL OR tu.school_id IS NULL)';
+    const params = schoolId !== null ? [schoolId] : [];
+    const visibility = teacherSchoolTransactionVisibilitySql(schoolId, params.length + 1);
+    return {
+        schoolCondition,
+        visibilityFragment: visibility.fragment,
+        params: [...params, ...visibility.params],
     };
 }
 function studentTownTransactionVisibilitySql(schoolId, studentClass, schoolParamIndex, classParamIndex) {

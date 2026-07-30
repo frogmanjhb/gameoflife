@@ -552,216 +552,193 @@ router.post('/process-weekly-payments', authenticateToken, requireRole(['teacher
   }
 });
 
-// Make manual loan payment (students only)
+async function applyStudentLoanPayment(
+  userId: number,
+  loanId: number,
+  mode: 'installment' | 'full'
+): Promise<{
+  paymentAmount: number;
+  newOutstandingBalance: number;
+  isFinalPayment: boolean;
+  remainingPayments: number;
+  message: string;
+}> {
+  const loan = await database.get('SELECT * FROM loans WHERE id = $1 AND borrower_id = $2', [loanId, userId]);
+  if (!loan) {
+    const err = new Error('Loan not found') as Error & { statusCode?: number };
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (loan.status !== 'active') {
+    const err = new Error('Loan is not active') as Error & { statusCode?: number };
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [userId]);
+  if (!account) {
+    const err = new Error('Account not found') as Error & { statusCode?: number };
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // outstanding_balance is already reduced as payments are recorded — do not
+  // subtract loan_payments again (that double-count blocked mid-loan payments).
+  const outstandingBalance = parseFloat(loan.outstanding_balance);
+  if (isNaN(outstandingBalance) || outstandingBalance <= 0.01) {
+    if (outstandingBalance <= 0.01) {
+      await database.run(
+        'UPDATE loans SET status = $1, outstanding_balance = 0 WHERE id = $2 AND status = $3',
+        ['paid_off', loanId, 'active']
+      );
+    }
+    const err = new Error('Loan is already paid off.') as Error & { statusCode?: number };
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const recentPayment = await database.get(
+    'SELECT id FROM loan_payments WHERE loan_id = $1 AND payment_date > NOW() - INTERVAL \'5 seconds\'',
+    [loanId]
+  );
+  if (recentPayment) {
+    const err = new Error(
+      'A payment was recently processed for this loan. Please wait a moment before trying again.'
+    ) as Error & { statusCode?: number };
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const weeklyPayment = parseFloat(loan.weekly_payment || loan.monthly_payment / 4.33);
+  const requestedAmount = mode === 'full'
+    ? outstandingBalance
+    : Math.min(weeklyPayment, outstandingBalance);
+  const paymentAmount = Math.round(requestedAmount * 100) / 100;
+
+  if (paymentAmount < 0.01) {
+    const err = new Error('Payment amount is too small. Loan may already be paid off.') as Error & { statusCode?: number };
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const newOutstandingBalance = Math.round((outstandingBalance - paymentAmount) * 100) / 100;
+  const isFinalPayment = newOutstandingBalance <= 0.01;
+  const clearedOutstanding = isFinalPayment ? 0 : newOutstandingBalance;
+
+  const client = await database.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Deduct payment (may make account negative — same as weekly auto-pay)
+    await client.query(
+      'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [paymentAmount, account.id]
+    );
+
+    await client.query(
+      'INSERT INTO loan_payments (loan_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
+      [loanId, paymentAmount]
+    );
+
+    if (isFinalPayment) {
+      await client.query(
+        'UPDATE loans SET status = $1, outstanding_balance = 0 WHERE id = $2',
+        ['paid_off', loanId]
+      );
+    } else {
+      await client.query(
+        'UPDATE loans SET outstanding_balance = $1 WHERE id = $2',
+        [clearedOutstanding, loanId]
+      );
+    }
+
+    const description = isFinalPayment && mode === 'full'
+      ? `Loan paid off - R${paymentAmount.toFixed(2)}`
+      : isFinalPayment
+        ? `Final loan payment - R${paymentAmount.toFixed(2)}`
+        : `Loan payment - R${paymentAmount.toFixed(2)}`;
+
+    await client.query(
+      'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
+      [account.id, paymentAmount, 'loan_repayment', description]
+    );
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  const remainingPayments = isFinalPayment
+    ? 0
+    : Math.max(0, Math.ceil(clearedOutstanding / weeklyPayment));
+
+  return {
+    paymentAmount,
+    newOutstandingBalance: clearedOutstanding,
+    isFinalPayment,
+    remainingPayments,
+    message: isFinalPayment
+      ? (mode === 'full' ? 'Loan paid off successfully' : 'Payment successful! Loan paid off.')
+      : 'Payment successful'
+  };
+}
+
+// Make manual installment payment (students only) — pays one weekly installment
 router.post('/pay', [
-  body('loan_id').isInt().withMessage('Loan ID is required'),
-  body('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0')
+  body('loan_id').isInt().withMessage('Loan ID is required')
 ], authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log('🔍 Loan payment request received:', {
-      loan_id: req.body.loan_id,
-      amount: req.body.amount,
-      user_id: req.user?.id,
-      timestamp: new Date().toISOString()
-    });
-
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      console.log('❌ Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { loan_id, amount } = req.body;
-
     if (!req.user) {
-      console.log('❌ No user found in request');
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // Convert amount to number to ensure proper handling
-    const paymentAmount = parseFloat(amount);
-    if (isNaN(paymentAmount)) {
-      return res.status(400).json({ error: 'Invalid payment amount' });
-    }
-
-    // Get loan details
-    const loan = await database.get('SELECT * FROM loans WHERE id = $1 AND borrower_id = $2', [loan_id, req.user.id]);
-    if (!loan) {
-      return res.status(404).json({ error: 'Loan not found' });
-    }
-
-    if (loan.status !== 'active') {
-      return res.status(400).json({ error: 'Loan is not active' });
-    }
-
-    // Get student's account
-    const account = await database.get('SELECT * FROM accounts WHERE user_id = $1', [req.user.id]);
-    if (!account) {
-      return res.status(404).json({ error: 'Account not found' });
-    }
-
-    console.log('Loan payment debug:', {
-      userId: req.user.id,
-      accountBalance: account.balance,
-      paymentAmount: paymentAmount,
-      accountId: account.id
-    });
-
-    // Check sufficient balance
-    const accountBalance = parseFloat(account.balance);
-    if (accountBalance < paymentAmount) {
-      console.log('Insufficient funds:', { balance: accountBalance, amount: paymentAmount, originalBalance: account.balance });
-      return res.status(400).json({ error: 'Insufficient funds' });
-    }
-
-    // Check if payment exceeds outstanding balance
-    const totalPaidResult = await database.get(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM loan_payments WHERE loan_id = $1',
-      [loan_id]
-    );
-    const totalPaid = parseFloat(totalPaidResult?.total || 0);
-    const outstandingBalance = parseFloat(loan.outstanding_balance);
-    const remainingBalance = outstandingBalance - totalPaid;
-    
-    // Check if loan is already paid off
-    if (remainingBalance <= 0.01) {
-      return res.status(400).json({ 
-        error: 'Loan is already paid off or has a very small remaining balance.' 
-      });
-    }
-    
-    // Check for recent payments to prevent duplicate submissions
-    const recentPayment = await database.get(
-      'SELECT id FROM loan_payments WHERE loan_id = $1 AND payment_date > NOW() - INTERVAL \'5 seconds\'',
-      [loan_id]
-    );
-    
-    if (recentPayment) {
-      return res.status(400).json({ 
-        error: 'A payment was recently processed for this loan. Please wait a moment before trying again.' 
-      });
-    }
-
-    console.log('Loan balance debug:', {
-      outstandingBalance,
-      totalPaid,
-      remainingBalance,
-      paymentAmount: paymentAmount,
-      weeklyPayment: loan.weekly_payment || loan.monthly_payment / 4.33
-    });
-
-    // For final payments, automatically adjust payment to remaining balance
-    const isFinalPayment = remainingBalance <= paymentAmount;
-    let actualPaymentAmount = isFinalPayment ? remainingBalance : paymentAmount;
-    
-    // Handle very small remaining balances (less than 1 cent)
-    if (actualPaymentAmount < 0.01 && actualPaymentAmount > 0) {
-      actualPaymentAmount = 0.01;
-      console.log(`🔄 Very small balance: Adjusted payment to minimum R0.01`);
-    }
-    
-    // Skip payment if amount is zero or negative
-    if (actualPaymentAmount <= 0) {
-      return res.status(400).json({ 
-        error: 'Payment amount is zero or negative. Loan may already be paid off.' 
-      });
-    }
-    
-    // Allow payment if it's close to the remaining balance (within 1 cent tolerance)
-    if (actualPaymentAmount > remainingBalance + 0.01) {
-      return res.status(400).json({ 
-        error: `Payment amount (R${paymentAmount.toFixed(2)}) exceeds outstanding balance (R${remainingBalance.toFixed(2)})` 
-      });
-    }
-    
-    if (isFinalPayment && actualPaymentAmount !== paymentAmount) {
-      console.log(`🔄 Final payment: Adjusted payment from R${paymentAmount.toFixed(2)} to R${actualPaymentAmount.toFixed(2)}`);
-    }
-
-    // Start transaction using PostgreSQL client
-    const client = await database.pool.connect();
-    
-    try {
-      await client.query('BEGIN');
-
-      // Update account balance
-      await client.query(
-        'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [actualPaymentAmount, account.id]
-      );
-
-      // Record loan payment
-      await client.query(
-        'INSERT INTO loan_payments (loan_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
-        [loan_id, actualPaymentAmount]
-      );
-
-      // Calculate the new outstanding balance
-      const totalLoanAmount = parseFloat(loan.amount) * (1 + parseFloat(loan.interest_rate));
-      const newTotalPaid = totalPaid + actualPaymentAmount;
-      const newOutstandingBalance = totalLoanAmount - newTotalPaid;
-      
-      await client.query(
-        'UPDATE loans SET outstanding_balance = $1 WHERE id = $2',
-        [newOutstandingBalance, loan_id]
-      );
-
-      // Check if loan is fully paid (allow for small rounding differences)
-      if (newOutstandingBalance <= 0.01) {
-        await client.query(
-          'UPDATE loans SET status = $1, outstanding_balance = 0 WHERE id = $2',
-          ['paid_off', loan_id]
-        );
-      }
-
-      // Record transaction
-      await client.query(
-        'INSERT INTO transactions (from_account_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)',
-        [account.id, actualPaymentAmount, 'loan_repayment', `Loan payment - R${actualPaymentAmount.toFixed(2)}`]
-      );
-
-      await client.query('COMMIT');
-      
-      // Calculate remaining payments for response
-      const weeklyPayment = parseFloat(loan.weekly_payment || loan.monthly_payment / 4.33);
-      const remainingPayments = Math.max(0, Math.ceil(newOutstandingBalance / weeklyPayment));
-      
-      console.log('✅ Payment processed successfully:', {
-        loan_id,
-        paymentAmount: actualPaymentAmount,
-        newOutstandingBalance,
-        remainingPayments,
-        totalLoanAmount,
-        newTotalPaid
-      });
-      
-      const responseMessage = isFinalPayment && actualPaymentAmount !== paymentAmount 
-        ? `Payment successful! Final payment adjusted from R${paymentAmount.toFixed(2)} to R${actualPaymentAmount.toFixed(2)}. Loan paid off.`
-        : 'Payment successful';
-        
-      res.json({ 
-        message: responseMessage,
-        paymentAmount: actualPaymentAmount,
-        isFinalPayment: newOutstandingBalance <= 0.01,
-        remainingPayments,
-        newOutstandingBalance
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    const result = await applyStudentLoanPayment(req.user.id, req.body.loan_id, 'installment');
+    res.json(result);
   } catch (error) {
+    const statusCode = (error as Error & { statusCode?: number }).statusCode;
+    if (statusCode) {
+      return res.status(statusCode).json({ error: error instanceof Error ? error.message : String(error) });
+    }
     console.error('Loan payment error:', error);
-    console.error('Error details:', {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      loan_id: req.body.loan_id,
-      amount: req.body.amount,
-      user_id: req.user?.id
+    res.status(500).json({
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : String(error)
     });
-    res.status(500).json({ 
+  }
+});
+
+// Pay off an active loan in full (students only)
+router.post('/pay-off', [
+  body('loan_id').isInt().withMessage('Loan ID is required')
+], authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const result = await applyStudentLoanPayment(req.user.id, req.body.loan_id, 'full');
+    res.json(result);
+  } catch (error) {
+    const statusCode = (error as Error & { statusCode?: number }).statusCode;
+    if (statusCode) {
+      return res.status(statusCode).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+    console.error('Loan payoff error:', error);
+    res.status(500).json({
       error: 'Internal server error',
       details: error instanceof Error ? error.message : String(error)
     });

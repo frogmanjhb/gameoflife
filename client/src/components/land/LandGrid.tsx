@@ -595,6 +595,15 @@ const LandGrid: React.FC<LandGridProps> = ({
             parcel={hoveredParcel} 
             position={mousePos}
             containerRef={containerRef}
+            canManageOwnership={canManageOwnership}
+            onTransferOwnership={
+              canManageOwnership
+                ? (p) => {
+                    setManageSelectedParcel(p);
+                    setHoveredParcel(null);
+                  }
+                : undefined
+            }
           />
         )}
       </div>

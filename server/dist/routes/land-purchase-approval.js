@@ -5,6 +5,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getRequiredLandEngineers = getRequiredLandEngineers;
 exports.getEngineerApprovalsForRequest = getEngineerApprovalsForRequest;
+exports.getEngineerReviewStartedAt = getEngineerReviewStartedAt;
+exports.getEngineerReviewDeadlineAt = getEngineerReviewDeadlineAt;
+exports.processAutoEngineerApprovals = processAutoEngineerApprovals;
+exports.executeTeacherPurchaseApproval = executeTeacherPurchaseApproval;
 exports.maybeAdvanceToTeacherReview = maybeAdvanceToTeacherReview;
 exports.townHasFinancialManager = townHasFinancialManager;
 exports.enrichPurchaseRequestWithEngineers = enrichPurchaseRequestWithEngineers;
@@ -16,13 +20,11 @@ const jobs_1 = require("./jobs");
 const landProperty_1 = require("../domain/landProperty");
 const landPurchaseApproval_1 = require("../domain/landPurchaseApproval");
 const router = (0, express_1.Router)();
+function purchaseRequestSchoolId(request) {
+    return (0, landPurchaseApproval_1.resolvePurchaseSchoolId)(request.school_id, request.applicant_school_id);
+}
 async function getRequiredLandEngineers(schoolId, townClass, excludeUserId) {
-    const params = [townClass];
-    let schoolFilter = 'u.school_id IS NULL';
-    if (schoolId !== null) {
-        schoolFilter = 'u.school_id = $2';
-        params.push(schoolId);
-    }
+    const params = [townClass, schoolId];
     let excludeFilter = '';
     if (excludeUserId !== undefined) {
         excludeFilter = ` AND u.id != $${params.length + 1}`;
@@ -33,7 +35,7 @@ async function getRequiredLandEngineers(schoolId, townClass, excludeUserId) {
      JOIN jobs j ON j.id = u.job_id
      WHERE u.role = 'student'
        AND u.class = $1
-       AND ${schoolFilter}
+       AND u.school_id IS NOT DISTINCT FROM $2
        AND (
          LOWER(j.name) LIKE '%architect%'
          OR LOWER(j.name) LIKE '%civil engineer%'
@@ -49,6 +51,115 @@ async function getEngineerApprovalsForRequest(requestId) {
      JOIN users u ON u.id = lpea.approver_id
      WHERE lpea.request_id = $1
      ORDER BY lpea.approved_at ASC`, [requestId]);
+}
+function getEngineerReviewStartedAt(request) {
+    const fmReviewed = request.fm_reviewed_at;
+    if (fmReviewed) {
+        const d = new Date(String(fmReviewed));
+        if (!Number.isNaN(d.getTime()))
+            return d;
+    }
+    const updated = request.updated_at || request.created_at;
+    if (!updated)
+        return null;
+    const d = new Date(String(updated));
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+function getEngineerReviewDeadlineAt(request) {
+    const started = getEngineerReviewStartedAt(request);
+    if (!started)
+        return null;
+    const deadline = new Date(started);
+    deadline.setDate(deadline.getDate() + landPurchaseApproval_1.LAND_ENGINEER_APPROVAL_AUTO_AFTER_DAYS);
+    return deadline.toISOString();
+}
+/** After 3 days, record absent architect/engineer approvals (no fee or XP) and advance if complete. */
+async function processAutoEngineerApprovals(request) {
+    const status = String(request.status || '').toLowerCase();
+    if (status !== 'pending_engineer')
+        return false;
+    const townClass = request.parcel_town_class;
+    const buyerId = request.user_id;
+    const requestId = request.id;
+    if (!townClass || !buyerId || !requestId)
+        return false;
+    const startedAt = getEngineerReviewStartedAt(request);
+    if (!startedAt)
+        return false;
+    const deadline = new Date(startedAt);
+    deadline.setDate(deadline.getDate() + landPurchaseApproval_1.LAND_ENGINEER_APPROVAL_AUTO_AFTER_DAYS);
+    if (Date.now() < deadline.getTime())
+        return false;
+    const schoolId = purchaseRequestSchoolId(request);
+    const requiredEngineers = await getRequiredLandEngineers(schoolId, townClass, buyerId);
+    if (requiredEngineers.length === 0)
+        return false;
+    const existingApprovals = await getEngineerApprovalsForRequest(requestId);
+    const approvedIds = new Set(existingApprovals.map((a) => Number(a.approver_id)));
+    let inserted = false;
+    const client = await database_prod_1.default.pool.connect();
+    try {
+        await client.query('BEGIN');
+        for (const eng of requiredEngineers) {
+            if (approvedIds.has(eng.id))
+                continue;
+            const res = await client.query(`INSERT INTO land_purchase_engineer_approvals (request_id, approver_id, job_name, fee_amount, auto_approved)
+         VALUES ($1, $2, $3, 0, TRUE)
+         ON CONFLICT (request_id, approver_id) DO NOTHING
+         RETURNING id`, [requestId, eng.id, eng.job_name]);
+            if ((res.rowCount ?? 0) > 0)
+                inserted = true;
+        }
+        await client.query('COMMIT');
+    }
+    catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    }
+    finally {
+        client.release();
+    }
+    if (inserted) {
+        await maybeAdvanceToTeacherReview(requestId, buyerId, schoolId, townClass);
+    }
+    return inserted;
+}
+async function executeTeacherPurchaseApproval(purchaseRequest, teacherId) {
+    const offeredPrice = Number(purchaseRequest.offered_price) || 0;
+    const buyerId = purchaseRequest.user_id;
+    const account = await database_prod_1.default.get('SELECT id, balance FROM accounts WHERE user_id = $1', [buyerId]);
+    const accountBalance = Number(account?.balance) || 0;
+    if (!account || accountBalance < offeredPrice) {
+        const err = new Error('User has insufficient balance');
+        err.code = 'INSUFFICIENT_BALANCE';
+        throw err;
+    }
+    await database_prod_1.default.run(`UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2`, [offeredPrice, buyerId]);
+    const buyer = await database_prod_1.default.get('SELECT class, school_id FROM users WHERE id = $1', [buyerId]);
+    const buyerClass = buyer?.class;
+    const landSchoolId = buyer?.school_id ?? null;
+    if (buyerClass && ['6A', '6B', '6C'].includes(buyerClass)) {
+        if (landSchoolId != null) {
+            await database_prod_1.default.run('UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id = $3', [offeredPrice, buyerClass, landSchoolId]);
+        }
+        else {
+            await database_prod_1.default.run('UPDATE town_settings SET treasury_balance = treasury_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE class = $2 AND school_id IS NULL', [offeredPrice, buyerClass]);
+        }
+        await database_prod_1.default.run('INSERT INTO treasury_transactions (school_id, town_class, amount, transaction_type, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)', [landSchoolId, buyerClass, offeredPrice, 'deposit', `Land Purchase: Plot ${purchaseRequest.parcel_id}`, buyerId]);
+    }
+    await database_prod_1.default.run(`INSERT INTO transactions (from_account_id, amount, transaction_type, description)
+     VALUES ($1, $2, 'withdrawal', $3)`, [account.id, offeredPrice, `Land purchase: Plot ${purchaseRequest.parcel_id}`]);
+    await database_prod_1.default.run(`UPDATE land_parcels
+     SET owner_id = $1, purchased_at = CURRENT_TIMESTAMP, purchase_price = $2, value = $2,
+         last_rent_collected_at = NULL, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $3`, [buyerId, offeredPrice, purchaseRequest.parcel_id]);
+    await database_prod_1.default.run(`UPDATE land_purchase_requests
+     SET status = 'approved', reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2`, [teacherId, purchaseRequest.id]);
+    await database_prod_1.default.run(`UPDATE land_purchase_requests
+     SET status = 'denied', denial_reason = 'Parcel was purchased by another user',
+         reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+     WHERE parcel_id = $2 AND id != $3 AND status IN ('pending_fm', 'pending_engineer', 'pending_teacher')`, [teacherId, purchaseRequest.parcel_id, purchaseRequest.id]);
 }
 async function maybeAdvanceToTeacherReview(requestId, buyerId, schoolId, townClass) {
     const requiredEngineers = await getRequiredLandEngineers(schoolId, townClass, buyerId);
@@ -66,28 +177,23 @@ async function maybeAdvanceToTeacherReview(requestId, buyerId, schoolId, townCla
     }
 }
 async function townHasFinancialManager(schoolId, townClass) {
-    const params = [townClass];
-    let schoolFilter = 'u.school_id IS NULL';
-    if (schoolId !== null) {
-        schoolFilter = 'u.school_id = $2';
-        params.push(schoolId);
-    }
     const row = await database_prod_1.default.get(`SELECT COUNT(*)::int AS count
      FROM users u
      JOIN jobs j ON j.id = u.job_id
      WHERE u.role = 'student'
        AND u.class = $1
-       AND ${schoolFilter}
-       AND LOWER(j.name) LIKE '%financial manager%'`, params);
+       AND u.school_id IS NOT DISTINCT FROM $2
+       AND LOWER(j.name) LIKE '%financial manager%'`, [townClass, schoolId]);
     return (row?.count ?? 0) > 0;
 }
 async function enrichPurchaseRequestWithEngineers(request) {
     const townClass = request.parcel_town_class;
-    const schoolId = request.school_id ?? null;
+    const schoolId = (0, landPurchaseApproval_1.resolvePurchaseSchoolId)(request.school_id, request.applicant_school_id);
     const buyerId = request.user_id;
     const requestId = request.id;
     const status = String(request.status || '').toLowerCase();
     if (status === 'pending_engineer' && townClass && buyerId) {
+        await processAutoEngineerApprovals(request);
         await maybeAdvanceToTeacherReview(requestId, buyerId, schoolId, townClass);
         const refreshed = await database_prod_1.default.get('SELECT status FROM land_purchase_requests WHERE id = $1', [requestId]);
         if (refreshed) {
@@ -115,6 +221,8 @@ async function enrichPurchaseRequestWithEngineers(request) {
         professional_fee_total: cost_breakdown.professional_fee_total,
         fm_fee: cost_breakdown.fm_fee,
         cost_breakdown,
+        engineer_review_deadline_at: getEngineerReviewDeadlineAt(request),
+        engineer_auto_approval_after_days: landPurchaseApproval_1.LAND_ENGINEER_APPROVAL_AUTO_AFTER_DAYS,
     };
 }
 async function getUserWithJob(userId) {
@@ -129,6 +237,7 @@ const purchaseRequestSelect = `
          u.first_name AS applicant_first_name,
          u.last_name AS applicant_last_name,
          u.class AS applicant_class,
+         u.school_id AS applicant_school_id,
          lp.grid_code AS parcel_grid_code,
          lp.biome_type AS parcel_biome_type,
          lp.value AS parcel_value,
@@ -201,7 +310,8 @@ router.put('/purchase-requests/:id/fm-review', auth_1.authenticateToken, (0, exp
         if (reviewer.class !== purchaseRequest.parcel_town_class) {
             return res.status(403).json({ error: 'You can only review purchases in your town class' });
         }
-        if ((reviewer.school_id ?? null) !== (purchaseRequest.school_id ?? null)) {
+        const requestSchoolId = purchaseRequestSchoolId(purchaseRequest);
+        if ((reviewer.school_id ?? null) !== requestSchoolId) {
             return res.status(403).json({ error: 'You can only review purchases in your school' });
         }
         if (purchaseRequest.user_id === req.user.id) {
@@ -224,7 +334,7 @@ router.put('/purchase-requests/:id/fm-review', auth_1.authenticateToken, (0, exp
             return res.json({ message: 'Purchase request denied', request: updated });
         }
         const offeredPrice = Number(purchaseRequest.offered_price) || 0;
-        const requiredEngineers = await getRequiredLandEngineers(purchaseRequest.school_id ?? null, purchaseRequest.parcel_town_class, purchaseRequest.user_id);
+        const requiredEngineers = await getRequiredLandEngineers(requestSchoolId, purchaseRequest.parcel_town_class, purchaseRequest.user_id);
         const xpAlreadyEarned = await (0, landPurchaseApproval_1.fmPurchaseReviewXpAlreadyEarned)(database_prod_1.default, purchaseRequest.parcel_id, purchaseRequest.user_id, requestId);
         const fmFee = xpAlreadyEarned ? 0 : (0, landPurchaseApproval_1.calculateFmFee)(offeredPrice, requiredEngineers.length);
         await client.query('BEGIN');
@@ -261,8 +371,9 @@ router.put('/purchase-requests/:id/fm-review', auth_1.authenticateToken, (0, exp
          SET status = $1,
              fm_reviewed_by = $2,
              fm_reviewed_at = CURRENT_TIMESTAMP,
+             school_id = COALESCE(school_id, $4),
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3`, [nextStatus, req.user.id, requestId]);
+         WHERE id = $3`, [nextStatus, req.user.id, requestId, requestSchoolId]);
         let xpAwarded = 0;
         let newLevel = null;
         if (!xpAlreadyEarned) {
@@ -328,13 +439,14 @@ router.put('/purchase-requests/:id/engineer-review', auth_1.authenticateToken, (
         if (reviewer.class !== purchaseRequest.parcel_town_class) {
             return res.status(403).json({ error: 'You can only review purchases in your town class' });
         }
-        if ((reviewer.school_id ?? null) !== (purchaseRequest.school_id ?? null)) {
+        const requestSchoolId = purchaseRequestSchoolId(purchaseRequest);
+        if ((reviewer.school_id ?? null) !== requestSchoolId) {
             return res.status(403).json({ error: 'You can only review purchases in your school' });
         }
         if (purchaseRequest.user_id === req.user.id) {
             return res.status(400).json({ error: 'You cannot approve your own purchase request' });
         }
-        const requiredEngineers = await getRequiredLandEngineers(purchaseRequest.school_id ?? null, purchaseRequest.parcel_town_class, purchaseRequest.user_id);
+        const requiredEngineers = await getRequiredLandEngineers(requestSchoolId, purchaseRequest.parcel_town_class, purchaseRequest.user_id);
         const isRequired = requiredEngineers.some((e) => e.id === req.user.id);
         if (!isRequired) {
             return res.status(403).json({ error: 'You are not a required approver for this purchase' });

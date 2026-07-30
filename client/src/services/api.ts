@@ -28,6 +28,7 @@ import {
   ContentSubmissionsPending,
   ClassEventVotingStatus, ClassEventTiming, ClassEventItem,
   FiveMinuteLessonsStatus, FiveMinuteLessonItem,
+  AuctionItem, AuctionBid, AuctionBidIncrement,
   RetailManagerGameStatus, RetailManagerGameStartRequest, RetailManagerGameSubmitRequest,
   EntrepreneurGameStatus, EntrepreneurGameStartRequest, EntrepreneurGameSubmitRequest,
   Job, JobApplication, LandParcel, LandPurchaseRequest, LandSaleRequest, 
@@ -1315,6 +1316,28 @@ export const classEventsApi = {
   deleteEvent: (eventId: number, townClass: string): Promise<{ data: { success: boolean } }> =>
     api.delete(`/class-events/${eventId}`, { params: { class: townClass } }),
 };
+
+export const auctionApi = {
+  list: (params?: { class?: string }): Promise<{
+    data: { auctions: AuctionItem[]; town_class?: string | null; bid_increments: AuctionBidIncrement[] };
+  }> => api.get('/auction', { params }),
+  get: (id: number): Promise<{
+    data: { auction: AuctionItem; bids: AuctionBid[]; bid_increments: AuctionBidIncrement[] };
+  }> => api.get(`/auction/${id}`),
+  create: (data: {
+    name: string;
+    starting_price: number;
+    town_class: string;
+  }): Promise<{ data: { auction: AuctionItem } }> => api.post('/auction', data),
+  goLive: (id: number): Promise<{ data: { auction: AuctionItem } }> =>
+    api.post(`/auction/${id}/go-live`),
+  end: (id: number): Promise<{ data: { auction: AuctionItem } }> =>
+    api.post(`/auction/${id}/end`),
+  bid: (id: number, increment: AuctionBidIncrement): Promise<{
+    data: { success: boolean; bid_amount: number; auction: AuctionItem };
+  }> => api.post(`/auction/${id}/bid`, { increment }),
+};
+
 
 export const fiveMinuteLessonsApi = {
   getStatus: (params?: { class?: string }): Promise<{ data: FiveMinuteLessonsStatus }> =>

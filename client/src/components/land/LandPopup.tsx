@@ -12,9 +12,17 @@ interface LandPopupProps {
   parcel: LandParcel;
   position: { x: number; y: number };
   containerRef: React.RefObject<HTMLDivElement>;
+  canManageOwnership?: boolean;
+  onTransferOwnership?: (parcel: LandParcel) => void;
 }
 
-const LandPopup: React.FC<LandPopupProps> = ({ parcel, position, containerRef }) => {
+const LandPopup: React.FC<LandPopupProps> = ({
+  parcel,
+  position,
+  containerRef,
+  canManageOwnership,
+  onTransferOwnership,
+}) => {
   const isAuctionPlot = isCommunityAuctionPlot(parcel);
   const biomeConfig = BIOME_CONFIG[parcel.biome_type];
   const riskColors = RISK_COLORS[parcel.risk_level];
@@ -201,12 +209,26 @@ const LandPopup: React.FC<LandPopupProps> = ({ parcel, position, containerRef })
         </div>
       </div>
 
-      <div className="px-4 py-2 bg-gray-50 border-t border-gray-100">
+      <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 space-y-2">
+        {isAuctionPlot && canManageOwnership && onTransferOwnership && (
+          <button
+            type="button"
+            className="w-full text-sm font-medium px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700"
+            onClick={(e) => {
+              e.stopPropagation();
+              onTransferOwnership(parcel);
+            }}
+          >
+            Transfer ownership
+          </button>
+        )}
         <p className="text-xs text-gray-500 text-center">
           {parcel.owner_id
             ? `This plot is owned by ${ownerName}`
             : isAuctionPlot
-              ? 'Reserved for the class auction — not available for direct purchase'
+              ? canManageOwnership
+                ? 'Reserved for the class auction — transfer ownership after bidding ends'
+                : 'Reserved for the class auction — not available for direct purchase'
               : 'Click to purchase this plot'}
         </p>
       </div>

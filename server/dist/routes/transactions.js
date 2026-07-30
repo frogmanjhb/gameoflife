@@ -94,6 +94,103 @@ async function executeTeacherTransferApproval(pending, schoolId, reviewerId) {
     }
 }
 const router = (0, express_1.Router)();
+const TEACHER_HISTORY_JOIN = `
+  FROM transactions t
+  LEFT JOIN accounts fa ON t.from_account_id = fa.id
+  LEFT JOIN users fu ON fa.user_id = fu.id
+  LEFT JOIN accounts ta ON t.to_account_id = ta.id
+  LEFT JOIN users tu ON ta.user_id = tu.id
+`;
+function parseTeacherHistoryPagination(req) {
+    if (req.query.limit === undefined)
+        return null;
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit), 10) || 50, 1), 500);
+    const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
+    return { limit, offset };
+}
+function buildTeacherHistoryFilters(req, baseParams) {
+    const extraClauses = [];
+    const params = [...baseParams];
+    const className = typeof req.query.class === 'string' ? req.query.class.trim() : '';
+    const username = typeof req.query.username === 'string' ? req.query.username.trim() : '';
+    if (className) {
+        params.push(className);
+        extraClauses.push(`(fu.class = $${params.length} OR tu.class = $${params.length})`);
+    }
+    if (username) {
+        params.push(username);
+        extraClauses.push(`(fu.username = $${params.length} OR tu.username = $${params.length})`);
+    }
+    return {
+        extraWhere: extraClauses.length > 0 ? ` AND ${extraClauses.join(' AND ')}` : '',
+        params,
+    };
+}
+// Lightweight aggregate stats for teacher bank dashboard
+router.get('/bank-stats', auth_1.authenticateToken, tenant_1.requireTenant, (0, auth_1.requireRole)(['teacher']), async (req, res) => {
+    try {
+        const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+        const filter = (0, transaction_history_visibility_1.teacherSchoolTransactionFilter)(schoolId);
+        const historyFilters = buildTeacherHistoryFilters(req, filter.params);
+        const whereClause = `${filter.schoolCondition}${filter.visibilityFragment}${historyFilters.extraWhere}`;
+        const weekRow = await database_prod_1.default.get(`
+      SELECT COUNT(*)::int AS week_transaction_count
+      ${TEACHER_HISTORY_JOIN}
+      WHERE ${whereClause}
+      AND t.created_at >= NOW() - INTERVAL '7 days'
+    `, historyFilters.params);
+        const className = typeof req.query.class === 'string' ? req.query.class.trim() : '';
+        const username = typeof req.query.username === 'string' ? req.query.username.trim() : '';
+        const loanClauses = [];
+        const loanParams = [];
+        if (schoolId !== null) {
+            loanParams.push(schoolId);
+            loanClauses.push(`u.school_id = $${loanParams.length}`);
+        }
+        else {
+            loanClauses.push('u.school_id IS NULL');
+        }
+        if (className) {
+            loanParams.push(className);
+            loanClauses.push(`u.class = $${loanParams.length}`);
+        }
+        if (username) {
+            loanParams.push(username);
+            loanClauses.push(`u.username = $${loanParams.length}`);
+        }
+        const loanRow = await database_prod_1.default.get(`
+      SELECT
+        COUNT(*) FILTER (WHERE l.status = 'pending')::int AS pending_loans,
+        COUNT(*) FILTER (WHERE l.status = 'active')::int AS active_loans
+      FROM loans l
+      JOIN users u ON l.borrower_id = u.id
+      WHERE ${loanClauses.join(' AND ')}
+    `, loanParams);
+        const finesRow = schoolId != null
+            ? await database_prod_1.default.get(`SELECT COUNT(*)::int AS pending_fines_bonuses
+             FROM police_fine_bonus_requests
+             WHERE school_id = $1 AND status = 'pending_teacher'`, [schoolId])
+            : await database_prod_1.default.get(`SELECT COUNT(*)::int AS pending_fines_bonuses
+             FROM police_fine_bonus_requests
+             WHERE school_id IS NULL AND status = 'pending_teacher'`);
+        const lawsuitRow = schoolId != null
+            ? await database_prod_1.default.get(`SELECT COUNT(*)::int AS pending_lawsuits
+             FROM student_lawsuits
+             WHERE school_id IS NOT DISTINCT FROM $1 AND status = 'pending_teacher'`, [schoolId])
+            : { pending_lawsuits: 0 };
+        res.json({
+            week_transaction_count: weekRow?.week_transaction_count ?? 0,
+            pending_loans: loanRow?.pending_loans ?? 0,
+            active_loans: loanRow?.active_loans ?? 0,
+            pending_fines_bonuses: finesRow?.pending_fines_bonuses ?? 0,
+            pending_lawsuits: lawsuitRow?.pending_lawsuits ?? 0,
+        });
+    }
+    catch (error) {
+        console.error('Bank stats error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 // Get transaction history
 router.get('/history', auth_1.authenticateToken, async (req, res) => {
     try {
@@ -133,27 +230,48 @@ router.get('/history', auth_1.authenticateToken, async (req, res) => {
             console.log('📊 Found transactions for student:', transactions.length);
         }
         else {
-            // Teacher: only transactions where both parties are in the teacher's school
             const schoolId = req.user.school_id ?? req.schoolId ?? null;
-            const schoolCondition = schoolId !== null
-                ? '(fa.user_id IS NULL OR fu.school_id = $1) AND (ta.user_id IS NULL OR tu.school_id = $1)'
-                : '(fa.user_id IS NULL OR fu.school_id IS NULL) AND (ta.user_id IS NULL OR tu.school_id IS NULL)';
-            const params = schoolId !== null ? [schoolId] : [];
-            const visibility = (0, transaction_history_visibility_1.teacherSchoolTransactionVisibilitySql)(schoolId, params.length + 1);
+            const pagination = parseTeacherHistoryPagination(req);
+            const filter = (0, transaction_history_visibility_1.teacherSchoolTransactionFilter)(schoolId);
+            const historyFilters = buildTeacherHistoryFilters(req, filter.params);
+            const whereClause = `${filter.schoolCondition}${filter.visibilityFragment}${historyFilters.extraWhere}`;
+            if (pagination) {
+                const countRow = await database_prod_1.default.get(`
+          SELECT COUNT(*)::int AS total
+          ${TEACHER_HISTORY_JOIN}
+          WHERE ${whereClause}
+        `, historyFilters.params);
+                const total = countRow?.total ?? 0;
+                historyFilters.params.push(pagination.limit, pagination.offset);
+                const limitParam = historyFilters.params.length - 1;
+                const offsetParam = historyFilters.params.length;
+                transactions = await database_prod_1.default.query(`
+          SELECT
+            t.*,
+            fu.username as from_username,
+            tu.username as to_username
+          ${TEACHER_HISTORY_JOIN}
+          WHERE ${whereClause}
+          ORDER BY t.created_at DESC
+          LIMIT $${limitParam} OFFSET $${offsetParam}
+        `, historyFilters.params);
+                return res.json({
+                    transactions,
+                    total,
+                    limit: pagination.limit,
+                    offset: pagination.offset,
+                    has_more: pagination.offset + transactions.length < total,
+                });
+            }
             transactions = await database_prod_1.default.query(`
-        SELECT 
+        SELECT
           t.*,
           fu.username as from_username,
           tu.username as to_username
-        FROM transactions t
-        LEFT JOIN accounts fa ON t.from_account_id = fa.id
-        LEFT JOIN users fu ON fa.user_id = fu.id
-        LEFT JOIN accounts ta ON t.to_account_id = ta.id
-        LEFT JOIN users tu ON ta.user_id = tu.id
-        WHERE ${schoolCondition}
-        ${visibility.fragment}
+        ${TEACHER_HISTORY_JOIN}
+        WHERE ${whereClause}
         ORDER BY t.created_at DESC
-      `, [...params, ...visibility.params]);
+      `, historyFilters.params);
         }
         res.json(transactions);
     }

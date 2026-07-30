@@ -201,9 +201,6 @@ router.put('/sale-requests/:id/fm-review', auth_1.authenticateToken, (0, express
         if (!fmAuth.ok) {
             return res.status(403).json({ error: fmAuth.error });
         }
-        if (sale.seller_id === req.user.id || sale.buyer_id === req.user.id) {
-            return res.status(403).json({ error: 'You cannot review a sale you are party to' });
-        }
         if (sale.fm_reviewed_by != null) {
             return res.status(400).json({ error: 'This sale request has already been reviewed' });
         }
