@@ -14,9 +14,15 @@ export const DEFENSE_LAWYER_FEE = 5000;
 export const DEFENSE_LAWYER_XP = 15;
 export const JURY_LAWSUIT_XP = 10;
 export const HR_MEDIATION_XP = 10;
-export const LAWSUIT_CLAIM_CAP = 5000;
+export const LAWSUIT_CLAIM_CAP = 15000;
+/** On teacher approve, town treasury pays this multiple of the awarded amount to the plaintiff. */
+export const LAWSUIT_TREASURY_AWARD_MULTIPLIER = 2;
 export const JURY_SIZE = 5;
 export const JURY_MIN_ELIGIBLE = 3;
+
+type LawsuitDbClient = {
+  query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+};
 
 export const TERMINAL_STATUSES = ['approved', 'denied', 'withdrawn', 'resolved_mediation'] as const;
 export const LAWYER_OPINIONS = ['recommend_approve', 'recommend_partial', 'recommend_dismiss'] as const;
@@ -369,7 +375,7 @@ export async function refundEscrowIfHeld(lawsuitId: number): Promise<void> {
 
 export async function payPlaintiffLawyerOnClose(
   lawsuit: Record<string, unknown>,
-  client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }
+  client: LawsuitDbClient
 ): Promise<{ lawyerId?: number }> {
   if (!lawsuit.accepting_lawyer_id || lawsuit.lawyer_fee_paid_at || !lawsuit.escrow_held_at || lawsuit.escrow_refunded_at) {
     return {};
@@ -391,6 +397,135 @@ export async function payPlaintiffLawyerOnClose(
     lawsuit.id,
   ]);
   return { lawyerId };
+}
+
+/** Refund plaintiff escrow inside an open transaction (approve / win path). */
+export async function refundEscrowWithClient(
+  lawsuit: Record<string, unknown>,
+  client: LawsuitDbClient
+): Promise<number> {
+  if (!lawsuit.escrow_held_at || lawsuit.escrow_refunded_at || lawsuit.escrow_amount == null) {
+    return 0;
+  }
+  const amount = parseFloat(String(lawsuit.escrow_amount));
+  if (!amount || amount <= 0) return 0;
+
+  const accountRes = await client.query('SELECT id FROM accounts WHERE user_id = $1 FOR UPDATE', [
+    lawsuit.plaintiff_user_id,
+  ]);
+  const account = accountRes.rows[0];
+  if (!account) throw new Error('Plaintiff account not found');
+
+  await client.query(
+    'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+    [amount, account.id]
+  );
+  await client.query(
+    `INSERT INTO transactions (to_account_id, amount, transaction_type, description)
+     VALUES ($1, $2, 'deposit', $3)`,
+    [account.id, amount, `Lawsuit escrow refund | case #${lawsuit.id}`]
+  );
+  await client.query(
+    'UPDATE student_lawsuits SET escrow_refunded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+    [lawsuit.id]
+  );
+  return amount;
+}
+
+/**
+ * On approve: refund escrow to plaintiff, pay counsel from town treasury,
+ * and pay plaintiff LAWSUIT_TREASURY_AWARD_MULTIPLIER × awarded from treasury.
+ */
+export async function settleApprovedLawsuitPayouts(
+  lawsuit: Record<string, unknown>,
+  awardedAmount: number,
+  client: LawsuitDbClient,
+  createdBy: number | null
+): Promise<{ lawyerId?: number; treasuryBonus: number; escrowRefunded: number }> {
+  const needsLawyerFee =
+    !!lawsuit.accepting_lawyer_id &&
+    !lawsuit.lawyer_fee_paid_at &&
+    !!lawsuit.escrow_held_at &&
+    !lawsuit.escrow_refunded_at;
+
+  const treasuryBonus =
+    awardedAmount > 0 ? awardedAmount * LAWSUIT_TREASURY_AWARD_MULTIPLIER : 0;
+  const treasuryNeeded = (needsLawyerFee ? LAWYER_LAWSUIT_FEE : 0) + treasuryBonus;
+
+  if (treasuryNeeded > 0) {
+    const townRes = await client.query(
+      'SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id IS NOT DISTINCT FROM $2 FOR UPDATE',
+      [lawsuit.town_class, lawsuit.school_id]
+    );
+    const town = townRes.rows[0];
+    if (!town || parseFloat(String(town.treasury_balance)) < treasuryNeeded) {
+      throw new Error(
+        `Town treasury has insufficient funds for lawsuit payout (need R${treasuryNeeded.toFixed(2)})`
+      );
+    }
+  }
+
+  const escrowRefunded = await refundEscrowWithClient(lawsuit, client);
+
+  let lawyerId: number | undefined;
+  if (needsLawyerFee) {
+    const lid = lawsuit.accepting_lawyer_id as number;
+    await updateTownTreasury(
+      client,
+      lawsuit.school_id as number | null,
+      lawsuit.town_class as string,
+      LAWYER_LAWSUIT_FEE,
+      `Lawsuit legal fee (approved case) | case #${lawsuit.id}`,
+      createdBy
+    );
+    const accountRes = await client.query('SELECT id FROM accounts WHERE user_id = $1 FOR UPDATE', [lid]);
+    const account = accountRes.rows[0];
+    if (!account) throw new Error('Lawyer account not found');
+    await client.query(
+      'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [LAWYER_LAWSUIT_FEE, account.id]
+    );
+    await client.query(
+      `INSERT INTO transactions (to_account_id, amount, transaction_type, description)
+       VALUES ($1, $2, 'deposit', $3)`,
+      [account.id, LAWYER_LAWSUIT_FEE, `Lawsuit legal fee | case #${lawsuit.id}`]
+    );
+    await client.query('UPDATE student_lawsuits SET lawyer_fee_paid_at = CURRENT_TIMESTAMP WHERE id = $1', [
+      lawsuit.id,
+    ]);
+    lawyerId = lid;
+  }
+
+  if (treasuryBonus > 0) {
+    await updateTownTreasury(
+      client,
+      lawsuit.school_id as number | null,
+      lawsuit.town_class as string,
+      treasuryBonus,
+      `Lawsuit treasury award (${LAWSUIT_TREASURY_AWARD_MULTIPLIER}×) | case #${lawsuit.id}`,
+      createdBy
+    );
+    const plAcct = await client.query('SELECT id FROM accounts WHERE user_id = $1 FOR UPDATE', [
+      lawsuit.plaintiff_user_id,
+    ]);
+    const plAccount = plAcct.rows[0];
+    if (!plAccount) throw new Error('Plaintiff account not found');
+    await client.query(
+      'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [treasuryBonus, plAccount.id]
+    );
+    await client.query(
+      `INSERT INTO transactions (to_account_id, amount, transaction_type, description)
+       VALUES ($1, $2, 'deposit', $3)`,
+      [
+        plAccount.id,
+        treasuryBonus,
+        `Lawsuit treasury award (${LAWSUIT_TREASURY_AWARD_MULTIPLIER}× claim) | case #${lawsuit.id}`,
+      ]
+    );
+  }
+
+  return { lawyerId, treasuryBonus, escrowRefunded };
 }
 
 export async function payDefenseLawyerParticipation(
@@ -827,7 +962,9 @@ export function buildProceedingsTimeline(
       at: row.teacher_reviewed_at as string | null,
       summary:
         status === 'approved'
-          ? `Approved — R${row.awarded_amount} awarded`
+          ? `Approved — R${row.awarded_amount} from defendant + R${
+              parseFloat(String(row.awarded_amount || 0)) * LAWSUIT_TREASURY_AWARD_MULTIPLIER
+            } from town treasury; escrow refunded`
           : status === 'denied'
             ? 'Denied'
             : status === 'pending_teacher'

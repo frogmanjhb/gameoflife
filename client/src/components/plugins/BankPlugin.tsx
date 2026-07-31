@@ -906,7 +906,7 @@ const TeacherBankView: React.FC<TeacherBankViewProps> = ({ bankPlugin }) => {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">Pending Lawsuits</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Final teacher approval for damages and lawyer fees. Review jury verdict and counsel opinions in Court plugin.
+                  Final teacher approval for damages and lawyer fees. On approve: defendant pays the award, town treasury pays 2× that award to the plaintiff, escrow is refunded, and plaintiff counsel is paid from the treasury. Review jury verdict and counsel opinions in Court plugin.
                 </p>
               </div>
               {pendingLawsuits.length === 0 ? (

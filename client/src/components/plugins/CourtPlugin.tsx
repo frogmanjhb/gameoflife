@@ -8,7 +8,8 @@ import LawsuitProceedingsFlowMap from '../LawsuitProceedingsFlowMap';
 import { ResponsivePage, ResponsivePluginHero, LoadingState, ResponsiveTabNav } from '../responsive';
 
 const PROCESS_COST = 10000;
-const CLAIM_CAP = 5000;
+const CLAIM_CAP = 15000;
+const TREASURY_AWARD_MULTIPLIER = 2;
 
 const COURT_RULES = [
   {
@@ -44,7 +45,7 @@ const COURT_RULES = [
       'If your town has no HR Director, the case auto-escalates past mediation to lawyers and jury.',
       'When only one lawyer serves the town, they may represent both plaintiff and defendant.',
       'HR may resolve without damages, settle by agreement (skips jury), or escalate to full court.',
-      'Plaintiff lawyer accept holds R10,000 escrow; paid to lawyer on teacher close (+20 XP).',
+      'Plaintiff lawyer accept holds R10,000 escrow. On approval, escrow is refunded to the plaintiff and the lawyer is paid from the town treasury (+20 XP). On denial, escrow pays the lawyer.',
       'Defense lawyer earns R5,000 from town treasury + 15 XP when submitting their opinion.',
       'Jurors vote guilty or not guilty (+10 XP); majority advises the teacher.',
     ],
@@ -62,6 +63,7 @@ const COURT_RULES = [
     title: 'Outcomes',
     items: [
       'Teacher may approve full, partial, or no damages.',
+      `On approval, the plaintiff receives the awarded amount from the defendant plus ${TREASURY_AWARD_MULTIPLIER}× that award from the town treasury.`,
       'A guilty jury verdict does not automatically transfer money.',
       'Frivolous or malicious cases may be denied with no damages awarded.',
     ],

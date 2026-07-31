@@ -29,6 +29,7 @@ import {
   recordJuryVote,
   refundEscrowIfHeld,
   resolveLawyerSetup,
+  settleApprovedLawsuitPayouts,
   tablesReady,
   TERMINAL_STATUSES,
   tryAdvanceToJury,
@@ -828,6 +829,13 @@ router.post(
           }
         }
 
+        const settle = await settleApprovedLawsuitPayouts(
+          { ...lawsuit, id: lawsuitId },
+          awardedAmount,
+          client,
+          req.user!.id
+        );
+
         await client.query(
           `UPDATE student_lawsuits SET
              status = 'approved',
@@ -841,17 +849,18 @@ router.post(
           [awardedAmount, req.user!.id, teacherInitials, teacherNotes, lawsuitId]
         );
 
-        const xpResult = await payPlaintiffLawyerOnClose({ ...lawsuit, id: lawsuitId }, client);
         await client.query('COMMIT');
 
         let lawyerXp: { experience_points?: number; new_level?: number | null } = {};
-        if (xpResult.lawyerId) {
-          lawyerXp = await awardJobXp(xpResult.lawyerId, LAWYER_LAWSUIT_XP);
+        if (settle.lawyerId) {
+          lawyerXp = await awardJobXp(settle.lawyerId, LAWYER_LAWSUIT_XP);
         }
 
         return res.json({
           message: 'Case approved',
           awarded_amount: awardedAmount,
+          treasury_bonus: settle.treasuryBonus,
+          escrow_refunded: settle.escrowRefunded,
           lawyer_xp: lawyerXp.experience_points,
           new_level: lawyerXp.new_level,
         });
