@@ -9,418 +9,98 @@ export interface TownPlannerQuestion {
 
 // EASY – Land Area & Cost (area, price per plot, simple multiplication)
 export const easyQuestions: TownPlannerQuestion[] = [
-  {
-    question: "A Savanna plot costs R6,200. A student buys 4 plots. Total cost (R)?",
-    answer: 24800,
-    explanation: "6,200 × 4 = R24,800"
-  },
-  {
-    question: "A rectangular plot is 22 m × 16 m. What is the area (m²)?",
-    answer: 352,
-    explanation: "22 × 16 = 352 m²"
-  },
-  {
-    question: "A plot costs R2,400 each. A student buys 6 plots. Total cost (R)?",
-    answer: 14400,
-    explanation: "2,400 × 6 = R14,400"
-  },
-  {
-    question: "A rectangular plot is 12 m × 9 m. Area (m²)?",
-    answer: 108,
-    explanation: "12 × 9 = 108 m²"
-  },
-  {
-    question: "R8,500 per plot. 3 plots. Total cost (R)?",
-    answer: 25500,
-    explanation: "8,500 × 3 = R25,500"
-  },
-  {
-    question: "Rectangular plot 28 m × 5 m. Area (m²)?",
-    answer: 140,
-    explanation: "28 × 5 = 140 m²"
-  },
-  {
-    question: "5 plots at R3,200 each. Total cost (R)?",
-    answer: 16000,
-    explanation: "3,200 × 5 = R16,000"
-  },
-  {
-    question: "A square plot is 14 m × 14 m. Area (m²)?",
-    answer: 196,
-    explanation: "14 × 14 = 196 m²"
-  },
-  {
-    question: "R5,800 per plot. 5 plots. Total (R)?",
-    answer: 29000,
-    explanation: "5,800 × 5 = R29,000"
-  },
-  {
-    question: "Rectangular plot 32 m × 18 m. Area (m²)?",
-    answer: 576,
-    explanation: "32 × 18 = 576 m²"
-  },
-  {
-    question: "7 plots at R2,800 each. Total cost (R)?",
-    answer: 19600,
-    explanation: "2,800 × 7 = R19,600"
-  },
-  {
-    question: "Plot 18 m × 11 m. Area (m²)?",
-    answer: 198,
-    explanation: "18 × 11 = 198 m²"
-  },
-  {
-    question: "R7,200 per plot. 4 plots. Total (R)?",
-    answer: 28800,
-    explanation: "7,200 × 4 = R28,800"
-  },
-  {
-    question: "Rectangular plot 20 m × 6 m. Area (m²)?",
-    answer: 120,
-    explanation: "20 × 6 = 120 m²"
-  },
-  {
-    question: "6 plots at R4,500 each. Total cost (R)?",
-    answer: 27000,
-    explanation: "4,500 × 6 = R27,000"
-  },
-  {
-    question: "Plot 26 m × 11 m. Area (m²)?",
-    answer: 286,
-    explanation: "26 × 11 = 286 m²"
-  },
-  {
-    question: "R4,200 per plot. 7 plots. Total (R)?",
-    answer: 29400,
-    explanation: "4,200 × 7 = R29,400"
-  },
-  {
-    question: "Rectangular plot 9 m × 11 m. Area (m²)?",
-    answer: 99,
-    explanation: "9 × 11 = 99 m²"
-  },
-  {
-    question: "9 plots at R1,800 each. Total cost (R)?",
-    answer: 16200,
-    explanation: "1,800 × 9 = R16,200"
-  },
-  {
-    question: "Plot 19 m × 17 m. Area (m²)?",
-    answer: 323,
-    explanation: "19 × 17 = 323 m²"
-  }
+  { question: "A Karoo plot costs R5,400. A student buys 5 plots. Total cost (R)?", answer: 27000, explanation: "5,400 × 5 = R27,000" },
+  { question: "A rectangular plot is 24 m × 15 m. What is the area (m²)?", answer: 360, explanation: "24 × 15 = 360 m²" },
+  { question: "A plot costs R3,600 each. A student buys 4 plots. Total cost (R)?", answer: 14400, explanation: "3,600 × 4 = R14,400" },
+  { question: "A rectangular plot is 16 m × 13 m. Area (m²)?", answer: 208, explanation: "16 × 13 = 208 m²" },
+  { question: "R9,200 per plot. 2 plots. Total cost (R)?", answer: 18400, explanation: "9,200 × 2 = R18,400" },
+  { question: "Rectangular plot 30 m × 7 m. Area (m²)?", answer: 210, explanation: "30 × 7 = 210 m²" },
+  { question: "8 plots at R2,600 each. Total cost (R)?", answer: 20800, explanation: "2,600 × 8 = R20,800" },
+  { question: "A square plot is 12 m × 12 m. Area (m²)?", answer: 144, explanation: "12 × 12 = 144 m²" },
+  { question: "R6,500 per plot. 3 plots. Total (R)?", answer: 19500, explanation: "6,500 × 3 = R19,500" },
+  { question: "Rectangular plot 25 m × 14 m. Area (m²)?", answer: 350, explanation: "25 × 14 = 350 m²" },
+  { question: "6 plots at R3,900 each. Total cost (R)?", answer: 23400, explanation: "3,900 × 6 = R23,400" },
+  { question: "Plot 17 m × 12 m. Area (m²)?", answer: 204, explanation: "17 × 12 = 204 m²" },
+  { question: "R5,500 per plot. 5 plots. Total (R)?", answer: 27500, explanation: "5,500 × 5 = R27,500" },
+  { question: "Rectangular plot 21 m × 8 m. Area (m²)?", answer: 168, explanation: "21 × 8 = 168 m²" },
+  { question: "4 plots at R5,250 each. Total cost (R)?", answer: 21000, explanation: "5,250 × 4 = R21,000" },
+  { question: "Plot 23 m × 13 m. Area (m²)?", answer: 299, explanation: "23 × 13 = 299 m²" },
+  { question: "R3,300 per plot. 8 plots. Total (R)?", answer: 26400, explanation: "3,300 × 8 = R26,400" },
+  { question: "Rectangular plot 11 m × 15 m. Area (m²)?", answer: 165, explanation: "11 × 15 = 165 m²" },
+  { question: "10 plots at R2,200 each. Total cost (R)?", answer: 22000, explanation: "2,200 × 10 = R22,000" },
+  { question: "Plot 15 m × 19 m. Area (m²)?", answer: 285, explanation: "15 × 19 = 285 m²" }
 ];
 
 // MEDIUM – Zoning Percentages (percentage allocation, planning ratios)
 export const mediumQuestions: TownPlannerQuestion[] = [
-  {
-    question: "Town has 1,200 m² available. 35% must be residential. How many m² is residential?",
-    answer: 420,
-    explanation: "1,200 × 0.35 = 420 m²"
-  },
-  {
-    question: "Karoo zone: 30% land reserved for conservation. Plot is 900 m². How much must remain untouched (m²)?",
-    answer: 270,
-    explanation: "900 × 0.30 = 270 m²"
-  },
-  {
-    question: "2,400 m² available. 45% commercial. Commercial area (m²)?",
-    answer: 1080,
-    explanation: "2,400 × 0.45 = 1,080 m²"
-  },
-  {
-    question: "600 m² total. 25% green space. Green space (m²)?",
-    answer: 150,
-    explanation: "600 × 0.25 = 150 m²"
-  },
-  {
-    question: "1,500 m². 55% residential. Residential (m²)?",
-    answer: 825,
-    explanation: "1,500 × 0.55 = 825 m²"
-  },
-  {
-    question: "750 m² plot. 18% reserved for conservation. Reserved (m²)?",
-    answer: 135,
-    explanation: "750 × 0.18 = 135 m²"
-  },
-  {
-    question: "3,200 m². 28% residential. Residential (m²)?",
-    answer: 896,
-    explanation: "3,200 × 0.28 = 896 m²"
-  },
-  {
-    question: "450 m². 40% conservation. Conservation (m²)?",
-    answer: 180,
-    explanation: "450 × 0.40 = 180 m²"
-  },
-  {
-    question: "1,800 m². 65% residential. Residential (m²)?",
-    answer: 1170,
-    explanation: "1,800 × 0.65 = 1,170 m²"
-  },
-  {
-    question: "Coastal: 22% flood buffer required. 850 m² plot. Buffer (m²)?",
-    answer: 187,
-    explanation: "850 × 0.22 = 187 m²"
-  },
-  {
-    question: "2,600 m². 38% commercial. Commercial (m²)?",
-    answer: 988,
-    explanation: "2,600 × 0.38 = 988 m²"
-  },
-  {
-    question: "820 m². 32% must remain untouched. Untouched (m²)?",
-    answer: 262.4,
-    explanation: "820 × 0.32 = 262.4 m²"
-  },
-  {
-    question: "2,100 m². 42% residential. Residential (m²)?",
-    answer: 882,
-    explanation: "2,100 × 0.42 = 882 m²"
-  },
-  {
-    question: "380 m². 45% biodiversity reserve. Reserve (m²)?",
-    answer: 171,
-    explanation: "380 × 0.45 = 171 m²"
-  },
-  {
-    question: "2,900 m². 22% green space. Green (m²)?",
-    answer: 638,
-    explanation: "2,900 × 0.22 = 638 m²"
-  },
-  {
-    question: "720 m². 25% reserved. Reserved (m²)?",
-    answer: 180,
-    explanation: "720 × 0.25 = 180 m²"
-  },
-  {
-    question: "2,500 m². 48% residential. Residential (m²)?",
-    answer: 1200,
-    explanation: "2,500 × 0.48 = 1,200 m²"
-  },
-  {
-    question: "580 m². 20% conservation. Conservation (m²)?",
-    answer: 116,
-    explanation: "580 × 0.20 = 116 m²"
-  },
-  {
-    question: "3,800 m². 30% roads. Road area (m²)?",
-    answer: 1140,
-    explanation: "3,800 × 0.30 = 1,140 m²"
-  },
-  {
-    question: "520 m². 35% reserved. Reserved (m²)?",
-    answer: 182,
-    explanation: "520 × 0.35 = 182 m²"
-  }
+  { question: "Town has 1,400 m² available. 40% must be residential. How many m² is residential?", answer: 560, explanation: "1,400 × 0.40 = 560 m²" },
+  { question: "Karoo zone: 25% land reserved for conservation. Plot is 800 m². How much must remain untouched (m²)?", answer: 200, explanation: "800 × 0.25 = 200 m²" },
+  { question: "2,800 m² available. 50% commercial. Commercial area (m²)?", answer: 1400, explanation: "2,800 × 0.50 = 1,400 m²" },
+  { question: "720 m² total. 30% green space. Green space (m²)?", answer: 216, explanation: "720 × 0.30 = 216 m²" },
+  { question: "1,600 m². 60% residential. Residential (m²)?", answer: 960, explanation: "1,600 × 0.60 = 960 m²" },
+  { question: "680 m² plot. 20% reserved for conservation. Reserved (m²)?", answer: 136, explanation: "680 × 0.20 = 136 m²" },
+  { question: "3,500 m². 32% residential. Residential (m²)?", answer: 1120, explanation: "3,500 × 0.32 = 1,120 m²" },
+  { question: "500 m². 36% conservation. Conservation (m²)?", answer: 180, explanation: "500 × 0.36 = 180 m²" },
+  { question: "2,000 m². 70% residential. Residential (m²)?", answer: 1400, explanation: "2,000 × 0.70 = 1,400 m²" },
+  { question: "Coastal: 15% flood buffer required. 920 m² plot. Buffer (m²)?", answer: 138, explanation: "920 × 0.15 = 138 m²" },
+  { question: "2,400 m². 42% commercial. Commercial (m²)?", answer: 1008, explanation: "2,400 × 0.42 = 1,008 m²" },
+  { question: "760 m². 28% must remain untouched. Untouched (m²)?", answer: 212.8, explanation: "760 × 0.28 = 212.8 m²" },
+  { question: "1,950 m². 38% residential. Residential (m²)?", answer: 741, explanation: "1,950 × 0.38 = 741 m²" },
+  { question: "420 m². 50% biodiversity reserve. Reserve (m²)?", answer: 210, explanation: "420 × 0.50 = 210 m²" },
+  { question: "3,100 m². 24% green space. Green (m²)?", answer: 744, explanation: "3,100 × 0.24 = 744 m²" },
+  { question: "640 m². 30% reserved. Reserved (m²)?", answer: 192, explanation: "640 × 0.30 = 192 m²" },
+  { question: "2,200 m². 45% residential. Residential (m²)?", answer: 990, explanation: "2,200 × 0.45 = 990 m²" },
+  { question: "540 m². 25% conservation. Conservation (m²)?", answer: 135, explanation: "540 × 0.25 = 135 m²" },
+  { question: "4,200 m². 35% roads. Road area (m²)?", answer: 1470, explanation: "4,200 × 0.35 = 1,470 m²" },
+  { question: "480 m². 40% reserved. Reserved (m²)?", answer: 192, explanation: "480 × 0.40 = 192 m²" }
 ];
 
 // HARD – Sustainability Constraints (multi-step, environmental compliance)
 export const hardQuestions: TownPlannerQuestion[] = [
-  {
-    question: "Desert biome: 35% solar coverage required. Building footprint = 220 m². How much roof space must be solar (m²)?",
-    answer: 77,
-    explanation: "220 × 0.35 = 77 m²"
-  },
-  {
-    question: "Forest biome allows only 55% land development. Plot = 1,400 m². Maximum buildable area (m²)?",
-    answer: 770,
-    explanation: "1,400 × 0.55 = 770 m²"
-  },
-  {
-    question: "Desert: 45% solar. Building 160 m². Solar roof required (m²)?",
-    answer: 72,
-    explanation: "160 × 0.45 = 72 m²"
-  },
-  {
-    question: "Forest: 48% developable. 950 m² plot. Max buildable (m²)?",
-    answer: 456,
-    explanation: "950 × 0.48 = 456 m²"
-  },
-  {
-    question: "Coastal: 18% flood buffer. 1,100 m². Buffer area (m²)?",
-    answer: 198,
-    explanation: "1,100 × 0.18 = 198 m²"
-  },
-  {
-    question: "Desert: 28% solar. Footprint 350 m². Solar (m²)?",
-    answer: 98,
-    explanation: "350 × 0.28 = 98 m²"
-  },
-  {
-    question: "Forest: 62% developable. 650 m² plot. Max buildable (m²)?",
-    answer: 403,
-    explanation: "650 × 0.62 = 403 m²"
-  },
-  {
-    question: "38% solar coverage. Building 250 m². Solar roof (m²)?",
-    answer: 95,
-    explanation: "250 × 0.38 = 95 m²"
-  },
-  {
-    question: "Plot 1,350 m². Only 58% buildable. Max buildable (m²)?",
-    answer: 783,
-    explanation: "1,350 × 0.58 = 783 m²"
-  },
-  {
-    question: "Desert: 22% solar. 280 m² building. Solar (m²)?",
-    answer: 61.6,
-    explanation: "280 × 0.22 = 61.6 m²"
-  },
-  {
-    question: "Forest: 42% development limit. 1,050 m². Buildable (m²)?",
-    answer: 441,
-    explanation: "1,050 × 0.42 = 441 m²"
-  },
-  {
-    question: "Coastal: 12% flood buffer. 750 m². Buffer (m²)?",
-    answer: 90,
-    explanation: "750 × 0.12 = 90 m²"
-  },
-  {
-    question: "Desert: 55% solar. 140 m² footprint. Solar (m²)?",
-    answer: 77,
-    explanation: "140 × 0.55 = 77 m²"
-  },
-  {
-    question: "Forest: 58% developable. 1,150 m². Max buildable (m²)?",
-    answer: 667,
-    explanation: "1,150 × 0.58 = 667 m²"
-  },
-  {
-    question: "Building 450 m². 28% must be solar. Solar (m²)?",
-    answer: 126,
-    explanation: "450 × 0.28 = 126 m²"
-  },
-  {
-    question: "Plot 2,200 m². 38% buildable. Buildable (m²)?",
-    answer: 836,
-    explanation: "2,200 × 0.38 = 836 m²"
-  },
-  {
-    question: "Desert: 32% solar. 195 m² building. Solar (m²)?",
-    answer: 62.4,
-    explanation: "195 × 0.32 = 62.4 m²"
-  },
-  {
-    question: "Forest: 68% development. 720 m². Buildable (m²)?",
-    answer: 489.6,
-    explanation: "720 × 0.68 = 489.6 m²"
-  },
-  {
-    question: "Coastal: 28% buffer. 950 m². Buffer (m²)?",
-    answer: 266,
-    explanation: "950 × 0.28 = 266 m²"
-  },
-  {
-    question: "Plot 1,650 m². 52% buildable. Max buildable (m²)?",
-    answer: 858,
-    explanation: "1,650 × 0.52 = 858 m²"
-  }
+  { question: "Desert biome: 40% solar coverage required. Building footprint = 200 m². How much roof space must be solar (m²)?", answer: 80, explanation: "200 × 0.40 = 80 m²" },
+  { question: "Forest biome allows only 50% land development. Plot = 1,200 m². Maximum buildable area (m²)?", answer: 600, explanation: "1,200 × 0.50 = 600 m²" },
+  { question: "Desert: 50% solar. Building 180 m². Solar roof required (m²)?", answer: 90, explanation: "180 × 0.50 = 90 m²" },
+  { question: "Forest: 52% developable. 850 m² plot. Max buildable (m²)?", answer: 442, explanation: "850 × 0.52 = 442 m²" },
+  { question: "Coastal: 20% flood buffer. 900 m². Buffer area (m²)?", answer: 180, explanation: "900 × 0.20 = 180 m²" },
+  { question: "Desert: 30% solar. Footprint 320 m². Solar (m²)?", answer: 96, explanation: "320 × 0.30 = 96 m²" },
+  { question: "Forest: 65% developable. 580 m² plot. Max buildable (m²)?", answer: 377, explanation: "580 × 0.65 = 377 m²" },
+  { question: "42% solar coverage. Building 300 m². Solar roof (m²)?", answer: 126, explanation: "300 × 0.42 = 126 m²" },
+  { question: "Plot 1,500 m². Only 60% buildable. Max buildable (m²)?", answer: 900, explanation: "1,500 × 0.60 = 900 m²" },
+  { question: "Desert: 25% solar. 240 m² building. Solar (m²)?", answer: 60, explanation: "240 × 0.25 = 60 m²" },
+  { question: "Forest: 45% development limit. 980 m². Buildable (m²)?", answer: 441, explanation: "980 × 0.45 = 441 m²" },
+  { question: "Coastal: 16% flood buffer. 625 m². Buffer (m²)?", answer: 100, explanation: "625 × 0.16 = 100 m²" },
+  { question: "Desert: 60% solar. 130 m² footprint. Solar (m²)?", answer: 78, explanation: "130 × 0.60 = 78 m²" },
+  { question: "Forest: 55% developable. 1,280 m². Max buildable (m²)?", answer: 704, explanation: "1,280 × 0.55 = 704 m²" },
+  { question: "Building 380 m². 35% must be solar. Solar (m²)?", answer: 133, explanation: "380 × 0.35 = 133 m²" },
+  { question: "Plot 1,900 m². 44% buildable. Buildable (m²)?", answer: 836, explanation: "1,900 × 0.44 = 836 m²" },
+  { question: "Desert: 36% solar. 175 m² building. Solar (m²)?", answer: 63, explanation: "175 × 0.36 = 63 m²" },
+  { question: "Forest: 70% development. 680 m². Buildable (m²)?", answer: 476, explanation: "680 × 0.70 = 476 m²" },
+  { question: "Coastal: 24% buffer. 1,050 m². Buffer (m²)?", answer: 252, explanation: "1,050 × 0.24 = 252 m²" },
+  { question: "Plot 1,750 m². 48% buildable. Max buildable (m²)?", answer: 840, explanation: "1,750 × 0.48 = 840 m²" }
 ];
 
 // EXTREME – Infrastructure Modelling (road planning, cost distribution, multi-variable zoning)
 export const extremeQuestions: TownPlannerQuestion[] = [
-  {
-    question: "Town allocates: 45% residential, 25% commercial, 20% roads, 10% green. Total land = 6,000 m². Residential (m²)?",
-    answer: 2700,
-    explanation: "6,000 × 0.45 = 2,700 m²"
-  },
-  {
-    question: "Road cost = R520 per metre. Planner designs 140 m of road. Total cost (R)?",
-    answer: 72800,
-    explanation: "520 × 140 = R72,800"
-  },
-  {
-    question: "Total 6,000 m². 45% residential, 25% commercial, 20% roads, 10% green. Commercial (m²)?",
-    answer: 1500,
-    explanation: "6,000 × 0.25 = 1,500 m²"
-  },
-  {
-    question: "Road R430 per m. 95 m designed. Total cost (R)?",
-    answer: 40850,
-    explanation: "430 × 95 = R40,850"
-  },
-  {
-    question: "Total 4,500 m²: 42% residential, 28% commercial, 22% roads, 8% green. Roads (m²)?",
-    answer: 990,
-    explanation: "4,500 × 0.22 = 990 m²"
-  },
-  {
-    question: "Road R580 per m. 65 m. Total cost (R)?",
-    answer: 37700,
-    explanation: "580 × 65 = R37,700"
-  },
-  {
-    question: "Land 7,200 m²: 40% residential, 30% commercial, 20% roads, 10% green. Green (m²)?",
-    answer: 720,
-    explanation: "7,200 × 0.10 = 720 m²"
-  },
-  {
-    question: "Road R390 per m. 115 m. Total (R)?",
-    answer: 44850,
-    explanation: "390 × 115 = R44,850"
-  },
-  {
-    question: "Total 3,600 m²: 48% res, 22% com, 18% roads, 12% green. Commercial (m²)?",
-    answer: 792,
-    explanation: "3,600 × 0.22 = 792 m²"
-  },
-  {
-    question: "Road R470 per m. 105 m. Total cost (R)?",
-    answer: 49350,
-    explanation: "470 × 105 = R49,350"
-  },
-  {
-    question: "Land 8,500 m²: 38% res, 32% com, 22% roads, 8% green. Residential (m²)?",
-    answer: 3230,
-    explanation: "8,500 × 0.38 = 3,230 m²"
-  },
-  {
-    question: "Road R560 per m. 72 m. Total (R)?",
-    answer: 40320,
-    explanation: "560 × 72 = R40,320"
-  },
-  {
-    question: "Total 5,800 m²: 42% res, 23% com, 27% roads, 8% green. Roads (m²)?",
-    answer: 1566,
-    explanation: "5,800 × 0.27 = 1,566 m²"
-  },
-  {
-    question: "Road R505 per m. 88 m. Total cost (R)?",
-    answer: 44440,
-    explanation: "505 × 88 = R44,440"
-  },
-  {
-    question: "Land 7,800 m²: 36% res, 34% com, 22% roads, 8% green. Commercial (m²)?",
-    answer: 2652,
-    explanation: "7,800 × 0.34 = 2,652 m²"
-  },
-  {
-    question: "Road R540 per m. 125 m. Total (R)?",
-    answer: 67500,
-    explanation: "540 × 125 = R67,500"
-  },
-  {
-    question: "Total 4,800 m²: 46% res, 24% com, 22% roads, 8% green. Green (m²)?",
-    answer: 384,
-    explanation: "4,800 × 0.08 = 384 m²"
-  },
-  {
-    question: "Road R415 per m. 102 m. Total cost (R)?",
-    answer: 42330,
-    explanation: "415 × 102 = R42,330"
-  },
-  {
-    question: "Land 9,600 m²: 44% res, 26% com, 22% roads, 8% green. Residential (m²)?",
-    answer: 4224,
-    explanation: "9,600 × 0.44 = 4,224 m²"
-  },
-  {
-    question: "Road R460 per m. 92 m. Total (R)?",
-    answer: 42320,
-    explanation: "460 × 92 = R42,320"
-  }
+  { question: "Town allocates: 45% residential, 25% commercial, 20% roads, 10% green. Total land = 5,400 m². Residential (m²)?", answer: 2430, explanation: "5,400 × 0.45 = 2,430 m²" },
+  { question: "Road cost = R480 per metre. Planner designs 130 m of road. Total cost (R)?", answer: 62400, explanation: "480 × 130 = R62,400" },
+  { question: "Total 5,400 m². 45% residential, 25% commercial, 20% roads, 10% green. Commercial (m²)?", answer: 1350, explanation: "5,400 × 0.25 = 1,350 m²" },
+  { question: "Road R445 per m. 110 m designed. Total cost (R)?", answer: 48950, explanation: "445 × 110 = R48,950" },
+  { question: "Total 4,200 m²: 40% residential, 30% commercial, 22% roads, 8% green. Roads (m²)?", answer: 924, explanation: "4,200 × 0.22 = 924 m²" },
+  { question: "Road R510 per m. 80 m. Total cost (R)?", answer: 40800, explanation: "510 × 80 = R40,800" },
+  { question: "Land 6,800 m²: 42% residential, 28% commercial, 22% roads, 8% green. Green (m²)?", answer: 544, explanation: "6,800 × 0.08 = 544 m²" },
+  { question: "Road R425 per m. 120 m. Total (R)?", answer: 51000, explanation: "425 × 120 = R51,000" },
+  { question: "Total 3,200 m²: 50% res, 20% com, 22% roads, 8% green. Commercial (m²)?", answer: 640, explanation: "3,200 × 0.20 = 640 m²" },
+  { question: "Road R495 per m. 98 m. Total cost (R)?", answer: 48510, explanation: "495 × 98 = R48,510" },
+  { question: "Land 9,200 m²: 40% res, 30% com, 22% roads, 8% green. Residential (m²)?", answer: 3680, explanation: "9,200 × 0.40 = 3,680 m²" },
+  { question: "Road R550 per m. 85 m. Total (R)?", answer: 46750, explanation: "550 × 85 = R46,750" },
+  { question: "Total 5,400 m²: 44% res, 26% com, 24% roads, 6% green. Roads (m²)?", answer: 1296, explanation: "5,400 × 0.24 = 1,296 m²" },
+  { question: "Road R525 per m. 96 m. Total cost (R)?", answer: 50400, explanation: "525 × 96 = R50,400" },
+  { question: "Land 8,200 m²: 38% res, 32% com, 22% roads, 8% green. Commercial (m²)?", answer: 2624, explanation: "8,200 × 0.32 = 2,624 m²" },
+  { question: "Road R490 per m. 118 m. Total (R)?", answer: 57820, explanation: "490 × 118 = R57,820" },
+  { question: "Total 4,000 m²: 48% res, 24% com, 20% roads, 8% green. Green (m²)?", answer: 320, explanation: "4,000 × 0.08 = 320 m²" },
+  { question: "Road R435 per m. 108 m. Total cost (R)?", answer: 46980, explanation: "435 × 108 = R46,980" },
+  { question: "Land 10,400 m²: 46% res, 28% com, 20% roads, 6% green. Residential (m²)?", answer: 4784, explanation: "10,400 × 0.46 = 4,784 m²" },
+  { question: "Road R475 per m. 100 m. Total (R)?", answer: 47500, explanation: "475 × 100 = R47,500" }
 ];
 
 export function getTownPlannerQuestion(difficulty: 'easy' | 'medium' | 'hard' | 'extreme'): TownPlannerQuestion {
