@@ -59,6 +59,7 @@
     "migrate:land-purchase-engineer-fix": "node run-sql-migration.js migrations/107_land_purchase_school_id_engineer_fix.sql",
     "migrate:land-purchase-auto-engineer": "node run-sql-migration.js migrations/108_land_purchase_auto_engineer_approval.sql",
     "migrate:auction": "node run-sql-migration.js migrations/109_add_auction_plugin.sql",
+    "migrate:land-purchase-cancel": "node run-sql-migration.js migrations/110_land_purchase_cancel_status.sql",
     "audit:accountant-transfer-exploit": "node scripts/audit-reverse-accountant-transfer-rewards.js --audit",
     "reverse:accountant-transfer-exploit": "node scripts/audit-reverse-accountant-transfer-rewards.js --apply",
     "seed:test-school": "node seed-test-school.js",

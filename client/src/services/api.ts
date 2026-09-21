@@ -707,7 +707,7 @@ export const landApi = {
 
   // Get purchase requests
   getPurchaseRequests: (
-    status?: 'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied',
+    status?: 'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied' | 'cancelled',
     townClass?: '6A' | '6B' | '6C'
   ): Promise<{ data: LandPurchaseRequest[] }> => {
     const params = new URLSearchParams();
@@ -736,6 +736,9 @@ export const landApi = {
     denialReason?: string
   ): Promise<{ data: { message: string; request: LandPurchaseRequest; fee_paid?: number } }> =>
     api.put(`/land/purchase-requests/${id}/engineer-review`, { status, denial_reason: denialReason }),
+
+  cancelPurchaseRequest: (id: number): Promise<{ data: { message: string } }> =>
+    api.put(`/land/purchase-requests/${id}/cancel`),
 
   // Update purchase request (teachers only)
   updatePurchaseRequest: (

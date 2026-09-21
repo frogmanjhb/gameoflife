@@ -36,6 +36,7 @@ const formatPurchaseStatus = (status: string) => {
     case 'pending_teacher': return 'Awaiting teacher';
     case 'approved': return 'Approved';
     case 'denied': return 'Denied';
+    case 'cancelled': return 'Cancelled';
     default: return status;
   }
 };
@@ -47,6 +48,7 @@ const purchaseStatusColor = (status: string) => {
     case 'pending_teacher': return 'bg-amber-100 text-amber-800 border-amber-300';
     case 'approved': return 'bg-green-100 text-green-800 border-green-300';
     case 'denied': return 'bg-red-100 text-red-800 border-red-300';
+    case 'cancelled': return 'bg-gray-100 text-gray-700 border-gray-300';
     default: return 'bg-gray-100 text-gray-800 border-gray-300';
   }
 };
@@ -613,53 +615,90 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
 
   const fetchMyData = async () => {
     setLoading(true);
+    setError('');
     const landEngineerRole = user?.role === 'student' && isLandEngineerJob(user?.job_name);
-    try {
-      const [propertiesRes, requestsRes, salesRes, buyerRes] = await Promise.all([
-        landApi.getMyProperties(),
-        landApi.getPurchaseRequests(),
-        landApi.getSaleRequests('seller'),
-        landApi.getSaleRequests('buyer'),
-      ]);
-      setMyProperties(propertiesRes.data);
-      setMyRequests(requestsRes.data);
-      setMySales(salesRes.data);
-      setBuyerOffers(buyerRes.data);
+    const asArray = <T,>(data: unknown): T[] => (Array.isArray(data) ? data : []);
 
-      let fmRole = false;
-      try {
-        const fmPurchasesRes = await landApi.getFmPurchaseRequests();
-        setFmPurchaseApprovals(fmPurchasesRes.data);
-        fmRole = true;
-      } catch {
-        setFmPurchaseApprovals([]);
-      }
-      try {
-        const fmSalesRes = await landApi.getSaleRequests('fm');
-        setFmApprovals(fmSalesRes.data);
-        fmRole = true;
-      } catch {
-        setFmApprovals([]);
-      }
-      setIsFinancialManager(fmRole);
+    const [propertiesResult, requestsResult, salesResult, buyerResult] = await Promise.allSettled([
+      landApi.getMyProperties(),
+      landApi.getPurchaseRequests(),
+      landApi.getSaleRequests('seller'),
+      landApi.getSaleRequests('buyer'),
+    ]);
 
-      if (landEngineerRole) {
-        setIsLandEngineer(true);
-        try {
-          const engineerRes = await landApi.getEngineerPurchaseRequests();
-          setEngineerApprovals(engineerRes.data);
-        } catch {
-          setEngineerApprovals([]);
-        }
-      } else {
-        setEngineerApprovals([]);
-        setIsLandEngineer(false);
-      }
-    } catch (err: any) {
-      console.error('Failed to fetch land data:', err);
-    } finally {
-      setLoading(false);
+    const apiErrorMessage = (reason: unknown, fallback: string) => {
+      const err = reason as { response?: { data?: { error?: string } } } | undefined;
+      return err?.response?.data?.error || fallback;
+    };
+
+    if (propertiesResult.status === 'fulfilled') {
+      const data = propertiesResult.value.data;
+      setMyProperties(
+        data && Array.isArray(data.parcels)
+          ? data
+          : { parcels: [], total_count: 0, total_value: 0, total_purchase_value: 0 }
+      );
+    } else {
+      console.error('Failed to fetch my properties:', propertiesResult.reason);
+      setMyProperties({ parcels: [], total_count: 0, total_value: 0, total_purchase_value: 0 });
+      setError(apiErrorMessage(propertiesResult.reason, 'Could not load your plots. Please try again.'));
     }
+
+    if (requestsResult.status === 'fulfilled') {
+      setMyRequests(asArray<LandPurchaseRequest>(requestsResult.value.data));
+    } else {
+      console.error('Failed to fetch purchase requests:', requestsResult.reason);
+      setMyRequests([]);
+      setError((prev) =>
+        prev || apiErrorMessage(requestsResult.reason, 'Could not load buy requests. Please try again.')
+      );
+    }
+
+    if (salesResult.status === 'fulfilled') {
+      setMySales(asArray<LandSaleRequest>(salesResult.value.data));
+    } else {
+      console.error('Failed to fetch sale requests:', salesResult.reason);
+      setMySales([]);
+    }
+
+    if (buyerResult.status === 'fulfilled') {
+      setBuyerOffers(asArray<LandSaleRequest>(buyerResult.value.data));
+    } else {
+      console.error('Failed to fetch buyer offers:', buyerResult.reason);
+      setBuyerOffers([]);
+    }
+
+    let fmRole = false;
+    try {
+      const fmPurchasesRes = await landApi.getFmPurchaseRequests();
+      setFmPurchaseApprovals(asArray(fmPurchasesRes.data));
+      fmRole = true;
+    } catch {
+      setFmPurchaseApprovals([]);
+    }
+    try {
+      const fmSalesRes = await landApi.getSaleRequests('fm');
+      setFmApprovals(asArray(fmSalesRes.data));
+      fmRole = true;
+    } catch {
+      setFmApprovals([]);
+    }
+    setIsFinancialManager(fmRole);
+
+    if (landEngineerRole) {
+      setIsLandEngineer(true);
+      try {
+        const engineerRes = await landApi.getEngineerPurchaseRequests();
+        setEngineerApprovals(asArray(engineerRes.data));
+      } catch {
+        setEngineerApprovals([]);
+      }
+    } else {
+      setEngineerApprovals([]);
+      setIsLandEngineer(false);
+    }
+
+    setLoading(false);
   };
 
   const handleFmPurchaseReview = async (id: number, status: 'approved' | 'denied') => {
@@ -723,6 +762,28 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
       fetchMyData();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Could not cancel sale');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCancelPurchase = async (request: LandPurchaseRequest) => {
+    const feesMayBePaid = request.status === 'pending_engineer' || request.status === 'pending_teacher';
+    const confirmed = window.confirm(
+      feesMayBePaid
+        ? 'Cancel this buy request? Professional fees already paid to the Financial Manager or engineers will not be refunded. The plot price has not been charged yet.'
+        : 'Cancel this buy request?'
+    );
+    if (!confirmed) return;
+
+    setActionLoading(request.id);
+    setError('');
+    try {
+      const res = await landApi.cancelPurchaseRequest(request.id);
+      setSuccess(res.data.message);
+      fetchMyData();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Could not cancel purchase request');
     } finally {
       setActionLoading(null);
     }
@@ -842,13 +903,13 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
           {activeTab === 'my-properties' && (
             loading ? (
               <LoadingState />
-            ) : myProperties && myProperties.parcels.length === 0 ? (
+            ) : !myProperties || myProperties.parcels.length === 0 ? (
               <EmptyState
                 icon={MapPin}
                 title="You don't own any land yet"
                 description="Explore the grid and purchase your first plot!"
               />
-            ) : myProperties && (
+            ) : (
               <div className="space-y-4">
                 <p className="text-sm text-gray-600">
                   Properties grow <strong>1% per week</strong>. Collect <strong>5% rental income</strong> weekly, or sell to a classmate (Financial Manager approval when one is assigned).
@@ -903,7 +964,7 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
                         <div key={sale.id} className="border border-gray-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
                           <div>
                             <p className="font-medium">{sale.parcel_grid_code} → {sale.buyer_username}</p>
-                            <p className="text-sm text-gray-600">{formatCurrency(sale.sale_price)} · {sale.status.replace('_', ' ')}</p>
+                            <p className="text-sm text-gray-600">{formatCurrency(sale.sale_price)} · {(sale.status || '').replace('_', ' ')}</p>
                           </div>
                           {(sale.status === 'pending_fm' || sale.status === 'pending_buyer') && (
                             <button type="button" onClick={() => handleCancelSale(sale.id)} disabled={actionLoading === sale.id} className="text-sm text-red-600 hover:text-red-700">
@@ -1130,6 +1191,19 @@ const StudentLandView: React.FC<StudentLandViewProps> = ({ landPlugin: _landPlug
                         </div>
                         <div className="flex items-center space-x-2">
                           <span className="text-xs font-medium">{formatPurchaseStatus(request.status)}</span>
+                          {isActivePurchaseStatus(request.status) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCancelPurchase(request);
+                              }}
+                              disabled={actionLoading === request.id}
+                              className="text-sm text-red-600 hover:text-red-700 disabled:opacity-50"
+                            >
+                              {actionLoading === request.id ? 'Cancelling…' : 'Cancel'}
+                            </button>
+                          )}
                           {expandedRequest === request.id ? (
                             <ChevronUp className="h-4 w-4" />
                           ) : (

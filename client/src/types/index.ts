@@ -1591,7 +1591,7 @@ export interface LandPurchaseRequest {
   user_id: number;
   parcel_id: number;
   offered_price: number;
-  status: 'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied';
+  status: 'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied' | 'cancelled';
   fm_reviewed_by?: number;
   fm_reviewed_at?: string;
   fm_reviewer_username?: string;

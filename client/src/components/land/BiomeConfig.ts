@@ -86,12 +86,13 @@ export const getBiomeConfig = (biome: BiomeType): BiomeConfig => {
 };
 
 export const formatCurrency = (amount: number): string => {
+  const safe = Number(amount);
   return new Intl.NumberFormat('en-ZA', {
     style: 'currency',
     currency: 'ZAR',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
-  }).format(amount);
+  }).format(Number.isFinite(safe) ? safe : 0);
 };
 
 export const BIOME_ICONS: Record<BiomeType, string> = {

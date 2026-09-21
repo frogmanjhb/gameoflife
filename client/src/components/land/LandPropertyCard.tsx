@@ -28,10 +28,12 @@ const LandPropertyCard: React.FC<LandPropertyCardProps> = ({ parcel, onUpdated }
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const currentValue = parcel.current_value ?? parcel.value;
-  const purchasePrice = parcel.purchase_price ?? parcel.value;
+  const currentValue = Number(parcel.current_value ?? parcel.value) || 0;
+  const purchasePrice = Number(parcel.purchase_price ?? parcel.value) || 0;
   const appreciation = parcel.appreciation ?? (currentValue - purchasePrice);
-  const weeklyRent = parcel.weekly_rent ?? 0;
+  const weeklyRent = Number(parcel.weekly_rent) || 0;
+  const biomeConfig = BIOME_CONFIG[parcel.biome_type] ?? BIOME_CONFIG['Grassland'];
+  const biomeIcon = BIOME_ICONS[parcel.biome_type] ?? '🗺️';
 
   const handleCollectRent = async () => {
     setRentLoading(true);
@@ -88,12 +90,12 @@ const LandPropertyCard: React.FC<LandPropertyCardProps> = ({ parcel, onUpdated }
     <>
       <div
         className="bg-white rounded-xl border-2 overflow-hidden hover:shadow-lg transition-shadow"
-        style={{ borderColor: BIOME_CONFIG[parcel.biome_type].color }}
+        style={{ borderColor: biomeConfig.color }}
       >
-        <div className="p-4 text-white" style={{ backgroundColor: BIOME_CONFIG[parcel.biome_type].color }}>
+        <div className="p-4 text-white" style={{ backgroundColor: biomeConfig.color }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <span className="text-2xl">{BIOME_ICONS[parcel.biome_type]}</span>
+              <span className="text-2xl">{biomeIcon}</span>
               <div>
                 <h4 className="font-bold">{parcel.grid_code}</h4>
                 <p className="text-sm opacity-80">{parcel.biome_type}</p>

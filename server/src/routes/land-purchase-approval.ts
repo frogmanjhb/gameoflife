@@ -764,4 +764,44 @@ router.put('/purchase-requests/:id/engineer-review',
   }
 );
 
+// PUT /purchase-requests/:id/cancel — buyer cancels their own pending buy request
+router.put('/purchase-requests/:id/cancel', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const requestId = parseInt(req.params.id, 10);
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ error: 'Invalid purchase request ID' });
+    }
+
+    const purchaseRequest = await database.get(
+      'SELECT * FROM land_purchase_requests WHERE id = $1',
+      [requestId]
+    );
+    if (!purchaseRequest || purchaseRequest.user_id !== req.user!.id) {
+      return res.status(404).json({ error: 'Purchase request not found' });
+    }
+
+    const status = String(purchaseRequest.status).toLowerCase().trim();
+    if (!['pending_fm', 'pending_engineer', 'pending_teacher'].includes(status)) {
+      return res.status(400).json({ error: 'Only pending purchase requests can be cancelled' });
+    }
+
+    await database.run(
+      `UPDATE land_purchase_requests
+       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [requestId]
+    );
+
+    res.json({
+      message:
+        status === 'pending_fm'
+          ? 'Purchase request cancelled'
+          : 'Purchase request cancelled. Professional fees already paid are not refunded.',
+    });
+  } catch (error) {
+    console.error('Failed to cancel purchase request:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
