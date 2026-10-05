@@ -283,14 +283,18 @@ export async function enrichPurchaseRequestWithEngineers(request: Record<string,
   const status = String(request.status || '').toLowerCase();
 
   if (status === 'pending_engineer' && townClass && buyerId) {
-    await processAutoEngineerApprovals(request);
-    await maybeAdvanceToTeacherReview(requestId, buyerId, schoolId, townClass);
-    const refreshed = await database.get(
-      'SELECT status FROM land_purchase_requests WHERE id = $1',
-      [requestId]
-    );
-    if (refreshed) {
-      request.status = refreshed.status;
+    try {
+      await processAutoEngineerApprovals(request);
+      await maybeAdvanceToTeacherReview(requestId, buyerId, schoolId, townClass);
+      const refreshed = await database.get(
+        'SELECT status FROM land_purchase_requests WHERE id = $1',
+        [requestId]
+      );
+      if (refreshed) {
+        request.status = refreshed.status;
+      }
+    } catch (error) {
+      console.error('Land engineer auto-approval failed for request', requestId, error);
     }
   }
 
@@ -358,6 +362,28 @@ const purchaseRequestSelect = `
   LEFT JOIN users r ON lpr.reviewed_by = r.id
   LEFT JOIN users fm ON fm.id = lpr.fm_reviewed_by
 `;
+
+/** Move overdue architect/engineer reviews forward before a teacher loads the queue. */
+export async function advanceOverdueEngineerPurchaseApprovals(
+  schoolId: number | null,
+  townClass: string | null
+): Promise<void> {
+  if (!townClass) return;
+  const rows = await database.query(
+    `${purchaseRequestSelect}
+     WHERE lpr.status = 'pending_engineer'
+       AND lp.town_class = $1
+       AND u.school_id IS NOT DISTINCT FROM $2`,
+    [townClass, schoolId]
+  );
+  for (const row of rows) {
+    try {
+      await enrichPurchaseRequestWithEngineers(row);
+    } catch (error) {
+      console.error('Failed to advance land purchase request', row.id, error);
+    }
+  }
+}
 
 // GET /purchase-requests/fm-queue — Financial Manager pending purchase reviews
 router.get('/purchase-requests/fm-queue', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {

@@ -707,7 +707,7 @@ export const landApi = {
 
   // Get purchase requests
   getPurchaseRequests: (
-    status?: 'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied' | 'cancelled',
+    status?: 'active' | 'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied' | 'cancelled',
     townClass?: '6A' | '6B' | '6C'
   ): Promise<{ data: LandPurchaseRequest[] }> => {
     const params = new URLSearchParams();

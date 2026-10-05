@@ -111,21 +111,24 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied' | ''>('pending_teacher');
+  const [filterStatus, setFilterStatus] = useState<'active' | 'pending_fm' | 'pending_engineer' | 'pending_teacher' | 'approved' | 'denied' | ''>('active');
   const [seeding, setSeeding] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!currentTownClass) return;
     setLoading(true);
+    setError('');
     try {
       const [requestsRes, statsRes] = await Promise.all([
         landApi.getPurchaseRequests(filterStatus || undefined, currentTownClass),
         landApi.getStats(currentTownClass)
       ]);
-      setRequests(requestsRes.data);
+      setRequests(Array.isArray(requestsRes.data) ? requestsRes.data : []);
       setStats(statsRes.data);
     } catch (err: any) {
       console.error('Failed to fetch land data:', err);
+      setRequests([]);
+      setError(err.response?.data?.error || 'Failed to load purchase requests');
     } finally {
       setLoading(false);
     }
@@ -317,6 +320,7 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                   onChange={(e) => setFilterStatus(e.target.value as any)}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                 >
+                  <option value="active">Active requests</option>
                   <option value="">All Requests</option>
                   <option value="pending_teacher">Awaiting teacher</option>
                   <option value="pending_engineer">Awaiting engineers</option>
@@ -338,7 +342,13 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
               ) : requests.length === 0 ? (
                 <EmptyState
                   icon={Clock}
-                  title={`No ${filterStatus || ''} purchase requests found`}
+                  title={
+                    filterStatus === 'active'
+                      ? 'No active purchase requests'
+                      : filterStatus
+                        ? `No ${formatPurchaseStatus(filterStatus).toLowerCase()} purchase requests`
+                        : 'No purchase requests found'
+                  }
                 />
               ) : (
                 <div className="space-y-4">
@@ -348,9 +358,9 @@ const TeacherLandView: React.FC<TeacherLandViewProps> = ({ landPlugin: _landPlug
                         <div className="flex items-start space-x-4">
                           <div 
                             className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
-                            style={{ backgroundColor: request.parcel_biome_type ? BIOME_CONFIG[request.parcel_biome_type].lightColor : '#e5e7eb' }}
+                            style={{ backgroundColor: (request.parcel_biome_type && BIOME_CONFIG[request.parcel_biome_type]?.lightColor) || '#e5e7eb' }}
                           >
-                            {request.parcel_biome_type ? BIOME_ICONS[request.parcel_biome_type] : '🗺️'}
+                            {(request.parcel_biome_type && BIOME_ICONS[request.parcel_biome_type]) || '🗺️'}
                           </div>
                           <div>
                             <div className="flex items-center space-x-2">

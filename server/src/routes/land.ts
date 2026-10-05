@@ -17,6 +17,7 @@ import landPurchaseApprovalRouter, {
   enrichPurchaseRequestWithEngineers,
   townHasFinancialManager,
   executeTeacherPurchaseApproval,
+  advanceOverdueEngineerPurchaseApprovals,
 } from './land-purchase-approval';
 
 const router = Router();
@@ -469,6 +470,12 @@ router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedReq
     const townClass = req.user!.role === 'teacher' ? resolveTownClass(req, town_class) : null;
 
     if (req.user!.role === 'teacher') {
+      try {
+        await advanceOverdueEngineerPurchaseApprovals(schoolId, townClass);
+      } catch (error) {
+        console.error('Failed to advance overdue land purchase approvals:', error);
+      }
+
       query = `
         SELECT lpr.*, 
                u.username as applicant_username, 
@@ -493,7 +500,9 @@ router.get('/purchase-requests', authenticateToken, async (req: AuthenticatedReq
       } else {
         query += ' WHERE u.school_id IS NULL';
       }
-      if (status) {
+      if (status === 'active') {
+        query += ` AND lpr.status IN ('pending_fm', 'pending_engineer', 'pending_teacher')`;
+      } else if (status) {
         query += ` AND lpr.status = $${params.length + 1}`;
         params.push(status);
       }
@@ -766,8 +775,8 @@ router.get('/stats', authenticateToken, async (req: AuthenticatedRequest, res: R
       ? 'WHERE lp.school_id = $1 AND lp.town_class = $2'
       : 'WHERE lp.school_id IS NULL AND lp.town_class = $1';
     const schoolFilterLpr = schoolId !== null
-      ? `lpr.school_id = $1 AND lpr.status = 'pending_teacher' AND lp.town_class = $2`
-      : `lpr.school_id IS NULL AND lpr.status = 'pending_teacher' AND lp.town_class = $1`;
+      ? `u.school_id = $1 AND lpr.status IN ('pending_fm', 'pending_engineer', 'pending_teacher') AND lp.town_class = $2`
+      : `u.school_id IS NULL AND lpr.status IN ('pending_fm', 'pending_engineer', 'pending_teacher') AND lp.town_class = $1`;
     const params = schoolId !== null ? [schoolId, townClass] : [townClass];
 
     const totalParcels = await database.get(
@@ -780,6 +789,7 @@ router.get('/stats', authenticateToken, async (req: AuthenticatedRequest, res: R
     );
     const pendingRequests = await database.get(
       `SELECT COUNT(*) as count FROM land_purchase_requests lpr
+       JOIN users u ON lpr.user_id = u.id
        JOIN land_parcels lp ON lpr.parcel_id = lp.id
        WHERE ${schoolFilterLpr}`,
       params
