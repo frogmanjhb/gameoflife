@@ -349,10 +349,6 @@ router.post('/:id/bid', authenticateToken, requireRole(['student']), async (req:
     }
 
     const high = await getHighBid(id);
-    if (high && high.user_id === req.user.id) {
-      return res.status(400).json({ error: 'You are already the highest bidder' });
-    }
-
     const base = high?.amount ?? parseFloat(String(auction.starting_price));
     const amount = nextBidAmount(base, increment);
 

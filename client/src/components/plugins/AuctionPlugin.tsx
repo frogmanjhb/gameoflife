@@ -437,24 +437,25 @@ const LiveAuctionCard: React.FC<{
 
       {!isTeacher && (
         <div>
-          <p className="text-sm font-medium text-gray-700 mb-2">Place a bid (add to current high)</p>
-          {isHighest ? (
-            <p className="text-sm text-green-700 font-medium">You are the highest bidder</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {BID_INCREMENTS.map((inc) => (
-                <button
-                  key={inc}
-                  type="button"
-                  disabled={biddingIncrement !== null}
-                  onClick={() => onBid(auction.id, inc)}
-                  className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
-                >
-                  {biddingIncrement === inc ? 'Bidding…' : `+${formatMoney(inc)}`}
-                </button>
-              ))}
-            </div>
+          <p className="text-sm font-medium text-gray-700 mb-2">
+            {isHighest ? 'Raise your bid (add to current high)' : 'Place a bid (add to current high)'}
+          </p>
+          {isHighest && (
+            <p className="text-sm text-green-700 font-medium mb-2">You are the highest bidder</p>
           )}
+          <div className="flex flex-wrap gap-2">
+            {BID_INCREMENTS.map((inc) => (
+              <button
+                key={inc}
+                type="button"
+                disabled={biddingIncrement !== null}
+                onClick={() => onBid(auction.id, inc)}
+                className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
+              >
+                {biddingIncrement === inc ? 'Bidding…' : `+${formatMoney(inc)}`}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
