@@ -946,6 +946,21 @@ export interface AttendanceMySickNote {
   };
 }
 
+export interface AttendanceAbsenceRecord {
+  id: number;
+  register_id: number;
+  marked_at: string;
+  town_class: string;
+  submitter_role: 'nurse' | 'doctor';
+  student_user_id: number;
+  student_display_name: string;
+  student_username: string;
+  marked_by_user_id: number;
+  marked_by_display_name: string;
+  marked_by_username: string;
+  sick_note_status: string | null;
+}
+
 export interface SickNoteQueueItem {
   id: number;
   student_username: string;
@@ -1578,6 +1593,8 @@ export interface LandParcel {
   last_rent_collected_at?: string;
   current_value?: number;
   weekly_rent?: number;
+  rent_weeks_due?: number;
+  accrued_rent?: number;
   can_collect_rent?: boolean;
   weeks_owned?: number;
   appreciation?: number;

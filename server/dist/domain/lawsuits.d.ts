@@ -10,6 +10,17 @@ export declare const HR_MEDIATION_XP = 10;
 export declare const LAWSUIT_CLAIM_CAP = 5000;
 export declare const JURY_SIZE = 5;
 export declare const JURY_MIN_ELIGIBLE = 3;
+/** Pool size when drawing random jurors — job-ineligible students are filtered out afterward. */
+export declare const JURY_CANDIDATE_POOL = 50;
+export interface LawsuitJuryMember {
+    user_id: number;
+    username: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    vote: string | null;
+    voted_at: string | null;
+}
+export declare function formatLawsuitPersonName(username: string, firstName?: string | null, lastName?: string | null): string;
 export declare const TERMINAL_STATUSES: readonly ["approved", "denied", "withdrawn", "resolved_mediation"];
 export declare const LAWYER_OPINIONS: readonly ["recommend_approve", "recommend_partial", "recommend_dismiss"];
 export type LawsuitStatus = 'pending_hr' | 'pending_lawyer' | 'pending_jury' | 'pending_teacher' | 'approved' | 'denied' | 'withdrawn' | 'resolved_mediation';
@@ -68,10 +79,7 @@ export declare function getLinkableActions(plaintiffUserId: number, defendantUse
     label: string;
     created_at: string;
 }>>;
-export declare function buildProceedingsTimeline(row: Record<string, unknown>, juryAssignments?: Array<{
-    vote: string | null;
-    voted_at: string | null;
-}>): ProceedingsStep[];
+export declare function buildProceedingsTimeline(row: Record<string, unknown>, juryAssignments?: LawsuitJuryMember[]): ProceedingsStep[];
 export declare const LAWSUIT_LIST_SELECT = "\n  sl.*,\n  p.username AS plaintiff_username,\n  p.first_name AS plaintiff_first_name,\n  p.last_name AS plaintiff_last_name,\n  d.username AS defendant_username,\n  d.first_name AS defendant_first_name,\n  d.last_name AS defendant_last_name,\n  hr.username AS hr_reviewer_username,\n  tr.username AS teacher_reviewer_username,\n  pl.username AS plaintiff_lawyer_username,\n  dl.username AS defendant_lawyer_username,\n  al.username AS accepting_lawyer_username\n";
 export declare const LAWSUIT_LIST_JOINS = "\n  FROM student_lawsuits sl\n  JOIN users p ON p.id = sl.plaintiff_user_id\n  JOIN users d ON d.id = sl.defendant_user_id\n  LEFT JOIN users hr ON hr.id = sl.hr_reviewer_id\n  LEFT JOIN users tr ON tr.id = sl.teacher_reviewer_id\n  LEFT JOIN users pl ON pl.id = sl.plaintiff_lawyer_id\n  LEFT JOIN users dl ON dl.id = sl.defendant_lawyer_id\n  LEFT JOIN users al ON al.id = sl.accepting_lawyer_id\n";
 export declare function isValidTownClassForLawsuit(value: unknown): value is TownClass;

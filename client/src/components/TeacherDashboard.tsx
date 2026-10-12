@@ -335,6 +335,7 @@ const TeacherDashboard: React.FC = () => {
     announcements,
     refreshAnnouncements,
     unemployedStudentsByClass,
+    currentTownClass,
   };
 
   const renderPluginTiles = (draggable: boolean) => (

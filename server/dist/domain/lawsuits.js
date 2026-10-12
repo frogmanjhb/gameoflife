@@ -3,7 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LAWSUIT_LIST_JOINS = exports.LAWSUIT_LIST_SELECT = exports.LAWYER_OPINIONS = exports.TERMINAL_STATUSES = exports.JURY_MIN_ELIGIBLE = exports.JURY_SIZE = exports.LAWSUIT_CLAIM_CAP = exports.HR_MEDIATION_XP = exports.JURY_LAWSUIT_XP = exports.DEFENSE_LAWYER_XP = exports.DEFENSE_LAWYER_FEE = exports.LAWYER_LAWSUIT_XP = exports.LAWYER_LAWSUIT_FEE = exports.LAWSUIT_PROCESS_COST = exports.COURT_ROUTE_PATH = void 0;
+exports.LAWSUIT_LIST_JOINS = exports.LAWSUIT_LIST_SELECT = exports.LAWYER_OPINIONS = exports.TERMINAL_STATUSES = exports.JURY_CANDIDATE_POOL = exports.JURY_MIN_ELIGIBLE = exports.JURY_SIZE = exports.LAWSUIT_CLAIM_CAP = exports.HR_MEDIATION_XP = exports.JURY_LAWSUIT_XP = exports.DEFENSE_LAWYER_XP = exports.DEFENSE_LAWYER_FEE = exports.LAWYER_LAWSUIT_XP = exports.LAWYER_LAWSUIT_FEE = exports.LAWSUIT_PROCESS_COST = exports.COURT_ROUTE_PATH = void 0;
+exports.formatLawsuitPersonName = formatLawsuitPersonName;
 exports.tablesReady = tablesReady;
 exports.isCourtPluginEnabled = isCourtPluginEnabled;
 exports.awardJobXp = awardJobXp;
@@ -39,6 +40,12 @@ exports.HR_MEDIATION_XP = 10;
 exports.LAWSUIT_CLAIM_CAP = 5000;
 exports.JURY_SIZE = 5;
 exports.JURY_MIN_ELIGIBLE = 3;
+/** Pool size when drawing random jurors — job-ineligible students are filtered out afterward. */
+exports.JURY_CANDIDATE_POOL = 50;
+function formatLawsuitPersonName(username, firstName, lastName) {
+    const full = [firstName, lastName].filter(Boolean).join(' ').trim();
+    return full || username;
+}
 exports.TERMINAL_STATUSES = ['approved', 'denied', 'withdrawn', 'resolved_mediation'];
 exports.LAWYER_OPINIONS = ['recommend_approve', 'recommend_partial', 'recommend_dismiss'];
 let tablesReadyCache = null;
@@ -328,7 +335,7 @@ async function seatJury(lawsuitId) {
     const eligible = await database_prod_1.default.query(`SELECT u.id, j.name AS job_name
      FROM users u
      LEFT JOIN jobs j ON u.job_id = j.id
-     WHERE u.role = 'student' AND u.status = 'approved'
+     WHERE u.role = 'student' AND (u.status IS NULL OR u.status = 'approved')
        AND u.class = $1 AND u.school_id IS NOT DISTINCT FROM $2
        AND u.id NOT IN ($3, $4)
        AND u.id NOT IN (
@@ -343,10 +350,12 @@ async function seatJury(lawsuitId) {
         lawsuit.plaintiff_user_id,
         lawsuit.defendant_user_id,
         lawsuitId,
-        exports.JURY_SIZE,
+        exports.JURY_CANDIDATE_POOL,
     ]);
     const filtered = [];
     for (const s of eligible) {
+        if (filtered.length >= exports.JURY_SIZE)
+            break;
         if (await isJuryEligibleStudent(s.id, s.job_name)) {
             filtered.push({ id: s.id });
         }
@@ -502,6 +511,16 @@ function buildProceedingsTimeline(row, juryAssignments) {
     const isTerminal = exports.TERMINAL_STATUSES.includes(status);
     const juryTotal = juryAssignments?.length ?? 0;
     const juryVoted = juryAssignments?.filter((j) => j.vote).length ?? 0;
+    const juryRosterDetail = juryTotal > 0
+        ? juryAssignments
+            .map((j) => {
+            const name = formatLawsuitPersonName(j.username, j.first_name, j.last_name);
+            if (j.vote)
+                return `${name} — voted ${j.vote.replace(/_/g, ' ')}`;
+            return `${name} — awaiting vote`;
+        })
+            .join('\n')
+        : undefined;
     const stepState = (stepKey) => {
         if (isTerminal)
             return stepKey === 'outcome' || isStepComplete(row, stepKey) ? 'complete' : 'skipped';
@@ -593,6 +612,7 @@ function buildProceedingsTimeline(row, juryAssignments) {
                             ? 'Skipped — HR settlement'
                             : undefined,
             waiting_message: status === 'pending_jury' ? `Awaiting jury votes — ${juryVoted} of ${juryTotal} cast` : undefined,
+            detail: juryRosterDetail,
         },
         {
             key: 'teacher',

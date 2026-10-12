@@ -32,6 +32,8 @@ const LandPropertyCard: React.FC<LandPropertyCardProps> = ({ parcel, onUpdated }
   const purchasePrice = Number(parcel.purchase_price ?? parcel.value) || 0;
   const appreciation = parcel.appreciation ?? (currentValue - purchasePrice);
   const weeklyRent = Number(parcel.weekly_rent) || 0;
+  const rentWeeksDue = parcel.rent_weeks_due ?? (parcel.can_collect_rent ? 1 : 0);
+  const collectAmount = parcel.accrued_rent ?? (rentWeeksDue > 0 ? weeklyRent * rentWeeksDue : weeklyRent);
   const biomeConfig = BIOME_CONFIG[parcel.biome_type] ?? BIOME_CONFIG['Grassland'];
   const biomeIcon = BIOME_ICONS[parcel.biome_type] ?? '🗺️';
 
@@ -123,8 +125,12 @@ const LandPropertyCard: React.FC<LandPropertyCardProps> = ({ parcel, onUpdated }
               <span className="font-medium">{formatCurrency(purchasePrice)}</span>
             </div>
             <div>
-              <span className="text-xs text-gray-400 block">Weekly rent (5%)</span>
-              <span className="font-medium text-green-600">{formatCurrency(weeklyRent)}</span>
+              <span className="text-xs text-gray-400 block">
+                {rentWeeksDue > 1 ? `Rent due (${rentWeeksDue} wks)` : 'Weekly rent (5%)'}
+              </span>
+              <span className="font-medium text-green-600">
+                {formatCurrency(rentWeeksDue > 1 ? collectAmount : weeklyRent)}
+              </span>
             </div>
           </div>
 
@@ -142,7 +148,11 @@ const LandPropertyCard: React.FC<LandPropertyCardProps> = ({ parcel, onUpdated }
               className="flex-1 min-w-[120px] flex items-center justify-center gap-1 px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {rentLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <DollarSign className="h-3 w-3" />}
-              {parcel.can_collect_rent ? 'Collect rent' : 'Rent collected'}
+              {parcel.can_collect_rent
+                ? rentWeeksDue > 1
+                  ? `Collect ${formatCurrency(collectAmount)}`
+                  : 'Collect rent'
+                : 'Rent collected'}
             </button>
             <button
               type="button"

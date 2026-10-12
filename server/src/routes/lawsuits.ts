@@ -51,22 +51,29 @@ async function requireCourtEnabled(req: AuthenticatedRequest, res: Response): Pr
   return true;
 }
 
-async function enrichCase(row: Record<string, unknown>, allowAutoEscalate = true): Promise<Record<string, unknown>> {
-  if (allowAutoEscalate && row.status === 'pending_hr') {
-    const escalated = await autoEscalatePastHrIfNoDirector(Number(row.id));
-    if (escalated) {
-      const fresh = await getCaseById(Number(row.id));
-      if (fresh) return enrichCase(fresh, false);
-    }
+async function enrichCase(row: Record<string, unknown>): Promise<Record<string, unknown>> {
+  let caseRow = row;
+  if (caseRow.status === 'pending_lawyer') {
+    await tryAdvanceToJury(caseRow.id as number);
+    const refreshed = await getCaseById(caseRow.id as number);
+    if (refreshed) caseRow = refreshed;
   }
+
   const jury = await database.query(
-    'SELECT vote, voted_at FROM lawsuit_jury_assignments WHERE lawsuit_id = $1 ORDER BY id',
-    [row.id]
+    `SELECT ja.vote, ja.voted_at, ja.juror_user_id AS user_id,
+            u.username, u.first_name, u.last_name
+     FROM lawsuit_jury_assignments ja
+     JOIN users u ON u.id = ja.juror_user_id
+     WHERE ja.lawsuit_id = $1
+     ORDER BY ja.id`,
+    [caseRow.id]
   );
+  const townHasHr = await townHasHrDirector(caseRow.school_id as number | null, caseRow.town_class as string);
   return {
-    ...row,
-    proceedings_timeline: buildProceedingsTimeline(row, jury),
-    teacher_hr_required: false,
+    ...caseRow,
+    jury_members: jury,
+    proceedings_timeline: buildProceedingsTimeline(caseRow, jury),
+    teacher_hr_required: caseRow.status === 'pending_hr' && !townHasHr,
   };
 }
 
@@ -516,14 +523,14 @@ router.post('/:id/hr-review', authenticateToken, requireTenant, async (req: Auth
   try {
     if (!(await requireCourtEnabled(req, res))) return;
     const user = req.user;
-    if (!user || user.role !== 'student') {
-      return res.status(403).json({ error: 'Only the HR Director can mediate' });
-    }
-    const student = await database.get(
-      `SELECT u.*, j.name AS job_name FROM users u LEFT JOIN jobs j ON u.job_id = j.id WHERE u.id = $1`,
-      [user.id]
-    );
-    if (!hasHrDirectorJob(student?.job_name)) {
+    const isTeacher = user?.role === 'teacher' || user?.role === 'super_admin';
+    const student = isTeacher
+      ? null
+      : await database.get(
+          `SELECT u.*, j.name AS job_name FROM users u LEFT JOIN jobs j ON u.job_id = j.id WHERE u.id = $1`,
+          [user?.id]
+        );
+    if (!isTeacher && !hasHrDirectorJob(student?.job_name)) {
       return res.status(403).json({ error: 'Only HR Director can mediate' });
     }
 
@@ -542,14 +549,16 @@ router.post('/:id/hr-review', authenticateToken, requireTenant, async (req: Auth
       return res.status(400).json({ error: 'Case is not pending HR mediation' });
     }
 
-    if (row.town_class !== student?.class) {
+    if (isTeacher) {
+      const schoolId = req.schoolId ?? user?.school_id ?? null;
+      if (row.school_id !== schoolId && user?.role !== 'super_admin') {
+        return res.status(403).json({ error: 'Case is not in your school' });
+      }
+      if (await townHasHrDirector(row.school_id, row.town_class)) {
+        return res.status(403).json({ error: 'This town has an HR Director — student HR handles mediation' });
+      }
+    } else if (row.town_class !== student?.class) {
       return res.status(403).json({ error: 'Case is not in your town class' });
-    }
-    if (!(await townHasHrDirector(row.school_id, row.town_class))) {
-      await autoEscalatePastHrIfNoDirector(lawsuitId);
-      return res.status(400).json({
-        error: 'No HR Director in this town — case was auto-escalated to court',
-      });
     }
 
     let newStatus = 'pending_lawyer';
@@ -589,7 +598,7 @@ router.post('/:id/hr-review', authenticateToken, requireTenant, async (req: Auth
        WHERE id = $12`,
       [
         newStatus,
-        user.id,
+        user!.id,
         hr_notes.trim(),
         outcome,
         outcome === 'settlement_recommended' ? parseFloat(String(hr_recommended_amount)) : null,
@@ -607,7 +616,11 @@ router.post('/:id/hr-review', authenticateToken, requireTenant, async (req: Auth
       await refundEscrowIfHeld(lawsuitId);
     }
 
-    const xp = await awardJobXp(user.id, HR_MEDIATION_XP);
+    if (newStatus === 'pending_lawyer') {
+      await tryAdvanceToJury(lawsuitId);
+    }
+
+    const xp = isTeacher ? null : await awardJobXp(user!.id, HR_MEDIATION_XP);
     return res.json({
       message: 'HR review recorded',
       experience_points: xp?.experience_points,

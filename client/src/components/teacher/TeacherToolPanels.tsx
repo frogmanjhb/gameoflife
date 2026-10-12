@@ -12,6 +12,7 @@ import WinkelManagement from '../admin/WinkelManagement';
 import TownSettings from '../admin/TownSettings';
 import { Plugin } from '../../types';
 import TeacherToolContentShell from './TeacherToolContentShell';
+import TeacherAttendanceAbsenceLog from '../admin/TeacherAttendanceAbsenceLog';
 import { ResponsiveTabNav } from '../responsive';
 
 export type TeacherToolTab =
@@ -39,6 +40,7 @@ interface RenderTeacherToolContentProps {
     className: string;
     students: Student[];
   }[];
+  currentTownClass: string | null;
 }
 
 export const renderTeacherToolContent = ({
@@ -52,6 +54,7 @@ export const renderTeacherToolContent = ({
   announcements,
   refreshAnnouncements,
   unemployedStudentsByClass,
+  currentTownClass,
 }: RenderTeacherToolContentProps) => {
   const jobsSubTabs = [
     { id: 'manage' as const, label: 'Job management', mobileLabel: 'Manage' },
@@ -66,7 +69,12 @@ export const renderTeacherToolContent = ({
     case 'submissions':
       return <TeacherContentApprovals onUpdate={fetchData} />;
     case 'students':
-      return <StudentManagement students={students} onUpdate={fetchData} />;
+      return (
+        <div className="space-y-6">
+          <StudentManagement students={students} onUpdate={fetchData} />
+          <TeacherAttendanceAbsenceLog townClass={currentTownClass} />
+        </div>
+      );
     case 'treasury':
       return <TreasuryManagement />;
     case 'plugins':

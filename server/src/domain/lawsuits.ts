@@ -19,6 +19,26 @@ export const LAWSUIT_CLAIM_CAP = 15000;
 export const LAWSUIT_TREASURY_AWARD_MULTIPLIER = 2;
 export const JURY_SIZE = 5;
 export const JURY_MIN_ELIGIBLE = 3;
+/** Pool size when drawing random jurors — job-ineligible students are filtered out afterward. */
+export const JURY_CANDIDATE_POOL = 50;
+
+export interface LawsuitJuryMember {
+  user_id: number;
+  username: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  vote: string | null;
+  voted_at: string | null;
+}
+
+export function formatLawsuitPersonName(
+  username: string,
+  firstName?: string | null,
+  lastName?: string | null
+): string {
+  const full = [firstName, lastName].filter(Boolean).join(' ').trim();
+  return full || username;
+}
 
 type LawsuitDbClient = {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
@@ -609,7 +629,7 @@ export async function seatJury(lawsuitId: number): Promise<void> {
     `SELECT u.id, j.name AS job_name
      FROM users u
      LEFT JOIN jobs j ON u.job_id = j.id
-     WHERE u.role = 'student' AND u.status = 'approved'
+     WHERE u.role = 'student' AND (u.status IS NULL OR u.status = 'approved')
        AND u.class = $1 AND u.school_id IS NOT DISTINCT FROM $2
        AND u.id NOT IN ($3, $4)
        AND u.id NOT IN (
@@ -625,12 +645,13 @@ export async function seatJury(lawsuitId: number): Promise<void> {
       lawsuit.plaintiff_user_id,
       lawsuit.defendant_user_id,
       lawsuitId,
-      JURY_SIZE,
+      JURY_CANDIDATE_POOL,
     ]
   );
 
   const filtered: { id: number }[] = [];
   for (const s of eligible) {
+    if (filtered.length >= JURY_SIZE) break;
     if (await isJuryEligibleStudent(s.id, s.job_name)) {
       filtered.push({ id: s.id });
     }
@@ -854,12 +875,22 @@ export async function getLinkableActions(
 
 export function buildProceedingsTimeline(
   row: Record<string, unknown>,
-  juryAssignments?: Array<{ vote: string | null; voted_at: string | null }>
+  juryAssignments?: LawsuitJuryMember[]
 ): ProceedingsStep[] {
   const status = row.status as string;
   const isTerminal = TERMINAL_STATUSES.includes(status as (typeof TERMINAL_STATUSES)[number]);
   const juryTotal = juryAssignments?.length ?? 0;
   const juryVoted = juryAssignments?.filter((j) => j.vote).length ?? 0;
+  const juryRosterDetail =
+    juryTotal > 0
+      ? juryAssignments!
+          .map((j) => {
+            const name = formatLawsuitPersonName(j.username, j.first_name, j.last_name);
+            if (j.vote) return `${name} — voted ${j.vote.replace(/_/g, ' ')}`;
+            return `${name} — awaiting vote`;
+          })
+          .join('\n')
+      : undefined;
 
   const stepState = (stepKey: string): ProceedingsStep['state'] => {
     if (isTerminal) return stepKey === 'outcome' || isStepComplete(row, stepKey) ? 'complete' : 'skipped';
@@ -954,6 +985,7 @@ export function buildProceedingsTimeline(
               ? 'Skipped — HR settlement'
               : undefined,
       waiting_message: status === 'pending_jury' ? `Awaiting jury votes — ${juryVoted} of ${juryTotal} cast` : undefined,
+      detail: juryRosterDetail,
     },
     {
       key: 'teacher',

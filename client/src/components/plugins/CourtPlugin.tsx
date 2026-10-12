@@ -540,6 +540,134 @@ const CourtPlugin: React.FC = () => {
                   />
                 )}
 
+                {selectedCase.jury_members && selectedCase.jury_members.length > 0 && (
+                  <div className="border-t pt-4">
+                    <p className="text-sm font-medium text-gray-800">Seated jury</p>
+                    <ul className="mt-2 space-y-1 text-sm text-gray-700">
+                      {selectedCase.jury_members.map((j) => (
+                        <li key={j.user_id}>
+                          {displayName(j.username, j.first_name, j.last_name)}
+                          {j.vote ? (
+                            <span className="text-gray-500"> — voted {j.vote.replace(/_/g, ' ')}</span>
+                          ) : selectedCase.status === 'pending_jury' ? (
+                            <span className="text-amber-700"> — awaiting vote</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                    {selectedCase.status === 'pending_jury' && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Jurors see this case under Jury duty and vote guilty or not guilty.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {isTeacher && selectedCase.teacher_hr_required && tab === 'current' && (
+                  <div className="border-t pt-4 space-y-2">
+                    <p className="text-sm font-medium text-gray-800">
+                      HR mediation required — no HR Director in {selectedCase.town_class}
+                    </p>
+                    {selectedCase.defendant_response && (
+                      <p className="text-xs text-gray-600">Defendant response: {selectedCase.defendant_response}</p>
+                    )}
+                    <textarea
+                      className="input-field w-full text-sm"
+                      rows={3}
+                      placeholder="Mediation notes (required)"
+                      value={teacherHrNotes}
+                      onChange={(e) => setTeacherHrNotes(e.target.value)}
+                    />
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <button
+                        type="button"
+                        className="text-xs px-3 py-1.5 bg-gray-600 text-white rounded"
+                        disabled={submitting || !teacherHrNotes.trim()}
+                        onClick={async () => {
+                          setSubmitting(true);
+                          setError(null);
+                          try {
+                            await lawsuitsApi.hrReview(selectedCase.id, {
+                              outcome: 'resolved_no_damages',
+                              hr_notes: teacherHrNotes.trim(),
+                            });
+                            setSuccess('Case resolved without damages');
+                            openCaseDetail(selectedCase);
+                            fetchCases();
+                          } catch (err: unknown) {
+                            const e = err as { response?: { data?: { error?: string } } };
+                            setError(e.response?.data?.error || 'Failed to record mediation');
+                          } finally {
+                            setSubmitting(false);
+                          }
+                        }}
+                      >
+                        Resolve (no damages)
+                      </button>
+                      <input
+                        type="number"
+                        placeholder="Settlement R"
+                        className="input-field text-xs w-28 py-1"
+                        value={teacherSettlementAmount}
+                        onChange={(e) => setTeacherSettlementAmount(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded"
+                        disabled={submitting || !teacherHrNotes.trim() || !teacherSettlementAmount}
+                        onClick={async () => {
+                          setSubmitting(true);
+                          setError(null);
+                          try {
+                            await lawsuitsApi.hrReview(selectedCase.id, {
+                              outcome: 'settlement_recommended',
+                              hr_notes: teacherHrNotes.trim(),
+                              hr_recommended_amount: parseFloat(teacherSettlementAmount),
+                              plaintiff_consents_settlement: true,
+                              defendant_consents_settlement: true,
+                            });
+                            setSuccess('Settlement sent to Bank for approval');
+                            openCaseDetail(selectedCase);
+                            fetchCases();
+                          } catch (err: unknown) {
+                            const e = err as { response?: { data?: { error?: string } } };
+                            setError(e.response?.data?.error || 'Failed to record settlement');
+                          } finally {
+                            setSubmitting(false);
+                          }
+                        }}
+                      >
+                        Settle → Bank
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded"
+                        disabled={submitting || !teacherHrNotes.trim()}
+                        onClick={async () => {
+                          setSubmitting(true);
+                          setError(null);
+                          try {
+                            await lawsuitsApi.hrReview(selectedCase.id, {
+                              outcome: 'escalated',
+                              hr_notes: teacherHrNotes.trim(),
+                            });
+                            setSuccess('Escalated to lawyers and jury');
+                            openCaseDetail(selectedCase);
+                            fetchCases();
+                          } catch (err: unknown) {
+                            const e = err as { response?: { data?: { error?: string } } };
+                            setError(e.response?.data?.error || 'Failed to escalate case');
+                          } finally {
+                            setSubmitting(false);
+                          }
+                        }}
+                      >
+                        Escalate to court
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {myRole === 'defendant' &&
                   selectedCase.status === 'pending_hr' &&
                   !selectedCase.defendant_response && (

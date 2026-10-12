@@ -80,7 +80,9 @@ router.post('/collect-rent/:parcelId', auth_1.authenticateToken, async (req, res
         if (!(0, landProperty_1.canCollectWeeklyRent)(refreshed.purchased_at, refreshed.last_rent_collected_at)) {
             return res.status(400).json({ error: 'Rental income already collected for this week' });
         }
-        const rentAmount = (0, landProperty_1.calculateWeeklyRent)(currentValue);
+        const rentWeeksDue = (0, landProperty_1.getRentWeeksDue)(refreshed.purchased_at, refreshed.last_rent_collected_at);
+        const rentAmount = (0, landProperty_1.calculateAccruedRent)(purchasePrice, refreshed.purchased_at, refreshed.last_rent_collected_at);
+        const rentCollectedThrough = (0, landProperty_1.advanceRentCollectionAnchor)(refreshed.purchased_at, refreshed.last_rent_collected_at, rentWeeksDue);
         const account = await database_prod_1.default.get('SELECT id FROM accounts WHERE user_id = $1', [req.user.id]);
         if (!account) {
             return res.status(404).json({ error: 'Account not found' });
@@ -88,10 +90,11 @@ router.post('/collect-rent/:parcelId', auth_1.authenticateToken, async (req, res
         await database_prod_1.default.run('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2', [rentAmount, req.user.id]);
         await database_prod_1.default.run(`INSERT INTO transactions (to_account_id, amount, transaction_type, description)
        VALUES ($1, $2, 'deposit', $3)`, [account.id, rentAmount, `Land rental income: Plot ${refreshed.grid_code}`]);
-        await database_prod_1.default.run('UPDATE land_parcels SET last_rent_collected_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [parcelId]);
+        await database_prod_1.default.run('UPDATE land_parcels SET last_rent_collected_at = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [rentCollectedThrough.toISOString(), parcelId]);
         res.json({
             message: 'Rental income collected',
             amount: rentAmount,
+            weeks_collected: rentWeeksDue,
             parcel: (0, landProperty_1.enrichOwnedParcel)({ ...refreshed, value: currentValue }),
         });
     }

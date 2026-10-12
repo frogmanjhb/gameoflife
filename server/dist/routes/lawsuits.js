@@ -25,12 +25,25 @@ async function requireCourtEnabled(req, res) {
     return true;
 }
 async function enrichCase(row) {
-    const jury = await database_prod_1.default.query('SELECT vote, voted_at FROM lawsuit_jury_assignments WHERE lawsuit_id = $1 ORDER BY id', [row.id]);
-    const townHasHr = await (0, attendance_1.townHasHrDirector)(row.school_id, row.town_class);
+    let caseRow = row;
+    if (caseRow.status === 'pending_lawyer') {
+        await (0, lawsuits_1.tryAdvanceToJury)(caseRow.id);
+        const refreshed = await getCaseById(caseRow.id);
+        if (refreshed)
+            caseRow = refreshed;
+    }
+    const jury = await database_prod_1.default.query(`SELECT ja.vote, ja.voted_at, ja.juror_user_id AS user_id,
+            u.username, u.first_name, u.last_name
+     FROM lawsuit_jury_assignments ja
+     JOIN users u ON u.id = ja.juror_user_id
+     WHERE ja.lawsuit_id = $1
+     ORDER BY ja.id`, [caseRow.id]);
+    const townHasHr = await (0, attendance_1.townHasHrDirector)(caseRow.school_id, caseRow.town_class);
     return {
-        ...row,
-        proceedings_timeline: (0, lawsuits_1.buildProceedingsTimeline)(row, jury),
-        teacher_hr_required: row.status === 'pending_hr' && !townHasHr,
+        ...caseRow,
+        jury_members: jury,
+        proceedings_timeline: (0, lawsuits_1.buildProceedingsTimeline)(caseRow, jury),
+        teacher_hr_required: caseRow.status === 'pending_hr' && !townHasHr,
     };
 }
 async function getCaseById(id) {
@@ -496,6 +509,9 @@ router.post('/:id/hr-review', auth_1.authenticateToken, tenant_1.requireTenant, 
         ]);
         if (outcome === 'resolved_no_damages') {
             await (0, lawsuits_1.refundEscrowIfHeld)(lawsuitId);
+        }
+        if (newStatus === 'pending_lawyer') {
+            await (0, lawsuits_1.tryAdvanceToJury)(lawsuitId);
         }
         const xp = isTeacher ? null : await (0, lawsuits_1.awardJobXp)(user.id, lawsuits_1.HR_MEDIATION_XP);
         return res.json({

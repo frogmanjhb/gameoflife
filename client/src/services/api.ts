@@ -22,7 +22,7 @@ import {
   NurseGameStatus, NurseGameStartRequest, NurseGameSubmitRequest,
   DoctorGameStatus, DoctorGameStartRequest, DoctorGameSubmitRequest,
   DoctorIllnessMyStatus, DoctorIllnessDoctorStatus,
-  AttendanceRegisterStatus, AttendanceMySickNote, SickNoteQueueStatus,
+  AttendanceRegisterStatus, AttendanceMySickNote, AttendanceAbsenceRecord, SickNoteQueueStatus,
   CodeBoardManageStatus, CodeBoardPublicView, CodeBoardAppItem,
   TownNewsManageStatus, TownNewsPublicView, TownNewsStory, TownNewsPopup, TownNewsPopupManageStatus, TownNewsActivePopup,
   ContentSubmissionsPending,
@@ -416,6 +416,12 @@ export const attendanceApi = {
       new_level: number | null;
     };
   }> => api.post(`/attendance/review-sick-note/${id}`, { approved }),
+  getAbsenceRecords: (params?: {
+    town_class?: string;
+    submitter_role?: 'nurse' | 'doctor' | 'all';
+    limit?: number;
+  }): Promise<{ data: { records: AttendanceAbsenceRecord[] } }> =>
+    api.get('/attendance/absence-records', { params }),
 };
 
 export interface InsurancePolicy {
@@ -1426,6 +1432,15 @@ export interface ProceedingsStep {
   waiting_message?: string;
 }
 
+export interface LawsuitJuryMember {
+  user_id: number;
+  username: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  vote?: string | null;
+  voted_at?: string | null;
+}
+
 export interface StudentLawsuit {
   id: number;
   school_id: number | null;
@@ -1464,6 +1479,7 @@ export interface StudentLawsuit {
   jury_guilty_votes?: number;
   jury_not_guilty_votes?: number;
   jury_skipped_reason?: string | null;
+  jury_members?: LawsuitJuryMember[];
   teacher_initials?: string | null;
   denial_reason?: string | null;
   created_at: string;

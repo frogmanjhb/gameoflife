@@ -1,7 +1,8 @@
 import { Router, Response } from 'express';
-import { body, validationResult } from 'express-validator';
+import { body, query, validationResult } from 'express-validator';
 import database from '../database/database-prod';
-import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { requireTenant } from '../middleware/tenant';
 import { getXPForLevel } from './jobs';
 import {
   ABSENT_NO_SICK_NOTE_PAY_FACTOR,
@@ -52,6 +53,15 @@ async function awardXp(userId: number, xp: number): Promise<{ new_level: number 
 async function tablesReady(): Promise<boolean> {
   try {
     await database.query('SELECT 1 FROM attendance_registers LIMIT 1');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function absenceRecordsTableReady(): Promise<boolean> {
+  try {
+    await database.query('SELECT 1 FROM attendance_absence_records LIMIT 1');
     return true;
   } catch {
     return false;
@@ -200,6 +210,14 @@ router.post(
         return res.status(400).json({ error: 'Register has already been submitted for today.' });
       }
 
+      const entriesPreview = req.body.entries as { student_user_id: number; status: string }[];
+      const hasAbsent = entriesPreview.some((e) => e.status === 'absent');
+      if (hasAbsent && !(await absenceRecordsTableReady())) {
+        return res.status(503).json({
+          error: 'Attendance absence logging is not available yet. Please try again shortly.',
+        });
+      }
+
       const students = await fetchTownStudents(schoolId, townClass);
       const studentIds = new Set(students.map((s: { id: number }) => s.id));
       const entries = req.body.entries as { student_user_id: number; status: string }[];
@@ -247,17 +265,36 @@ router.post(
 
           if (status === 'absent') {
             absentCount++;
+            const registerEntryId = entryResult.rows[0].id;
             await client.query(
               `INSERT INTO sick_notes
                  (register_entry_id, student_user_id, reviewer_user_id, reviewer_role, status)
                VALUES ($1, $2, $3, $4, 'awaiting_submission')`,
               [
-                entryResult.rows[0].id,
+                registerEntryId,
                 entry.student_user_id,
                 reviewer?.user_id ?? null,
                 reviewer?.role ?? 'none',
               ]
             );
+            if (submitterRole) {
+              await client.query(
+                `INSERT INTO attendance_absence_records (
+                   register_id, register_entry_id, school_id, town_class,
+                   student_user_id, marked_by_user_id, submitter_role, marked_at
+                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [
+                  registerId,
+                  registerEntryId,
+                  schoolId,
+                  townClass,
+                  entry.student_user_id,
+                  req.user!.id,
+                  submitterRole,
+                  regResult.rows[0].submitted_at,
+                ]
+              );
+            }
           }
         }
 
@@ -283,6 +320,87 @@ router.post(
       }
     } catch (error) {
       console.error('Attendance submit-register error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+router.get(
+  '/absence-records',
+  authenticateToken,
+  requireTenant,
+  requireRole(['teacher']),
+  [
+    query('town_class').optional().isString(),
+    query('submitter_role').optional().isIn(['nurse', 'doctor', 'all']),
+    query('limit').optional().isInt({ min: 1, max: 200 }),
+  ],
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      if (!(await absenceRecordsTableReady())) {
+        return res.json({ records: [] });
+      }
+
+      const schoolId = req.schoolId ?? req.user?.school_id ?? null;
+      const townClass = req.query.town_class ? String(req.query.town_class).trim() : null;
+      const submitterRoleFilter = String(req.query.submitter_role || 'doctor');
+      const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit || '100'), 10) || 100));
+
+      const params: unknown[] = [schoolId];
+      let where = 'a.school_id IS NOT DISTINCT FROM $1';
+
+      if (townClass) {
+        params.push(townClass);
+        where += ` AND a.town_class = $${params.length}`;
+      }
+      if (submitterRoleFilter !== 'all') {
+        params.push(submitterRoleFilter);
+        where += ` AND a.submitter_role = $${params.length}`;
+      }
+      params.push(limit);
+
+      const rows = await database.query(
+        `SELECT a.id, a.register_id, a.marked_at, a.town_class, a.submitter_role,
+                a.student_user_id,
+                COALESCE(NULLIF(TRIM(CONCAT(st.first_name, ' ', st.last_name)), ''), st.username) AS student_display_name,
+                st.username AS student_username,
+                a.marked_by_user_id,
+                COALESCE(NULLIF(TRIM(CONCAT(mb.first_name, ' ', mb.last_name)), ''), mb.username) AS marked_by_display_name,
+                mb.username AS marked_by_username,
+                sn.status AS sick_note_status
+         FROM attendance_absence_records a
+         JOIN users st ON st.id = a.student_user_id
+         JOIN users mb ON mb.id = a.marked_by_user_id
+         LEFT JOIN sick_notes sn ON sn.register_entry_id = a.register_entry_id
+         WHERE ${where}
+         ORDER BY a.marked_at DESC
+         LIMIT $${params.length}`,
+        params
+      );
+
+      res.json({
+        records: rows.map((r: Record<string, unknown>) => ({
+          id: r.id,
+          register_id: r.register_id,
+          marked_at: r.marked_at,
+          town_class: r.town_class,
+          submitter_role: r.submitter_role,
+          student_user_id: r.student_user_id,
+          student_display_name: r.student_display_name,
+          student_username: r.student_username,
+          marked_by_user_id: r.marked_by_user_id,
+          marked_by_display_name: r.marked_by_display_name,
+          marked_by_username: r.marked_by_username,
+          sick_note_status: r.sick_note_status ?? null,
+        })),
+      });
+    } catch (error) {
+      console.error('Attendance absence-records error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

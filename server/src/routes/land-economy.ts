@@ -7,7 +7,9 @@ import {
   hasFinancialManagerJob,
   isTownClass,
   calculateAppreciatedValue,
-  calculateWeeklyRent,
+  calculateAccruedRent,
+  getRentWeeksDue,
+  advanceRentCollectionAnchor,
   canCollectWeeklyRent,
 } from '../domain/landProperty';
 import {
@@ -104,7 +106,17 @@ router.post('/collect-rent/:parcelId', authenticateToken, async (req: Authentica
       return res.status(400).json({ error: 'Rental income already collected for this week' });
     }
 
-    const rentAmount = calculateWeeklyRent(currentValue);
+    const rentWeeksDue = getRentWeeksDue(refreshed.purchased_at, refreshed.last_rent_collected_at);
+    const rentAmount = calculateAccruedRent(
+      purchasePrice,
+      refreshed.purchased_at,
+      refreshed.last_rent_collected_at
+    );
+    const rentCollectedThrough = advanceRentCollectionAnchor(
+      refreshed.purchased_at,
+      refreshed.last_rent_collected_at,
+      rentWeeksDue
+    );
     const account = await database.get('SELECT id FROM accounts WHERE user_id = $1', [req.user!.id]);
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
@@ -120,13 +132,14 @@ router.post('/collect-rent/:parcelId', authenticateToken, async (req: Authentica
       [account.id, rentAmount, `Land rental income: Plot ${refreshed.grid_code}`]
     );
     await database.run(
-      'UPDATE land_parcels SET last_rent_collected_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-      [parcelId]
+      'UPDATE land_parcels SET last_rent_collected_at = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [rentCollectedThrough.toISOString(), parcelId]
     );
 
     res.json({
       message: 'Rental income collected',
       amount: rentAmount,
+      weeks_collected: rentWeeksDue,
       parcel: enrichOwnedParcel({ ...refreshed, value: currentValue }),
     });
   } catch (error) {
