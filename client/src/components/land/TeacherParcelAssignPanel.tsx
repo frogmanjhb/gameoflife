@@ -18,6 +18,7 @@ interface TeacherParcelAssignPanelProps {
   students: ClassStudentOption[];
   onUpdated: () => void;
   onClose: () => void;
+  embedded?: boolean;
 }
 
 const studentLabel = (s: ClassStudentOption) =>
@@ -28,6 +29,7 @@ const TeacherParcelAssignPanel: React.FC<TeacherParcelAssignPanelProps> = ({
   students,
   onUpdated,
   onClose,
+  embedded = false,
 }) => {
   const [studentId, setStudentId] = useState('');
   const [loading, setLoading] = useState(false);
@@ -79,34 +81,48 @@ const TeacherParcelAssignPanel: React.FC<TeacherParcelAssignPanelProps> = ({
   const priceLabel = isAuction && !parcel.owner_id ? HIDDEN_AUCTION_PRICE_LABEL : formatCurrency(Number(parcel.value));
 
   return (
-    <div className="bg-white border border-emerald-200 rounded-xl shadow-sm p-4 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div
-            className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
-            style={{ backgroundColor: BIOME_CONFIG[parcel.biome_type].lightColor }}
-          >
-            {BIOME_ICONS[parcel.biome_type]}
+    <div
+      className={
+        embedded
+          ? 'border-t border-gray-200 pt-4 space-y-4'
+          : 'bg-white border border-emerald-200 rounded-xl shadow-sm p-4 space-y-4'
+      }
+    >
+      {!embedded && (
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
+              style={{ backgroundColor: BIOME_CONFIG[parcel.biome_type].lightColor }}
+            >
+              {BIOME_ICONS[parcel.biome_type]}
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900">
+                {isAuction ? `Transfer ownership · ${parcel.grid_code}` : `Assign plot ${parcel.grid_code}`}
+              </h3>
+              <p className="text-sm text-gray-600">
+                {parcel.biome_type} · {priceLabel}
+              </p>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Current owner:{' '}
+                <span className="font-medium text-gray-800">
+                  {parcel.owner_id ? ownerName || parcel.owner_username : 'None (available)'}
+                </span>
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">
-              {isAuction ? `Transfer ownership · ${parcel.grid_code}` : `Assign plot ${parcel.grid_code}`}
-            </h3>
-            <p className="text-sm text-gray-600">
-              {parcel.biome_type} · {priceLabel}
-            </p>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Current owner:{' '}
-              <span className="font-medium text-gray-800">
-                {parcel.owner_id ? ownerName || parcel.owner_username : 'None (available)'}
-              </span>
-            </p>
-          </div>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
-          <X className="h-5 w-5" />
-        </button>
-      </div>
+      )}
+
+      {embedded && (
+        <h4 className="text-sm font-semibold text-gray-900">
+          {isAuction ? 'Transfer ownership' : 'Assign to student'}
+        </h4>
+      )}
 
       {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
       {success && <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">{success}</p>}

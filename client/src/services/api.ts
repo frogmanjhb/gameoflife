@@ -815,6 +815,12 @@ export const landApi = {
 
   removeParcelOwner: (parcelId: number): Promise<{ data: { message: string; parcel: LandParcel } }> =>
     api.delete(`/land/parcels/${parcelId}/owner`),
+
+  updateParcelRentalYield: (
+    parcelId: number,
+    rentalYieldPercent: number
+  ): Promise<{ data: { message: string; parcel: LandParcel } }> =>
+    api.put(`/land/parcels/${parcelId}/rental-yield`, { rental_yield_percent: rentalYieldPercent }),
 };
 
 // Treasury and Tax API methods

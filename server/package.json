@@ -62,6 +62,7 @@
     "migrate:land-purchase-cancel": "node run-sql-migration.js migrations/110_land_purchase_cancel_status.sql",
     "migrate:attendance-absence-records": "node run-sql-migration.js migrations/112_attendance_absence_records.sql",
     "migrate:land-rent-backpay": "node run-sql-migration.js migrations/113_land_rent_backpay_marker.sql",
+    "migrate:land-parcel-rental-yield": "node run-sql-migration.js migrations/114_land_parcel_rental_yield.sql",
     "backpay:land-rent": "tsx scripts/run-land-rent-backpay.ts --apply",
     "audit:land-rent-backpay": "tsx scripts/run-land-rent-backpay.ts --audit",
     "audit:accountant-transfer-exploit": "node scripts/audit-reverse-accountant-transfer-rewards.js --audit",

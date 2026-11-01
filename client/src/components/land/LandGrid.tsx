@@ -4,8 +4,9 @@ import { landApi } from '../../services/api';
 import { BIOME_CONFIG, formatCurrency, BIOME_ICONS } from './BiomeConfig';
 import { isCommunityAuctionPlot, COMMUNITY_AUCTION_HOVER_TITLE, HIDDEN_AUCTION_PRICE_LABEL } from './communityPlot';
 import LandPopup from './LandPopup';
+import LandPropertyDetailModal from './LandPropertyDetailModal';
 import PurchaseModal from './PurchaseModal';
-import TeacherParcelAssignPanel, { ClassStudentOption } from './TeacherParcelAssignPanel';
+import { ClassStudentOption } from './TeacherParcelAssignPanel';
 import { ZoomIn, ZoomOut, Maximize2, Filter, Loader2, RefreshCw } from 'lucide-react';
 
 interface LandGridProps {
@@ -67,6 +68,7 @@ const LandGrid: React.FC<LandGridProps> = ({
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [selectedParcel, setSelectedParcel] = useState<LandParcel | null>(null);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [detailParcel, setDetailParcel] = useState<LandParcel | null>(null);
   
   const [filterBiome, setFilterBiome] = useState<BiomeType | ''>('');
   const [filterOwned, setFilterOwned] = useState<'all' | 'available' | 'owned'>('all');
@@ -77,7 +79,6 @@ const LandGrid: React.FC<LandGridProps> = ({
   const [swapLoading, setSwapLoading] = useState(false);
   const [recalcLoading, setRecalcLoading] = useState(false);
   const [recalcSuccess, setRecalcSuccess] = useState(false);
-  const [manageSelectedParcel, setManageSelectedParcel] = useState<LandParcel | null>(null);
   const [classStudents, setClassStudents] = useState<ClassStudentOption[]>([]);
   
   const containerRef = useRef<HTMLDivElement>(null);
@@ -110,9 +111,6 @@ const LandGrid: React.FC<LandGridProps> = ({
   // Fetch all parcels for the selected town
   useEffect(() => {
     fetchParcels();
-    if (canManageOwnership) {
-      setManageSelectedParcel(null);
-    }
   }, [townClass, canManageOwnership]);
 
   useEffect(() => {
@@ -126,9 +124,9 @@ const LandGrid: React.FC<LandGridProps> = ({
     try {
       const response = await landApi.getParcels({ townClass });
       setParcels(response.data);
-      if (manageSelectedParcel) {
-        const refreshed = response.data.find((p) => p.id === manageSelectedParcel.id);
-        setManageSelectedParcel(refreshed ?? null);
+      if (detailParcel) {
+        const refreshed = response.data.find((p) => p.id === detailParcel.id);
+        setDetailParcel(refreshed ?? null);
       }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load land plots');
@@ -180,16 +178,12 @@ const LandGrid: React.FC<LandGridProps> = ({
   // Handle cell click
   const handleCellClick = useCallback((row: number, col: number) => {
     const parcel = getParcel(row, col);
-    if (canManageOwnership && parcel) {
-      setManageSelectedParcel(parcel);
-    } else if (parcel && !parcel.owner_id && !readOnly && !isCommunityAuctionPlot(parcel)) {
-      setSelectedParcel(parcel);
-      setShowPurchaseModal(true);
-    }
-    if (onParcelSelect && parcel) {
+    if (!parcel) return;
+    setDetailParcel(parcel);
+    if (onParcelSelect) {
       onParcelSelect(parcel);
     }
-  }, [getParcel, readOnly, onParcelSelect, canManageOwnership]);
+  }, [getParcel, onParcelSelect]);
 
   // Drag-and-drop for teacher: swap two parcels
   const handleCellDragStart = useCallback((e: React.DragEvent, parcel: LandParcel) => {
@@ -315,9 +309,9 @@ const LandGrid: React.FC<LandGridProps> = ({
         const isAuctionPlot = parcel ? isCommunityAuctionPlot(parcel) : false;
         const isManageSelected =
           canManageOwnership &&
-          manageSelectedParcel &&
+          detailParcel &&
           parcel &&
-          manageSelectedParcel.id === parcel.id;
+          detailParcel.id === parcel.id;
         
         cells.push(
           <div
@@ -366,7 +360,7 @@ const LandGrid: React.FC<LandGridProps> = ({
       }
     }
     return cells;
-  }, [cellSize, hoveredParcel, draggedParcel, dropTargetKey, canRearrange, canManageOwnership, manageSelectedParcel, getParcel, getCellStyle, handleCellHover, handleCellClick, handleCellDragStart, handleCellDragEnd, handleCellDragOver, handleCellDragLeave, handleCellDrop]);
+  }, [cellSize, hoveredParcel, draggedParcel, dropTargetKey, canRearrange, canManageOwnership, detailParcel, getParcel, getCellStyle, handleCellHover, handleCellClick, handleCellDragStart, handleCellDragEnd, handleCellDragOver, handleCellDragLeave, handleCellDrop]);
 
   // Biome legend
   const biomeTypes = Object.keys(BIOME_CONFIG) as BiomeType[];
@@ -418,7 +412,7 @@ const LandGrid: React.FC<LandGridProps> = ({
             <div className="px-3 pb-3 space-y-2 border-t border-amber-200/60">
               <p className="text-xs text-amber-800 pt-2">
                 Drag tiles to swap positions. Recalculate prices to sync with the legend.
-                {canManageOwnership && ' Tap a plot to assign ownership.'}
+                {canManageOwnership && ' Click a plot to view details and assign ownership.'}
               </p>
               {recalcSuccess && (
                 <p className="text-xs text-green-700 font-medium">Prices updated to match the legend.</p>
@@ -439,7 +433,7 @@ const LandGrid: React.FC<LandGridProps> = ({
               <p className="text-sm text-amber-800">
                 Drag any tile onto another to swap positions and match your classroom board. Use &quot;Recalculate prices&quot; to sync plot values with the legend.
                 {canManageOwnership && (
-                  <> Click a plot below to assign it to a student or remove ownership.</>
+                  <> Click a plot to view details, set rental yield, or assign ownership.</>
                 )}
               </p>
               {recalcSuccess && (
@@ -599,7 +593,7 @@ const LandGrid: React.FC<LandGridProps> = ({
             onTransferOwnership={
               canManageOwnership
                 ? (p) => {
-                    setManageSelectedParcel(p);
+                    setDetailParcel(p);
                     setHoveredParcel(null);
                   }
                 : undefined
@@ -608,12 +602,19 @@ const LandGrid: React.FC<LandGridProps> = ({
         )}
       </div>
 
-      {canManageOwnership && manageSelectedParcel && (
-        <TeacherParcelAssignPanel
-          parcel={manageSelectedParcel}
-          students={classStudents}
+      {detailParcel && (
+        <LandPropertyDetailModal
+          parcel={detailParcel}
+          onClose={() => setDetailParcel(null)}
           onUpdated={() => fetchParcels()}
-          onClose={() => setManageSelectedParcel(null)}
+          canManageOwnership={canManageOwnership}
+          classStudents={classStudents}
+          showPurchaseAction={!readOnly && !detailParcel.owner_id && !isCommunityAuctionPlot(detailParcel)}
+          onRequestPurchase={() => {
+            setSelectedParcel(detailParcel);
+            setShowPurchaseModal(true);
+            setDetailParcel(null);
+          }}
         />
       )}
 

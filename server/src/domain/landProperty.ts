@@ -1,5 +1,18 @@
 export const WEEKLY_APPRECIATION_RATE = 0.01;
 export const WEEKLY_RENTAL_YIELD = 0.05;
+export const DEFAULT_RENTAL_YIELD_PERCENT = WEEKLY_RENTAL_YIELD * 100;
+
+export function resolveRentalYieldPercent(parcel: { rental_yield_percent?: number | string | null }): number {
+  const raw = parcel.rental_yield_percent;
+  if (raw == null || raw === '') return DEFAULT_RENTAL_YIELD_PERCENT;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return DEFAULT_RENTAL_YIELD_PERCENT;
+  return n;
+}
+
+export function resolveRentalYieldDecimal(parcel: { rental_yield_percent?: number | string | null }): number {
+  return resolveRentalYieldPercent(parcel) / 100;
+}
 
 export type TownClass = '6A' | '6B' | '6C';
 
@@ -37,8 +50,11 @@ export function calculateAppreciatedValue(
   return Math.round(value);
 }
 
-export function calculateWeeklyRent(currentValue: number): number {
-  return Math.round(currentValue * WEEKLY_RENTAL_YIELD);
+export function calculateWeeklyRent(
+  currentValue: number,
+  rentalYieldDecimal: number = WEEKLY_RENTAL_YIELD
+): number {
+  return Math.round(currentValue * rentalYieldDecimal);
 }
 
 export function getRentWeeksDue(
@@ -63,7 +79,8 @@ export function calculateAccruedRent(
   purchasePrice: number,
   purchasedAt: string,
   lastRentCollectedAt: string | null | undefined,
-  asOf: string | Date = new Date()
+  asOf: string | Date = new Date(),
+  rentalYieldDecimal: number = WEEKLY_RENTAL_YIELD
 ): number {
   const weeksDue = getRentWeeksDue(purchasedAt, lastRentCollectedAt, asOf);
   if (weeksDue < 1) return 0;
@@ -76,7 +93,7 @@ export function calculateAccruedRent(
     const valueForWeek = Math.round(
       purchasePrice * Math.pow(1 + WEEKLY_APPRECIATION_RATE, weeksOwnedForRent)
     );
-    totalRent += calculateWeeklyRent(valueForWeek);
+    totalRent += calculateWeeklyRent(valueForWeek, rentalYieldDecimal);
   }
   return totalRent;
 }
@@ -146,6 +163,7 @@ export interface LandParcelRow {
   purchase_price?: number | string | null;
   purchased_at?: string | null;
   last_rent_collected_at?: string | null;
+  rental_yield_percent?: number | string | null;
   owner_id?: number | null;
   biome_type: string;
   grid_code: string;
@@ -158,20 +176,25 @@ export interface LandParcelRow {
 export function enrichOwnedParcel(parcel: LandParcelRow) {
   const purchasePrice = Number(parcel.purchase_price ?? parcel.value) || 0;
   const purchasedAt = parcel.purchased_at || new Date().toISOString();
+  const rentalYieldPercent = resolveRentalYieldPercent(parcel);
+  const rentalYieldDecimal = rentalYieldPercent / 100;
   const currentValue = calculateAppreciatedValue(purchasePrice, purchasedAt);
-  const weeklyRent = calculateWeeklyRent(currentValue);
+  const weeklyRent = calculateWeeklyRent(currentValue, rentalYieldDecimal);
   const rentWeeksDue = getRentWeeksDue(purchasedAt, parcel.last_rent_collected_at ?? null);
   const canCollectRent = rentWeeksDue >= 1;
   const accruedRent = calculateAccruedRent(
     purchasePrice,
     purchasedAt,
-    parcel.last_rent_collected_at ?? null
+    parcel.last_rent_collected_at ?? null,
+    new Date(),
+    rentalYieldDecimal
   );
   const weeksOwned = getCompleteWeeksSince(purchasedAt);
 
   return {
     ...parcel,
     purchase_price: purchasePrice,
+    rental_yield_percent: rentalYieldPercent,
     current_value: currentValue,
     value: currentValue,
     weekly_rent: weeklyRent,

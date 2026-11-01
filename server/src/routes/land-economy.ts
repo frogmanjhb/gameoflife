@@ -11,6 +11,7 @@ import {
   getRentWeeksDue,
   advanceRentCollectionAnchor,
   canCollectWeeklyRent,
+  resolveRentalYieldDecimal,
 } from '../domain/landProperty';
 import {
   LAND_SALE_FM_RESUBMIT_COOLDOWN_HOURS,
@@ -107,10 +108,13 @@ router.post('/collect-rent/:parcelId', authenticateToken, async (req: Authentica
     }
 
     const rentWeeksDue = getRentWeeksDue(refreshed.purchased_at, refreshed.last_rent_collected_at);
+    const rentalYieldDecimal = resolveRentalYieldDecimal(refreshed);
     const rentAmount = calculateAccruedRent(
       purchasePrice,
       refreshed.purchased_at,
-      refreshed.last_rent_collected_at
+      refreshed.last_rent_collected_at,
+      new Date(),
+      rentalYieldDecimal
     );
     const rentCollectedThrough = advanceRentCollectionAnchor(
       refreshed.purchased_at,

@@ -1591,6 +1591,7 @@ export interface LandParcel {
   purchased_at?: string;
   purchase_price?: number;
   last_rent_collected_at?: string;
+  rental_yield_percent?: number;
   current_value?: number;
   weekly_rent?: number;
   rent_weeks_due?: number;
