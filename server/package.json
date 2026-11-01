@@ -5,7 +5,8 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "rimraf dist && node node_modules/typescript/lib/tsc.js && node node_modules/copyfiles/index.js src/database/*.sql dist/database/ --flat && node node_modules/copyfiles/index.js migrations/*.sql dist/migrations/ --flat && node node_modules/copyfiles/index.js seed-town-hub.js dist/ && node copy-wordle-words.js",
+    "prebuild": "node ../scripts/sync-gor-shared-to-server.mjs",
+    "build": "npm run prebuild && rimraf dist && node node_modules/typescript/lib/tsc.js && node node_modules/copyfiles/index.js src/database/*.sql dist/database/ --flat && node node_modules/copyfiles/index.js migrations/*.sql dist/migrations/ --flat && node node_modules/copyfiles/index.js seed-town-hub.js dist/ && node copy-wordle-words.js",
     "start": "node dist/server.js",
     "create-super-admin": "node create-super-admin.js",
     "migrate:multi-tenant": "node run-multi-tenant-migration.js",
@@ -63,12 +64,17 @@
     "migrate:attendance-absence-records": "node run-sql-migration.js migrations/112_attendance_absence_records.sql",
     "migrate:land-rent-backpay": "node run-sql-migration.js migrations/113_land_rent_backpay_marker.sql",
     "migrate:land-parcel-rental-yield": "node run-sql-migration.js migrations/114_land_parcel_rental_yield.sql",
+    "migrate:game-of-resources": "node run-sql-migration.js migrations/115_game_of_resources.sql",
+    "migrate:game-of-resources-bank-bridge": "node run-sql-migration.js migrations/116_game_of_resources_bank_bridge.sql",
+    "migrate:game-of-resources-avatar": "node run-sql-migration.js migrations/117_gor_citizen_avatar.sql",
     "backpay:land-rent": "tsx scripts/run-land-rent-backpay.ts --apply",
     "audit:land-rent-backpay": "tsx scripts/run-land-rent-backpay.ts --audit",
     "audit:accountant-transfer-exploit": "node scripts/audit-reverse-accountant-transfer-rewards.js --audit",
     "reverse:accountant-transfer-exploit": "node scripts/audit-reverse-accountant-transfer-rewards.js --apply",
     "seed:test-school": "node seed-test-school.js",
-    "verify:job-xp-wiring": "node scripts/verify-job-xp-wiring.js"
+    "verify:job-xp-wiring": "node scripts/verify-job-xp-wiring.js",
+    "test": "node ../scripts/sync-gor-shared-to-server.mjs && vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -92,5 +98,8 @@
     "tsx": "^4.6.2",
     "typescript": "^5.3.3",
     "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
   }
 }

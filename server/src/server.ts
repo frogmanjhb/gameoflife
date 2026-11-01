@@ -43,7 +43,9 @@ import codeBoardRoutes from './routes/code-board';
 import townNewsRoutes from './routes/town-news';
 import contentSubmissionsRoutes from './routes/content-submissions';
 import classEventsRoutes from './routes/class-events';
+import { startGameOfResourcesScheduler } from './domain/gameOfResources/scheduler';
 import auctionRoutes from './routes/auction';
+import gameOfResourcesRoutes from './routes/game-of-resources';
 import fiveMinuteLessonsRoutes from './routes/five-minute-lessons';
 import announcementRoutes from './routes/announcements';
 import townRoutes from './routes/town';
@@ -222,6 +224,7 @@ app.use('/api/town-news', townNewsRoutes);
 app.use('/api/content-submissions', contentSubmissionsRoutes);
 app.use('/api/class-events', classEventsRoutes);
 app.use('/api/auction', auctionRoutes);
+app.use('/api/game-of-resources', gameOfResourcesRoutes);
 app.use('/api/five-minute-lessons', fiveMinuteLessonsRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/town', townRoutes);
@@ -1227,11 +1230,51 @@ async function initializeDatabase() {
       console.log('⚠️ Land parcel rental yield migration may have already been applied:', migrationError);
     }
 
-    // Sync default plugins (ensures all known plugins exist - no manual script needed)
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '115_game_of_resources.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Game of Resources migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Game of Resources migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '116_game_of_resources_bank_bridge.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Game of Resources bank bridge migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Game of Resources bank bridge migration may have already been applied:', migrationError);
+    }
+
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '117_gor_citizen_avatar.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Game of Resources avatar migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Game of Resources avatar migration may have already been applied:', migrationError);
+    }
+
+    // Sync default plugins
     try {
       const defaultPlugins: { name: string; route_path: string; icon: string; description: string; enabled?: boolean }[] = [
         { name: 'Chores', route_path: '/chores', icon: '🧹', description: 'Earn money by completing chore challenges at home' },
         { name: 'Doubles Day', route_path: '/doubles-day', icon: '2️⃣', description: 'Double points from chores and double pizza time donations when enabled', enabled: false },
+        {
+          name: 'Game of Resources',
+          route_path: '/game-of-resources',
+          icon: '🌍',
+          description: 'Cooperative village simulation — jobs, land, market and the shared 3D planet',
+          enabled: false,
+        },
       ];
       for (const p of defaultPlugins) {
         const existing = await database.query('SELECT id FROM plugins WHERE route_path = $1', [p.route_path]);
@@ -1271,6 +1314,8 @@ async function startServer() {
     console.log(`📊 CivicLab API`);
     console.log(`🌐 Health check: http://localhost:${PORT}/health`);
     console.log(`🔍 Detailed health: http://localhost:${PORT}/api/health`);
+    startGameOfResourcesScheduler();
+    console.log('⏱️ Game of Resources scheduler started (60s interval)');
   });
 
   // Handle graceful shutdown

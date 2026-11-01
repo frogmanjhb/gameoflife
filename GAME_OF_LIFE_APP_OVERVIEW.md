@@ -2,7 +2,17 @@
 
 This repository contains a classroom-focused web application that simulates a small “town economy” to help Grade 6 students learn financial literacy and civic/economic concepts through structured gameplay.
 
-CivicLab is a **town/role economy simulator** with a bank account system, teacher and super-admin tools, and optional “Town Hub” modules (plugins) such as Jobs, Land, Government/Treasury, Tenders, News, Math Game, Leaderboard, Town Rules, Winkel (shop), Pizza Time, Suggestions/Bugs, Disasters, Chores, **Insurance**, **Court**, **Analytics**, **Code Board**, **Event Voting**, **Five Minute Lessons**, and **Doubles Day**. Jobs are deeply integrated with the town: most roles have **challenge mini-games**, **levels and XP**, and role-specific workflows (police fines, lawsuits, accountant oversight, doctor/clinic, cyber attacks, town news, and more). The system supports **multi-tenant schools**: each school has its own towns, students, and settings; a **super admin** can manage multiple schools from a central dashboard.
+CivicLab is a **town/role economy simulator** with a bank account system, teacher and super-admin tools, and optional “Town Hub” modules (plugins) such as Jobs, Land, Government/Treasury, Tenders, News, Math Game, Leaderboard, Town Rules, Winkel (shop), Pizza Time, Suggestions/Bugs, Disasters, Chores, **Game of Resources**, **Insurance**, **Court**, **Analytics**, **Code Board**, **Event Voting**, **Five Minute Lessons**, and **Doubles Day**. Jobs are deeply integrated with the town: most roles have **challenge mini-games**, **levels and XP**, and role-specific workflows (police fines, lawsuits, accountant oversight, doctor/clinic, cyber attacks, town news, and more). The system supports **multi-tenant schools**: each school has its own towns, students, and settings; a **super admin** can manage multiple schools from a central dashboard.
+
+### Recent updates (Nov 2026)
+
+- **Game of Resources**: Town Hub plugin at `/game-of-resources` — shared cooperative world per class, server rules, 3D hex planet, automatic daily rounds, optional teacher-approved **game coin → bank** conversion. See [GAME_OF_RESOURCES.md](./GAME_OF_RESOURCES.md).
+- **Land property detail modal**: Clicking a plot on the land grid or a card under **My Plots** opens a modal with biome info, ownership, value/appreciation, pros/cons, and role-specific actions.
+- **Property economy (owned plots)**: Values appreciate **1% per week** from purchase price. Owners collect **weekly rental income** as a percentage of current value (default **5%**; all amounts are calculated on the server).
+- **Teacher rental yield**: Teachers can set each parcel’s **weekly rental income %** (`rental_yield_percent`, 0–100) via `PUT /api/land/parcels/:parcelId/rental-yield`. Stored per plot in `land_parcels` (migration `114_land_parcel_rental_yield.sql`; also applied on startup in `runStartupMigrations()`).
+- **Student-to-student land sales**: Owners can list a plot for sale to a classmate; Financial Manager review may apply before the buyer accepts (see land sale request routes).
+- **Teacher land tools**: Assign or remove plot ownership from the property modal on the teacher land grid; drag-and-drop **swap** and **recalculate values** unchanged.
+- **Court / lawsuits**: Server build fix — `enrichCase()` is called with a single argument when creating a case (TypeScript compile).
 
 ---
 
@@ -23,7 +33,8 @@ Students can (after teacher approval and **Town Rules agreement**):
 - Play **job challenge games** on **My Job** (`/my-job/:jobId`) to earn money and XP toward the next level
 - Apply for loans (with eligibility rules) and repay them
 - Apply to town tenders (projects/contracts) and receive payouts when awarded and paid
-- Request to buy land parcels (multi-step approval: Financial Manager, engineer, then teacher)
+- Request to buy land parcels (multi-step approval: Financial Manager, engineer, then teacher); explore the grid and open the **property detail modal** to purchase available plots
+- **Own land**: view **My Plots** (`/land`); open each property for details; **collect weekly rental income** when due; **sell to a classmate** (sale workflow may require Financial Manager approval)
 - Play **Chores** — math sums and/or **Wordle** (teacher-configurable daily limits) to earn money
 - Buy **insurance** (health, cyber, property) at 5% of salary per type per week; file claims when applicable
 - Buy items from the **Winkel** (shop) and set a **profile emoji** from owned emoji items
@@ -46,7 +57,7 @@ Teachers can (scoped to their school):
 - **Approve or deny pending transfer requests** submitted by students
 - Run bulk payments/removals for a whole class
 - Review/approve/deny loan applications and (optionally) trigger weekly loan payment processing
-- Review/approve/deny land purchase requests (after Financial Manager and engineer steps when those roles exist); **swap** parcel positions; **recalculate** land values from biome config
+- Review/approve/deny land purchase requests (after Financial Manager and engineer steps when those roles exist); **swap** parcel positions; **recalculate** land values from biome config; **assign or remove** student ownership on a plot; set **weekly rental income %** per parcel (default 5% of current value)
 - Create and manage town announcements and **Town Rules** (editable rules text per town)
 - Create and manage tenders; review tender applications; award tenders; pay awarded tenders from the town treasury
 - Manage town settings (town name, mayor name, tax settings, treasury); toggle **job applications enabled** per town
@@ -169,15 +180,39 @@ Each town has a treasury balance and tax configuration:
 
 ### Land and property registry
 
-The Land module models a grid of parcels:
-- Parcels have a biome type, risk level, pros/cons, and value
-- Students can submit purchase requests (must have enough balance at request time)
-- **Multi-step approval**: Financial Manager review → Architect/Civil Engineer review → teacher final approval; approval deducts funds and transfers ownership
-- Teachers can **swap** positions of two parcels and **recalculate** all parcel values from the current biome config
-- The UI supports viewport filtering for performance (fetch only a subset of parcels)
+The Land module models a **10×10 grid** of parcels per town/class (`6A` / `6B` / `6C`):
 
-Seeding:
-- There are scripts and endpoints to seed land parcels; seeding is blocked if parcels already exist.
+- Parcels have a **biome type**, **risk level**, **pros/cons**, list **value**, and optional **owner** (student).
+- **Community auction plot** (special tile): price hidden until class auction; teachers can transfer ownership after bidding.
+- **UI**: Hover shows a quick popup; **click** opens a **property detail modal** (full info + actions). Student **My Plots** uses the same modal from property cards.
+
+**Buying land**
+
+- Students submit purchase requests (must have enough balance at request time, including professional fees where applicable).
+- **Multi-step approval**: Financial Manager review → Architect/Civil Engineer review (with optional auto-approval after a waiting period) → teacher final approval; teacher **master approve** can bypass engineer steps in some cases. Approval deducts funds and transfers ownership.
+- Teachers can **assign** a plot to a student without charge (cancels pending purchase/sale requests on that parcel).
+
+**Owned property economy** (server-authoritative; UI never computes balances or rent)
+
+- **Appreciation**: **+1% per week** on **purchase price** (stored as `purchase_price`; current value synced to `land_parcels.value`).
+- **Rental income**: Each complete week, the owner may collect rent = **(rental yield % × appreciated value for that week)**. Default yield is **5%** per week (`rental_yield_percent` on the parcel; teachers can change it per plot).
+- **Collect rent**: `POST /api/land/collect-rent/:parcelId` (owner only; multi-week accrual supported if collection was missed).
+- **Sell to student**: `POST /api/land/sale-requests` → FM review (if a Financial Manager exists) → buyer accept; ownership and purchase price reset on completion.
+
+**Teacher tools**
+
+- **Swap** two parcel grid positions (`POST /api/land/swap`).
+- **Recalculate** all parcel list prices from biome config (`POST /api/land/recalculate-values`).
+- **Rental yield**: `PUT /api/land/parcels/:parcelId/rental-yield` with `{ rental_yield_percent }`.
+- **Ownership**: `PUT /api/land/parcels/:parcelId/owner`, `DELETE /api/land/parcels/:parcelId/owner`; class student list via `GET /api/land/class-students`.
+
+**Performance**
+
+- The UI supports viewport filtering when fetching parcels (optional query params).
+
+**Seeding**
+
+- Teachers can seed land via API; seeding is blocked if parcels already exist for the school/town. Standalone script: `server/seed-land.js`.
 
 ### Tenders (town projects/contracts)
 
@@ -213,6 +248,10 @@ The **Chores** plugin (`/chores`) exposes chore challenges for students:
 - **Wordle chores**: guess the word in 6 tries; earns money and job XP (if employed). Separate daily limit; **Wordle leaderboard** at `/api/wordle-leaderboard`.
 - Teachers see an overview and can test games without recording scores.
 - When enabled, Chores appears as a separate plugin route.
+
+### Game of Resources
+
+Cooperative **Resources inquiry** side game: one hex world per class, shared environment and projects, per-student professions and inventory. Game **coins** and village treasury are not bank money unless the teacher enables the **bank bridge** (student request → teacher approve → bank deposit). Rules and round logic are **server-authoritative** (`shared/game-of-resources/`). Route `/game-of-resources`; full reference [GAME_OF_RESOURCES.md](./GAME_OF_RESOURCES.md).
 
 ### Town Rules and rules agreement
 
@@ -346,6 +385,8 @@ API base URL behavior:
 - In production builds, defaults to `'/api'` (same domain deployment)
 - In development, defaults to `http://localhost:5000/api`
 
+**Land UI** (under `client/src/components/land/`): grid (`LandGrid`), hover popup (`LandPopup`), **property detail modal** (`LandPropertyDetailModal`), purchase modal, teacher assign panel embedded in the modal, and **My Plots** cards (`LandPropertyCard`).
+
 ---
 
 ## Backend overview (server)
@@ -379,7 +420,7 @@ Base prefix: `/api`
 - **Town**: `/api/town/*`
   - town settings; treasury; taxes; salary runs; tax reporting; toggle-tax
 - **Land**: `/api/land/*`
-  - parcels, my properties, purchase requests + approvals (teacher, **fm-review**, **engineer-review**), seeding, stats, biome config, **swap**, **recalculate-values**
+  - parcels (list/filter), parcel by grid code, **my-properties**, purchase requests + approvals (teacher, **fm-review**, **engineer-review**, cancel), seeding, stats, biome config, **swap**, **recalculate-values**, **collect-rent**, **sale-requests** (create, FM review, accept, cancel), **class-students**, assign/remove **owner**, **rental-yield** (teacher)
 - **Jobs**: `/api/jobs/*`
   - list, job detail, apply, withdraw application, application review, assign/remove, award XP, setup; per-role game routes under `/api/*-game/*` (see below)
 - **Business proposals**: `/api/jobs/business-proposals/*`
@@ -404,6 +445,8 @@ Base prefix: `/api`
   - overall, class/:className, all-classes
 - **Math Game**: `/api/math-game/*`
   - status, start, submit
+- **Game of Resources**: `/api/game-of-resources/*`
+  - student: status, events (SSE), action, market, works, job, reflection, bank-bridge request; teacher: worlds, round control, settings, citizens, export, reset, run-checks, bank-bridge approve/deny. See [GAME_OF_RESOURCES.md](./GAME_OF_RESOURCES.md).
 - **Wordle Game**: `/api/wordle-game/*`
   - status, start, guess, complete
 - **Wordle Leaderboard**: `/api/wordle-leaderboard/*`
@@ -459,9 +502,10 @@ The application uses PostgreSQL tables for:
 - **Town Hub**: `plugins`, `town_settings`, `announcements`, `town_rules`
 - **Jobs**: `jobs`, `job_applications` (jobs can be global or per-school); per-role `*_game_sessions` / high-score tables
 - **Treasury/Tax**: `treasury_transactions`, `tax_transactions`, `tax_brackets` (created by migrations)
-- **Land registry**: `land_parcels`, `land_purchase_requests`
+- **Land registry**: `land_parcels` (includes `purchase_price`, `last_rent_collected_at`, **`rental_yield_percent`**, owner and appreciation-related fields), `land_purchase_requests`, **`land_sale_requests`**
 - **Tenders**: `tenders`, `tender_applications`
 - **Math / Wordle games**: `math_game_sessions`, `math_game_high_scores`; wordle game session tables
+- **Game of Resources**: `gor_worlds`, `gor_citizens`, `gor_listings`, `gor_log`, `gor_round_summaries`, `gor_reflections`, `gor_job_changes`, `gor_coin_redemptions` (migrations `115`, `116`)
 - **Winkel (shop)**: `shop_items`, `shop_purchases`, `shop_balance`; profile emoji stored on `users`
 - **Pizza Time**: `pizza_time_funds`, donation records
 - **Insurance**: `insurance_purchases`, insurance type settings, claim records
@@ -484,9 +528,12 @@ Many additional tables are added incrementally via migrations in `server/migrati
 
 ### Migrations
 
-SQL migrations live in `server/migrations/` and are applied in two ways:
-- Manually (e.g. via Railway CLI or a SQL client)
-- Automatically on server startup: `server/src/server.ts` attempts to run multiple migration files if present
+SQL migrations live in `server/migrations/` and are applied in several ways:
+- **One-off scripts**: `npm run migrate:*` in `server/package.json` (often run against Railway Postgres via `railway run`; see `.cursor/skills/railway-sql-migrate` / `TOWN_HUB_DEPLOYMENT.md`)
+- **On server startup**: `server/src/server.ts` runs many migration files sequentially during `initializeDatabase()` (idempotent SQL where possible)
+- **Critical startup**: `database.runStartupMigrations()` in `server/src/database/database-prod.ts` runs before the server listens (e.g. user `status` column, land engineer auto-approval flag, **`land_parcels.rental_yield_percent`**)
+
+Example land-related migrations: `073_land_property_economy.sql` (purchase price, rent collection, sale requests), `114_land_parcel_rental_yield.sql` (per-plot rental yield %).
 
 ### Seeding
 
@@ -558,6 +605,7 @@ At runtime in production:
 - **Job games**: daily limits and minimum play time before submit; XP and earnings are server-calculated.
 - **Court plugin**: disabled by default; lawsuits require teacher final approval for any money movement.
 - **Insurance**: requires a job (salary-based pricing); broker approval may be required per school/class.
+- **Land economy**: rental amounts and appreciation are computed only on the server (`server/src/domain/landProperty.ts`). Production must have column `rental_yield_percent` on `land_parcels` (migration 114 or startup migration).
 - **Doubles Day**: off by default; doubles chore points and pizza donation credit only.
 - **Factory reset is destructive**: teacher-only `/api/admin/factory-reset` requires `confirm: "RESET"` and deletes student economy data and restores towns/bank settings.
 - **Super admin**: cannot see individual student data; can only create teachers and manage schools. Create via script: `node create-super-admin.js` (see `SUPER_ADMIN_SETUP.md`).

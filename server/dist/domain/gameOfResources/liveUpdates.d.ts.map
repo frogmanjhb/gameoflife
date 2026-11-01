@@ -1,0 +1,1 @@
+{"version":3,"file":"liveUpdates.d.ts","sourceRoot":"","sources":["../../../src/domain/gameOfResources/liveUpdates.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AAMxC,wBAAgB,cAAc,CAAC,OAAO,EAAE,MAAM,EAAE,GAAG,EAAE,QAAQ,GAAG,IAAI,CAuBnE;AAED,wBAAgB,kBAAkB,CAAC,OAAO,EAAE,MAAM,EAAE,OAAO,EAAE,MAAM,GAAG,IAAI,CAWzE;AAED,wBAAgB,0BAA0B,IAAI,IAAI,CAKjD"}

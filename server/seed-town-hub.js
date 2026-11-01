@@ -71,7 +71,8 @@ async function seedDatabase() {
       { name: 'Government', route_path: '/government', icon: '🏛️', description: 'Town government services' },
       { name: 'Tenders', route_path: '/tenders', icon: '📑', description: 'Building jobs that need to happen on the game board' },
       { name: 'Town Rules', route_path: '/town-rules', icon: '📜', description: 'Town-specific rules and regulations' },
-      { name: 'The Winkel', route_path: '/winkel', icon: '🛒', description: 'Weekly shop for consumables and privileges' }
+      { name: 'The Winkel', route_path: '/winkel', icon: '🛒', description: 'Weekly shop for consumables and privileges' },
+      { name: 'Game of Resources', route_path: '/game-of-resources', icon: '🌍', description: 'Cooperative village simulation — jobs, land, market and the shared 3D planet' }
     ];
 
     let pluginsHaveSchoolId = false;

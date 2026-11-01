@@ -47,7 +47,9 @@ const code_board_1 = __importDefault(require("./routes/code-board"));
 const town_news_1 = __importDefault(require("./routes/town-news"));
 const content_submissions_1 = __importDefault(require("./routes/content-submissions"));
 const class_events_1 = __importDefault(require("./routes/class-events"));
+const scheduler_1 = require("./domain/gameOfResources/scheduler");
 const auction_1 = __importDefault(require("./routes/auction"));
+const game_of_resources_1 = __importDefault(require("./routes/game-of-resources"));
 const five_minute_lessons_1 = __importDefault(require("./routes/five-minute-lessons"));
 const announcements_1 = __importDefault(require("./routes/announcements"));
 const town_1 = __importDefault(require("./routes/town"));
@@ -205,6 +207,7 @@ app.use('/api/town-news', town_news_1.default);
 app.use('/api/content-submissions', content_submissions_1.default);
 app.use('/api/class-events', class_events_1.default);
 app.use('/api/auction', auction_1.default);
+app.use('/api/game-of-resources', game_of_resources_1.default);
 app.use('/api/five-minute-lessons', five_minute_lessons_1.default);
 app.use('/api/announcements', announcements_1.default);
 app.use('/api/town', town_1.default);
@@ -1194,6 +1197,17 @@ async function initializeDatabase() {
         catch (migrationError) {
             console.log('⚠️ Cyber attack tables migration may have already been applied:', migrationError);
         }
+        try {
+            const migrationPath = (0, path_1.join)(__dirname, '..', 'migrations', '114_land_parcel_rental_yield.sql');
+            if ((0, fs_1.existsSync)(migrationPath)) {
+                const migrationSQL = (0, fs_1.readFileSync)(migrationPath, 'utf8');
+                await database_prod_1.default.query(migrationSQL);
+                console.log('✅ Land parcel rental yield migration completed');
+            }
+        }
+        catch (migrationError) {
+            console.log('⚠️ Land parcel rental yield migration may have already been applied:', migrationError);
+        }
         // Sync default plugins (ensures all known plugins exist - no manual script needed)
         try {
             const defaultPlugins = [
@@ -1233,6 +1247,8 @@ async function startServer() {
         console.log(`📊 CivicLab API`);
         console.log(`🌐 Health check: http://localhost:${PORT}/health`);
         console.log(`🔍 Detailed health: http://localhost:${PORT}/api/health`);
+        (0, scheduler_1.startGameOfResourcesScheduler)();
+        console.log('⏱️ Game of Resources scheduler started (60s interval)');
     });
     // Handle graceful shutdown
     process.on('SIGTERM', () => {

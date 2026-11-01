@@ -32,6 +32,7 @@ import EventVotingPlugin from './components/plugins/EventVotingPlugin';
 import FiveMinuteLessonsPlugin from './components/plugins/FiveMinuteLessonsPlugin';
 import CourtPlugin from './components/plugins/CourtPlugin';
 import AuctionPlugin from './components/plugins/AuctionPlugin';
+import GameOfResourcesPlugin from './components/plugins/GameOfResourcesPlugin';
 import SuperAdminDashboard from './components/admin/SuperAdminDashboard';
 import RequireRulesAgreed from './components/RequireRulesAgreed';
 import ShowcasePage from './components/ShowcasePage';
@@ -437,6 +438,20 @@ const AppContent: React.FC = () => {
                   <TownProvider>
                     <RequireRulesAgreed>
                       <FiveMinuteLessonsPlugin />
+                    </RequireRulesAgreed>
+                  </TownProvider>
+                </PluginProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/game-of-resources"
+            element={
+              <ProtectedRoute>
+                <PluginProvider>
+                  <TownProvider>
+                    <RequireRulesAgreed>
+                      <GameOfResourcesPlugin />
                     </RequireRulesAgreed>
                   </TownProvider>
                 </PluginProvider>

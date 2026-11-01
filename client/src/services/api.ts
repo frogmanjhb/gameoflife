@@ -38,6 +38,7 @@ import {
   TeacherAccountantAssignmentsResponse,
   TeacherLawyerAssignmentsResponse
 } from '../types';
+import type { GorPlayerView } from '../types/gameOfResources';
 
 // Support for multiple deployment platforms
 const getApiUrl = () => {
@@ -1578,6 +1579,58 @@ export const lawsuitsApi = {
 
   getLinkableActions: (defendantUsername: string): Promise<{ data: { actions: LinkableAction[] } }> =>
     api.get(`/lawsuits/linkable-actions?defendant_username=${encodeURIComponent(defendantUsername)}`),
+};
+
+export const gameOfResourcesApi = {
+  status: (since?: number): Promise<{ data: GorPlayerView }> =>
+    api.get('/game-of-resources/status', { params: since != null ? { since } : undefined }),
+  action: (body: { type: string; opt?: Record<string, unknown>; clientVersion?: number }): Promise<{ data: GorPlayerView }> =>
+    api.post('/game-of-resources/action', body),
+  storeBuy: (body: { item: string; qty?: number; clientVersion?: number }) =>
+    api.post('/game-of-resources/market/store-buy', body),
+  storeSell: (body: { item: string; qty?: number; clientVersion?: number }) =>
+    api.post('/game-of-resources/market/store-sell', body),
+  listItem: (body: { item: string; qty: number; price: number; clientVersion?: number }) =>
+    api.post('/game-of-resources/market/list', body),
+  cancelListing: (body: { listingId: string; clientVersion?: number }) =>
+    api.post('/game-of-resources/market/cancel', body),
+  buyListing: (body: { listingId: string; qty: number; clientVersion?: number }) =>
+    api.post('/game-of-resources/market/buy', body),
+  startWork: (body: { kind: 'reclaim' | 'link'; cellId: number; clientVersion?: number }) =>
+    api.post('/game-of-resources/works/start', body),
+  changeJob: (body: { profession: string; clientVersion?: number }) =>
+    api.post('/game-of-resources/job/change', body),
+  saveReflection: (body: { round: number; text: string; clientVersion?: number }) =>
+    api.post('/game-of-resources/reflection', body),
+  saveAvatar: (body: {
+    skin?: string;
+    clothes?: string | null;
+    ring?: string;
+    pos?: { fx: number; fz: number } | null;
+  }): Promise<{ data: GorPlayerView }> => api.post('/game-of-resources/avatar', body),
+  teacherWorlds: () => api.get('/game-of-resources/teacher/worlds'),
+  teacherCitizens: (town_class: string) =>
+    api.get('/game-of-resources/teacher/citizens', { params: { town_class } }),
+  teacherStatus: (town_class: string, user_id: number, since?: number): Promise<{ data: GorPlayerView }> =>
+    api.get('/game-of-resources/teacher/status', {
+      params: { town_class, user_id, ...(since != null ? { since } : {}) },
+    }),
+  teacherAssignProfession: (body: { town_class: string; user_id: number; profession: string }) =>
+    api.post('/game-of-resources/teacher/citizens/profession', body),
+  teacherRound: (op: 'open' | 'close' | 'advance', town_class: string) =>
+    api.post(`/game-of-resources/teacher/round/${op}`, { town_class }),
+  teacherSettings: (town_class: string, settings: Record<string, unknown>) =>
+    api.put('/game-of-resources/teacher/settings', { town_class, settings }),
+  teacherReset: (town_class: string) =>
+    api.post('/game-of-resources/teacher/reset', { town_class, confirm: 'RESET' }),
+  teacherRunChecks: () => api.post('/game-of-resources/teacher/run-checks'),
+  requestBankBridge: (coins: number) => api.post('/game-of-resources/bank-bridge/request', { coins }),
+  pendingBankBridge: (town_class: string) =>
+    api.get('/game-of-resources/bank-bridge/pending', { params: { town_class } }),
+  approveBankBridge: (id: number, town_class: string) =>
+    api.post(`/game-of-resources/bank-bridge/${id}/approve`, { town_class }),
+  denyBankBridge: (id: number, town_class: string) =>
+    api.post(`/game-of-resources/bank-bridge/${id}/deny`, { town_class }),
 };
 
 export default api;

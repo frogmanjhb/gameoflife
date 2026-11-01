@@ -205,6 +205,15 @@ class Database {
         ALTER TABLE land_parcels
         ADD COLUMN IF NOT EXISTS rental_yield_percent DECIMAL(5,2) NOT NULL DEFAULT 5.00
       `);
+
+      const gorTables = await this.get(`
+        SELECT 1 AS ok FROM information_schema.tables WHERE table_name = 'gor_worlds' LIMIT 1
+      `);
+      if (!gorTables) {
+        console.warn(
+          '⚠️ Game of Resources tables missing — run: cd server && npx @railway/cli@latest run --service Postgres npm run migrate:game-of-resources'
+        );
+      }
       
       console.log('✅ Startup migrations complete');
     } catch (error) {
