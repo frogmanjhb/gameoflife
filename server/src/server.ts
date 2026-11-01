@@ -1216,6 +1216,17 @@ async function initializeDatabase() {
       console.log('⚠️ Cyber attack tables migration may have already been applied:', migrationError);
     }
 
+    try {
+      const migrationPath = join(__dirname, '..', 'migrations', '114_land_parcel_rental_yield.sql');
+      if (existsSync(migrationPath)) {
+        const migrationSQL = readFileSync(migrationPath, 'utf8');
+        await database.query(migrationSQL);
+        console.log('✅ Land parcel rental yield migration completed');
+      }
+    } catch (migrationError) {
+      console.log('⚠️ Land parcel rental yield migration may have already been applied:', migrationError);
+    }
+
     // Sync default plugins (ensures all known plugins exist - no manual script needed)
     try {
       const defaultPlugins: { name: string; route_path: string; icon: string; description: string; enabled?: boolean }[] = [

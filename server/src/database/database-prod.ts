@@ -199,6 +199,12 @@ class Database {
         ALTER TABLE land_purchase_engineer_approvals
         ADD COLUMN IF NOT EXISTS auto_approved BOOLEAN NOT NULL DEFAULT FALSE
       `);
+
+      // Migration 114: per-plot rental yield (teacher-configurable weekly rent %)
+      await this.run(`
+        ALTER TABLE land_parcels
+        ADD COLUMN IF NOT EXISTS rental_yield_percent DECIMAL(5,2) NOT NULL DEFAULT 5.00
+      `);
       
       console.log('✅ Startup migrations complete');
     } catch (error) {
