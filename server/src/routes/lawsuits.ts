@@ -173,7 +173,7 @@ router.post('/', authenticateToken, requireTenant, async (req: AuthenticatedRequ
     const lawsuitId = result[0].id as number;
     await autoEscalatePastHrIfNoDirector(lawsuitId);
     const created = await getCaseById(lawsuitId);
-    return res.status(201).json(await enrichCase(created, false));
+    return res.status(201).json(await enrichCase(created));
   } catch (err) {
     console.error('lawsuits POST error:', err);
     return res.status(500).json({ error: 'Failed to file lawsuit' });

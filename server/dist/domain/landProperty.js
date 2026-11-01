@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WEEKLY_RENTAL_YIELD = exports.WEEKLY_APPRECIATION_RATE = void 0;
+exports.DEFAULT_RENTAL_YIELD_PERCENT = exports.WEEKLY_RENTAL_YIELD = exports.WEEKLY_APPRECIATION_RATE = void 0;
+exports.resolveRentalYieldPercent = resolveRentalYieldPercent;
+exports.resolveRentalYieldDecimal = resolveRentalYieldDecimal;
 exports.isTownClass = isTownClass;
 exports.getCompleteWeeksBetween = getCompleteWeeksBetween;
 exports.getCompleteWeeksSince = getCompleteWeeksSince;
@@ -15,6 +17,19 @@ exports.hasFinancialManagerJob = hasFinancialManagerJob;
 exports.enrichOwnedParcel = enrichOwnedParcel;
 exports.WEEKLY_APPRECIATION_RATE = 0.01;
 exports.WEEKLY_RENTAL_YIELD = 0.05;
+exports.DEFAULT_RENTAL_YIELD_PERCENT = exports.WEEKLY_RENTAL_YIELD * 100;
+function resolveRentalYieldPercent(parcel) {
+    const raw = parcel.rental_yield_percent;
+    if (raw == null || raw === '')
+        return exports.DEFAULT_RENTAL_YIELD_PERCENT;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0)
+        return exports.DEFAULT_RENTAL_YIELD_PERCENT;
+    return n;
+}
+function resolveRentalYieldDecimal(parcel) {
+    return resolveRentalYieldPercent(parcel) / 100;
+}
 function isTownClass(value) {
     return value === '6A' || value === '6B' || value === '6C';
 }
@@ -38,8 +53,8 @@ function calculateAppreciatedValue(purchasePrice, purchasedAt, asOf = new Date()
     const value = purchasePrice * Math.pow(1 + exports.WEEKLY_APPRECIATION_RATE, weeks);
     return Math.round(value);
 }
-function calculateWeeklyRent(currentValue) {
-    return Math.round(currentValue * exports.WEEKLY_RENTAL_YIELD);
+function calculateWeeklyRent(currentValue, rentalYieldDecimal = exports.WEEKLY_RENTAL_YIELD) {
+    return Math.round(currentValue * rentalYieldDecimal);
 }
 function getRentWeeksDue(purchasedAt, lastRentCollectedAt, asOf = new Date()) {
     if (!purchasedAt)
@@ -51,7 +66,7 @@ function canCollectWeeklyRent(purchasedAt, lastRentCollectedAt) {
     return getRentWeeksDue(purchasedAt, lastRentCollectedAt) >= 1;
 }
 /** Sum weekly rent (5% of appreciated value) for each complete week since last collection. */
-function calculateAccruedRent(purchasePrice, purchasedAt, lastRentCollectedAt, asOf = new Date()) {
+function calculateAccruedRent(purchasePrice, purchasedAt, lastRentCollectedAt, asOf = new Date(), rentalYieldDecimal = exports.WEEKLY_RENTAL_YIELD) {
     const weeksDue = getRentWeeksDue(purchasedAt, lastRentCollectedAt, asOf);
     if (weeksDue < 1)
         return 0;
@@ -62,7 +77,7 @@ function calculateAccruedRent(purchasePrice, purchasedAt, lastRentCollectedAt, a
         if (weeksOwnedForRent < 1)
             continue;
         const valueForWeek = Math.round(purchasePrice * Math.pow(1 + exports.WEEKLY_APPRECIATION_RATE, weeksOwnedForRent));
-        totalRent += calculateWeeklyRent(valueForWeek);
+        totalRent += calculateWeeklyRent(valueForWeek, rentalYieldDecimal);
     }
     return totalRent;
 }
@@ -99,15 +114,18 @@ function hasFinancialManagerJob(jobName) {
 function enrichOwnedParcel(parcel) {
     const purchasePrice = Number(parcel.purchase_price ?? parcel.value) || 0;
     const purchasedAt = parcel.purchased_at || new Date().toISOString();
+    const rentalYieldPercent = resolveRentalYieldPercent(parcel);
+    const rentalYieldDecimal = rentalYieldPercent / 100;
     const currentValue = calculateAppreciatedValue(purchasePrice, purchasedAt);
-    const weeklyRent = calculateWeeklyRent(currentValue);
+    const weeklyRent = calculateWeeklyRent(currentValue, rentalYieldDecimal);
     const rentWeeksDue = getRentWeeksDue(purchasedAt, parcel.last_rent_collected_at ?? null);
     const canCollectRent = rentWeeksDue >= 1;
-    const accruedRent = calculateAccruedRent(purchasePrice, purchasedAt, parcel.last_rent_collected_at ?? null);
+    const accruedRent = calculateAccruedRent(purchasePrice, purchasedAt, parcel.last_rent_collected_at ?? null, new Date(), rentalYieldDecimal);
     const weeksOwned = getCompleteWeeksSince(purchasedAt);
     return {
         ...parcel,
         purchase_price: purchasePrice,
+        rental_yield_percent: rentalYieldPercent,
         current_value: currentValue,
         value: currentValue,
         weekly_rent: weeklyRent,

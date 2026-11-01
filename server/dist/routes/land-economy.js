@@ -9,6 +9,7 @@ const database_prod_1 = __importDefault(require("../database/database-prod"));
 const auth_1 = require("../middleware/auth");
 const landProperty_1 = require("../domain/landProperty");
 const landPurchaseApproval_1 = require("../domain/landPurchaseApproval");
+const land_purchase_approval_1 = require("./land-purchase-approval");
 const router = (0, express_1.Router)();
 async function syncParcelAppreciation(parcelId) {
     const parcel = await database_prod_1.default.get('SELECT id, purchase_price, value, purchased_at FROM land_parcels WHERE id = $1 AND owner_id IS NOT NULL', [parcelId]);
@@ -81,7 +82,8 @@ router.post('/collect-rent/:parcelId', auth_1.authenticateToken, async (req, res
             return res.status(400).json({ error: 'Rental income already collected for this week' });
         }
         const rentWeeksDue = (0, landProperty_1.getRentWeeksDue)(refreshed.purchased_at, refreshed.last_rent_collected_at);
-        const rentAmount = (0, landProperty_1.calculateAccruedRent)(purchasePrice, refreshed.purchased_at, refreshed.last_rent_collected_at);
+        const rentalYieldDecimal = (0, landProperty_1.resolveRentalYieldDecimal)(refreshed);
+        const rentAmount = (0, landProperty_1.calculateAccruedRent)(purchasePrice, refreshed.purchased_at, refreshed.last_rent_collected_at, new Date(), rentalYieldDecimal);
         const rentCollectedThrough = (0, landProperty_1.advanceRentCollectionAnchor)(refreshed.purchased_at, refreshed.last_rent_collected_at, rentWeeksDue);
         const account = await database_prod_1.default.get('SELECT id FROM accounts WHERE user_id = $1', [req.user.id]);
         if (!account) {
@@ -142,13 +144,21 @@ router.post('/sale-requests', auth_1.authenticateToken, (0, express_validator_1.
             });
         }
         const schoolId = req.user.school_id ?? null;
+        const townClass = parcel.town_class;
+        const hasFm = (0, landProperty_1.isTownClass)(townClass) && (await (0, land_purchase_approval_1.townHasFinancialManager)(schoolId, townClass));
+        const initialStatus = hasFm ? 'pending_fm' : 'pending_buyer';
         const result = schoolId !== null
-            ? await database_prod_1.default.get(`INSERT INTO land_sale_requests (parcel_id, seller_id, buyer_id, sale_price, school_id)
-             VALUES ($1, $2, $3, $4, $5) RETURNING id`, [parcel_id, req.user.id, buyer_id, sale_price, schoolId])
-            : await database_prod_1.default.get(`INSERT INTO land_sale_requests (parcel_id, seller_id, buyer_id, sale_price)
-             VALUES ($1, $2, $3, $4) RETURNING id`, [parcel_id, req.user.id, buyer_id, sale_price]);
+            ? await database_prod_1.default.get(`INSERT INTO land_sale_requests (parcel_id, seller_id, buyer_id, sale_price, school_id, status)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, [parcel_id, req.user.id, buyer_id, sale_price, schoolId, initialStatus])
+            : await database_prod_1.default.get(`INSERT INTO land_sale_requests (parcel_id, seller_id, buyer_id, sale_price, status)
+             VALUES ($1, $2, $3, $4, $5) RETURNING id`, [parcel_id, req.user.id, buyer_id, sale_price, initialStatus]);
         const request = await database_prod_1.default.get(`${saleRequestSelect()} WHERE lsr.id = $1`, [result.id]);
-        res.status(201).json({ message: 'Sale request submitted to Financial Manager', request });
+        res.status(201).json({
+            message: hasFm
+                ? 'Sale request submitted to Financial Manager'
+                : 'Sale request sent to buyer (no Financial Manager in town)',
+            request,
+        });
     }
     catch (error) {
         console.error('Failed to create sale request:', error);
@@ -283,7 +293,7 @@ router.put('/sale-requests/:id/accept', auth_1.authenticateToken, async (req, re
         client.release();
     }
 });
-// PUT /sale-requests/:id/cancel — seller cancels pending FM review
+// PUT /sale-requests/:id/cancel — seller cancels pending FM or buyer review
 router.put('/sale-requests/:id/cancel', auth_1.authenticateToken, async (req, res) => {
     try {
         const requestId = parseInt(req.params.id, 10);
@@ -291,7 +301,7 @@ router.put('/sale-requests/:id/cancel', auth_1.authenticateToken, async (req, re
         if (!sale || sale.seller_id !== req.user.id) {
             return res.status(404).json({ error: 'Sale request not found' });
         }
-        if (sale.status !== 'pending_fm') {
+        if (sale.status !== 'pending_fm' && sale.status !== 'pending_buyer') {
             return res.status(400).json({ error: 'Only pending sale requests can be cancelled' });
         }
         await database_prod_1.default.run(`UPDATE land_sale_requests SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [requestId]);

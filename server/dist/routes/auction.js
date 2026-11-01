@@ -305,9 +305,6 @@ router.post('/:id/bid', auth_1.authenticateToken, (0, auth_1.requireRole)(['stud
             return res.status(403).json({ error: 'This auction is for another town' });
         }
         const high = await getHighBid(id);
-        if (high && high.user_id === req.user.id) {
-            return res.status(400).json({ error: 'You are already the highest bidder' });
-        }
         const base = high?.amount ?? parseFloat(String(auction.starting_price));
         const amount = (0, auction_1.nextBidAmount)(base, increment);
         const account = await database_prod_1.default.get('SELECT balance FROM accounts WHERE user_id = $1', [req.user.id]);

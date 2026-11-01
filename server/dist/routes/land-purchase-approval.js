@@ -12,6 +12,7 @@ exports.executeTeacherPurchaseApproval = executeTeacherPurchaseApproval;
 exports.maybeAdvanceToTeacherReview = maybeAdvanceToTeacherReview;
 exports.townHasFinancialManager = townHasFinancialManager;
 exports.enrichPurchaseRequestWithEngineers = enrichPurchaseRequestWithEngineers;
+exports.advanceOverdueEngineerPurchaseApprovals = advanceOverdueEngineerPurchaseApprovals;
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const database_prod_1 = __importDefault(require("../database/database-prod"));
@@ -193,11 +194,16 @@ async function enrichPurchaseRequestWithEngineers(request) {
     const requestId = request.id;
     const status = String(request.status || '').toLowerCase();
     if (status === 'pending_engineer' && townClass && buyerId) {
-        await processAutoEngineerApprovals(request);
-        await maybeAdvanceToTeacherReview(requestId, buyerId, schoolId, townClass);
-        const refreshed = await database_prod_1.default.get('SELECT status FROM land_purchase_requests WHERE id = $1', [requestId]);
-        if (refreshed) {
-            request.status = refreshed.status;
+        try {
+            await processAutoEngineerApprovals(request);
+            await maybeAdvanceToTeacherReview(requestId, buyerId, schoolId, townClass);
+            const refreshed = await database_prod_1.default.get('SELECT status FROM land_purchase_requests WHERE id = $1', [requestId]);
+            if (refreshed) {
+                request.status = refreshed.status;
+            }
+        }
+        catch (error) {
+            console.error('Land engineer auto-approval failed for request', requestId, error);
         }
     }
     const requiredEngineers = townClass && buyerId
@@ -250,6 +256,23 @@ const purchaseRequestSelect = `
   LEFT JOIN users r ON lpr.reviewed_by = r.id
   LEFT JOIN users fm ON fm.id = lpr.fm_reviewed_by
 `;
+/** Move overdue architect/engineer reviews forward before a teacher loads the queue. */
+async function advanceOverdueEngineerPurchaseApprovals(schoolId, townClass) {
+    if (!townClass)
+        return;
+    const rows = await database_prod_1.default.query(`${purchaseRequestSelect}
+     WHERE lpr.status = 'pending_engineer'
+       AND lp.town_class = $1
+       AND u.school_id IS NOT DISTINCT FROM $2`, [townClass, schoolId]);
+    for (const row of rows) {
+        try {
+            await enrichPurchaseRequestWithEngineers(row);
+        }
+        catch (error) {
+            console.error('Failed to advance land purchase request', row.id, error);
+        }
+    }
+}
 // GET /purchase-requests/fm-queue — Financial Manager pending purchase reviews
 router.get('/purchase-requests/fm-queue', auth_1.authenticateToken, async (req, res) => {
     try {
@@ -533,6 +556,35 @@ router.put('/purchase-requests/:id/engineer-review', auth_1.authenticateToken, (
     }
     finally {
         client.release();
+    }
+});
+// PUT /purchase-requests/:id/cancel — buyer cancels their own pending buy request
+router.put('/purchase-requests/:id/cancel', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const requestId = parseInt(req.params.id, 10);
+        if (Number.isNaN(requestId)) {
+            return res.status(400).json({ error: 'Invalid purchase request ID' });
+        }
+        const purchaseRequest = await database_prod_1.default.get('SELECT * FROM land_purchase_requests WHERE id = $1', [requestId]);
+        if (!purchaseRequest || purchaseRequest.user_id !== req.user.id) {
+            return res.status(404).json({ error: 'Purchase request not found' });
+        }
+        const status = String(purchaseRequest.status).toLowerCase().trim();
+        if (!['pending_fm', 'pending_engineer', 'pending_teacher'].includes(status)) {
+            return res.status(400).json({ error: 'Only pending purchase requests can be cancelled' });
+        }
+        await database_prod_1.default.run(`UPDATE land_purchase_requests
+       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`, [requestId]);
+        res.json({
+            message: status === 'pending_fm'
+                ? 'Purchase request cancelled'
+                : 'Purchase request cancelled. Professional fees already paid are not refunded.',
+        });
+    }
+    catch (error) {
+        console.error('Failed to cancel purchase request:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 exports.default = router;

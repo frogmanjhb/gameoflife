@@ -196,7 +196,17 @@ router.get('/parcels', auth_1.authenticateToken, async (req, res) => {
         }
         query += ' ORDER BY lp.row_index, lp.col_index';
         const parcels = await database_prod_1.default.query(query, params);
-        res.json(parcels);
+        const enriched = parcels.map((p) => {
+            const withYield = {
+                ...p,
+                rental_yield_percent: (0, landProperty_1.resolveRentalYieldPercent)(p),
+            };
+            if (p.owner_id && p.purchased_at) {
+                return (0, landProperty_1.enrichOwnedParcel)(withYield);
+            }
+            return withYield;
+        });
+        res.json(enriched);
     }
     catch (error) {
         console.error('Failed to fetch parcels:', error);
@@ -225,6 +235,13 @@ router.get('/parcels/:code', auth_1.authenticateToken, async (req, res) => {
         if (!parcel) {
             return res.status(404).json({ error: 'Parcel not found' });
         }
+        const withYield = {
+            ...parcel,
+            rental_yield_percent: (0, landProperty_1.resolveRentalYieldPercent)(parcel),
+        };
+        const responseParcel = parcel.owner_id && parcel.purchased_at
+            ? (0, landProperty_1.enrichOwnedParcel)(withYield)
+            : withYield;
         // Check if there's a pending purchase request for this parcel
         const pendingRequest = await database_prod_1.default.get(`
       SELECT lpr.*, u.username as applicant_username
@@ -232,7 +249,7 @@ router.get('/parcels/:code', auth_1.authenticateToken, async (req, res) => {
       JOIN users u ON lpr.user_id = u.id
       WHERE lpr.parcel_id = $1 AND lpr.status IN ('pending_fm', 'pending_engineer', 'pending_teacher')
     `, [parcel.id]);
-        res.json({ ...parcel, pending_request: pendingRequest || null });
+        res.json({ ...responseParcel, pending_request: pendingRequest || null });
     }
     catch (error) {
         console.error('Failed to fetch parcel:', error);
@@ -431,6 +448,12 @@ router.get('/purchase-requests', auth_1.authenticateToken, async (req, res) => {
         let params;
         const townClass = req.user.role === 'teacher' ? resolveTownClass(req, town_class) : null;
         if (req.user.role === 'teacher') {
+            try {
+                await (0, land_purchase_approval_1.advanceOverdueEngineerPurchaseApprovals)(schoolId, townClass);
+            }
+            catch (error) {
+                console.error('Failed to advance overdue land purchase approvals:', error);
+            }
             query = `
         SELECT lpr.*, 
                u.username as applicant_username, 
@@ -455,7 +478,10 @@ router.get('/purchase-requests', auth_1.authenticateToken, async (req, res) => {
             else {
                 query += ' WHERE u.school_id IS NULL';
             }
-            if (status) {
+            if (status === 'active') {
+                query += ` AND lpr.status IN ('pending_fm', 'pending_engineer', 'pending_teacher')`;
+            }
+            else if (status) {
                 query += ` AND lpr.status = $${params.length + 1}`;
                 params.push(status);
             }
@@ -694,12 +720,13 @@ router.get('/stats', auth_1.authenticateToken, async (req, res) => {
             ? 'WHERE lp.school_id = $1 AND lp.town_class = $2'
             : 'WHERE lp.school_id IS NULL AND lp.town_class = $1';
         const schoolFilterLpr = schoolId !== null
-            ? `lpr.school_id = $1 AND lpr.status = 'pending_teacher' AND lp.town_class = $2`
-            : `lpr.school_id IS NULL AND lpr.status = 'pending_teacher' AND lp.town_class = $1`;
+            ? `u.school_id = $1 AND lpr.status IN ('pending_fm', 'pending_engineer', 'pending_teacher') AND lp.town_class = $2`
+            : `u.school_id IS NULL AND lpr.status IN ('pending_fm', 'pending_engineer', 'pending_teacher') AND lp.town_class = $1`;
         const params = schoolId !== null ? [schoolId, townClass] : [townClass];
         const totalParcels = await database_prod_1.default.get(`SELECT COUNT(*) as count FROM land_parcels lp ${schoolFilter}`, params);
         const ownedParcels = await database_prod_1.default.get(`SELECT COUNT(*) as count FROM land_parcels lp ${schoolFilter} AND lp.owner_id IS NOT NULL`, params);
         const pendingRequests = await database_prod_1.default.get(`SELECT COUNT(*) as count FROM land_purchase_requests lpr
+       JOIN users u ON lpr.user_id = u.id
        JOIN land_parcels lp ON lpr.parcel_id = lp.id
        WHERE ${schoolFilterLpr}`, params);
         const biomeStats = await database_prod_1.default.query(`SELECT lp.biome_type, COUNT(*) as count, 
@@ -853,6 +880,46 @@ router.get('/class-students', auth_1.authenticateToken, (0, auth_1.requireRole)(
     }
     catch (error) {
         console.error('Failed to fetch class students for land assign:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// PUT /api/land/parcels/:parcelId/rental-yield — teacher sets weekly rental income %
+router.put('/parcels/:parcelId/rental-yield', auth_1.authenticateToken, (0, auth_1.requireRole)(['teacher']), (0, express_validator_1.body)('rental_yield_percent').isFloat({ min: 0, max: 100 }), async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const parcelId = parseInt(req.params.parcelId, 10);
+        const rentalYieldPercent = Number(req.body.rental_yield_percent);
+        const schoolId = req.user?.school_id ?? null;
+        const parcel = await database_prod_1.default.get('SELECT * FROM land_parcels WHERE id = $1', [parcelId]);
+        if (!parcel) {
+            return res.status(404).json({ error: 'Parcel not found' });
+        }
+        if (schoolId !== null && parcel.school_id !== schoolId) {
+            return res.status(404).json({ error: 'Parcel not found' });
+        }
+        if (schoolId === null && parcel.school_id !== null) {
+            return res.status(404).json({ error: 'Parcel not found' });
+        }
+        if (!parcel.town_class) {
+            return res.status(400).json({ error: 'Parcel has no town class' });
+        }
+        await database_prod_1.default.run(`UPDATE land_parcels
+         SET rental_yield_percent = $1, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`, [rentalYieldPercent, parcelId]);
+        const updated = await getParcelForTeacher(parcelId, schoolId, parcel.town_class);
+        const responseParcel = updated?.owner_id && updated?.purchased_at
+            ? (0, landProperty_1.enrichOwnedParcel)({ ...updated, rental_yield_percent: rentalYieldPercent })
+            : { ...updated, rental_yield_percent: rentalYieldPercent };
+        res.json({
+            message: 'Rental yield updated',
+            parcel: responseParcel,
+        });
+    }
+    catch (error) {
+        console.error('Failed to update parcel rental yield:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

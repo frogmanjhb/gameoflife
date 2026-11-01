@@ -1,15 +1,22 @@
 export declare const WEEKLY_APPRECIATION_RATE = 0.01;
 export declare const WEEKLY_RENTAL_YIELD = 0.05;
+export declare const DEFAULT_RENTAL_YIELD_PERCENT: number;
+export declare function resolveRentalYieldPercent(parcel: {
+    rental_yield_percent?: number | string | null;
+}): number;
+export declare function resolveRentalYieldDecimal(parcel: {
+    rental_yield_percent?: number | string | null;
+}): number;
 export type TownClass = '6A' | '6B' | '6C';
 export declare function isTownClass(value: unknown): value is TownClass;
 export declare function getCompleteWeeksBetween(startIso: string | Date | null | undefined, endIso: string | Date): number;
 export declare function getCompleteWeeksSince(dateIso: string | Date | null | undefined, asOf?: string | Date): number;
 export declare function calculateAppreciatedValue(purchasePrice: number, purchasedAt: string, asOf?: string | Date): number;
-export declare function calculateWeeklyRent(currentValue: number): number;
+export declare function calculateWeeklyRent(currentValue: number, rentalYieldDecimal?: number): number;
 export declare function getRentWeeksDue(purchasedAt: string | null | undefined, lastRentCollectedAt: string | null | undefined, asOf?: string | Date): number;
 export declare function canCollectWeeklyRent(purchasedAt: string | null | undefined, lastRentCollectedAt: string | null | undefined): boolean;
 /** Sum weekly rent (5% of appreciated value) for each complete week since last collection. */
-export declare function calculateAccruedRent(purchasePrice: number, purchasedAt: string, lastRentCollectedAt: string | null | undefined, asOf?: string | Date): number;
+export declare function calculateAccruedRent(purchasePrice: number, purchasedAt: string, lastRentCollectedAt: string | null | undefined, asOf?: string | Date, rentalYieldDecimal?: number): number;
 export interface LandRentCollectionEvent {
     amount: number;
     collectedAt: string | Date;
@@ -30,6 +37,7 @@ export interface LandParcelRow {
     purchase_price?: number | string | null;
     purchased_at?: string | null;
     last_rent_collected_at?: string | null;
+    rental_yield_percent?: number | string | null;
     owner_id?: number | null;
     biome_type: string;
     grid_code: string;
@@ -40,6 +48,7 @@ export interface LandParcelRow {
 }
 export declare function enrichOwnedParcel(parcel: LandParcelRow): {
     purchase_price: number;
+    rental_yield_percent: number;
     current_value: number;
     value: number;
     weekly_rent: number;

@@ -124,7 +124,9 @@ router.post('/', auth_1.authenticateToken, tenant_1.requireTenant, async (req, r
          linked_action_type, linked_action_id, status
        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending_hr')
        RETURNING id`, [schoolId, user.class, user.id, defendant.id, amount, description.trim(), rule_reference.trim(), linkedType, linkedId]);
-        const created = await getCaseById(result[0].id);
+        const lawsuitId = result[0].id;
+        await (0, lawsuits_1.autoEscalatePastHrIfNoDirector)(lawsuitId);
+        const created = await getCaseById(lawsuitId);
         return res.status(201).json(await enrichCase(created));
     }
     catch (err) {
@@ -713,6 +715,7 @@ router.post('/:id/approve', auth_1.authenticateToken, tenant_1.requireTenant, (0
                     ]);
                 }
             }
+            const settle = await (0, lawsuits_1.settleApprovedLawsuitPayouts)({ ...lawsuit, id: lawsuitId }, awardedAmount, client, req.user.id);
             await client.query(`UPDATE student_lawsuits SET
              status = 'approved',
              awarded_amount = $1,
@@ -722,15 +725,16 @@ router.post('/:id/approve', auth_1.authenticateToken, tenant_1.requireTenant, (0
              teacher_notes = $4,
              updated_at = CURRENT_TIMESTAMP
            WHERE id = $5`, [awardedAmount, req.user.id, teacherInitials, teacherNotes, lawsuitId]);
-            const xpResult = await (0, lawsuits_1.payPlaintiffLawyerOnClose)({ ...lawsuit, id: lawsuitId }, client);
             await client.query('COMMIT');
             let lawyerXp = {};
-            if (xpResult.lawyerId) {
-                lawyerXp = await (0, lawsuits_1.awardJobXp)(xpResult.lawyerId, lawsuits_1.LAWYER_LAWSUIT_XP);
+            if (settle.lawyerId) {
+                lawyerXp = await (0, lawsuits_1.awardJobXp)(settle.lawyerId, lawsuits_1.LAWYER_LAWSUIT_XP);
             }
             return res.json({
                 message: 'Case approved',
                 awarded_amount: awardedAmount,
+                treasury_bonus: settle.treasuryBonus,
+                escrow_refunded: settle.escrowRefunded,
                 lawyer_xp: lawyerXp.experience_points,
                 new_level: lawyerXp.new_level,
             });

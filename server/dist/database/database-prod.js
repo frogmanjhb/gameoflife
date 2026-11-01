@@ -186,6 +186,12 @@ class Database {
             else {
                 console.log('✅ Status column already exists');
             }
+            // Migration 108: auto-approved engineer steps. Applied here because the
+            // column is required for the teacher purchase-request list to load.
+            await this.run(`
+        ALTER TABLE land_purchase_engineer_approvals
+        ADD COLUMN IF NOT EXISTS auto_approved BOOLEAN NOT NULL DEFAULT FALSE
+      `);
             console.log('✅ Startup migrations complete');
         }
         catch (error) {

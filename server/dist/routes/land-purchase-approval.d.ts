@@ -27,5 +27,7 @@ export declare function enrichPurchaseRequestWithEngineers(request: Record<strin
     engineer_review_deadline_at: string | null;
     engineer_auto_approval_after_days: number;
 }>;
+/** Move overdue architect/engineer reviews forward before a teacher loads the queue. */
+export declare function advanceOverdueEngineerPurchaseApprovals(schoolId: number | null, townClass: string | null): Promise<void>;
 export default router;
 //# sourceMappingURL=land-purchase-approval.d.ts.map

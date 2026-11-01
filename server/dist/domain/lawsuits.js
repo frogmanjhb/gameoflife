@@ -3,18 +3,21 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LAWSUIT_LIST_JOINS = exports.LAWSUIT_LIST_SELECT = exports.LAWYER_OPINIONS = exports.TERMINAL_STATUSES = exports.JURY_CANDIDATE_POOL = exports.JURY_MIN_ELIGIBLE = exports.JURY_SIZE = exports.LAWSUIT_CLAIM_CAP = exports.HR_MEDIATION_XP = exports.JURY_LAWSUIT_XP = exports.DEFENSE_LAWYER_XP = exports.DEFENSE_LAWYER_FEE = exports.LAWYER_LAWSUIT_XP = exports.LAWYER_LAWSUIT_FEE = exports.LAWSUIT_PROCESS_COST = exports.COURT_ROUTE_PATH = void 0;
+exports.LAWSUIT_LIST_JOINS = exports.LAWSUIT_LIST_SELECT = exports.LAWYER_OPINIONS = exports.TERMINAL_STATUSES = exports.JURY_CANDIDATE_POOL = exports.JURY_MIN_ELIGIBLE = exports.JURY_SIZE = exports.LAWSUIT_TREASURY_AWARD_MULTIPLIER = exports.LAWSUIT_CLAIM_CAP = exports.HR_MEDIATION_XP = exports.JURY_LAWSUIT_XP = exports.DEFENSE_LAWYER_XP = exports.DEFENSE_LAWYER_FEE = exports.LAWYER_LAWSUIT_XP = exports.LAWYER_LAWSUIT_FEE = exports.LAWSUIT_PROCESS_COST = exports.COURT_ROUTE_PATH = void 0;
 exports.formatLawsuitPersonName = formatLawsuitPersonName;
 exports.tablesReady = tablesReady;
 exports.isCourtPluginEnabled = isCourtPluginEnabled;
 exports.awardJobXp = awardJobXp;
 exports.checkStudentCanTransact = checkStudentCanTransact;
 exports.getStudentBalance = getStudentBalance;
+exports.autoEscalatePastHrIfNoDirector = autoEscalatePastHrIfNoDirector;
 exports.resolveLawyerSetup = resolveLawyerSetup;
 exports.tryAdvanceToJury = tryAdvanceToJury;
 exports.holdEscrow = holdEscrow;
 exports.refundEscrowIfHeld = refundEscrowIfHeld;
 exports.payPlaintiffLawyerOnClose = payPlaintiffLawyerOnClose;
+exports.refundEscrowWithClient = refundEscrowWithClient;
+exports.settleApprovedLawsuitPayouts = settleApprovedLawsuitPayouts;
 exports.payDefenseLawyerParticipation = payDefenseLawyerParticipation;
 exports.isJuryEligibleStudent = isJuryEligibleStudent;
 exports.seatJury = seatJury;
@@ -37,7 +40,9 @@ exports.DEFENSE_LAWYER_FEE = 5000;
 exports.DEFENSE_LAWYER_XP = 15;
 exports.JURY_LAWSUIT_XP = 10;
 exports.HR_MEDIATION_XP = 10;
-exports.LAWSUIT_CLAIM_CAP = 5000;
+exports.LAWSUIT_CLAIM_CAP = 15000;
+/** On teacher approve, town treasury pays this multiple of the awarded amount to the plaintiff. */
+exports.LAWSUIT_TREASURY_AWARD_MULTIPLIER = 2;
 exports.JURY_SIZE = 5;
 exports.JURY_MIN_ELIGIBLE = 3;
 /** Pool size when drawing random jurors — job-ineligible students are filtered out afterward. */
@@ -122,6 +127,39 @@ async function checkStudentCanTransact(userId) {
 async function getStudentBalance(userId) {
     const account = await database_prod_1.default.get('SELECT balance FROM accounts WHERE user_id = $1', [userId]);
     return account ? parseFloat(account.balance) : 0;
+}
+/** When a town has no HR Director, skip mediation and escalate to lawyers. Returns true if status changed. */
+async function autoEscalatePastHrIfNoDirector(lawsuitId) {
+    const row = await database_prod_1.default.get('SELECT * FROM student_lawsuits WHERE id = $1', [lawsuitId]);
+    if (!row || row.status !== 'pending_hr')
+        return false;
+    if (await (0, attendance_1.townHasHrDirector)(row.school_id, row.town_class)) {
+        return false;
+    }
+    const lawyerSetup = await resolveLawyerSetup(row.plaintiff_user_id, row.defendant_user_id, row.town_class, row.school_id);
+    await database_prod_1.default.query(`UPDATE student_lawsuits SET
+       status = 'pending_lawyer',
+       hr_reviewer_id = NULL,
+       hr_reviewed_at = CURRENT_TIMESTAMP,
+       hr_notes = $1,
+       hr_outcome = 'escalated',
+       hr_recommended_amount = NULL,
+       plaintiff_consents_settlement = false,
+       defendant_consents_settlement = false,
+       plaintiff_lawyer_id = $2,
+       defendant_lawyer_id = $3,
+       lawyer_conflict = $4,
+       plaintiff_lawyer_acceptance = $5,
+       updated_at = CURRENT_TIMESTAMP
+     WHERE id = $6 AND status = 'pending_hr'`, [
+        'Auto-escalated: no HR Director in this town.',
+        lawyerSetup.plaintiffLawyerId,
+        lawyerSetup.defendantLawyerId,
+        lawyerSetup.lawyerConflict,
+        lawyerSetup.plaintiffAcceptance,
+        lawsuitId,
+    ]);
+    return true;
 }
 async function resolveLawyerSetup(plaintiffUserId, defendantUserId, townClass, schoolId) {
     const { lawyerIds } = await (0, lawyer_assignments_1.getClassLawyerRoster)(townClass, schoolId);
@@ -281,6 +319,79 @@ async function payPlaintiffLawyerOnClose(lawsuit, client) {
         lawsuit.id,
     ]);
     return { lawyerId };
+}
+/** Refund plaintiff escrow inside an open transaction (approve / win path). */
+async function refundEscrowWithClient(lawsuit, client) {
+    if (!lawsuit.escrow_held_at || lawsuit.escrow_refunded_at || lawsuit.escrow_amount == null) {
+        return 0;
+    }
+    const amount = parseFloat(String(lawsuit.escrow_amount));
+    if (!amount || amount <= 0)
+        return 0;
+    const accountRes = await client.query('SELECT id FROM accounts WHERE user_id = $1 FOR UPDATE', [
+        lawsuit.plaintiff_user_id,
+    ]);
+    const account = accountRes.rows[0];
+    if (!account)
+        throw new Error('Plaintiff account not found');
+    await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [amount, account.id]);
+    await client.query(`INSERT INTO transactions (to_account_id, amount, transaction_type, description)
+     VALUES ($1, $2, 'deposit', $3)`, [account.id, amount, `Lawsuit escrow refund | case #${lawsuit.id}`]);
+    await client.query('UPDATE student_lawsuits SET escrow_refunded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [lawsuit.id]);
+    return amount;
+}
+/**
+ * On approve: refund escrow to plaintiff, pay counsel from town treasury,
+ * and pay plaintiff LAWSUIT_TREASURY_AWARD_MULTIPLIER × awarded from treasury.
+ */
+async function settleApprovedLawsuitPayouts(lawsuit, awardedAmount, client, createdBy) {
+    const needsLawyerFee = !!lawsuit.accepting_lawyer_id &&
+        !lawsuit.lawyer_fee_paid_at &&
+        !!lawsuit.escrow_held_at &&
+        !lawsuit.escrow_refunded_at;
+    const treasuryBonus = awardedAmount > 0 ? awardedAmount * exports.LAWSUIT_TREASURY_AWARD_MULTIPLIER : 0;
+    const treasuryNeeded = (needsLawyerFee ? exports.LAWYER_LAWSUIT_FEE : 0) + treasuryBonus;
+    if (treasuryNeeded > 0) {
+        const townRes = await client.query('SELECT treasury_balance FROM town_settings WHERE class = $1 AND school_id IS NOT DISTINCT FROM $2 FOR UPDATE', [lawsuit.town_class, lawsuit.school_id]);
+        const town = townRes.rows[0];
+        if (!town || parseFloat(String(town.treasury_balance)) < treasuryNeeded) {
+            throw new Error(`Town treasury has insufficient funds for lawsuit payout (need R${treasuryNeeded.toFixed(2)})`);
+        }
+    }
+    const escrowRefunded = await refundEscrowWithClient(lawsuit, client);
+    let lawyerId;
+    if (needsLawyerFee) {
+        const lid = lawsuit.accepting_lawyer_id;
+        await updateTownTreasury(client, lawsuit.school_id, lawsuit.town_class, exports.LAWYER_LAWSUIT_FEE, `Lawsuit legal fee (approved case) | case #${lawsuit.id}`, createdBy);
+        const accountRes = await client.query('SELECT id FROM accounts WHERE user_id = $1 FOR UPDATE', [lid]);
+        const account = accountRes.rows[0];
+        if (!account)
+            throw new Error('Lawyer account not found');
+        await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [exports.LAWYER_LAWSUIT_FEE, account.id]);
+        await client.query(`INSERT INTO transactions (to_account_id, amount, transaction_type, description)
+       VALUES ($1, $2, 'deposit', $3)`, [account.id, exports.LAWYER_LAWSUIT_FEE, `Lawsuit legal fee | case #${lawsuit.id}`]);
+        await client.query('UPDATE student_lawsuits SET lawyer_fee_paid_at = CURRENT_TIMESTAMP WHERE id = $1', [
+            lawsuit.id,
+        ]);
+        lawyerId = lid;
+    }
+    if (treasuryBonus > 0) {
+        await updateTownTreasury(client, lawsuit.school_id, lawsuit.town_class, treasuryBonus, `Lawsuit treasury award (${exports.LAWSUIT_TREASURY_AWARD_MULTIPLIER}×) | case #${lawsuit.id}`, createdBy);
+        const plAcct = await client.query('SELECT id FROM accounts WHERE user_id = $1 FOR UPDATE', [
+            lawsuit.plaintiff_user_id,
+        ]);
+        const plAccount = plAcct.rows[0];
+        if (!plAccount)
+            throw new Error('Plaintiff account not found');
+        await client.query('UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [treasuryBonus, plAccount.id]);
+        await client.query(`INSERT INTO transactions (to_account_id, amount, transaction_type, description)
+       VALUES ($1, $2, 'deposit', $3)`, [
+            plAccount.id,
+            treasuryBonus,
+            `Lawsuit treasury award (${exports.LAWSUIT_TREASURY_AWARD_MULTIPLIER}× claim) | case #${lawsuit.id}`,
+        ]);
+    }
+    return { lawyerId, treasuryBonus, escrowRefunded };
 }
 async function payDefenseLawyerParticipation(lawsuitId, lawyerUserId) {
     const client = await database_prod_1.default.pool.connect();
@@ -548,7 +659,11 @@ function buildProceedingsTimeline(row, juryAssignments) {
             label: 'HR mediation',
             state: stepState('hr'),
             at: row.hr_reviewed_at || null,
-            summary: row.hr_outcome ? String(row.hr_outcome).replace(/_/g, ' ') : undefined,
+            summary: row.hr_notes && String(row.hr_notes).startsWith('Auto-escalated')
+                ? 'Skipped — no HR Director'
+                : row.hr_outcome
+                    ? String(row.hr_outcome).replace(/_/g, ' ')
+                    : undefined,
             detail: row.hr_notes,
         },
         {
@@ -620,7 +735,7 @@ function buildProceedingsTimeline(row, juryAssignments) {
             state: stepState('teacher'),
             at: row.teacher_reviewed_at,
             summary: status === 'approved'
-                ? `Approved — R${row.awarded_amount} awarded`
+                ? `Approved — R${row.awarded_amount} from defendant + R${parseFloat(String(row.awarded_amount || 0)) * exports.LAWSUIT_TREASURY_AWARD_MULTIPLIER} from town treasury; escrow refunded`
                 : status === 'denied'
                     ? 'Denied'
                     : status === 'pending_teacher'
