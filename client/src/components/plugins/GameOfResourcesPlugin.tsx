@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import type { ProfessionId } from '@game-of-resources';
 import { usePlugins } from '../../contexts/PluginContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -95,8 +95,17 @@ function WorldView({
     previewCitizens?.find((c) => c.name === view.self?.name)?.userId ?? previewCitizens?.[0]?.userId;
 
   return (
-    <div className="gor-root">
+    <div className="gor-root gor-immersive">
       <GorIconSprite />
+      {readOnly && onExitPreview ? (
+        <button type="button" className="gor-exit-fab" onClick={onExitPreview} aria-label="Close preview">
+          ×
+        </button>
+      ) : (
+        <Link to="/" className="gor-exit-fab" aria-label="Back to dashboard">
+          ×
+        </Link>
+      )}
       {readOnly && onExitPreview ? (
         <div className="gor-teacher-preview-bar">
           <span>

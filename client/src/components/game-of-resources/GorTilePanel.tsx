@@ -5,9 +5,30 @@ import GorActionCard from './GorActionCard';
 import { GorIcon } from './GorIconSprite';
 
 function condWord(h: number): string {
-  if (h >= 80) return 'healthy';
-  if (h >= 50) return 'worn';
-  return 'poor';
+  const P = CONFIG.places;
+  if (h >= P.full) return 'Healthy';
+  if (h >= P.low) return 'Worn';
+  return 'Exhausted';
+}
+
+function placeWorkNote(
+  gameState: GameState,
+  selfId: string,
+  actionId: string,
+  opt: Record<string, unknown>,
+  verb: string
+): ReactNode | null {
+  const p = RULES.plan(gameState, selfId, actionId, opt);
+  if (!p.tileKey || typeof p.tileKey !== 'string') return null;
+  const h = RULES.health(gameState, p.tileKey);
+  const tile = RULES.TILE[p.tileKey];
+  const where = tile?.type === 'farm' ? 'farm' : tile?.type === 'quarry' ? 'quarry' : 'tile';
+  return (
+    <p className="small">
+      <GorIcon id="i-pin" className="ic sm" /> {verb} the {where} with condition {h} ({condWord(h)}). Select
+      another workplace to spread the work.
+    </p>
+  );
 }
 
 function DevelopLandCards({
@@ -140,9 +161,34 @@ function FixedTilePanel({
 
   const health = RULES.health(gameState, tileKey);
   const selfId = gameState.activeId;
+  const selfCitizen = selfId ? gameState.citizens.find((c) => c.id === selfId) : null;
 
   let developBlock: ReactNode = null;
   let restoreBlock: ReactNode = null;
+  let restBlock: ReactNode = null;
+
+  if (t.type === 'farm' && selfId && selfCitizen?.prof === 'farmer') {
+    restBlock = (
+      <GorActionCard
+        iconId="i-soil"
+        title="Rest and compost this field"
+        buttonLabel="Rest and compost this field"
+        plan={RULES.plan(gameState, selfId, 'rest', { tileKey })}
+        busy={busy}
+        roundOpen={roundOpen}
+        onRun={() => onRun('rest', { tileKey })}
+        hint={
+          <>
+            <p className="small">
+              Skip a harvest: no food this time, but Soil improves, the field gains {CONFIG.actions.rest.condition}{' '}
+              condition and it recovers twice as fast tonight.
+            </p>
+            {placeWorkNote(gameState, selfId, 'rest', { tileKey }, 'Resting on')}
+          </>
+        }
+      />
+    );
+  }
 
   if (t.type === 'land') {
     const cid = PLANET.cellOfKey[tileKey];
@@ -227,6 +273,7 @@ function FixedTilePanel({
         ) : null}
       </div>
       {developBlock}
+      {restBlock}
       {restoreBlock}
     </div>
   );
@@ -334,6 +381,50 @@ function CellTilePanel({
       />
     ) : null;
 
+  const restoreBlock =
+    mine && gameState.land[cellId]?.dev && t !== 'forest' ? (
+      <GorActionCard
+        iconId="i-paw"
+        title="Restore to wild land"
+        buttonLabel="Restore to wild land"
+        plan={RULES.plan(gameState, selfId, 'restore', { cell: key })}
+        busy={busy}
+        roundOpen={roundOpen}
+        onRun={() => onRun('restore', { cell: key })}
+        hint={
+          <p className="small">
+            Takes {CONFIG.actions.restore.ap} AP plus tools and wood. Repairing nature costs more than protecting
+            it.
+          </p>
+        }
+      />
+    ) : null;
+
+  const selfCitizen = gameState.citizens.find((c) => c.id === selfId);
+  const isFarmWorkplace = t === 'farm' || (gameState.land[cellId]?.dev && gameState.land[cellId]?.type === 'farm');
+
+  const restBlock =
+    mine && isFarmWorkplace && selfCitizen?.prof === 'farmer' ? (
+      <GorActionCard
+        iconId="i-soil"
+        title="Rest and compost this field"
+        buttonLabel="Rest and compost this field"
+        plan={RULES.plan(gameState, selfId, 'rest', { tileKey: key })}
+        busy={busy}
+        roundOpen={roundOpen}
+        onRun={() => onRun('rest', { tileKey: key })}
+        hint={
+          <>
+            <p className="small">
+              Skip a harvest: no food this time, but Soil improves, the field gains {CONFIG.actions.rest.condition}{' '}
+              condition and it recovers twice as fast tonight.
+            </p>
+            {placeWorkNote(gameState, selfId, 'rest', { tileKey: key }, 'Resting on')}
+          </>
+        }
+      />
+    ) : null;
+
   const fishBlock = RULES.fishable(gameState, cellId, vl) ? (
     <GorActionCard
       iconId="i-fish"
@@ -362,6 +453,8 @@ function CellTilePanel({
         ) : null}
       </div>
       {developBlock}
+      {restBlock}
+      {restoreBlock}
       {fishBlock}
     </div>
   );

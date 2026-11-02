@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlugins } from '../../contexts/PluginContext';
 import { Navigate } from 'react-router-dom';
-import { BarChart3, TrendingUp, PieChart, Users, Calendar } from 'lucide-react';
+import { BarChart3, TrendingUp, PieChart, Users, Calendar, Download } from 'lucide-react';
 import { teacherAnalyticsApi } from '../../services/api';
 import { EngagementAnalytics, EngagementTimeSeries, EngagementByClass, EngagementByStudent, StudentLoginRow } from '../../types';
+import { buildAnalyticsYearCsv, downloadCsvFile } from '../../utils/analyticsCsvExport';
 import { ResponsivePage, ResponsivePluginHero, LoadingState, ResponsiveTabNav } from '../responsive';
 
 const AnalyticsPlugin: React.FC = () => {
@@ -23,6 +24,8 @@ const AnalyticsPlugin: React.FC = () => {
   const [studentLogins, setStudentLogins] = useState<StudentLoginRow[]>([]);
   const [studentLoginsLoading, setStudentLoginsLoading] = useState(false);
   const [studentLoginsError, setStudentLoginsError] = useState('');
+  const [exportingYearCsv, setExportingYearCsv] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   // Scope for engagement API: only 'students' when on By student tab, else 'school'
   const scope = activeTab === 'bystudent' ? 'students' : 'school';
@@ -52,6 +55,29 @@ const AnalyticsPlugin: React.FC = () => {
       setStudentLogins([]);
     } finally {
       setStudentLoginsLoading(false);
+    }
+  };
+
+  const handleExportYearCsv = async () => {
+    try {
+      setExportingYearCsv(true);
+      setExportError('');
+      const [engagementRes, loginsRes] = await Promise.all([
+        teacherAnalyticsApi.getEngagement({ time_range: 'year', scope: 'students' }),
+        teacherAnalyticsApi.getStudentLogins({ time_range: 'year' }),
+      ]);
+      const csv = buildAnalyticsYearCsv(engagementRes.data, loginsRes.data.students);
+      const startSlug = new Date(engagementRes.data.start_date).toISOString().slice(0, 10);
+      downloadCsvFile(csv, `civiclab-analytics-year-from-${startSlug}.csv`);
+    } catch (err: unknown) {
+      console.error('Failed to export analytics CSV:', err);
+      const message =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
+          : undefined;
+      setExportError(message || 'Failed to export year analytics');
+    } finally {
+      setExportingYearCsv(false);
     }
   };
 
@@ -384,6 +410,23 @@ const AnalyticsPlugin: React.FC = () => {
               <option value="6B">6B</option>
               <option value="6C">6C</option>
             </select>
+          </div>
+          <div className="flex flex-col items-start gap-1">
+            <button
+              type="button"
+              onClick={handleExportYearCsv}
+              disabled={exportingYearCsv}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-800 font-medium text-sm hover:bg-indigo-100 transition-colors disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              {exportingYearCsv ? 'Exporting…' : 'Export year to CSV'}
+            </button>
+            <p className="text-xs text-gray-500 max-w-xs">
+              Downloads school year data (from game start date) including summary, trends, by class, students, and logins.
+            </p>
+            {exportError && (
+              <p className="text-xs text-red-600">{exportError}</p>
+            )}
           </div>
           {analytics?.start_date && (
             <p className="text-xs text-gray-500 w-full mt-1">

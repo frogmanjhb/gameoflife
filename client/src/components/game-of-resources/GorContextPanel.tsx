@@ -25,6 +25,33 @@ function selForWork(state: GameState, type: string, selected: string | null): st
   return undefined;
 }
 
+function condWord(h: number): string {
+  const P = CONFIG.places;
+  if (h >= P.full) return 'Healthy';
+  if (h >= P.low) return 'Worn';
+  return 'Exhausted';
+}
+
+function placeWorkNote(
+  gameState: GameState,
+  selfId: string,
+  actionId: string,
+  opt: Record<string, unknown>,
+  verb: string
+): React.ReactNode | null {
+  const p = RULES.plan(gameState, selfId, actionId, opt);
+  if (!p.tileKey || typeof p.tileKey !== 'string') return null;
+  const h = RULES.health(gameState, p.tileKey);
+  const tile = RULES.TILE[p.tileKey];
+  const where = tile?.type === 'farm' ? 'farm' : tile?.type === 'quarry' ? 'quarry' : 'tile';
+  return (
+    <p className="small">
+      <GorIcon id="i-pin" className="ic sm" /> {verb} the {where} with condition {h} ({condWord(h)}). Select
+      another workplace to spread the work.
+    </p>
+  );
+}
+
 export default function GorContextPanel({
   view,
   gameState,
@@ -132,8 +159,46 @@ function WorkPanel({
           plan={RULES.plan(gameState, self.id, 'farm', { tileKey: selForWork(gameState, 'farm', selectedTile) })}
           busy={busy}
           roundOpen={view.round.open}
-          hint={<p className="small">The river is {band.name.toLowerCase()}, so farms give {band.words}.</p>}
+          hint={
+            <>
+              <p className="small">The river is {band.name.toLowerCase()}, so farms give {band.words}.</p>
+              {placeWorkNote(
+                gameState,
+                self.id,
+                'farm',
+                { tileKey: selForWork(gameState, 'farm', selectedTile) },
+                'Working on'
+              )}
+            </>
+          }
           onRun={() => onRun('farm', { tileKey: selForWork(gameState, 'farm', selectedTile) })}
+        />
+      );
+      cards.push(
+        <GorActionCard
+          key="rest"
+          iconId="i-soil"
+          title="Rest and compost a field"
+          buttonLabel="Rest and compost this field"
+          plan={RULES.plan(gameState, self.id, 'rest', { tileKey: selForWork(gameState, 'farm', selectedTile) })}
+          busy={busy}
+          roundOpen={view.round.open}
+          hint={
+            <>
+              <p className="small">
+                Skip a harvest: no food this time, but Soil improves, the field gains {CONFIG.actions.rest.condition}{' '}
+                condition and it recovers twice as fast tonight.
+              </p>
+              {placeWorkNote(
+                gameState,
+                self.id,
+                'rest',
+                { tileKey: selForWork(gameState, 'farm', selectedTile) },
+                'Resting on'
+              )}
+            </>
+          }
+          onRun={() => onRun('rest', { tileKey: selForWork(gameState, 'farm', selectedTile) })}
         />
       );
       break;

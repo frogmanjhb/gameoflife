@@ -271,6 +271,86 @@ tr.idle td{background:color-mix(in srgb,var(--warn) 12%,transparent)}
 .gor-colour-row{display:flex;flex-wrap:wrap;gap:6px}
 .gor-swatch{width:28px;height:28px;border-radius:8px;border:2px solid var(--line);cursor:pointer;padding:0}
 
+/* Full-viewport play mode (no CivicLab header / main padding) */
+.gor-layout-shell{max-width:none!important;padding:0!important;margin:0!important}
+.gor-root.gor-immersive{
+  position:relative;
+  width:100%;
+  max-width:100%;
+  height:100dvh;
+  max-height:100dvh;
+  min-height:0;
+  font-size:13px;
+  line-height:1.35;
+  overflow:hidden;
+}
+.gor-exit-fab{
+  position:fixed;top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));
+  z-index:80;width:40px;height:40px;border-radius:50%;
+  display:grid;place-items:center;border:1px solid var(--line);
+  background:color-mix(in srgb,var(--panel) 92%,transparent);
+  color:var(--ink);font-size:26px;line-height:1;font-weight:400;
+  text-decoration:none;cursor:pointer;box-shadow:0 2px 10px rgba(var(--shadow),.18);
+}
+.gor-exit-fab:hover{background:var(--panel);filter:brightness(1.02)}
+.gor-immersive .game{height:100%}
+.gor-immersive .btn{min-height:36px;padding:6px 10px;font-size:13px;gap:6px;border-radius:10px}
+.gor-immersive .icon-btn{width:36px;height:36px}
+.gor-immersive .main{grid-template-columns:minmax(0,172px) minmax(0,1fr) minmax(0,248px)}
+.gor-immersive .topbar{padding:6px 10px 6px 52px;gap:4px}
+.gor-immersive .brand{font-size:17px}
+.gor-immersive .chip{padding:4px 8px;font-size:12px;gap:4px}
+.gor-immersive .treasury .num{font-size:15px}
+.gor-immersive .gauges{gap:4px}
+.gor-immersive .gauge{padding:3px 4px;column-gap:3px;border-radius:10px}
+.gor-immersive .gauge .g-ic,.gor-immersive .gauge .g-ic svg{width:15px;height:15px}
+.gor-immersive .gauge .g-top{font-size:10px}
+.gor-immersive .gauge .g-num{font-size:12px}
+.gor-immersive .gauge .g-bot{font-size:10px}
+.gor-immersive .gauge .g-bar{width:28px;height:5px}
+.gor-immersive .cz-body{padding:8px 10px;gap:10px}
+.gor-immersive .avatar{width:40px;height:40px;border-radius:12px}
+.gor-immersive .pseudo{font-size:17px}
+.gor-immersive .inv-item{padding:6px}
+.gor-immersive .tabs .tab{min-height:46px;font-size:11px;padding:2px}
+.gor-immersive .panel-wrap{padding:8px 10px}
+.gor-immersive .card{padding:10px;border-radius:12px}
+.gor-immersive .card h3{font-size:16px}
+.gor-immersive .act-card h3{font-size:14px}
+.gor-immersive .small{font-size:12px}
+.gor-immersive .rail button,.gor-immersive .turn button{width:36px;height:36px}
+.gor-immersive .turn{bottom:40px;padding:4px}
+.gor-immersive .lite-btn{min-height:36px;font-size:12px;padding:4px 8px}
+.gor-immersive .caption{font-size:12px;padding:3px 10px}
+.gor-immersive .closed-banner{font-size:13px;top:48px;padding:6px 10px}
+.gor-immersive .gor-teacher-preview-bar{padding-left:52px}
+
+/* Keep three columns on typical Chromebook widths (avoid hidden citizen drawer) */
+@media (max-width:1100px){
+  .gor-root.gor-immersive .main{grid-template-columns:minmax(0,160px) minmax(0,1fr) minmax(0,236px)}
+  .gor-root.gor-immersive .citizen{
+    position:relative;left:auto;top:auto;bottom:auto;width:auto;
+    transform:none!important;opacity:1!important;pointer-events:auto!important;
+    box-shadow:none;
+  }
+  .gor-root.gor-immersive .game.expanded .citizen{transform:none!important;opacity:1!important}
+}
+@media (max-height:720px){
+  .gor-root.gor-immersive{font-size:12px}
+  .gor-root.gor-immersive .topbar{grid-template-rows:auto auto;padding:4px 8px 4px 48px}
+  .gor-root.gor-immersive .main{grid-template-columns:minmax(0,148px) minmax(0,1fr) minmax(0,220px)}
+  .gor-root.gor-immersive .gauge .g-bar{display:block;width:24px}
+}
+@media (max-width:760px){
+  .gor-root.gor-immersive .main{grid-template-columns:minmax(0,1fr) minmax(0,42%)}
+  .gor-root.gor-immersive .citizen{display:none}
+  .gor-root.gor-immersive .canvas-host,.gor-root.gor-immersive .labels{bottom:0}
+  .gor-root.gor-immersive .context{
+    position:relative;max-height:none;transform:none!important;opacity:1!important;
+    border-radius:0;box-shadow:none;
+  }
+}
+
 /* ---------- responsive ---------- */
 @media (max-width:1400px){
   .treasury .lbl{display:none}
