@@ -100,6 +100,49 @@ async function main() {
       [u.id]
     );
     console.log('Pending transfers by status:', pending.rows);
+
+    const juneCombined = await pool.query(
+      `SELECT COUNT(*)::int AS cnt,
+              COUNT(DISTINCT t.to_account_id)::int AS recipients,
+              MIN(t.created_at) AS first_at,
+              MAX(t.created_at) AS last_at
+       FROM transactions t
+       WHERE t.from_account_id = $1
+         AND t.transaction_type = 'transfer'
+         AND t.description = 'combined'
+         AND t.created_at >= '2026-06-01' AND t.created_at < '2026-07-01'`,
+      [accountId]
+    );
+    console.log('June "combined" transfers:', juneCombined.rows[0]);
+
+    const topRecipients = await pool.query(
+      `SELECT tu.username, COUNT(*)::int AS cnt
+       FROM transactions t
+       JOIN accounts ta ON t.to_account_id = ta.id
+       JOIN users tu ON ta.user_id = tu.id
+       WHERE t.from_account_id = $1
+         AND t.description = 'combined'
+         AND t.created_at >= '2026-06-01' AND t.created_at < '2026-07-01'
+       GROUP BY tu.username
+       ORDER BY cnt DESC
+       LIMIT 10`,
+      [accountId]
+    );
+    console.log('June combined top recipients:', topRecipients.rows);
+
+    const burstMinutes = await pool.query(
+      `SELECT date_trunc('minute', created_at) AS minute, COUNT(*)::int AS cnt
+       FROM transactions
+       WHERE from_account_id = $1
+         AND description = 'combined'
+         AND created_at >= '2026-06-01' AND created_at < '2026-07-01'
+       GROUP BY 1
+       HAVING COUNT(*) > 20
+       ORDER BY cnt DESC
+       LIMIT 10`,
+      [accountId]
+    );
+    console.log('June burst minutes (>20/min):', burstMinutes.rows);
   }
 
   const schoolTotal = await pool.query(

@@ -54,6 +54,10 @@ async function executeTeacherTransferApproval(pending, schoolId, reviewerId) {
     }
     const transferAmount = parseFloat(String(pending.amount));
     const description = pending.description || `Transfer to ${pending.to_username ?? 'student'}`;
+    const amountCheck = (0, student_transfer_limit_1.validatePeerTransferForApproval)(transferAmount);
+    if (!amountCheck.ok) {
+        return { success: false, error: amountCheck.error, httpStatus: 400 };
+    }
     const client = await database_prod_1.default.pool.connect();
     try {
         await client.query('BEGIN');
@@ -283,7 +287,9 @@ router.get('/history', auth_1.authenticateToken, async (req, res) => {
 // Transfer request between students (requires teacher approval)
 router.post('/transfer', [
     (0, express_validator_1.body)('to_username').notEmpty().withMessage('Recipient username is required'),
-    (0, express_validator_1.body)('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0'),
+    (0, express_validator_1.body)('amount')
+        .isFloat({ min: student_transfer_limit_1.STUDENT_PEER_TRANSFER_MIN_AMOUNT })
+        .withMessage(`Amount must be at least R${student_transfer_limit_1.STUDENT_PEER_TRANSFER_MIN_AMOUNT.toFixed(2)}`),
     (0, express_validator_1.body)('description').notEmpty().trim().withMessage('Description is required')
 ], auth_1.authenticateToken, (0, auth_1.requireRole)(['student']), async (req, res) => {
     try {
@@ -299,10 +305,6 @@ router.post('/transfer', [
         const canTransactResult = await checkStudentCanTransact(req.user.id);
         if (!canTransactResult.canTransact) {
             return res.status(400).json({ error: canTransactResult.reason });
-        }
-        const transferLimitStatus = await (0, student_transfer_limit_1.getStudentTransferLimitStatusForUser)(req.user.id);
-        if (!transferLimitStatus.canRequestTransfer) {
-            return res.status(400).json({ error: (0, student_transfer_limit_1.dailyTransferLimitReason)() });
         }
         // Parse and validate transfer amount early
         const transferAmount = parseFloat(amount.toString());
@@ -332,8 +334,10 @@ router.post('/transfer', [
         if (isNaN(senderBalance) || senderBalance < transferAmount) {
             return res.status(400).json({ error: 'Insufficient funds' });
         }
-        // Create pending transfer request (teacher approval required)
-        await database_prod_1.default.run(`INSERT INTO pending_transfers (from_user_id, to_user_id, amount, description, status) VALUES ($1, $2, $3, $4, 'pending')`, [req.user.id, toUser.id, transferAmount, description || `Transfer to ${to_username}`]);
+        const createResult = await (0, student_transfer_limit_1.createStudentTransferRequest)(req.user.id, toUser.id, transferAmount, description || `Transfer to ${to_username}`);
+        if (!createResult.ok) {
+            return res.status(400).json({ error: createResult.error });
+        }
         res.json({ message: 'Transfer request submitted. Awaiting teacher approval.' });
     }
     catch (error) {
@@ -413,11 +417,14 @@ router.post('/pending-transfers/approve-all', auth_1.authenticateToken, tenant_1
                 message: 'No pending transfers to approve',
                 approved: 0,
                 failed: [],
+                remaining_pending: 0,
             });
         }
+        const remainingAfterBatch = Math.max(0, pendingList.length - student_transfer_limit_1.TEACHER_TRANSFER_APPROVE_ALL_MAX);
+        const batch = pendingList.slice(0, student_transfer_limit_1.TEACHER_TRANSFER_APPROVE_ALL_MAX);
         const failed = [];
         let approved = 0;
-        for (const pending of pendingList) {
+        for (const pending of batch) {
             const result = await executeTeacherTransferApproval(pending, schoolId, req.user.id);
             if (result.success) {
                 approved += 1;
@@ -426,10 +433,13 @@ router.post('/pending-transfers/approve-all', auth_1.authenticateToken, tenant_1
                 failed.push({ id: pending.id, error: result.error });
             }
         }
-        const message = failed.length === 0
+        let message = failed.length === 0
             ? `Approved ${approved} transfer${approved !== 1 ? 's' : ''} successfully`
             : `Approved ${approved} transfer${approved !== 1 ? 's' : ''}; ${failed.length} could not be approved`;
-        res.json({ message, approved, failed });
+        if (remainingAfterBatch > 0) {
+            message += `. ${remainingAfterBatch} pending transfer${remainingAfterBatch !== 1 ? 's' : ''} remain — use Approve all again (max ${student_transfer_limit_1.TEACHER_TRANSFER_APPROVE_ALL_MAX} per batch).`;
+        }
+        res.json({ message, approved, failed, remaining_pending: remainingAfterBatch });
     }
     catch (error) {
         console.error('Approve all transfers error:', error);
@@ -697,6 +707,11 @@ router.post('/my-approvals/:id/approve', auth_1.authenticateToken, (0, auth_1.re
             }
             const transferAmount = parseFloat(pending.amount);
             const description = pending.description || `Transfer to student`;
+            const amountCheck = (0, student_transfer_limit_1.validatePeerTransferForApproval)(transferAmount);
+            if (!amountCheck.ok) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: amountCheck.error });
+            }
             const fromAccountResult = await client.query('SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE', [pending.from_user_id]);
             const toAccountResult = await client.query('SELECT * FROM accounts WHERE user_id = $1 FOR UPDATE', [pending.to_user_id]);
             const fromAccount = fromAccountResult.rows[0];
@@ -1069,9 +1084,13 @@ router.get('/can-transact', auth_1.authenticateToken, (0, auth_1.requireRole)(['
         const result = await checkStudentCanTransact(req.user.id);
         const transferLimitStatus = await (0, student_transfer_limit_1.getStudentTransferLimitStatusForUser)(req.user.id);
         if (result.canTransact && !transferLimitStatus.canRequestTransfer) {
+            const atDailyCap = transferLimitStatus.transfers_remaining_today === 0;
+            const reason = atDailyCap
+                ? `You have used all ${student_transfer_limit_1.STUDENT_TRANSFER_DAILY_LIMIT} transfer requests for today. You can request more tomorrow.`
+                : (0, student_transfer_limit_1.pendingTransferCapReason)(transferLimitStatus.pending_transfers_count);
             return res.json({
                 canTransact: false,
-                reason: `You have used all ${student_transfer_limit_1.STUDENT_TRANSFER_DAILY_LIMIT} transfer requests for today. You can request more tomorrow.`,
+                reason,
                 ...transferLimitStatus,
             });
         }

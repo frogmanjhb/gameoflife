@@ -222,8 +222,8 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
             id="amount"
             name="amount"
             type="number"
+            min="5"
             step="0.01"
-            min="0.01"
             required
             className="input-field"
             placeholder="0.00"
@@ -281,6 +281,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onSuccess }) => {
           <li>• Select a student from any class to send money to</li>
           <li>• Add a description (required) so both parties know what the transfer is for</li>
           <li>• Transfer requests require teacher approval before the money moves</li>
+          <li>• Minimum transfer amount is R5.00</li>
           <li>• You can request up to 3 student transfers per day</li>
           <li>• Pay off any outstanding loans before making transfers</li>
         </ul>
