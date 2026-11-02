@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg';
 import type { GameState, ProfessionId } from './shared';
-import { type GorWorldRow, type LockedWorldBundle, type TownClass } from './types';
+import { type GorCitizenRow, type GorWorldRow, type LockedWorldBundle, type TownClass } from './types';
 export declare function citizenIdForUser(userId: number): string;
 export declare function userIdFromCitizenId(citizenId: string): number | null;
 export declare function worldSeedForTown(schoolId: number, townClass: string): number;
@@ -32,5 +32,6 @@ export declare function tablesReady(client: PoolClient): Promise<boolean>;
 export declare function persistReflectionRow(client: PoolClient, citizenRowId: number, worldId: number, roundNumber: number, text: string): Promise<void>;
 export declare function saveRoundSummaryRow(client: PoolClient, worldId: number, roundNumber: number, summary: Record<string, unknown>): Promise<void>;
 export declare function updateWorldSettings(client: PoolClient, worldId: number, settings: GorWorldRow['settings'], expectedVersion: number, paused?: boolean): Promise<GorWorldRow>;
+export declare function updateCitizenAvatar(client: PoolClient, worldId: number, userId: number, avatar: import('./avatar').GorAvatar): Promise<GorCitizenRow | null>;
 export declare function resetWorldForTown(client: PoolClient, worldId: number): Promise<void>;
 //# sourceMappingURL=worldRepository.d.ts.map

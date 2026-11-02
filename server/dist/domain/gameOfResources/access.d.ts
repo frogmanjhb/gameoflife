@@ -25,6 +25,7 @@ export declare function jobChangeOptsFromSettings(settings: {
     xpSource: "game" | "civiclab";
 };
 export declare function isProfessionId(v: unknown): v is ProfessionId;
+export declare function requireStudentInTown(client: PoolClient, schoolId: number, townClass: TownClass, userId: number, res: Response): Promise<boolean>;
 export declare function requireTeacherForSchool(req: AuthenticatedRequest, res: Response): Promise<User | null>;
 export declare function schoolIdFromRequest(req: AuthenticatedRequest): number;
 //# sourceMappingURL=access.d.ts.map

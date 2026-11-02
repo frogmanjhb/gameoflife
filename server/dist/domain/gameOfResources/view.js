@@ -4,6 +4,7 @@ exports.buildPlayerView = buildPlayerView;
 exports.redactStateForUser = redactStateForUser;
 const shared_1 = require("./shared");
 const worldRepository_1 = require("./worldRepository");
+const avatar_1 = require("./avatar");
 function jobChangeSettings(settings) {
     return {
         xpCost: settings.jobChange?.xpCost ?? shared_1.CONFIG.jobChange.xpCost,
@@ -18,7 +19,7 @@ function citizenDisplayName(citizen, userId, displayNameForUser, useNicknames) {
     return displayNameForUser(userId);
 }
 function buildPlayerView(input) {
-    const { row, state, viewerUserId, displayNameForUser, useNicknames } = input;
+    const { row, state, viewerUserId, displayNameForUser, useNicknames, getAvatar } = input;
     const jc = jobChangeSettings(row.settings);
     const selfId = (0, worldRepository_1.citizenIdForUser)(viewerUserId);
     const citizens = [];
@@ -28,6 +29,9 @@ function buildPlayerView(input) {
         if (uid == null)
             continue;
         const name = citizenDisplayName(c, uid, displayNameForUser, useNicknames);
+        const avatar = getAvatar
+            ? getAvatar(uid, c.prof)
+            : (0, avatar_1.parseGorAvatar)(undefined, c.prof);
         const base = {
             id: c.id,
             userId: uid,
@@ -38,6 +42,7 @@ function buildPlayerView(input) {
             level: shared_1.RULES.levelFor(c.xp),
             actions: c.actions,
             contrib: c.contrib,
+            avatar,
         };
         if (c.id === selfId) {
             const xpAfter = c.xp - jc.xpCost;

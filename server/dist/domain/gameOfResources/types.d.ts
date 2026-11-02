@@ -61,6 +61,7 @@ export type GorCitizenRow = {
     reflections: Record<string, string>;
     last_active_round: number | null;
     job_changed_round: number | null;
+    avatar: Record<string, unknown> | null;
 };
 export type GorListingRow = {
     id: number;

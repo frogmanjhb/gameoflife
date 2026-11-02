@@ -18,6 +18,7 @@ exports.tablesReady = tablesReady;
 exports.persistReflectionRow = persistReflectionRow;
 exports.saveRoundSummaryRow = saveRoundSummaryRow;
 exports.updateWorldSettings = updateWorldSettings;
+exports.updateCitizenAvatar = updateCitizenAvatar;
 exports.resetWorldForTown = resetWorldForTown;
 const shared_1 = require("./shared");
 const types_1 = require("./types");
@@ -32,12 +33,14 @@ function userIdFromCitizenId(citizenId) {
     const n = Number(citizenId.slice(1));
     return Number.isFinite(n) ? n : null;
 }
+const PG_INT_MAX = 2147483647;
 function worldSeedForTown(schoolId, townClass) {
     let h = Math.imul(schoolId, 2654435761);
     for (let i = 0; i < townClass.length; i++) {
         h = Math.imul(h ^ townClass.charCodeAt(i), 1597334677);
     }
-    return (h >>> 0) || 1;
+    const u = (h >>> 0) || 1;
+    return (u % PG_INT_MAX) || 1;
 }
 function parseJsonRecord(value, fallback) {
     if (value == null)
@@ -513,6 +516,12 @@ async function updateWorldSettings(client, worldId, settings, expectedVersion, p
     if (!res.rows.length)
         throw new Error('World version conflict — refresh and try again.');
     return mapWorldRow(res.rows[0]);
+}
+async function updateCitizenAvatar(client, worldId, userId, avatar) {
+    const res = await client.query(`UPDATE gor_citizens SET avatar = $1::jsonb WHERE world_id = $2 AND user_id = $3 RETURNING *`, [JSON.stringify(avatar), worldId, userId]);
+    if (!res.rows.length)
+        return null;
+    return res.rows[0];
 }
 async function resetWorldForTown(client, worldId) {
     await client.query(`DELETE FROM gor_job_changes WHERE world_id = $1`, [worldId]);

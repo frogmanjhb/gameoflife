@@ -14,6 +14,7 @@ exports.generateNickname = generateNickname;
 exports.stripHtml = stripHtml;
 exports.jobChangeOptsFromSettings = jobChangeOptsFromSettings;
 exports.isProfessionId = isProfessionId;
+exports.requireStudentInTown = requireStudentInTown;
 exports.requireTeacherForSchool = requireTeacherForSchool;
 exports.schoolIdFromRequest = schoolIdFromRequest;
 const database_prod_1 = __importDefault(require("../../database/database-prod"));
@@ -107,6 +108,14 @@ function jobChangeOptsFromSettings(settings) {
 }
 function isProfessionId(v) {
     return typeof v === 'string' && v in shared_1.CONFIG.professions;
+}
+async function requireStudentInTown(client, schoolId, townClass, userId, res) {
+    const row = await client.query(`SELECT id FROM users WHERE id = $1 AND school_id = $2 AND class = $3 AND role = 'student' LIMIT 1`, [userId, schoolId, townClass]);
+    if (!row.rows.length) {
+        res.status(404).json({ error: 'That student is not in this town class.' });
+        return false;
+    }
+    return true;
 }
 async function requireTeacherForSchool(req, res) {
     if (!req.user) {

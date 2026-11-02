@@ -183,6 +183,21 @@ exports.RULES = (() => {
         addLog(n, c, 'job', `${c.name} changed job from ${config_1.CONFIG.professions[from].name} to ${config_1.CONFIG.professions[profession].name} for ${JC.xpCost} XP.`);
         return { ok: true, state: n, event: { citizenId: cid, from, to: profession, xpSpent: JC.xpCost, xpSource: JC.xpSource } };
     }
+    function teacherSetProfession(s, cid, profession) {
+        if (!config_1.CONFIG.professions[profession])
+            return { ok: false, reason: 'Choose a profession.', state: s };
+        const c0 = citizen(s, cid);
+        if (!c0)
+            return { ok: false, reason: 'Citizen not found.', state: s };
+        if (c0.prof === profession)
+            return { ok: false, reason: 'This citizen already has that job.', state: s };
+        const n = clone(s);
+        const c = citizen(n, cid);
+        const from = c.prof;
+        c.prof = profession;
+        addLog(n, c, 'job', `${c.name}'s job was set to ${config_1.CONFIG.professions[profession].name} by the teacher (was ${config_1.CONFIG.professions[from].name}).`);
+        return { ok: true, state: n, event: { citizenId: cid, from, to: profession, teacher: true } };
+    }
     function defaultState(rng = Math.random) {
         const s = { schema: config_1.CONFIG.schema, seq: 1, round: { n: 1, open: true, settled: [] },
             treasury: config_1.CONFIG.start.treasury, env: { ...config_1.CONFIG.env }, harvest: {}, minedTotal: 0,
@@ -545,7 +560,7 @@ exports.RULES = (() => {
                 if (!why && (cell == null || !planet_1.PLANET.cells[cell]))
                     why = 'Choose a tile first.';
                 else if (!why && !config_1.CONFIG.dev.from.includes(t))
-                    why = `${(config_1.CONFIG.terrain[t] || { name: 'This tile' }).name} cannot be developed. Choose beach, grass, meadow or new land.`;
+                    why = `${(config_1.CONFIG.terrain[t] || { name: 'This tile' }).name} cannot be developed. Choose beach, grass, meadow, open land or new land.`;
                 else if (!why && !villageLand(s).has(cell))
                     why = 'This land is not joined to your village yet.';
                 if (!why)
@@ -1005,6 +1020,6 @@ exports.RULES = (() => {
         openRound, closeRound, settleRound, advanceRound, resetWorld,
         health, tileYield, habLevel, habPen, workplaces, fishable,
         cellKey, cellIdOf, cellType, isLand, isSea, villageLand, seaStaysOpen, workCheck, startWork, workProgress, devCounts, devBonus, upgradeState,
-        isCitizenActive, autoAssignProfession, changeJob };
+        isCitizenActive, autoAssignProfession, changeJob, teacherSetProfession };
 })();
 //# sourceMappingURL=rules.js.map

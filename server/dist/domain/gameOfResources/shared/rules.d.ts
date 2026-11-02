@@ -406,5 +406,21 @@ export declare const RULES: {
         };
         reason?: undefined;
     };
+    teacherSetProfession: (s: any, cid: any, profession: any) => {
+        ok: boolean;
+        reason: string;
+        state: any;
+        event?: undefined;
+    } | {
+        ok: boolean;
+        state: any;
+        event: {
+            citizenId: any;
+            from: any;
+            to: any;
+            teacher: boolean;
+        };
+        reason?: undefined;
+    };
 };
 //# sourceMappingURL=rules.d.ts.map

@@ -15,6 +15,7 @@ export declare function runMarketAction(bundle: LockedWorldBundle, userId: numbe
 export declare function runStartWork(bundle: LockedWorldBundle, userId: number, kind: 'reclaim' | 'link', cellId: number): GameplayResult;
 export declare function runJobChange(client: PoolClient, bundle: LockedWorldBundle, userId: number, profession: ProfessionId, settings: GorWorldSettings): Promise<GameplayResult>;
 export declare function runSaveReflection(client: PoolClient, bundle: LockedWorldBundle, userId: number, round: number, text: string): Promise<GameplayResult>;
+export declare function runTeacherSetProfession(bundle: LockedWorldBundle, targetUserId: number, profession: ProfessionId): GameplayResult;
 export declare function runTeacherRound(bundle: LockedWorldBundle, op: 'open' | 'close' | 'advance'): GameplayResult;
 export declare function persistAdvanceSummary(client: PoolClient, bundle: LockedWorldBundle, summary: Record<string, unknown> | undefined): Promise<void>;
 export declare function runRuleChecks(): {

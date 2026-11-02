@@ -1,4 +1,5 @@
 import type { GameState, InventoryItem } from './shared';
+import type { GorAvatar } from './avatar';
 import type { GorWorldRow, GorWorldSettings } from './types';
 export type PublicCitizenView = {
     id: string;
@@ -10,6 +11,7 @@ export type PublicCitizenView = {
     level: number;
     actions: number;
     contrib: number;
+    avatar: GorAvatar;
 };
 export type SelfCitizenView = PublicCitizenView & {
     coins: number;
@@ -70,6 +72,7 @@ export type BuildViewInput = {
     viewerUserId: number;
     displayNameForUser: (userId: number) => string;
     useNicknames: boolean;
+    getAvatar?: (userId: number, profession: string) => GorAvatar;
 };
 export declare function buildPlayerView(input: BuildViewInput): GorWorldPlayerView;
 /** Strip private fields from full state for non-owner clients (API safety net). */

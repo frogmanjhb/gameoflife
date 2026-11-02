@@ -9,11 +9,11 @@ const DEFAULT_YEAR_START_MONTH = 1; // February (0-indexed)
 const DEFAULT_YEAR_START_DAY = 10;
 
 async function fetchSchoolGameStartDate(schoolId: number): Promise<string | null> {
-  const row = await database.get<{ game_start_date: string | null }>(
+  const row = await database.get(
     `SELECT settings->>'game_start_date' AS game_start_date FROM schools WHERE id = $1`,
     [schoolId]
   );
-  return row?.game_start_date ?? null;
+  return (row?.game_start_date as string | null | undefined) ?? null;
 }
 
 /** Year analytics: from school game_start_date, else most recent 10 Feb (UTC) on or before now. */

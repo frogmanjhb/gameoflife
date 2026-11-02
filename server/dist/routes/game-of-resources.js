@@ -17,6 +17,7 @@ const shared_1 = require("../domain/gameOfResources/shared");
 const bankBridge_1 = require("../domain/gameOfResources/bankBridge");
 const worldRepository_1 = require("../domain/gameOfResources/worldRepository");
 const worldSession_1 = require("../domain/gameOfResources/worldSession");
+const avatar_1 = require("../domain/gameOfResources/avatar");
 const router = (0, express_1.Router)();
 async function migrationGuard(res) {
     if (!(await (0, access_1.tablesReady)())) {
@@ -265,6 +266,56 @@ router.post('/job/change', auth_1.authenticateToken, tenant_1.requireTenant, (0,
         return { ...r, clientVersion: req.body.clientVersion };
     });
 });
+router.post('/avatar', auth_1.authenticateToken, tenant_1.requireTenant, async (req, res) => {
+    if (!(await migrationGuard(res)))
+        return;
+    const user = await (0, access_1.requireApprovedStudentWithRules)(req, res);
+    if (!user)
+        return;
+    if (!rateLimitUser(user.id, res))
+        return;
+    const townClass = (0, access_1.resolveStudentTown)(user);
+    const schoolId = (0, access_1.schoolIdFromRequest)(req);
+    const displayName = (0, access_1.displayNameForUser)(user);
+    const patch = req.body;
+    try {
+        const payload = await (0, worldSession_1.withWorldTransaction)(schoolId, townClass, async (client, bundle) => {
+            const cid = (0, worldRepository_1.citizenIdForUser)(user.id);
+            const citizen = bundle.state.citizens.find((c) => c.id === cid);
+            if (!citizen) {
+                return { ok: false, reason: 'Citizen not found.' };
+            }
+            const row0 = bundle.citizenRows.find((r) => r.user_id === user.id);
+            const current = (0, avatar_1.parseGorAvatar)(row0?.avatar, citizen.prof);
+            const validated = (0, avatar_1.validateAvatarPatch)(current, patch);
+            if (!validated.ok) {
+                return { ok: false, reason: validated.reason };
+            }
+            const row = await (0, worldRepository_1.updateCitizenAvatar)(client, bundle.row.id, user.id, validated.avatar);
+            if (!row) {
+                return { ok: false, reason: 'Citizen not found.' };
+            }
+            const idx = bundle.citizenRows.findIndex((r) => r.user_id === user.id);
+            if (idx >= 0)
+                bundle.citizenRows[idx] = row;
+            return { ok: true, ...(await (0, worldSession_1.buildStatusForStudent)(client, bundle, user.id, displayName)) };
+        });
+        if (!payload.ok) {
+            res.status(400).json({ error: payload.reason });
+            return;
+        }
+        res.json({
+            ...payload.view,
+            firstVisit: payload.firstVisit,
+            assignedProfession: payload.assignedProfession,
+            assignedProfessionName: payload.assignedProfessionName,
+        });
+    }
+    catch (e) {
+        console.error('Game of Resources avatar failed:', e);
+        res.status(500).json({ error: 'Could not save your character.' });
+    }
+});
 router.post('/reflection', auth_1.authenticateToken, tenant_1.requireTenant, (0, express_validator_1.body)('round').isInt({ min: 1 }), (0, express_validator_1.body)('text').isString().isLength({ max: shared_1.CONFIG.reflectionMax }), (0, express_validator_1.body)('clientVersion').optional().isInt({ min: 0 }), async (req, res) => {
     if (validationFailed(req, res))
         return;
@@ -395,6 +446,84 @@ router.get('/teacher/citizens', auth_1.authenticateToken, tenant_1.requireTenant
     catch (e) {
         console.error('Game of Resources teacher citizens failed:', e);
         res.status(500).json({ error: 'Could not load citizens.' });
+    }
+});
+router.get('/teacher/status', auth_1.authenticateToken, tenant_1.requireTenant, (0, express_validator_1.query)('town_class').isIn(['6A', '6B', '6C']), (0, express_validator_1.query)('user_id').isInt({ min: 1 }).withMessage('Choose a student.'), (0, express_validator_1.query)('since').optional().isInt({ min: 0 }), async (req, res) => {
+    if (validationFailed(req, res))
+        return;
+    if (!(await migrationGuard(res)))
+        return;
+    if (!(await (0, access_1.requireTeacherForSchool)(req, res)))
+        return;
+    const townClass = req.query.town_class;
+    const targetUserId = Number(req.query.user_id);
+    const since = req.query.since != null ? Number(req.query.since) : null;
+    const schoolId = (0, access_1.schoolIdFromRequest)(req);
+    try {
+        const payload = await (0, worldSession_1.withWorldTransaction)(schoolId, townClass, async (client, bundle) => {
+            if (!(await (0, access_1.requireStudentInTown)(client, schoolId, townClass, targetUserId, res))) {
+                throw new Error('__abort__');
+            }
+            if (since != null && since === bundle.row.version) {
+                return { unchanged: true, version: bundle.row.version };
+            }
+            const nameMap = await (0, access_1.loadDisplayNameMap)(client, schoolId, townClass);
+            const displayName = nameMap.get(targetUserId) ?? `Student ${targetUserId}`;
+            const status = await (0, worldSession_1.buildStatusForStudent)(client, bundle, targetUserId, displayName);
+            return { unchanged: false, ...status };
+        });
+        if ('unchanged' in payload && payload.unchanged) {
+            return res.json({ unchanged: true, version: payload.version });
+        }
+        res.json({
+            ...payload.view,
+            firstVisit: payload.firstVisit,
+            assignedProfession: payload.assignedProfession,
+            assignedProfessionName: payload.assignedProfessionName,
+            previewUserId: targetUserId,
+        });
+    }
+    catch (e) {
+        if (e instanceof Error && e.message === '__abort__')
+            return;
+        console.error('Game of Resources teacher status failed:', e);
+        res.status(500).json({ error: 'Could not load the world for that student.' });
+    }
+});
+router.post('/teacher/citizens/profession', auth_1.authenticateToken, tenant_1.requireTenant, (0, express_validator_1.body)('town_class').isIn(['6A', '6B', '6C']), (0, express_validator_1.body)('user_id').isInt({ min: 1 }), (0, express_validator_1.body)('profession').custom((v) => (0, access_1.isProfessionId)(v) || Promise.reject('Choose a valid profession.')), async (req, res) => {
+    if (validationFailed(req, res))
+        return;
+    if (!(await migrationGuard(res)))
+        return;
+    if (!(await (0, access_1.requireTeacherForSchool)(req, res)))
+        return;
+    const townClass = req.body.town_class;
+    const targetUserId = Number(req.body.user_id);
+    const profession = req.body.profession;
+    const schoolId = (0, access_1.schoolIdFromRequest)(req);
+    try {
+        const outcome = await (0, worldSession_1.withWorldTransaction)(schoolId, townClass, async (client, bundle) => {
+            if (!(await (0, access_1.requireStudentInTown)(client, schoolId, townClass, targetUserId, res))) {
+                throw new Error('__abort__');
+            }
+            const gameplay = (0, actions_1.runTeacherSetProfession)(bundle, targetUserId, profession);
+            if (!gameplay.ok) {
+                return { ok: false, reason: gameplay.reason || 'Could not set profession.' };
+            }
+            await (0, worldSession_1.applyGameplayAndSave)(client, bundle, targetUserId, gameplay);
+            return { ok: true };
+        });
+        if (!outcome.ok) {
+            res.status(400).json({ error: outcome.reason });
+            return;
+        }
+        res.json({ ok: true });
+    }
+    catch (e) {
+        if (e instanceof Error && e.message === '__abort__')
+            return;
+        console.error('Game of Resources teacher profession failed:', e);
+        res.status(500).json({ error: 'Could not set profession.' });
     }
 });
 router.get('/teacher/export.csv', auth_1.authenticateToken, tenant_1.requireTenant, (0, express_validator_1.query)('town_class').isIn(['6A', '6B', '6C']), async (req, res) => {

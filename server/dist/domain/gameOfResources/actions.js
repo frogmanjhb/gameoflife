@@ -6,6 +6,7 @@ exports.runMarketAction = runMarketAction;
 exports.runStartWork = runStartWork;
 exports.runJobChange = runJobChange;
 exports.runSaveReflection = runSaveReflection;
+exports.runTeacherSetProfession = runTeacherSetProfession;
 exports.runTeacherRound = runTeacherRound;
 exports.persistAdvanceSummary = persistAdvanceSummary;
 exports.runRuleChecks = runRuleChecks;
@@ -112,6 +113,11 @@ async function runSaveReflection(client, bundle, userId, round, text) {
         await (0, worldRepository_1.persistReflectionRow)(client, citizenRowId, bundle.row.id, round, cleaned);
     }
     return { ok: true, state: r.state };
+}
+function runTeacherSetProfession(bundle, targetUserId, profession) {
+    const cid = (0, worldRepository_1.citizenIdForUser)(targetUserId);
+    const r = shared_1.RULES.teacherSetProfession(bundle.state, cid, profession);
+    return { ok: r.ok, reason: r.reason, state: r.state, event: r.event };
 }
 function runTeacherRound(bundle, op) {
     let r;
